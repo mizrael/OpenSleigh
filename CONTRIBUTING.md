@@ -10,7 +10,7 @@ Thank you very much for considering contributing to OpenSleigh! We want to make 
 When contributing to this repository, please first discuss the change you wish to make via issue, email, or any other method with the owners of this repository before making a change.
 
 ## Code of Conduct
-Please note we have a [Code of Conduct](https://github.com/mizrael/OpenSleigh/blob/main/CODE-OF-CONDUCT.md), please follow it in all your interactions with the project.
+Please note we have a [Code of Conduct](https://github.com/mizrael/OpenSleigh/blob/develop/CODE-OF-CONDUCT.md), please follow it in all your interactions with the project.
 We take our open source community seriously and hold ourselves and other contributors to high standards of communication. 
 By participating and contributing to this project, you agree to uphold our Code of Conduct.
 
@@ -20,7 +20,7 @@ We use github to host code, to track issues and feature requests, as well as acc
 ## All Code Changes Happen Through Pull Requests
 Pull requests are the best way to propose changes to the codebase. We actively welcome your pull requests:
 
-1. Fork the repo and create your branch from `main`.
+1. Fork the repo and create your branch from `develop`.
 2. If you've added code that should be tested, add tests.
 3. If you've changed APIs, update the documentation.
 4. Ensure the test suite passes.
