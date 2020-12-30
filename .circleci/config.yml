@@ -1,0 +1,25 @@
+version: 2.1
+
+jobs:
+  build:
+    docker:
+      - image: mcr.microsoft.com/dotnet/sdk:5.0
+      - image: 'circleci/mongo:latest'
+        environment:
+          MONGO_INITDB_ROOT_USERNAME: root
+          MONGO_INITDB_ROOT_PASSWORD: password
+
+    steps:
+      - checkout
+
+      - run:
+          name: Build solution
+          command: |
+            cd ./src
+            dotnet build
+
+      - run:
+          name: Test
+          command: |     
+            cd ./src
+            dotnet test
