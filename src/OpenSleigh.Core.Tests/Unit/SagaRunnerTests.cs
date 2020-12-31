@@ -63,15 +63,10 @@ namespace OpenSleigh.Core.Tests
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
 
             var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
-
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var state = new DummySagaState(message.CorrelationId);
-            state.EnqueueMessage(message);
-            await state.ProcessOutboxAsync(bus, CancellationToken.None);
-            state.ProcessedMessages.Should().Contain(i => i.Message.Id == message.Id);
             
+            var state = new DummySagaState(message.CorrelationId);
+            state.SetAsProcessed(message);
+
             sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
                 .Returns((state, Guid.NewGuid()));
 

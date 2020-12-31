@@ -27,9 +27,9 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         public async Task SerializeAsync_should_serialize_outbox()
         {
             var state = new DummyState(Guid.NewGuid(), "foo", 42);
-            state.EnqueueMessage(DummyMessage.New());
-            state.EnqueueMessage(DummyMessage.New());
-            state.EnqueueMessage(DummyMessage.New());
+            state.AddToOutbox(DummyMessage.New());
+            state.AddToOutbox(DummyMessage.New());
+            state.AddToOutbox(DummyMessage.New());
 
             var sut = new JsonSagaStateSerializer();
             var serialized = await sut.SerializeAsync(state);

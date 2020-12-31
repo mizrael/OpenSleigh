@@ -17,8 +17,10 @@ namespace OpenSleigh.Core
         private readonly HashSet<Guid> _outboxIds = new HashSet<Guid>();
 
         [JsonProperty]
-        private readonly List<ProcessedMessage> _processedMessages = new();
+        private readonly Dictionary<Guid, IMessage> _publishedMessages = new();
 
+        [JsonProperty]
+        private readonly Dictionary<Guid, IMessage> _processedMessages = new();
 
         protected SagaState(Guid id)
         {
@@ -30,17 +32,16 @@ namespace OpenSleigh.Core
         [JsonIgnore]
         public IReadOnlyCollection<IMessage> Outbox => _outbox;
 
-        [JsonIgnore]
-        public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
-
-        public void EnqueueMessage(IMessage message)
+        public void AddToOutbox<TM>(TM message) where TM : IMessage
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
             if (_outboxIds.Contains(message.Id))
                 throw new ArgumentException($"message '{message.Id}' was already enqueued", nameof(message));
-
+            if (_publishedMessages.ContainsKey(message.Id))
+                throw new ArgumentException($"message '{message.Id}' was already sent", nameof(message));
+            
             _outbox.Enqueue(message);
             _outboxIds.Add(message.Id);
         }
@@ -56,7 +57,7 @@ namespace OpenSleigh.Core
                 try
                 {
                     await bus.PublishAsync((dynamic)message, cancellationToken);
-                    _processedMessages.Add(new ProcessedMessage(message, DateTime.UtcNow));
+                    _publishedMessages.Add(message.Id, message);
                 }
                 catch (Exception e)
                 {
@@ -70,12 +71,21 @@ namespace OpenSleigh.Core
             while (failedMessages.Any())
             {
                 var message = failedMessages.Dequeue();
-                EnqueueMessage(message);
+                AddToOutbox(message);
             }
 
             return exceptions; //TODO: evaluate returning a proper Error class instead of Exception
         }
-    }
 
-    public record ProcessedMessage(IMessage Message, DateTime When);
+        public void SetAsProcessed<TM>(TM message) where TM : IMessage
+        {
+            if (message == null) 
+                throw new ArgumentNullException(nameof(message));
+            
+            _processedMessages.Add(message.Id, message);
+        }
+
+        public bool CheckWasPublished<TM>(TM message) where TM : IMessage => _publishedMessages.ContainsKey(message.Id);
+        public bool CheckWasProcessed<TM>(TM message) where TM : IMessage => _processedMessages.ContainsKey(message.Id);
+    }
 }

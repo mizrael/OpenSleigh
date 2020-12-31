@@ -117,7 +117,7 @@ namespace OpenSleigh.Core.Tests
 
             var state = new DummySagaState(Guid.NewGuid());
             var msg = StartDummySaga.New();
-            state.EnqueueMessage(msg);
+            state.AddToOutbox(msg);
             var lockId = Guid.NewGuid();
 
             await sut.SaveAsync(state, lockId, CancellationToken.None);

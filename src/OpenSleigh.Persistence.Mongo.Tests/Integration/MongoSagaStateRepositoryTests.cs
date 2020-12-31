@@ -29,9 +29,9 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             var sut = new MongoSagaStateRepository(_fixture.DbContext, serializer, options);
 
             var newState = DummyState.New();
-            newState.EnqueueMessage(DummyMessage.New());
-            newState.EnqueueMessage(DummyMessage.New());
-            newState.EnqueueMessage(DummyMessage.New());
+            newState.AddToOutbox(DummyMessage.New());
+            newState.AddToOutbox(DummyMessage.New());
+            newState.AddToOutbox(DummyMessage.New());
 
             var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
             state.Should().NotBeNull();

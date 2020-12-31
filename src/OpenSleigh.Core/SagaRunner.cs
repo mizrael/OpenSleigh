@@ -43,7 +43,7 @@ namespace OpenSleigh.Core
                 }
             }
 
-            if (state.ProcessedMessages.Any(pm => pm.Message.Id == messageContext.Message.Id))
+            if (state.CheckWasProcessed(messageContext.Message))
                 throw new MessageException($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
 
             var saga = _sagaFactory.Create(state);
@@ -55,9 +55,10 @@ namespace OpenSleigh.Core
 
             //TODO: add configurable retry policy
             await handler.HandleAsync(messageContext, cancellationToken);
+            
+            state.SetAsProcessed(messageContext.Message);
 
             await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
-
         }
     }
 }

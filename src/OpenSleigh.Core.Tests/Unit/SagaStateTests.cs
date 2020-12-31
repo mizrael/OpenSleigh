@@ -11,28 +11,42 @@ namespace OpenSleigh.Core.Tests.Unit
     public class SagaStateTests
     {
         [Fact]
-        public void EnqueueMessage_should_enqueue_message()
+        public void Enqueue_should_enqueue_message()
         {
             var state = new DummySagaState(Guid.NewGuid());
             state.Outbox.Should().BeEmpty();
 
             var msg = StartDummySaga.New();
-            state.EnqueueMessage(msg);
+            state.AddToOutbox(msg);
             state.Outbox.Should().HaveCount(1)
                 .And.Contain(m => m.Id == msg.Id);
         }
 
         [Fact]
-        public void EnqueueMessage_should_not_enqueue_the_same_message_more_than_once()
+        public void AddToOutbox_should_not_enqueue_the_same_message_more_than_once()
         {
             var state = new DummySagaState(Guid.NewGuid());
             state.Outbox.Should().BeEmpty();
 
             var msg = StartDummySaga.New();
-            state.EnqueueMessage(msg);
+            state.AddToOutbox(msg);
 
-            var ex = Assert.Throws<ArgumentException>(() => state.EnqueueMessage(msg));
+            var ex = Assert.Throws<ArgumentException>(() => state.AddToOutbox(msg));
             ex.Message.Should().Contain($"message '{msg.Id}' was already enqueued");
+        }
+
+        [Fact]
+        public async Task AddToOutbox_should_not_enqueue_a_message_already_sent()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            state.Outbox.Should().BeEmpty();
+
+            var msg = StartDummySaga.New();
+            state.AddToOutbox(msg);
+            await state.ProcessOutboxAsync(NSubstitute.Substitute.For<IMessageBus>());
+
+            var ex = Assert.Throws<ArgumentException>(() => state.AddToOutbox(msg));
+            ex.Message.Should().Contain($"message '{msg.Id}' was already sent");
         }
 
         [Fact]
@@ -44,7 +58,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Select(i => StartDummySaga.New())
                 .ToArray();
             foreach (var msg in messages)
-                state.EnqueueMessage(msg);
+                state.AddToOutbox(msg);
 
             var bus = NSubstitute.Substitute.For<IMessageBus>();
             await state.ProcessOutboxAsync(bus, CancellationToken.None);
@@ -54,7 +68,9 @@ namespace OpenSleigh.Core.Tests.Unit
                     .PublishAsync(msg, CancellationToken.None);
 
             state.Outbox.Should().BeEmpty();
-            state.ProcessedMessages.Should().HaveCount(messages.Length);
+
+            foreach (var msg in messages)
+                state.CheckWasPublished(msg).Should().BeTrue();
         }
 
         [Fact]
@@ -66,7 +82,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Select(i => StartDummySaga.New())
                 .ToArray();
             foreach (var msg in messages)
-                state.EnqueueMessage(msg);
+                state.AddToOutbox(msg);
 
             var bus = NSubstitute.Substitute.For<IMessageBus>();
 
@@ -75,7 +91,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .ToArray();
             foreach (var msg in failedMessage)
             {
-                state.EnqueueMessage(msg);
+                state.AddToOutbox(msg);
                 bus.When(b => b.PublishAsync(msg, CancellationToken.None))
                     .Throw(new Exception(msg.Id.ToString()));
             }
@@ -90,7 +106,8 @@ namespace OpenSleigh.Core.Tests.Unit
 
             state.Outbox.Should().HaveCount(failedMessage.Length);
 
-            state.ProcessedMessages.Should().HaveCount(messages.Length);
+            foreach (var msg in failedMessage)
+                state.CheckWasPublished(msg).Should().BeFalse();
         }
     }
 }

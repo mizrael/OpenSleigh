@@ -5,7 +5,7 @@
     {
         protected void Publish<TM>(TM message) where TM : IMessage
         {
-            this.State.EnqueueMessage(message);
+            this.State.AddToOutbox(message);
         }
 
         public TD State { get; internal set; }
