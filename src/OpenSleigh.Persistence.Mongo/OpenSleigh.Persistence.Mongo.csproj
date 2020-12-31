@@ -2,8 +2,17 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
+    <PackageVersion>0.0.1</PackageVersion>
+    <IsPackable>true</IsPackable>
+    <Authors>davidguida</Authors>
+    <PackageDescription>MongoDB persistence for OpenSleigh.</PackageDescription>
+    <Copyright>Copyright 2020</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport</PackageTags>
+    <PackageOutputPath>../../packages/</PackageOutputPath>
+    <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
   </PropertyGroup>
-
   <ItemGroup>
     <PackageReference Include="Mongodb.Driver" Version="2.11.5" />
     <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
