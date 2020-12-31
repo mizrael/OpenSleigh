@@ -67,7 +67,7 @@ public class MyAwesomeSaga :
     Saga<MyAwesomeSagaState>,
     IStartedBy<StartMyAwesomeSaga>
 {
-     public async Task HandleAsync(IMessageContext<StartMyAwesomeSaga> context, CancellationToken cancellationToken = default)
+    public async Task HandleAsync(IMessageContext<StartMyAwesomeSaga> context, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation($"starting saga '{context.Message.CorrelationId}'...");
     }
