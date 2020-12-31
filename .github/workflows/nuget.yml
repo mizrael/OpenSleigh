@@ -4,10 +4,10 @@ on:
   push:
     branches:
       - nuget
- # pull_request:
-#    types: [closed]
- #   branches:
- #     - releases/**
+  pull_request:
+    types: [closed]
+    branches:
+      - releases/**
 
 jobs:
   build:
