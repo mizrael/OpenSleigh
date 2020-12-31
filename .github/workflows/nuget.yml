@@ -1,10 +1,10 @@
 name: NuGet Generation
 
 on:
-  pull_request:
-    types: [closed]
-    branches:
-      - releases/**
+  release:
+    types: 
+      - prereleased
+      - released
 
 jobs:
   build:
