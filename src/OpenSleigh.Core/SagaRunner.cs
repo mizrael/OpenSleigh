@@ -44,8 +44,7 @@ namespace OpenSleigh.Core
             }
 
             if (state.ProcessedMessages.Any(pm => pm.Message.Id == messageContext.Message.Id))
-                throw new MessageException(messageContext.Message,
-                    $"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
+                throw new MessageException($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
 
             var saga = _sagaFactory.Create(state);
             if (null == saga)
