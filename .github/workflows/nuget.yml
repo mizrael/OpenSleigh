@@ -1,9 +1,6 @@
 name: NuGet Generation
 
 on:
-  push:
-    branches:
-      - nuget
   pull_request:
     types: [closed]
     branches:
