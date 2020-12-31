@@ -1,0 +1,31 @@
+name: NuGet Generation
+
+on:
+  push:
+    branches:
+      - nuget
+ # pull_request:
+#    types: [closed]
+ #   branches:
+ #     - releases/**
+
+jobs:
+  build:
+    runs-on: ubuntu-18.04
+    name: Update NuGet package
+    steps:
+
+      - name: Checkout repository
+        uses: actions/checkout@v1
+
+      - name: Setup .NET Core @ Latest
+        uses: actions/setup-dotnet@v1        
+          
+      - name: Build solution and generate NuGet package
+        run: |  
+          cd src
+          dotnet pack -c Release
+
+      - name: Push generated package to GitHub registry
+        run: |
+            dotnet nuget push ./packages/*.nupkg --skip-duplicate --no-symbols true
