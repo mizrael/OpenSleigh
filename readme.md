@@ -32,8 +32,8 @@ Host.CreateDefaultBuilder(args)
 A Saga is a simple class inheriting from the base [`Saga<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/Saga.cs) class. We also have to create an additional State class holding it's data, by inheriting from [`SagaState`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/SagaState.cs):
 
 ```
-public class ParentSagaState : SagaState{
-    public ParentSagaState(Guid id) : base(id){}
+public class MyAwesomeSagaState : SagaState{
+    public MyAwesomeSagaState(Guid id) : base(id){}
 }
 
 public class MyAwesomeSaga :
