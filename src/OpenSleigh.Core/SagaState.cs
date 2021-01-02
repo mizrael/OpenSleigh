@@ -9,7 +9,7 @@ namespace OpenSleigh.Core
     {
         [JsonProperty]
         private readonly Dictionary<Guid, IMessage> _processedMessages = new();
-
+        
         protected SagaState(Guid id)
         {
             Id = id;
@@ -21,10 +21,17 @@ namespace OpenSleigh.Core
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
+
+            if (this.Id != message.CorrelationId)
+                throw new ArgumentException($"invalid message correlation id", nameof(IMessage.CorrelationId));
             
             _processedMessages.Add(message.Id, message);
         }
 
-        public bool CheckWasProcessed<TM>(TM message) where TM : IMessage => _processedMessages.ContainsKey(message.Id);
+        public bool CheckWasProcessed<TM>(TM message) where TM : IMessage
+        {
+            if (message == null) throw new ArgumentNullException(nameof(message));
+            return _processedMessages.ContainsKey(message.Id);
+        }
     }
 }

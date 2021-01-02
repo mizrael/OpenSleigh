@@ -2,7 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Core.Tests
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class DummySagaState : SagaState
     {
@@ -28,8 +28,6 @@ namespace OpenSleigh.Core.Tests
     {
         public virtual async Task HandleAsync(IMessageContext<StartDummySaga> context, CancellationToken cancellationToken = default)
         {
-            var started = new DummySagaStarted(Guid.NewGuid(), context.Message.CorrelationId);
-            this.Publish(started);
         }
 
         public virtual Task HandleAsync(IMessageContext<DummySagaStarted> context, CancellationToken cancellationToken = default)

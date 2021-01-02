@@ -33,7 +33,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(coll);
 
-            var serializer = NSubstitute.Substitute.For<ISagaStateSerializer>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
             serializer.DeserializeAsync<DummyState>(stateData)
                 .Returns(newState);
 
@@ -62,7 +62,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(coll);
 
-            var serializer = NSubstitute.Substitute.For<ISagaStateSerializer>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(dbContext, serializer, options);
 
@@ -85,7 +85,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(coll);
 
-            var serializer = NSubstitute.Substitute.For<ISagaStateSerializer>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(dbContext, serializer, options);
 

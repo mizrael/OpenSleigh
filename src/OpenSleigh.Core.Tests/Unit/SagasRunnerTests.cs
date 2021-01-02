@@ -1,11 +1,11 @@
-using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Core.Exceptions;
-using NSubstitute;
 using System;
 using System.Threading.Tasks;
+using NSubstitute;
+using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.Core.Exceptions;
 using Xunit;
 
-namespace OpenSleigh.Core.Tests
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class SagasRunnerTests
     {

@@ -1,9 +1,9 @@
-﻿using OpenSleigh.Core.DependencyInjection;
+﻿using System;
 using Microsoft.Extensions.DependencyInjection;
-using System;
+using OpenSleigh.Core.DependencyInjection;
 using Xunit;
 
-namespace OpenSleigh.Core.Tests
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class BusConfiguratorTests
     {

@@ -11,103 +11,47 @@ namespace OpenSleigh.Core.Tests.Unit
     public class SagaStateTests
     {
         [Fact]
-        public void Enqueue_should_enqueue_message()
+        public void SetAsProcessed_should_throw_ArgumentNullException_if_message_null()
         {
-            var state = new DummySagaState(Guid.NewGuid());
-            state.Outbox.Should().BeEmpty();
+            var sut = new DummySagaState(Guid.NewGuid());
 
-            var msg = StartDummySaga.New();
-            state.AddToOutbox(msg);
-            state.Outbox.Should().HaveCount(1)
-                .And.Contain(m => m.Id == msg.Id);
+            Assert.Throws<ArgumentNullException>(() => sut.SetAsProcessed((IMessage) null));
         }
 
         [Fact]
-        public void AddToOutbox_should_not_enqueue_the_same_message_more_than_once()
+        public void SetAsProcessed_should_throw_ArgumentException_if_message_correlation_id_invalid()
         {
-            var state = new DummySagaState(Guid.NewGuid());
-            state.Outbox.Should().BeEmpty();
+            var sut = new DummySagaState(Guid.NewGuid());
+            var message = StartDummySaga.New();
+            
+            Assert.Throws<ArgumentException>(() => sut.SetAsProcessed(message));
+        }
 
-            var msg = StartDummySaga.New();
-            state.AddToOutbox(msg);
 
-            var ex = Assert.Throws<ArgumentException>(() => state.AddToOutbox(msg));
-            ex.Message.Should().Contain($"message '{msg.Id}' was already enqueued");
+        [Fact]
+        public void CheckWasProcessed_should_return_false_if_message_not_processed()
+        {
+            var sut = new DummySagaState(Guid.NewGuid());
+
+            var message = new StartDummySaga(Guid.NewGuid(), sut.Id);
+            sut.CheckWasProcessed(message).Should().BeFalse();
         }
 
         [Fact]
-        public async Task AddToOutbox_should_not_enqueue_a_message_already_sent()
+        public void CheckWasProcessed_should_return_true_if_message_processed()
         {
-            var state = new DummySagaState(Guid.NewGuid());
-            state.Outbox.Should().BeEmpty();
-
-            var msg = StartDummySaga.New();
-            state.AddToOutbox(msg);
-            await state.ProcessOutboxAsync(NSubstitute.Substitute.For<IMessageBus>());
-
-            var ex = Assert.Throws<ArgumentException>(() => state.AddToOutbox(msg));
-            ex.Message.Should().Contain($"message '{msg.Id}' was already sent");
+            var sut = new DummySagaState(Guid.NewGuid());
+            var message = new StartDummySaga(Guid.NewGuid(), sut.Id);
+            sut.SetAsProcessed(message);
+            sut.CheckWasProcessed(message).Should().BeTrue();
         }
 
         [Fact]
-        public async Task ProcessOutbox_should_publish_all_messaged()
+        public void CheckWasProcessed_should_throw_ArgumentNullException_if_message_null()
         {
-            var state = new DummySagaState(Guid.NewGuid());
-
-            var messages = Enumerable.Repeat(1, 5)
-                .Select(i => StartDummySaga.New())
-                .ToArray();
-            foreach (var msg in messages)
-                state.AddToOutbox(msg);
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-            await state.ProcessOutboxAsync(bus, CancellationToken.None);
-
-            foreach (var msg in messages)
-                await bus.Received()
-                    .PublishAsync(msg, CancellationToken.None);
-
-            state.Outbox.Should().BeEmpty();
-
-            foreach (var msg in messages)
-                state.CheckWasPublished(msg).Should().BeTrue();
-        }
-
-        [Fact]
-        public async Task ProcessOutbox_should_reenqueue_failed_messages()
-        {
-            var state = new DummySagaState(Guid.NewGuid());
-
-            var messages = Enumerable.Repeat(1, 3)
-                .Select(i => StartDummySaga.New())
-                .ToArray();
-            foreach (var msg in messages)
-                state.AddToOutbox(msg);
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var failedMessage = Enumerable.Repeat(1, 5)
-                .Select(i => StartDummySaga.New())
-                .ToArray();
-            foreach (var msg in failedMessage)
-            {
-                state.AddToOutbox(msg);
-                bus.When(b => b.PublishAsync(msg, CancellationToken.None))
-                    .Throw(new Exception(msg.Id.ToString()));
-            }
-
-            state.Outbox.Should().HaveCount(failedMessage.Length + messages.Length);
-
-            await state.ProcessOutboxAsync(bus, CancellationToken.None);
-
-            foreach (var msg in messages)
-                await bus.Received()
-                    .PublishAsync(msg, CancellationToken.None);
-
-            state.Outbox.Should().HaveCount(failedMessage.Length);
-
-            foreach (var msg in failedMessage)
-                state.CheckWasPublished(msg).Should().BeFalse();
+            var sut = new DummySagaState(Guid.NewGuid());
+            
+            Assert.Throws<ArgumentNullException>(() => sut.CheckWasProcessed((IMessage)null));
         }
     }
 }

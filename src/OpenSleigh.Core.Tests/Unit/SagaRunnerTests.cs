@@ -1,13 +1,12 @@
-using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Persistence;
-using NSubstitute;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using FluentAssertions;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
+using OpenSleigh.Core.Exceptions;
 using Xunit;
 
-namespace OpenSleigh.Core.Tests
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class SagaRunnerTests
     {
@@ -43,7 +42,9 @@ namespace OpenSleigh.Core.Tests
             sagaFactory.Create(state)
                 .Returns(saga);
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService);
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
 
             await sut.RunAsync(messageContext, CancellationToken.None);
 
@@ -54,25 +55,38 @@ namespace OpenSleigh.Core.Tests
         }
 
         [Fact]
-        public async Task RunAsync_should_throw_MessageException_if_message_already_processed()
+        public async Task RunAsync_should_not_execute_handler_if_message_already_processed()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
             messageContext.Message.Returns(message);
 
-            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
+            var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
+            saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
+                .DoNotCallBase();
 
-            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
-            
             var state = new DummySagaState(message.CorrelationId);
             state.SetAsProcessed(message);
 
+            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
+            sagaFactory.Create(state)
+                .Returns(saga);
+
+            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
+           
             sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
                 .Returns((state, Guid.NewGuid()));
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService);
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            await Assert.ThrowsAsync<MessageException>(() => sut.RunAsync(messageContext, CancellationToken.None));
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
+
+            await sut.RunAsync(messageContext, CancellationToken.None);
+
+            sagaFactory.DidNotReceiveWithAnyArgs().Create(null);
+
+            await saga.DidNotReceiveWithAnyArgs()
+                .HandleAsync(messageContext, Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -90,7 +104,9 @@ namespace OpenSleigh.Core.Tests
             sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
                 .Returns((state, Guid.NewGuid()));
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService);
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
 
             await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext, CancellationToken.None));
         }
@@ -117,7 +133,9 @@ namespace OpenSleigh.Core.Tests
             sagaFactory.Create(state)
                 .Returns(saga);
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService);
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
 
             await sut.RunAsync(messageContext, CancellationToken.None);
 

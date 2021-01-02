@@ -1,14 +1,14 @@
-using FluentAssertions;
-using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Persistence;
-using NSubstitute;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using FluentAssertions;
+using NSubstitute;
+using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Core.Persistence;
 using Xunit;
 
-namespace OpenSleigh.Core.Tests
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class SagaStateServiceTests
     {
@@ -100,30 +100,6 @@ namespace OpenSleigh.Core.Tests
 
             await sagaStateRepo.Received(1)
                 .UpdateAsync(state, lockId, true, CancellationToken.None);
-        }
-
-        [Fact]
-        public async Task SaveAsync_should_process_outbox()
-        {
-            var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
-
-            var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
-            uow.SagaStatesRepository.Returns(sagaStateRepo);
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow, bus);
-
-            var state = new DummySagaState(Guid.NewGuid());
-            var msg = StartDummySaga.New();
-            state.AddToOutbox(msg);
-            var lockId = Guid.NewGuid();
-
-            await sut.SaveAsync(state, lockId, CancellationToken.None);
-
-            await bus.Received(1)
-                .PublishAsync(msg, CancellationToken.None);
         }
     }
 }
