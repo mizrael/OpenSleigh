@@ -5,7 +5,6 @@ using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    //TODO: tests
     public class PublisherChannelFactory : IPublisherChannelFactory
     {
         private readonly IBusConnection _connection;
