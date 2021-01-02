@@ -44,15 +44,15 @@ namespace OpenSleigh.Core
                     await Task.Delay(TimeSpan.FromMilliseconds(random.Next(1, 10)), cancellationToken).ConfigureAwait(false);
                 }
             }
+            
+            if (state.CheckWasProcessed(messageContext.Message))
+            {
+                _logger.LogWarning($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
+                return;
+            }
 
             try
             {
-                if (state.CheckWasProcessed(messageContext.Message))
-                {
-                    _logger.LogWarning($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
-                    return;
-                }
-
                 var saga = _sagaFactory.Create(state);
                 if (null == saga)
                     throw new SagaNotFoundException($"unable to create Saga of type '{typeof(TS).FullName}'");
