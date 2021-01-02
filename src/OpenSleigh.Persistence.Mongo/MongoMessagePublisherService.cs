@@ -25,6 +25,8 @@ namespace OpenSleigh.Persistence.Mongo
 
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
+            //TODO: use change stream when available
+            
             while (!cancellationToken.IsCancellationRequested)
             {
                 await ProcessPendingMessages(cancellationToken);

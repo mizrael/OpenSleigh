@@ -3,7 +3,6 @@ using OpenSleigh.Core;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    //TODO: tests
     public class QueueReferenceFactory : IQueueReferenceFactory
     {
         public QueueReferences Create<TM>() where TM : IMessage

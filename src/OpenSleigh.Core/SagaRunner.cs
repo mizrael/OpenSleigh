@@ -38,9 +38,9 @@ namespace OpenSleigh.Core
 
                     done = true;
                 }
-                catch (LockException)
+                catch (LockException ex)
                 {
-                    //TODO: logging
+                    _logger.LogWarning($"unable to lock state for saga '{messageContext.Message.CorrelationId}': '{ex.Message}'. Retrying...");
                     await Task.Delay(TimeSpan.FromMilliseconds(random.Next(1, 10)), cancellationToken).ConfigureAwait(false);
                 }
             }
