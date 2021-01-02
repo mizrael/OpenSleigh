@@ -16,17 +16,17 @@ namespace OpenSleigh.Persistence.Mongo
     public class MongoSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;
-        private readonly ISagaStateSerializer _sagaStateSerializer;
+        private readonly ISerializer _serializer;
         private readonly MongoSagaStateRepositoryOptions _options;
         
-        public MongoSagaStateRepository(IDbContext dbContext, ISagaStateSerializer sagaStateSerializer, MongoSagaStateRepositoryOptions options)
+        public MongoSagaStateRepository(IDbContext dbContext, ISerializer serializer, MongoSagaStateRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-            _sagaStateSerializer = sagaStateSerializer ?? throw new ArgumentNullException(nameof(sagaStateSerializer));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newEntity = null, CancellationToken cancellationToken = default)
+        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = null, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             var stateType = typeof(TD);
@@ -44,9 +44,9 @@ namespace OpenSleigh.Persistence.Mongo
                 .Set(e => e.LockId, Guid.NewGuid())
                 .Set(e => e.LockTime, DateTime.UtcNow);
 
-            if (newEntity is not null)
+            if (newState is not null)
             {
-                var serializedState = await _sagaStateSerializer.SerializeAsync(newEntity, cancellationToken);
+                var serializedState = await _serializer.SerializeAsync(newState, cancellationToken);
                 
                 update = update.SetOnInsert(e => e.CorrelationId, correlationId)
                     .SetOnInsert(e => e.Type, stateType.FullName)
@@ -68,7 +68,7 @@ namespace OpenSleigh.Persistence.Mongo
                     return (null, Guid.Empty);
 
                 // can't deserialize a BsonDocument to <TD> so we have to use JSON instead
-                var state = await _sagaStateSerializer.DeserializeAsync<TD>(entity.Data, cancellationToken);
+                var state = await _serializer.DeserializeAsync<TD>(entity.Data, cancellationToken);
                 return (state, entity.LockId.Value);
             }
             catch (MongoCommandException e) when (e.Code == 11000 && e.CodeName == "DuplicateKey")
@@ -83,7 +83,7 @@ namespace OpenSleigh.Persistence.Mongo
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
-            var serializedState = await _sagaStateSerializer.SerializeAsync(state, cancellationToken);
+            var serializedState = await _serializer.SerializeAsync(state, cancellationToken);
             var stateType = typeof(TD);
 
             var filterBuilder = Builders<Entities.SagaState>.Filter;
@@ -94,14 +94,14 @@ namespace OpenSleigh.Persistence.Mongo
             );
 
             var update = Builders<Entities.SagaState>.Update
-                  .Set(e => e.Data, serializedState);
+                .Set(e => e.Data, serializedState);
             if (releaseLock)
                 update = update.Set(e => e.LockId, null)
                                 .Set(e => e.LockTime, null);
 
             var options = new UpdateOptions()
             {
-                IsUpsert = true
+                IsUpsert = false
             };
 
             var result = await _dbContext.SagaStates.UpdateOneAsync(filter, update, options, cancellationToken)

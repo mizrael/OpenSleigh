@@ -2,7 +2,6 @@ using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -46,14 +45,7 @@ namespace OpenSleigh.Core
 
         public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
         {
-            await _uow.SagaStatesRepository.UpdateAsync(state, lockId, false, cancellationToken);
-
-            var exceptions = await state.ProcessOutboxAsync(_bus, cancellationToken);
-
             await _uow.SagaStatesRepository.UpdateAsync(state, lockId, true, cancellationToken);
-
-            if (exceptions.Any())
-                throw new AggregateException(exceptions);
         }
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Core
 {
@@ -13,12 +14,12 @@ namespace OpenSleigh.Core
 
     internal class DefaultMessageBus : IMessageBus
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IOutboxRepository _outboxRepository;
         private readonly ILogger<DefaultMessageBus> _logger;
         
-        public DefaultMessageBus(IServiceProvider serviceProvider, ILogger<DefaultMessageBus> logger)
+        public DefaultMessageBus(IOutboxRepository outboxRepository, ILogger<DefaultMessageBus> logger)
         {
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
@@ -27,15 +28,7 @@ namespace OpenSleigh.Core
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            var publisher = _serviceProvider.GetService<IPublisher<TM>>();
-            if (null == publisher)
-            {
-                _logger.LogWarning($"no publisher found for message type '{typeof(TM).FullName}'");
-                return;
-            }
-            
-            await publisher.PublishAsync(message, cancellationToken)
-                            .ConfigureAwait(false);
+            await _outboxRepository.AppendAsync(message, cancellationToken);
         }
     }
 }

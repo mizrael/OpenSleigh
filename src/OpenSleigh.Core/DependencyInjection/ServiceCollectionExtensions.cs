@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using OpenSleigh.Core.BackgroundServices;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
@@ -30,7 +31,8 @@ namespace OpenSleigh.Core.DependencyInjection
             var builder = new BusConfigurator(services, stateTypeResolver);
             configure?.Invoke(builder);
 
-            services.AddHostedService<SagasBackgroundService>();
+            services.AddHostedService<SagasBackgroundService>()
+                   .AddHostedService<PublisherBackgroundService>();
 
             return services;
         }

@@ -18,10 +18,10 @@ namespace OpenSleigh.Persistence.InMemory
             _items = new ConcurrentDictionary<Guid, (SagaState state, Guid? lockId)>();
         }
 
-        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newEntity = default, CancellationToken cancellationToken = default)
+        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
-            var (state, lockId) = _items.AddOrUpdate(correlationId, k => (newEntity, Guid.NewGuid()), (k, v) => throw new LockException($"saga state '{correlationId}' is already locked"));
+            var (state, lockId) = _items.AddOrUpdate(correlationId, k => (newState, Guid.NewGuid()), (k, v) => throw new LockException($"saga state '{correlationId}' is already locked"));
 
             return (state as TD, lockId.Value);
         }

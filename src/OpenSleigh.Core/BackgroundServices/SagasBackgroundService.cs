@@ -1,12 +1,12 @@
-using OpenSleigh.Core.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using OpenSleigh.Core.DependencyInjection;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.BackgroundServices
 {
     public class SagasBackgroundService : BackgroundService
     {

@@ -31,10 +31,7 @@ namespace OpenSleigh.Persistence.InMemory
                     continue;
 
                 var messageType = i.GetGenericArguments().First();
-
-                sagaConfigurator.Services.AddSingleton(typeof(IPublisher<>).MakeGenericType(messageType),
-                                                       typeof(RabbitPublisher<>).MakeGenericType(messageType));
-
+                
                 sagaConfigurator.Services.AddSingleton(typeof(ISubscriber<>).MakeGenericType(messageType),
                                                        typeof(RabbitSubscriber<>).MakeGenericType(messageType));
             }
@@ -47,7 +44,9 @@ namespace OpenSleigh.Persistence.InMemory
 
                 sagaConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();
                 sagaConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
-
+                sagaConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();
+                sagaConfigurator.Services.AddSingleton<IPublisherChannelFactory, PublisherChannelFactory>();
+                
                 sagaConfigurator.Services.AddSingleton<IConnectionFactory>(ctx =>
                 {
                     var connectionFactory = new ConnectionFactory()

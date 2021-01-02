@@ -1,9 +1,8 @@
 using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Persistence;
 using System;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 
 namespace OpenSleigh.Core
 {
@@ -13,12 +12,15 @@ namespace OpenSleigh.Core
     {
         private readonly ISagaStateService<TS, TD> _sagaStateService;
         private readonly ISagaFactory<TS, TD> _sagaFactory;
+        private readonly ILogger<SagaRunner<TS, TD>> _logger;
         
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
-                          ISagaStateService<TS, TD> sagaStateService)
+                          ISagaStateService<TS, TD> sagaStateService,
+                          ILogger<SagaRunner<TS, TD>> logger)
         {
             _sagaFactory = sagaFactory ?? throw new ArgumentNullException(nameof(sagaFactory));
             _sagaStateService = sagaStateService ?? throw new ArgumentNullException(nameof(sagaStateService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
@@ -43,22 +45,30 @@ namespace OpenSleigh.Core
                 }
             }
 
-            if (state.CheckWasProcessed(messageContext.Message))
-                throw new MessageException($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
+            try
+            {
+                if (state.CheckWasProcessed(messageContext.Message))
+                {
+                    _logger.LogWarning($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");
+                    return;
+                }
 
-            var saga = _sagaFactory.Create(state);
-            if (null == saga)
-                throw new SagaNotFoundException($"unable to create Saga of type '{typeof(TS).FullName}'");
+                var saga = _sagaFactory.Create(state);
+                if (null == saga)
+                    throw new SagaNotFoundException($"unable to create Saga of type '{typeof(TS).FullName}'");
 
-            if (saga is not IHandleMessage<TM> handler)
-                throw new ConsumerNotFoundException(typeof(TM));
+                if (saga is not IHandleMessage<TM> handler)
+                    throw new ConsumerNotFoundException(typeof(TM));
 
-            //TODO: add configurable retry policy
-            await handler.HandleAsync(messageContext, cancellationToken);
-            
-            state.SetAsProcessed(messageContext.Message);
+                //TODO: add configurable retry policy
+                await handler.HandleAsync(messageContext, cancellationToken);
 
-            await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+                state.SetAsProcessed(messageContext.Message);
+            }
+            finally
+            {
+                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+            }
         }
     }
 }

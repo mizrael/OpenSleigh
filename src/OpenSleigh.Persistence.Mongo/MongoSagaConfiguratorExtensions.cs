@@ -3,6 +3,7 @@ using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
+using OpenSleigh.Core.BackgroundServices;
 
 namespace OpenSleigh.Persistence.Mongo
 {
@@ -24,11 +25,13 @@ namespace OpenSleigh.Persistence.Mongo
                     var database = client.GetDatabase(config.DbName);
                     return database;
                 })
-                .AddSingleton<ISagaStateSerializer, JsonSagaStateSerializer>()
+                .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IDbContext, DbContext>()
                 .AddSingleton<IUnitOfWork, MongoUnitOfWork>()
                 .AddSingleton(config.RepositoryOptions)
-                .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>();
+                .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
+                .AddSingleton<IOutboxRepository, OutboxRepository>()
+                .AddSingleton<IMessagePublisherService, MongoMessagePublisherService>();
             return sagaConfigurator;
         }
     }

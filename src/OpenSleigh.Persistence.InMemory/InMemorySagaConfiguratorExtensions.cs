@@ -47,13 +47,12 @@ namespace OpenSleigh.Persistence.InMemory
                 sagaConfigurator.Services.AddSingleton(typeof(ChannelWriter<>).MakeGenericType(messageType), (object)channel.Writer);
 
                 sagaConfigurator.Services.AddSingleton(typeof(ChannelReader<>).MakeGenericType(messageType), (object)channel.Reader);
-
-                sagaConfigurator.Services.AddSingleton(typeof(IPublisher<>).MakeGenericType(messageType),
-                                                    typeof(InMemoryPublisher<>).MakeGenericType(messageType));
-
+                
                 sagaConfigurator.Services.AddSingleton(typeof(ISubscriber<>).MakeGenericType(messageType),
                                                     typeof(InMemorySubscriber<>).MakeGenericType(messageType));
             }
+
+            sagaConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>();
 
             return sagaConfigurator;
         }
