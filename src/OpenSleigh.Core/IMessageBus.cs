@@ -15,12 +15,10 @@ namespace OpenSleigh.Core
     internal class DefaultMessageBus : IMessageBus
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly ILogger<DefaultMessageBus> _logger;
         
-        public DefaultMessageBus(IOutboxRepository outboxRepository, ILogger<DefaultMessageBus> logger)
+        public DefaultMessageBus(IOutboxRepository outboxRepository)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage
