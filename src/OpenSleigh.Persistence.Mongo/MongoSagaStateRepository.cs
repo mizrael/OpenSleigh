@@ -77,7 +77,8 @@ namespace OpenSleigh.Persistence.Mongo
             }
         }
 
-        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
+            CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
@@ -105,14 +106,15 @@ namespace OpenSleigh.Persistence.Mongo
 
             UpdateResult result = null;
             if (transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
-                await _dbContext.SagaStates.UpdateOneAsync(mongoTransaction?.Session, filter, update, options, cancellationToken)
+                result = await _dbContext.SagaStates.UpdateOneAsync(mongoTransaction?.Session, filter, update, options,
+                        cancellationToken)
                     .ConfigureAwait(false);
             else
                 result = await _dbContext.SagaStates.UpdateOneAsync(filter, update, options, cancellationToken)
                     .ConfigureAwait(false);
 
             var failed = (result is null || result.MatchedCount == 0);
-            if (failed) 
+            if (failed)
                 throw new LockException($"unable to release lock on saga state '{state.Id}'");
         }
     }
