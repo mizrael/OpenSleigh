@@ -48,6 +48,8 @@ public class MyAwesomeSaga :
 }
 ```
 
+Dependency injection can be used to reference services from Sagas.
+
 At this point all you have to do is register and configure the Saga:
 ```
 services.AddOpenSleigh(cfg =>{
@@ -105,7 +107,8 @@ public class MyAwesomeSaga :
 ```
 
 #### Publishing messages
-A message can be published directly from a Saga using the `Publish()` method on the base `Saga` class:
+A message can be published by calling the `PublishAsync()` method of `IMessageBus`. Sagas classes get an instance injected as Property:
+
 ```
 public class MyAwesomeSaga :
     Saga<MyAwesomeSagaState>,
@@ -113,10 +116,8 @@ public class MyAwesomeSaga :
 {
      public async Task HandleAsync(IMessageContext<StartMyAwesomeSaga> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"starting saga '{context.Message.CorrelationId}'...");
-
         var message = new MyAwesomeSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-        this.Publish(message);
+        this.Bus.PublishAsync(message);
     }
 }
 ```
