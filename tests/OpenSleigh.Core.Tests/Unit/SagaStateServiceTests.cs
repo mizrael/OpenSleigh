@@ -19,9 +19,8 @@ namespace OpenSleigh.Core.Tests.Unit
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
             var uow = NSubstitute.Substitute.For<IUnitOfWork>();
             uow.SagaStatesRepository.Returns(sagaStateRepo);
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow, bus);
+            
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow);
 
             var message = StartDummySaga.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
@@ -39,9 +38,8 @@ namespace OpenSleigh.Core.Tests.Unit
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
             var uow = NSubstitute.Substitute.For<IUnitOfWork>();
             uow.SagaStatesRepository.Returns(sagaStateRepo);
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow, bus);
+            
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow);
 
             var message = DummySagaStarted.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<DummySagaStarted>>();
@@ -71,10 +69,8 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var uow = NSubstitute.Substitute.For<IUnitOfWork>();
             uow.SagaStatesRepository.Returns(sagaStateRepo);
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow, bus);
+            
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow);
 
             var result = await sut.GetAsync(messageContext, CancellationToken.None);
             result.state.Should().Be(expectedState);
@@ -88,18 +84,16 @@ namespace OpenSleigh.Core.Tests.Unit
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
             var uow = NSubstitute.Substitute.For<IUnitOfWork>();
             uow.SagaStatesRepository.Returns(sagaStateRepo);
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow, bus);
+            
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, uow);
 
             var state = new DummySagaState(Guid.NewGuid());
             var lockId = Guid.NewGuid();
 
-            await sut.SaveAsync(state, lockId, CancellationToken.None);
+            await sut.SaveAsync(state, lockId, null, CancellationToken.None);
 
             await sagaStateRepo.Received(1)
-                .UpdateAsync(state, lockId, true, CancellationToken.None);
+                .ReleaseLockAsync(state, lockId, null, CancellationToken.None);
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Core.Persistence;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit
@@ -35,6 +36,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
+            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -44,7 +46,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
             await sut.RunAsync(messageContext, CancellationToken.None);
 
@@ -79,7 +83,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
             await sut.RunAsync(messageContext, CancellationToken.None);
 
@@ -106,7 +112,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
             await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext, CancellationToken.None));
         }
@@ -126,6 +134,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
+            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -135,7 +144,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, logger);
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
             await sut.RunAsync(messageContext, CancellationToken.None);
 

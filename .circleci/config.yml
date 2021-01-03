@@ -15,11 +15,9 @@ jobs:
       - run:
           name: Build solution
           command: |
-            cd ./src
             dotnet build
 
       - run:
           name: Test
           command: |     
-            cd ./src
             dotnet test

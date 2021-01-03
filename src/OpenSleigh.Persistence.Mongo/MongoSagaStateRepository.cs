@@ -77,7 +77,8 @@ namespace OpenSleigh.Persistence.Mongo
             }
         }
 
-        public async Task UpdateAsync<TD>(TD state, Guid lockId, bool releaseLock = false, CancellationToken cancellationToken = default)
+        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
+            CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
@@ -94,27 +95,27 @@ namespace OpenSleigh.Persistence.Mongo
             );
 
             var update = Builders<Entities.SagaState>.Update
-                .Set(e => e.Data, serializedState);
-            if (releaseLock)
-                update = update.Set(e => e.LockId, null)
-                                .Set(e => e.LockTime, null);
+                .Set(e => e.Data, serializedState)
+                .Set(e => e.LockId, null)
+                .Set(e => e.LockTime, null);
 
             var options = new UpdateOptions()
             {
                 IsUpsert = false
             };
 
-            var result = await _dbContext.SagaStates.UpdateOneAsync(filter, update, options, cancellationToken)
-                .ConfigureAwait(false);
+            UpdateResult result = null;
+            if (transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
+                result = await _dbContext.SagaStates.UpdateOneAsync(mongoTransaction?.Session, filter, update, options,
+                        cancellationToken)
+                    .ConfigureAwait(false);
+            else
+                result = await _dbContext.SagaStates.UpdateOneAsync(filter, update, options, cancellationToken)
+                    .ConfigureAwait(false);
 
             var failed = (result is null || result.MatchedCount == 0);
             if (failed)
-            {
-                if (releaseLock)
-                    throw new LockException($"unable to release lock on saga state '{state.Id}'");
-                else
-                    throw new Exception($"unable to update saga state '{state.Id}'");
-            }
+                throw new LockException($"unable to release lock on saga state '{state.Id}'");
         }
     }
 }

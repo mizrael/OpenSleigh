@@ -25,7 +25,7 @@ namespace OpenSleigh.Core.DependencyInjection
                     return resolver;
                 })
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
-                .AddSingleton<IMessageBus, DefaultMessageBus>()
+                .AddScoped<IMessageBus, DefaultMessageBus>()
                 .AddSingleton<IMessageProcessor, MessageProcessor>();
 
             var builder = new BusConfigurator(services, stateTypeResolver);

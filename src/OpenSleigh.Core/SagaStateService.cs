@@ -13,13 +13,11 @@ namespace OpenSleigh.Core
     {
         private readonly ISagaStateFactory<TD> _sagaStateFactory;
         private readonly IUnitOfWork _uow;
-        private readonly IMessageBus _bus;
 
-        public SagaStateService(ISagaStateFactory<TD> sagaStateFactory, IUnitOfWork uow, IMessageBus publisher)
+        public SagaStateService(ISagaStateFactory<TD> sagaStateFactory, IUnitOfWork uow)
         {
             _sagaStateFactory = sagaStateFactory ?? throw new ArgumentNullException(nameof(sagaStateFactory));
             _uow = uow ?? throw new ArgumentNullException(nameof(uow));
-            _bus = publisher ?? throw new ArgumentNullException(nameof(publisher));
         }
 
         public async Task<(TD state, Guid lockId)> GetAsync<TM>(IMessageContext<TM> messageContext,
@@ -43,9 +41,9 @@ namespace OpenSleigh.Core
             throw new StateCreationException(typeof(TD), "unable to create saga state instance");
         }
 
-        public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
         {
-            await _uow.SagaStatesRepository.UpdateAsync(state, lockId, true, cancellationToken);
+            await _uow.SagaStatesRepository.ReleaseLockAsync(state, lockId, transaction, cancellationToken);
         }
     }
 }

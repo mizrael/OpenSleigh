@@ -26,8 +26,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OpenSleigh.Core\OpenSleigh.Core.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
   </ItemGroup>
 
 </Project>
