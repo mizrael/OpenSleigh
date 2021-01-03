@@ -19,9 +19,7 @@ jobs:
         uses: actions/setup-dotnet@v1        
           
       - name: Generate NuGet packages
-        run: |  
-          cd src
-          dotnet pack -c Release
+        run: dotnet pack -c Release
 
       - name: Push packages to GitHub registry
         run: dotnet nuget push ./packages/*.nupkg -k ${NUGET_API_KEY} -s https://api.nuget.org/v3/index.json --skip-duplicate
