@@ -63,20 +63,26 @@ namespace OpenSleigh.Persistence.Mongo
                 IsUpsert = false
             };
 
-            var result = await _dbContext.Outbox.UpdateOneAsync(filter, update, options, cancellationToken);
+            var result = await _dbContext.Outbox.UpdateOneAsync(filter, update, options, cancellationToken)
+                                            .ConfigureAwait(false);
             if (0 == result.MatchedCount)
                 throw new ArgumentException($"message '{message.Id}' not found. Maybe it was already processed?");
         }
-
-        //TODO: add transaction support (saving Saga state + appending events)
-        public async Task AppendAsync(IMessage message, CancellationToken cancellationToken)
+        
+        public async Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
             var data = await _serializer.SerializeAsync(message, cancellationToken);
             var entity = new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
-            await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken);
+
+            if(transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
+                await _dbContext.Outbox.InsertOneAsync(mongoTransaction.Session, entity, null, cancellationToken)
+                                    .ConfigureAwait(false);
+            else
+                await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken)
+                    .ConfigureAwait(false);
         }
     }
 }

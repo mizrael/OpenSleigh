@@ -41,9 +41,9 @@ namespace OpenSleigh.Core
             throw new StateCreationException(typeof(TD), "unable to create saga state instance");
         }
 
-        public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
         {
-            await _uow.SagaStatesRepository.UpdateAsync(state, lockId, true, cancellationToken);
+            await _uow.SagaStatesRepository.ReleaseLockAsync(state, lockId, transaction, cancellationToken);
         }
     }
 }

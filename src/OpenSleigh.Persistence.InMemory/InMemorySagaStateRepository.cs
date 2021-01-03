@@ -26,7 +26,7 @@ namespace OpenSleigh.Persistence.InMemory
             return (state as TD, lockId.Value);
         }
 
-        public async Task UpdateAsync<TD>(TD state, Guid lockId, bool releaseLock = false, CancellationToken cancellationToken = default)
+        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
@@ -41,7 +41,7 @@ namespace OpenSleigh.Persistence.InMemory
                 var stored = _items[state.Id];
                 if (stored.lockId != lockId)
                     throw new LockException($"unable to release lock on saga state '{state.Id}'");
-                _items[state.Id] = (state, releaseLock ? null : stored.lockId);
+                _items[state.Id] = (state, null);
             }
             finally
             {

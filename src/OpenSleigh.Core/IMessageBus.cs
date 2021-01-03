@@ -8,11 +8,13 @@ namespace OpenSleigh.Core
     public interface IMessageBus
     {
         Task PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
+        void SetTransaction(ITransaction transaction);
     }
 
     internal class DefaultMessageBus : IMessageBus
     {
         private readonly IOutboxRepository _outboxRepository;
+        private ITransaction _transaction;
         
         public DefaultMessageBus(IOutboxRepository outboxRepository)
         {
@@ -24,7 +26,9 @@ namespace OpenSleigh.Core
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _outboxRepository.AppendAsync(message, cancellationToken);
+            await _outboxRepository.AppendAsync(message, _transaction, cancellationToken);
         }
+
+        public void SetTransaction(ITransaction transaction) => _transaction = transaction;
     }
 }

@@ -18,7 +18,8 @@ namespace OpenSleigh.Samples.Console
             var hostBuilder = CreateHostBuilder(args);
             var host = hostBuilder.Build();
 
-            var bus = host.Services.GetRequiredService<IMessageBus>();
+            using var scope = host.Services.CreateScope();
+            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
             var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
 
             await Task.WhenAll(new[]

@@ -48,7 +48,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         }
 
         [Fact]
-        public async Task UpdateAsync_should_throw_when_update_fails()
+        public async Task ReleaseLockAsync_should_throw_when_release_lock_fails()
         {
             var newState = DummyState.New();
 
@@ -66,30 +66,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(dbContext, serializer, options);
 
-            var ex = await Assert.ThrowsAsync<Exception>(async () => await sut.UpdateAsync(newState, Guid.NewGuid(), false, CancellationToken.None));
-            ex.Message.Should().Contain("unable to update saga state");
-        }
-
-        [Fact]
-        public async Task UpdateAsync_should_throw_when_release_lock_fails()
-        {
-            var newState = DummyState.New();
-
-            var coll = NSubstitute.Substitute.For<IMongoCollection<Entities.SagaState>>();
-            coll.UpdateOneAsync(Arg.Any<FilterDefinition<Entities.SagaState>>(),
-                    Arg.Any<UpdateDefinition<Entities.SagaState>>(),
-                    Arg.Any<UpdateOptions>(),
-                    Arg.Any<CancellationToken>())
-                .ReturnsForAnyArgs((UpdateResult)null);
-
-            var dbContext = NSubstitute.Substitute.For<IDbContext>();
-            dbContext.SagaStates.Returns(coll);
-
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
-            var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
-            var sut = new MongoSagaStateRepository(dbContext, serializer, options);
-
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.UpdateAsync(newState, Guid.NewGuid(), true, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), null, CancellationToken.None));
             ex.Message.Should().Contain("unable to release lock on saga state");
         }
     }

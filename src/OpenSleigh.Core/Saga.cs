@@ -1,4 +1,7 @@
-﻿namespace OpenSleigh.Core
+﻿using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
+namespace OpenSleigh.Core
 {
     public abstract class Saga<TD>
         where TD : SagaState
