@@ -127,6 +127,7 @@ OpenSleigh uses the [Outbox pattern](https://www.davideguida.com/improving-micro
 A .NET Console application is available in the `/samples/` folder. Before running it, make sure to spin-up the required infrastructure using the provided docker-compose configuration using `docker-compose up`.
 
 ## Roadmap
+- add more tests
 - add more logging
 - add Azure ServiceBus message transport
 - add CosmosDB saga state persistence
