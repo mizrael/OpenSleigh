@@ -36,7 +36,6 @@ namespace OpenSleigh.Persistence.Mongo
                 _logger.LogWarning($"unable to start MongoDB transaction : {ex.Message}");
                 return new NullTransaction();
             }
-           
         }
     }
 }

@@ -6,6 +6,8 @@ using Microsoft.Extensions.Hosting;
 
 namespace OpenSleigh.Core.BackgroundServices
 {
+    //TODO: add another background service to delete processed messages on regular basis
+    
     public class PublisherBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
