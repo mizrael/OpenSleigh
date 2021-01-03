@@ -1,16 +1,15 @@
 name: NuGet Generation
 
 on:
-  push:
-  #release:
-  #  types: 
-  #    - prereleased
-  #    - released
+  release:
+    types: 
+      - prereleased
+      - released
 
 jobs:
   build:
     runs-on: ubuntu-18.04
-    name: Update NuGet package
+    name: Update NuGet packages
     steps:
 
       - name: Checkout repository
@@ -22,7 +21,7 @@ jobs:
       - name: Generate NuGet packages
         run: dotnet pack -c Release
 
-      - name: Push packages to GitHub registry
+      - name: Push packages to registry
         run: |
           cd ./packages
           dotnet nuget push "*.nupkg" -k ${NUGET_API_KEY} -s https://api.nuget.org/v3/index.json --skip-duplicate
