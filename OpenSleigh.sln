@@ -3,25 +3,25 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core", "OpenSleigh.Core\OpenSleigh.Core.csproj", "{82774D46-07E9-4A39-A987-D49CD1412DCE}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core", "src\OpenSleigh.Core\OpenSleigh.Core.csproj", "{82774D46-07E9-4A39-A987-D49CD1412DCE}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core.Tests", "OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj", "{4AC0DD4D-CB5E-4BF2-87B5-442A06CF38B3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core.Tests", "tests\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj", "{4AC0DD4D-CB5E-4BF2-87B5-442A06CF38B3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.InMemory", "OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj", "{1E8C0BF5-04DA-4228-9F78-C69E7EAE08F9}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.InMemory", "src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj", "{1E8C0BF5-04DA-4228-9F78-C69E7EAE08F9}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.InMemory.Tests", "OpenSleigh.Persistence.InMemory.Tests\OpenSleigh.Persistence.InMemory.Tests.csproj", "{E7C7C0F4-CD99-4F97-A905-13EAABF10498}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.InMemory.Tests", "tests\OpenSleigh.Persistence.InMemory.Tests\OpenSleigh.Persistence.InMemory.Tests.csproj", "{E7C7C0F4-CD99-4F97-A905-13EAABF10498}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Persistence", "Persistence", "{5594CC89-F905-46B2-B938-27B8050D9CA3}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo", "OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj", "{FD1CCF1D-68C7-49D5-B3A2-E3D34F269B14}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo", "src\OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj", "{FD1CCF1D-68C7-49D5-B3A2-E3D34F269B14}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo.Tests", "OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj", "{48BF1200-BAA2-48A7-B7DA-1FD0A070FF0E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo.Tests", "tests\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj", "{48BF1200-BAA2-48A7-B7DA-1FD0A070FF0E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Transport", "Transport", "{86CDC8FD-5E6F-4F45-A073-9F2749192582}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.RabbitMQ", "OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj", "{01C17CD2-1927-4562-9ACF-9566D168096F}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.RabbitMQ", "src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj", "{01C17CD2-1927-4562-9ACF-9566D168096F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Transport.RabbitMQ.Tests", "OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj", "{2E5F3E44-A3E7-429A-81BB-FC907F0D5377}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Transport.RabbitMQ.Tests", "tests\OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj", "{2E5F3E44-A3E7-429A-81BB-FC907F0D5377}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

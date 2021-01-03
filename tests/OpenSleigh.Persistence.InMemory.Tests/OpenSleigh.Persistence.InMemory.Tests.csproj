@@ -23,7 +23,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
   </ItemGroup>
 
 </Project>
