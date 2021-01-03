@@ -4,5 +4,6 @@
         where TD : SagaState
     {
         public TD State { get; internal set; }
+        public IMessageBus Bus { get; internal set; }
     }
 }

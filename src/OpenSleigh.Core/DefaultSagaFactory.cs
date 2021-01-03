@@ -22,6 +22,7 @@ namespace OpenSleigh.Core
             using var scope = _serviceProvider.CreateScope();
             var saga = scope.ServiceProvider.GetRequiredService<TS>();
             saga.State = state;
+            saga.Bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
             return saga;
         }
     }
