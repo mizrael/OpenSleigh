@@ -29,11 +29,9 @@ namespace OpenSleigh.Persistence.InMemory
             where TM : IMessage
         {
             var writer = _channelFactory.GetWriter<TM>();
-            if (null == writer)
-                return;
-
-            await writer.WriteAsync(message, cancellationToken)
-                .ConfigureAwait(false);
+            if(writer is not null)
+                await writer.WriteAsync(message, cancellationToken)
+                    .ConfigureAwait(false);
         }
     }
 }
