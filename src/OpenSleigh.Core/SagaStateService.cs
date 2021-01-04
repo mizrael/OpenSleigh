@@ -12,12 +12,12 @@ namespace OpenSleigh.Core
         where TD : SagaState
     {
         private readonly ISagaStateFactory<TD> _sagaStateFactory;
-        private readonly IUnitOfWork _uow;
+        private readonly ISagaStateRepository _sagaStateRepository;
 
-        public SagaStateService(ISagaStateFactory<TD> sagaStateFactory, IUnitOfWork uow)
+        public SagaStateService(ISagaStateFactory<TD> sagaStateFactory, ISagaStateRepository uow)
         {
             _sagaStateFactory = sagaStateFactory ?? throw new ArgumentNullException(nameof(sagaStateFactory));
-            _uow = uow ?? throw new ArgumentNullException(nameof(uow));
+            _sagaStateRepository = uow ?? throw new ArgumentNullException(nameof(uow));
         }
 
         public async Task<(TD state, Guid lockId)> GetAsync<TM>(IMessageContext<TM> messageContext,
@@ -27,7 +27,7 @@ namespace OpenSleigh.Core
 
             var defaultState = _sagaStateFactory.Create(messageContext.Message);
 
-            var result = await _uow.SagaStatesRepository.LockAsync(correlationId, defaultState, cancellationToken);
+            var result = await _sagaStateRepository.LockAsync(correlationId, defaultState, cancellationToken);
 
             if (null != result.state)
                 return result;
@@ -43,7 +43,7 @@ namespace OpenSleigh.Core
 
         public async Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
         {
-            await _uow.SagaStatesRepository.ReleaseLockAsync(state, lockId, transaction, cancellationToken);
+            await _sagaStateRepository.ReleaseLockAsync(state, lockId, transaction, cancellationToken);
         }
     }
 }

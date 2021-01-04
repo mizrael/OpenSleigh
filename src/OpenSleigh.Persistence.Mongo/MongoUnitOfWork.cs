@@ -7,19 +7,16 @@ using Microsoft.Extensions.Logging;
 
 namespace OpenSleigh.Persistence.Mongo
 {
-    internal class MongoUnitOfWork : IUnitOfWork
+    public class MongoUnitOfWork : IUnitOfWork
     {
-        private readonly MongoClient _client;
+        private readonly IMongoClient _client;
         private readonly ILogger<MongoUnitOfWork> _logger;
 
-        public MongoUnitOfWork(MongoClient client, ISagaStateRepository sagaStatesRepository, ILogger<MongoUnitOfWork> logger)
+        public MongoUnitOfWork(IMongoClient client, ILogger<MongoUnitOfWork> logger)
         {
-            SagaStatesRepository = sagaStatesRepository ?? throw new ArgumentNullException(nameof(sagaStatesRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _client = client ?? throw new ArgumentNullException(nameof(client));
         }
-
-        public ISagaStateRepository SagaStatesRepository { get; }
 
         public Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
         {
