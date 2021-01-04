@@ -2,10 +2,16 @@ name: Sonarcloud scan
 
 on:
   push:
+    paths:
+    - 'src/**'
+    - 'tests/**'
     branches:
       - develop
   pull_request:
     types: [opened, synchronize, reopened]
+    paths:
+    - 'src/**'
+    - 'tests/**'
 jobs:
   build:
     name: Build

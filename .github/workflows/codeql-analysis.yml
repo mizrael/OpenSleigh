@@ -16,10 +16,16 @@ on:
     branches:
       - develop
       - 'releases/**'
+    paths:
+    - 'src/**'
+    - 'tests/**'
   pull_request:
     branches:
       - develop
       - 'releases/**'
+    paths:
+    - 'src/**'
+    - 'tests/**'
   schedule:
     - cron: '37 10 * * 6'
 
