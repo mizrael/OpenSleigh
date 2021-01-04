@@ -15,6 +15,7 @@ namespace OpenSleigh.Core
         private readonly ISagaFactory<TS, TD> _sagaFactory;
         private readonly IUnitOfWork _uow;
         private readonly ILogger<SagaRunner<TS, TD>> _logger;
+        private static readonly Random _rand = new();
         
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
                           ISagaStateService<TS, TD> sagaStateService, 
@@ -31,7 +32,6 @@ namespace OpenSleigh.Core
             where TM : IMessage
         {
             var done = false;
-            var random = new Random();
             TD state = null;
             var lockId = Guid.Empty;
             while (!done) // TODO: better retry policy (max retries? Polly?)
@@ -45,7 +45,7 @@ namespace OpenSleigh.Core
                 catch (LockException ex)
                 {
                     _logger.LogWarning($"unable to lock state for saga '{messageContext.Message.CorrelationId}': '{ex.Message}'. Retrying...");
-                    await Task.Delay(TimeSpan.FromMilliseconds(random.Next(1, 10)), cancellationToken).ConfigureAwait(false);
+                    await Task.Delay(TimeSpan.FromMilliseconds(_rand.Next(1, 10)), cancellationToken).ConfigureAwait(false);
                 }
             }
             
