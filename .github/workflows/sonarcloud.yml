@@ -5,8 +5,8 @@ on:
   #  paths:
  #   - 'src/**'
  #   - 'tests/**'
-    branches:
-      - develop
+ #   branches:
+ #     - develop
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
