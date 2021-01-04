@@ -1,6 +1,6 @@
 namespace OpenSleigh.Core
 {
-    public interface ISagaFactory<TS, TD>
+    public interface ISagaFactory<out TS, in TD>
         where TD : SagaState
         where TS : Saga<TD>
     {

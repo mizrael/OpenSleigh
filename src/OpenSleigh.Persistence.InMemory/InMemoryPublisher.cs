@@ -26,6 +26,11 @@ namespace OpenSleigh.Persistence.InMemory
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
+            await PublishAsyncCore(message, cancellationToken);
+        }
+
+        private async Task PublishAsyncCore(IMessage message, CancellationToken cancellationToken)
+        {
             var messageType = message.GetType();
             var rawWriterType = typeof(ChannelWriter<>);
             var writerType = _typesCache.GetGeneric(rawWriterType, messageType);
@@ -33,7 +38,7 @@ namespace OpenSleigh.Persistence.InMemory
             if (null == writer)
                 return;
 
-            await (writer as dynamic).WriteAsync(message, cancellationToken)
+            await ((dynamic) writer).WriteAsync(message, cancellationToken)
                 .ConfigureAwait(false);
         }
     }

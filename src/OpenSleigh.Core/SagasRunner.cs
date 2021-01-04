@@ -34,10 +34,16 @@ namespace OpenSleigh.Core
             if (null == runner)
                 throw new SagaNotFoundException($"no saga registered on DI for message of type '{typeof(TM).FullName}'");
 
+            await RunAsyncCore(messageContext, cancellationToken, runnerType, runner);
+        }
+
+        private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken,
+            Type runnerType, object runner) where TM : IMessage
+        {
             var genericHandlerMethod = _typesCache.GetMethod(runnerType, nameof(ISagaRunner<Saga<SagaState>, SagaState>.RunAsync));
             var handlerMethod = genericHandlerMethod.MakeGenericMethod(typeof(TM));
 
-            await (Task)handlerMethod.Invoke(runner, new[] { (object)messageContext, (object)cancellationToken });
+            await (Task) handlerMethod.Invoke(runner, new[] {(object) messageContext, (object) cancellationToken});
         }
     }
 }

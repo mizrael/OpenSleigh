@@ -21,6 +21,11 @@ namespace OpenSleigh.Core
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
+            await ProcessAsyncCore(message, cancellationToken);
+        }
+
+        private async Task ProcessAsyncCore<TM>(TM message, CancellationToken cancellationToken) where TM : IMessage
+        {
             var messageContext = _messageContextFactory.Create(message);
 
             await _sagasRunner.RunAsync(messageContext, cancellationToken);

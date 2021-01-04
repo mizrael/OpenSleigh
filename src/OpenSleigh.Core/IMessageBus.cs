@@ -26,8 +26,12 @@ namespace OpenSleigh.Core
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await _outboxRepository.AppendAsync(message, _transaction, cancellationToken);
+            await PublishAsyncCore(message, cancellationToken);
         }
+
+        private Task PublishAsyncCore<TM>(TM message, CancellationToken cancellationToken) 
+            where TM : IMessage
+        => _outboxRepository.AppendAsync(message, _transaction, cancellationToken);
 
         public void SetTransaction(ITransaction transaction) => _transaction = transaction;
     }

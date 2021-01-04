@@ -39,6 +39,12 @@ namespace OpenSleigh.Persistence.InMemory
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
+            await ReleaseLockAsyncCore(state, lockId, cancellationToken);
+        }
+
+        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken)
+            where TD : SagaState
+        {
             await _semaphore.WaitAsync(cancellationToken);
 
             try
