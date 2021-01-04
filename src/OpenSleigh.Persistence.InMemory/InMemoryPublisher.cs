@@ -4,7 +4,6 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 
 //TODO: tests
 [assembly: InternalsVisibleTo("OpenSleigh.Persistence.InMemory.Tests")]
