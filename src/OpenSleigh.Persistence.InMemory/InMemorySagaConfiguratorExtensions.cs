@@ -38,7 +38,7 @@ namespace OpenSleigh.Persistence.InMemory
 
                 var messageType = i.GetGenericArguments().First();
 
-                var rawMethod = typeof(Channel).GetMethod(nameof(Channel.CreateUnbounded), new Type[] { });
+                var rawMethod = typeof(Channel).GetMethod(nameof(Channel.CreateUnbounded), Array.Empty<Type>());
                 var method = rawMethod.MakeGenericMethod(messageType);
                 dynamic channel = method.Invoke(null, null);
 

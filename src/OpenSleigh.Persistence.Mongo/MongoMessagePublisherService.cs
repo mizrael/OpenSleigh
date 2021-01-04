@@ -30,7 +30,7 @@ namespace OpenSleigh.Persistence.Mongo
             while (!cancellationToken.IsCancellationRequested)
             {
                 await ProcessPendingMessages(cancellationToken);
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
             }
         }
 

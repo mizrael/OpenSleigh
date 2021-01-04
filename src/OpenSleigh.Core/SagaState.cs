@@ -23,7 +23,7 @@ namespace OpenSleigh.Core
                 throw new ArgumentNullException(nameof(message));
 
             if (this.Id != message.CorrelationId)
-                throw new ArgumentException($"invalid message correlation id", nameof(IMessage.CorrelationId));
+                throw new ArgumentException($"invalid message correlation id", nameof(IMessage));
             
             _processedMessages.Add(message.Id, message);
         }

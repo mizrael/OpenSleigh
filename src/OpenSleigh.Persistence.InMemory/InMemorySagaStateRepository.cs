@@ -44,7 +44,7 @@ namespace OpenSleigh.Persistence.InMemory
             try
             {
                 if (!_items.ContainsKey(state.Id))
-                    throw new ArgumentOutOfRangeException(nameof(SagaState.Id), $"invalid state correlationId '{state.Id}'");
+                    throw new ArgumentOutOfRangeException(nameof(SagaState), $"invalid state correlationId '{state.Id}'");
                 var stored = _items[state.Id];
                 if (stored.lockId != lockId)
                     throw new LockException($"unable to release lock on saga state '{state.Id}'");

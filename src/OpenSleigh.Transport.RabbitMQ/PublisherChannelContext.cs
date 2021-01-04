@@ -3,7 +3,7 @@ using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public record PublisherChannelContext(IModel Channel, QueueReferences QueueReferences) : IDisposable
+    public sealed record PublisherChannelContext(IModel Channel, QueueReferences QueueReferences) : IDisposable
     {
         public void Dispose()
         {

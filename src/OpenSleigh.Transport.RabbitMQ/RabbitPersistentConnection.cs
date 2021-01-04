@@ -1,11 +1,12 @@
-﻿using Microsoft.Extensions.Logging;
+﻿
+using Microsoft.Extensions.Logging;
 using Polly;
 using RabbitMQ.Client;
 using System;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public class RabbitPersistentConnection : IDisposable, IBusConnection
+    public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
     {
         private readonly ILogger<RabbitPersistentConnection> _logger;
         private readonly IConnectionFactory _connectionFactory;
