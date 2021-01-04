@@ -15,13 +15,13 @@ namespace OpenSleigh.Core
             _messageContextFactory = messageContextFactory ?? throw new ArgumentNullException(nameof(messageContextFactory));
         }
 
-        public async Task ProcessAsync<TM>(TM message, CancellationToken cancellationToken = default)
+        public Task ProcessAsync<TM>(TM message, CancellationToken cancellationToken = default)
             where TM : IMessage
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await ProcessAsyncCore(message, cancellationToken);
+            return ProcessAsyncCore(message, cancellationToken);
         }
 
         private async Task ProcessAsyncCore<TM>(TM message, CancellationToken cancellationToken) where TM : IMessage

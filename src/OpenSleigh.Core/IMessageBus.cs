@@ -21,12 +21,12 @@ namespace OpenSleigh.Core
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         }
 
-        public async Task PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage
+        public Task PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await PublishAsyncCore(message, cancellationToken);
+            return PublishAsyncCore(message, cancellationToken);
         }
 
         private Task PublishAsyncCore<TM>(TM message, CancellationToken cancellationToken) 

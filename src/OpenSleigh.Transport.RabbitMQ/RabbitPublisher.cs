@@ -25,7 +25,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             _publisherChannelFactory = publisherChannelFactory ?? throw new ArgumentNullException(nameof(publisherChannelFactory));
         }
 
-        public async Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
@@ -59,6 +59,8 @@ namespace OpenSleigh.Transport.RabbitMQ
 
                 _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id, context.QueueReferences.ExchangeName);
             });
+            
+            return Task.CompletedTask;
         }
     }
 }

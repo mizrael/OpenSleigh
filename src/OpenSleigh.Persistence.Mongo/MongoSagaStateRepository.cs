@@ -77,13 +77,19 @@ namespace OpenSleigh.Persistence.Mongo
             }
         }
 
-        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
+        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
             CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
+            return ReleaseLockAsyncCore(state, lockId, transaction, cancellationToken);
+        }
+
+        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, ITransaction transaction,
+            CancellationToken cancellationToken) where TD : SagaState
+        {
             var serializedState = await _serializer.SerializeAsync(state, cancellationToken);
             var stateType = typeof(TD);
 

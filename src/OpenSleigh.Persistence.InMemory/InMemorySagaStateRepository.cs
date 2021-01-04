@@ -33,13 +33,13 @@ namespace OpenSleigh.Persistence.InMemory
             return (state as TD, lockId.Value);
         }
 
-        public async Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
-            await ReleaseLockAsyncCore(state, lockId, cancellationToken);
+            return ReleaseLockAsyncCore(state, lockId, cancellationToken);
         }
 
         private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken)

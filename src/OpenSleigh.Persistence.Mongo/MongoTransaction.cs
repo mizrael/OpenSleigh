@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Persistence.Mongo
 {
-    internal class MongoTransaction : ITransaction, IDisposable
+    internal sealed class MongoTransaction : ITransaction, IDisposable
     {
         public readonly IClientSessionHandle Session;
 

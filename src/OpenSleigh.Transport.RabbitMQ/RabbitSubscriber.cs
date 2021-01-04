@@ -62,7 +62,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             _channel.CallbackException += OnChannelException;
         }
 
-        private void OnChannelException(object? sender, CallbackExceptionEventArgs ea)
+        private void OnChannelException(object _, CallbackExceptionEventArgs ea)
         {
             _logger.LogError(ea.Exception, "the RabbitMQ Channel has encountered an error: {ExceptionMessage}", ea.Exception.Message);
 
@@ -134,15 +134,17 @@ namespace OpenSleigh.Transport.RabbitMQ
             }
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken = default)
+        public Task StartAsync(CancellationToken cancellationToken = default)
         {
             InitChannel();
             InitSubscription();
+            return Task.CompletedTask;
         }
 
-        public async Task StopAsync(CancellationToken cancellationToken = default)
+        public Task StopAsync(CancellationToken cancellationToken = default)
         {
             StopChannel();
+            return Task.CompletedTask;
         }
 
         public ValueTask DisposeAsync() => new ValueTask(StopAsync());

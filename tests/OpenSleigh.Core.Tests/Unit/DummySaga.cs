@@ -26,8 +26,9 @@ namespace OpenSleigh.Core.Tests.Unit
         IStartedBy<StartDummySaga>,
         IHandleMessage<DummySagaStarted>
     {
-        public virtual async Task HandleAsync(IMessageContext<StartDummySaga> context, CancellationToken cancellationToken = default)
+        public virtual Task HandleAsync(IMessageContext<StartDummySaga> context, CancellationToken cancellationToken = default)
         {
+            return Task.CompletedTask;
         }
 
         public virtual Task HandleAsync(IMessageContext<DummySagaStarted> context, CancellationToken cancellationToken = default)

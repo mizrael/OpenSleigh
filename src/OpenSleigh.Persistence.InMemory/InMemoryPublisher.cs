@@ -21,12 +21,12 @@ namespace OpenSleigh.Persistence.InMemory
             _typesCache = typesCache ?? throw new ArgumentNullException(nameof(typesCache));
         }
 
-        public async Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
-            await PublishAsyncCore(message, cancellationToken);
+            return PublishAsyncCore(message, cancellationToken);
         }
 
         private async Task PublishAsyncCore(IMessage message, CancellationToken cancellationToken)

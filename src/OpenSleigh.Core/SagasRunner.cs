@@ -19,7 +19,7 @@ namespace OpenSleigh.Core
             _typesCache = typesCache ?? throw new ArgumentNullException(nameof(typesCache));
         }
 
-        public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        public Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
             where TM : IMessage
         {
             if (messageContext == null)
@@ -34,7 +34,7 @@ namespace OpenSleigh.Core
             if (null == runner)
                 throw new SagaNotFoundException($"no saga registered on DI for message of type '{typeof(TM).FullName}'");
 
-            await RunAsyncCore(messageContext, cancellationToken, runnerType, runner);
+            return RunAsyncCore(messageContext, cancellationToken, runnerType, runner);
         }
 
         private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken,
