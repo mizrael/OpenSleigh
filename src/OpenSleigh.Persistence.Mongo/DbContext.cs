@@ -9,19 +9,18 @@ namespace OpenSleigh.Persistence.Mongo
 {
     public class DbContext : IDbContext
     {
-        private readonly IMongoDatabase _db;
-
         private static readonly IBsonSerializer<Guid> guidSerializer = new GuidSerializer(GuidRepresentation.Standard);
         private static readonly IBsonSerializer nullableGuidSerializer = new NullableSerializer<Guid>(guidSerializer);
 
         public DbContext(IMongoDatabase db)
         {
-            _db = db ?? throw new ArgumentNullException(nameof(db));
-
-            Outbox = _db.GetCollection<Entities.OutboxMessage>("outbox");
+            if (db == null) 
+                throw new ArgumentNullException(nameof(db));
+            
+            Outbox = db.GetCollection<Entities.OutboxMessage>("outbox");
             BuildOutboxIndexes();
             
-            SagaStates = _db.GetCollection<Entities.SagaState>("sagaStates");
+            SagaStates = db.GetCollection<Entities.SagaState>("sagaStates");
             BuildSagaStatesIndexes();
         }
 
