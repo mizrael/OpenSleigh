@@ -34,6 +34,11 @@ jobs:
       run: dotnet test --filter Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=opencover.xml
     - name: SonarCloud Scan
       uses: sonarsource/sonarcloud-github-action@master
+      with:
+        args: >
+          -Dsonar.organization=mizrael
+          -Dsonar.projectKey=mizrael_OpenSleigh
+          -Dsonar.tests=tests/
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
