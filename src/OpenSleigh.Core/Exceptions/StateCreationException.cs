@@ -4,11 +4,9 @@ namespace OpenSleigh.Core.Exceptions
 {
     public class StateCreationException : Exception
     {
-        public Type StateType { get; }
-
-        public StateCreationException(Type stateType, string message) : base(message)
+        public StateCreationException(Type stateType, Guid correlationId) 
+            : base($"unable to create State instance with type '{stateType.FullName}' for Saga '{correlationId}'")
         {
-            StateType = stateType;
         }
     }
 }

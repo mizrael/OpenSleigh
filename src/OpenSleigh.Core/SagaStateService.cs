@@ -36,9 +36,9 @@ namespace OpenSleigh.Core
             // We have to check if the current message can
             // actually start the specified saga or not
             if (!typeof(IStartedBy<TM>).IsAssignableFrom(typeof(TS)))
-                throw new StateCreationException(typeof(TD), $"saga cannot be started by message '{typeof(TM).FullName}'");
+                throw new MessageException($"Saga '{correlationId}' cannot be started by message '{typeof(TM).FullName}'");
 
-            throw new StateCreationException(typeof(TD), "unable to create saga state instance");
+            throw new StateCreationException(typeof(TD), correlationId);
         }
 
         public async Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)

@@ -28,11 +28,11 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var ex = await Assert.ThrowsAsync<StateCreationException>(() =>
                              sut.GetAsync(messageContext, CancellationToken.None));
-            ex.Message.Should().Contain("unable to create saga state instance");
+            ex.Message.Should().Contain("unable to create State instance with type");
         }
 
         [Fact]
-        public async Task GetAsync_should_throw_StateCreationException_if_message_cannot_start_saga()
+        public async Task GetAsync_should_throw_MessageException_if_message_cannot_start_saga()
         {
             var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
@@ -45,9 +45,9 @@ namespace OpenSleigh.Core.Tests.Unit
             var messageContext = NSubstitute.Substitute.For<IMessageContext<DummySagaStarted>>();
             messageContext.Message.Returns(message);
 
-            var ex = await Assert.ThrowsAsync<StateCreationException>(() =>
+            var ex = await Assert.ThrowsAsync<MessageException>(() =>
                          sut.GetAsync(messageContext, CancellationToken.None));
-            ex.Message.Should().Contain("saga cannot be started by message");
+            ex.Message.Should().Contain($"Saga '{message.CorrelationId}' cannot be started by message");
         }
 
         [Fact]
