@@ -52,7 +52,8 @@ namespace OpenSleigh.Persistence.InMemory
                                                     typeof(InMemorySubscriber<>).MakeGenericType(messageType));
             }
 
-            sagaConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>();
+            sagaConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
+                                    .AddSingleton<IChannelFactory, ChannelFactory>();
 
             return sagaConfigurator;
         }

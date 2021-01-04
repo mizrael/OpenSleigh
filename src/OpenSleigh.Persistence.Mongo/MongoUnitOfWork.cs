@@ -21,22 +21,25 @@ namespace OpenSleigh.Persistence.Mongo
 
         public ISagaStateRepository SagaStatesRepository { get; }
 
-        public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
+        public Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
         {
             var transactionOptions = new TransactionOptions(ReadConcern.Majority, ReadPreference.Primary, WriteConcern.WMajority);
 
+            ITransaction transaction;
             try
             {
                 //TODO: the async overload might freeze if transactions are not supported
                 var session = _client.StartSession();
                 session.StartTransaction(transactionOptions);
-                return new MongoTransaction(session);
+                transaction = new MongoTransaction(session);
             }
             catch (NotSupportedException ex)
             {
                 _logger.LogWarning($"unable to start MongoDB transaction : {ex.Message}");
-                return new NullTransaction();
+                transaction = new NullTransaction();
             }
+
+            return Task.FromResult(transaction);
         }
     }
 }

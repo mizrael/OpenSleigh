@@ -22,7 +22,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (basicProperties is null)
                 throw new ArgumentNullException(nameof(basicProperties));
             if (basicProperties.Headers is null)
-                throw new ArgumentNullException(nameof(IBasicProperties.Headers), "message headers are missing");
+                throw new ArgumentNullException(nameof(basicProperties), "message headers are missing");
 
             if (!basicProperties.Headers.TryGetValue(HeaderNames.MessageType, out var tmp) ||
                 tmp is not byte[] messageTypeBytes ||
