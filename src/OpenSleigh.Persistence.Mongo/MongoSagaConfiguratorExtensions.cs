@@ -18,10 +18,10 @@ namespace OpenSleigh.Persistence.Mongo
             where TS : Saga<TD>
             where TD : SagaState
         {
-            sagaConfigurator.Services.AddSingleton(ctx => new MongoClient(connectionString: config.ConnectionString))
+            sagaConfigurator.Services.AddSingleton<IMongoClient>(ctx => new MongoClient(connectionString: config.ConnectionString))
                 .AddSingleton(ctx =>
                 {
-                    var client = ctx.GetRequiredService<MongoClient>();
+                    var client = ctx.GetRequiredService<IMongoClient>();
                     var database = client.GetDatabase(config.DbName);
                     return database;
                 })
