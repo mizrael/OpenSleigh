@@ -11,7 +11,7 @@ namespace OpenSleigh.Persistence.InMemory
     public class InMemorySagaStateRepository : ISagaStateRepository
     {
         private readonly ConcurrentDictionary<Guid, (SagaState state, Guid? lockId)> _items;
-        private static SemaphoreSlim _semaphore = new SemaphoreSlim(1, 1);
+        private static readonly SemaphoreSlim _semaphore = new (1, 1);
 
         public InMemorySagaStateRepository()
         {
@@ -21,7 +21,14 @@ namespace OpenSleigh.Persistence.InMemory
         public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
-            var (state, lockId) = _items.AddOrUpdate(correlationId, k => (newState, Guid.NewGuid()), (k, v) => throw new LockException($"saga state '{correlationId}' is already locked"));
+            var (state, lockId) = _items.AddOrUpdate(correlationId, 
+                k => (newState, Guid.NewGuid()),
+                (k, v) =>
+                {
+                    if(v.lockId.HasValue)
+                        throw new LockException($"saga state '{correlationId}' is already locked");
+                    return (v.state, Guid.NewGuid());
+                });
 
             return (state as TD, lockId.Value);
         }

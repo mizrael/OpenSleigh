@@ -36,6 +36,21 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         }
 
         [Fact]
+        public async Task LockAsync_should_lock_item_if_available()
+        {
+            var sut = new InMemorySagaStateRepository();
+
+            var newState = DummyState.New();
+
+            var (lockedState, lockId) = await sut.LockAsync(newState.Id, newState);
+            await sut.ReleaseLockAsync(lockedState, lockId);
+
+            var (secondLockedState, secondLockId) = await sut.LockAsync<DummyState>(newState.Id);
+            secondLockedState.Should().NotBeNull();
+            secondLockId.Should().NotBe(lockId);
+        }
+
+        [Fact]
         public async Task UpdateAsync_should_release_lock()
         {
             var sut = new InMemorySagaStateRepository();
