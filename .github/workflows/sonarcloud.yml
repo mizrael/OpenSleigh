@@ -2,9 +2,9 @@ name: Sonarcloud scan
 
 on:
   push:
-    paths:
-    - 'src/**'
-    - 'tests/**'
+  #  paths:
+ #   - 'src/**'
+ #   - 'tests/**'
     branches:
       - develop
   pull_request:
@@ -12,6 +12,7 @@ on:
     paths:
     - 'src/**'
     - 'tests/**'
+
 jobs:
   build:
     name: Build
@@ -51,4 +52,5 @@ jobs:
         run: |
           .\.sonar\scanner\dotnet-sonarscanner begin /k:"mizrael_OpenSleigh" /o:"mizrael" /d:sonar.login="${{ secrets.SONAR_TOKEN }}" /d:sonar.host.url="https://sonarcloud.io"
           dotnet build
+          dotnet test /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput="/coverage"
           .\.sonar\scanner\dotnet-sonarscanner end /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
