@@ -39,6 +39,7 @@ namespace OpenSleigh.Core.DependencyInjection
 
                 var messageType = i.GetGenericArguments().First();
 
+                //TODO: move this check into SagaTypeResolver
                 if (messageType.IsAssignableTo(typeof(ICommand)))
                 {
                     var commandHandlerType = typeof(IHandleMessage<>).MakeGenericType(messageType);

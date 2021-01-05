@@ -49,6 +49,8 @@ namespace OpenSleigh.Core
                 }
             }
             
+            //TODO: if saga is marked as complete, stop processing
+            
             if (state.CheckWasProcessed(messageContext.Message))
             {
                 _logger.LogWarning($"message '{messageContext.Message.Id}' was already processed by saga '{state.Id}'");

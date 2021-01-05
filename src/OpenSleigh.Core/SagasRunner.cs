@@ -25,6 +25,7 @@ namespace OpenSleigh.Core
             if (messageContext == null)
                 throw new ArgumentNullException(nameof(messageContext));
 
+            //TODO: an event can be handled by multiple sagas
             var types = _stateTypeResolver.Resolve<TM>();
             if (default == types)
                 throw new SagaNotFoundException($"no saga registered for message of type '{typeof(TM).FullName}'");
