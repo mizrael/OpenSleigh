@@ -1,4 +1,5 @@
 ﻿using System.Runtime.CompilerServices;
+using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
 namespace OpenSleigh.Core

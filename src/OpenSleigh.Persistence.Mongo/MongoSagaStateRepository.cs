@@ -5,6 +5,7 @@ using MongoDB.Driver;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Persistence.Mongo.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {

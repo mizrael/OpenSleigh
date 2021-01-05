@@ -2,10 +2,10 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
-namespace OpenSleigh.Persistence.Mongo
+namespace OpenSleigh.Persistence.Mongo.Messaging
 {
     public class MongoOutboxProcessor : IOutboxProcessor
     {

@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
 {

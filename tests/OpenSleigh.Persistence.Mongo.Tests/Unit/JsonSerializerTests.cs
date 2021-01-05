@@ -1,6 +1,7 @@
 ﻿using FluentAssertions;
 using System;
 using System.Threading.Tasks;
+using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit

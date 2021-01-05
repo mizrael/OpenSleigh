@@ -1,11 +1,11 @@
+using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Transport.RabbitMQ;
-using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core.Messaging;
 using RabbitMQ.Client;
-using System.Linq;
 
-namespace OpenSleigh.Persistence.InMemory
+namespace OpenSleigh.Transport.RabbitMQ
 {
     public record RabbitConfiguration(string HostName, string UserName, string Password);
 

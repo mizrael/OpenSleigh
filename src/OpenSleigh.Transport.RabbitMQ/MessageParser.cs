@@ -2,6 +2,7 @@
 using RabbitMQ.Client;
 using System;
 using System.Text;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {

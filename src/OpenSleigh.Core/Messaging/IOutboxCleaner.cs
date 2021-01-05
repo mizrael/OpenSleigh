@@ -1,9 +1,9 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.Messaging
 {
-    public interface IOutboxProcessor
+    public interface IOutboxCleaner
     {
         Task StartAsync(CancellationToken cancellationToken = default);
     }

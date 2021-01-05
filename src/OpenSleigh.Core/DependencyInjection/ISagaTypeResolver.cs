@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
 {

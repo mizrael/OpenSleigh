@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.Messaging
 {
     public interface IMessage
     {
