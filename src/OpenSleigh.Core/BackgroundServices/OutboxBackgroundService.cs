@@ -7,8 +7,6 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.BackgroundServices
 {
-    //TODO: add another background service to delete processed messages on regular basis
-    
     public class OutboxBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
