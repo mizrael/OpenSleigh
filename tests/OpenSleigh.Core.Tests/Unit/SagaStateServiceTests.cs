@@ -14,6 +14,19 @@ namespace OpenSleigh.Core.Tests.Unit
     public class SagaStateServiceTests
     {
         [Fact]
+        public void ctor_should_throw_if_arguments_null()
+        {
+            var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
+            var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
+
+            Assert.Throws<ArgumentNullException>(() =>
+                new SagaStateService<DummySaga, DummySagaState>(null, sagaStateRepo));
+
+            Assert.Throws<ArgumentNullException>(() =>
+                new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, null));
+        }
+        
+        [Fact]
         public async Task GetAsync_should_throw_StateCreationException_if_saga_state_cannot_be_build()
         {
             var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
