@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.BackgroundServices
 {

@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
+using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit

@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Core

@@ -2,25 +2,32 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core;
-using OpenSleigh.Core.BackgroundServices;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
-namespace OpenSleigh.Persistence.Mongo
+namespace OpenSleigh.Persistence.Mongo.Messaging
 {
-    public class MongoMessagePublisherService : IMessagePublisherService
+    public record MongoOutboxProcessorOptions(TimeSpan Interval)
+    {
+        public static readonly MongoOutboxProcessorOptions Default = new MongoOutboxProcessorOptions(TimeSpan.FromSeconds(5));
+    }
+    
+    public class MongoOutboxProcessor : IOutboxProcessor
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly ILogger<MongoMessagePublisherService> _logger;
+        private readonly ILogger<MongoOutboxProcessor> _logger;
         private readonly IPublisher _publisher;
+        private readonly MongoOutboxProcessorOptions _options;
 
-        public MongoMessagePublisherService(IOutboxRepository outboxRepository,
-            IPublisher bus,
-            ILogger<MongoMessagePublisherService> logger)
+        public MongoOutboxProcessor(IOutboxRepository outboxRepository,
+            IPublisher publisher, 
+            MongoOutboxProcessorOptions options,
+            ILogger<MongoOutboxProcessor> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _publisher = bus ?? throw new ArgumentNullException(nameof(bus));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         }
 
         public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -30,7 +37,9 @@ namespace OpenSleigh.Persistence.Mongo
             while (!cancellationToken.IsCancellationRequested)
             {
                 await ProcessPendingMessages(cancellationToken);
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                
+                //TODO: make the delay configurable
+                await Task.Delay(_options.Interval, cancellationToken);
             }
         }
 

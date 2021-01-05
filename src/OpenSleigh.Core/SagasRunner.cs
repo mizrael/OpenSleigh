@@ -3,6 +3,7 @@ using OpenSleigh.Core.Exceptions;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {

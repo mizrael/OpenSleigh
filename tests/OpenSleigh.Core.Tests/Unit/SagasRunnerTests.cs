@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using NSubstitute;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Core.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit

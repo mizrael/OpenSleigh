@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using OpenSleigh.Core;
+using OpenSleigh.Core.Messaging;
 using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ

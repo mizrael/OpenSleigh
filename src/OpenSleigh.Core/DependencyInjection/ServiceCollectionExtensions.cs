@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using OpenSleigh.Core.BackgroundServices;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
@@ -32,7 +33,8 @@ namespace OpenSleigh.Core.DependencyInjection
             configure?.Invoke(builder);
 
             services.AddHostedService<SagasBackgroundService>()
-                   .AddHostedService<PublisherBackgroundService>();
+                   .AddHostedService<OutboxBackgroundService>()
+                   .AddHostedService<OutboxCleanerBackgroundService>();
 
             return services;
         }

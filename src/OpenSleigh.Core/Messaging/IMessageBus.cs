@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Persistence;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.Messaging
 {
     public interface IMessageBus
     {

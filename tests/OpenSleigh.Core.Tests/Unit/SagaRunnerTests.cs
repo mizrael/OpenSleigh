@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using Xunit;
 

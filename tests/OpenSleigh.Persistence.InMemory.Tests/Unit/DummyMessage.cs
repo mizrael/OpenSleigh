@@ -1,5 +1,5 @@
 ﻿using System;
-using OpenSleigh.Core;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 {

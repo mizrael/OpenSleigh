@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection

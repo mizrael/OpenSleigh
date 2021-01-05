@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {

@@ -5,6 +5,7 @@ using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using Xunit;
 

@@ -1,5 +1,6 @@
 ﻿using FluentAssertions;
 using System;
+using OpenSleigh.Core.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit

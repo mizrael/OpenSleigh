@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.Messaging
 {
     public interface IMessageProcessor
     {

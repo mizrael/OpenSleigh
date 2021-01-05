@@ -1,4 +1,4 @@
-﻿namespace OpenSleigh.Core
+﻿namespace OpenSleigh.Core.Messaging
 {
     public interface IMessageContextFactory
     {

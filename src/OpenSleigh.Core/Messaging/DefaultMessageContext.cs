@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace OpenSleigh.Core
+namespace OpenSleigh.Core.Messaging
 {
     internal class DefaultMessageContext<TM> : IMessageContext<TM>
         where TM : IMessage

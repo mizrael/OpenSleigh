@@ -3,10 +3,11 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Driver;
-using OpenSleigh.Core;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
+using OpenSleigh.Persistence.Mongo.Utils;
 
-namespace OpenSleigh.Persistence.Mongo
+namespace OpenSleigh.Persistence.Mongo.Messaging
 {
     public class OutboxRepository : IOutboxRepository
     {
@@ -81,6 +82,9 @@ namespace OpenSleigh.Persistence.Mongo
 
             return AppendAsyncCore(message, transaction, cancellationToken);
         }
+
+        public Task CleanProcessedAsync(CancellationToken cancellationToken = default) =>
+            _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
 
         private async Task AppendAsyncCore(IMessage message, ITransaction transaction, CancellationToken cancellationToken)
         {

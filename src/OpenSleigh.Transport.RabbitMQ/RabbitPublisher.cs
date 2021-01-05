@@ -1,10 +1,10 @@
-﻿using OpenSleigh.Core;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Polly;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
