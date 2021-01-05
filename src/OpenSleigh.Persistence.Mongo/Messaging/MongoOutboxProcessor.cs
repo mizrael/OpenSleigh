@@ -7,19 +7,27 @@ using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Persistence.Mongo.Messaging
 {
+    public record MongoOutboxProcessorOptions(TimeSpan Interval)
+    {
+        public static MongoOutboxProcessorOptions Default = new MongoOutboxProcessorOptions(TimeSpan.FromSeconds(5));
+    }
+    
     public class MongoOutboxProcessor : IOutboxProcessor
     {
         private readonly IOutboxRepository _outboxRepository;
         private readonly ILogger<MongoOutboxProcessor> _logger;
         private readonly IPublisher _publisher;
+        private readonly MongoOutboxProcessorOptions _options;
 
         public MongoOutboxProcessor(IOutboxRepository outboxRepository,
-            IPublisher bus,
+            IPublisher publisher, 
+            MongoOutboxProcessorOptions options,
             ILogger<MongoOutboxProcessor> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _publisher = bus ?? throw new ArgumentNullException(nameof(bus));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
+            _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         }
 
         public async Task StartAsync(CancellationToken cancellationToken = default)
@@ -29,7 +37,9 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             while (!cancellationToken.IsCancellationRequested)
             {
                 await ProcessPendingMessages(cancellationToken);
-                await Task.Delay(TimeSpan.FromSeconds(1), cancellationToken);
+                
+                //TODO: make the delay configurable
+                await Task.Delay(_options.Interval, cancellationToken);
             }
         }
 

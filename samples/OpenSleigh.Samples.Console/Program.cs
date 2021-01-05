@@ -8,6 +8,9 @@ using OpenSleigh.Samples.Console.Sagas;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core.Messaging;
+using OpenSleigh.Persistence.Mongo.Messaging;
+using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Console
 {
@@ -42,7 +45,9 @@ namespace OpenSleigh.Samples.Console
                         var mongoSection = hostContext.Configuration.GetSection("Mongo");
                         var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"], 
                                                               mongoSection["DbName"],
-                                                            MongoSagaStateRepositoryOptions.Default);
+                                                              MongoSagaStateRepositoryOptions.Default,
+                                                              MongoOutboxProcessorOptions.Default, 
+                                                              MongoOutboxCleanerOptions.Default);
 
                         var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
                         var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 

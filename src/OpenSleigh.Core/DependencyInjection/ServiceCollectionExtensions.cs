@@ -33,7 +33,8 @@ namespace OpenSleigh.Core.DependencyInjection
             configure?.Invoke(builder);
 
             services.AddHostedService<SagasBackgroundService>()
-                   .AddHostedService<OutboxBackgroundService>();
+                   .AddHostedService<OutboxBackgroundService>()
+                   .AddHostedService<OutboxCleanerBackgroundService>();
 
             return services;
         }

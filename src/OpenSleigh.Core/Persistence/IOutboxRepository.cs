@@ -11,5 +11,6 @@ namespace OpenSleigh.Core.Persistence
         Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default);
         Task MarkAsSentAsync(IMessage message, CancellationToken cancellationToken = default);
         Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default);
+        Task CleanProcessedAsync(CancellationToken cancellationToken = default);
     }
 }
