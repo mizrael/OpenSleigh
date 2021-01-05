@@ -8,7 +8,7 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
 {
     public record MongoOutboxCleanerOptions(TimeSpan Interval)
     {
-        public static MongoOutboxCleanerOptions Default = new MongoOutboxCleanerOptions(TimeSpan.FromSeconds(5));
+        public static readonly MongoOutboxCleanerOptions Default = new MongoOutboxCleanerOptions(TimeSpan.FromSeconds(5));
     }
     
     public class MongoOutboxCleaner : IOutboxCleaner

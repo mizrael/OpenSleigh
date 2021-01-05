@@ -9,7 +9,7 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
 {
     public record MongoOutboxProcessorOptions(TimeSpan Interval)
     {
-        public static MongoOutboxProcessorOptions Default = new MongoOutboxProcessorOptions(TimeSpan.FromSeconds(5));
+        public static readonly MongoOutboxProcessorOptions Default = new MongoOutboxProcessorOptions(TimeSpan.FromSeconds(5));
     }
     
     public class MongoOutboxProcessor : IOutboxProcessor
