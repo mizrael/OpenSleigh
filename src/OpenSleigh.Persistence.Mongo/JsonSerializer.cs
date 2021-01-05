@@ -15,16 +15,16 @@ namespace OpenSleigh.Persistence.Mongo
             TypeNameHandling = TypeNameHandling.All
         };
 
-        public async ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default)
+        public ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default)
         {
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(state, Settings);
-            return Encoding.UTF8.GetBytes(json);
+            return ValueTask.FromResult(Encoding.UTF8.GetBytes(json));
         }
 
-        public async ValueTask<T> DeserializeAsync<T>(byte[] data, CancellationToken cancellationToken = default)
+        public ValueTask<T> DeserializeAsync<T>(byte[] data, CancellationToken cancellationToken = default)
         {
             var json = Encoding.UTF8.GetString(data);
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json, Settings);
+            return ValueTask.FromResult(Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json, Settings));
         }
     }
 

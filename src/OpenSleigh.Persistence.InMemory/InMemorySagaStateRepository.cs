@@ -18,7 +18,7 @@ namespace OpenSleigh.Persistence.InMemory
             _items = new ConcurrentDictionary<Guid, (SagaState state, Guid? lockId)>();
         }
 
-        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default, CancellationToken cancellationToken = default)
+        public Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             var (state, lockId) = _items.AddOrUpdate(correlationId, 
@@ -30,7 +30,7 @@ namespace OpenSleigh.Persistence.InMemory
                     return (v.state, Guid.NewGuid());
                 });
 
-            return (state as TD, lockId.Value);
+            return Task.FromResult((state as TD, lockId.Value));
         }
 
         public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
