@@ -1,5 +1,4 @@
-﻿using OpenSleigh.Core;
-using RabbitMQ.Client;
+﻿using RabbitMQ.Client;
 using System;
 using OpenSleigh.Core.Messaging;
 

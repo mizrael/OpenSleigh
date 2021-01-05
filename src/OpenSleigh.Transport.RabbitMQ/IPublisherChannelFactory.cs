@@ -1,5 +1,4 @@
-﻿using OpenSleigh.Core;
-using OpenSleigh.Core.Messaging;
+﻿using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
