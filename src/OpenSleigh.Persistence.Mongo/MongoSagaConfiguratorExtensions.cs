@@ -31,7 +31,7 @@ namespace OpenSleigh.Persistence.Mongo
                 .AddSingleton(config.RepositoryOptions)
                 .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
                 .AddSingleton<IOutboxRepository, OutboxRepository>()
-                .AddSingleton<IMessagePublisherService, MongoMessagePublisherService>();
+                .AddSingleton<IOutboxProcessor, MongoOutboxProcessor>();
             return sagaConfigurator;
         }
     }

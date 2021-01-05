@@ -20,13 +20,8 @@ namespace OpenSleigh.Core.BackgroundServices
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             using var scope = _scopeFactory.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<IMessagePublisherService>();
+            var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
             await service.StartAsync(stoppingToken);
         }
-    }
-
-    public interface IMessagePublisherService
-    {
-        Task StartAsync(CancellationToken cancellationToken = default);
     }
 }

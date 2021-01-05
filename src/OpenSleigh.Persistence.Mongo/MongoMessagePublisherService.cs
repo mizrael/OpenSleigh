@@ -8,15 +8,15 @@ using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Persistence.Mongo
 {
-    public class MongoMessagePublisherService : IMessagePublisherService
+    public class MongoOutboxProcessor : IOutboxProcessor
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly ILogger<MongoMessagePublisherService> _logger;
+        private readonly ILogger<MongoOutboxProcessor> _logger;
         private readonly IPublisher _publisher;
 
-        public MongoMessagePublisherService(IOutboxRepository outboxRepository,
+        public MongoOutboxProcessor(IOutboxRepository outboxRepository,
             IPublisher bus,
-            ILogger<MongoMessagePublisherService> logger)
+            ILogger<MongoOutboxProcessor> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
