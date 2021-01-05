@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
-using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Persistence.Mongo

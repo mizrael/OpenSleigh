@@ -3,7 +3,6 @@ using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
-using OpenSleigh.Core.BackgroundServices;
 
 namespace OpenSleigh.Persistence.Mongo
 {
