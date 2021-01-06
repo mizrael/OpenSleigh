@@ -12,6 +12,11 @@ namespace OpenSleigh.Core.Tests.Unit
         }
     }
 
+    public record UnhandledMessage(Guid Id, Guid CorrelationId) : ICommand
+    {
+        public static UnhandledMessage New() => new UnhandledMessage(Guid.NewGuid(), Guid.NewGuid());
+    }
+
     public record StartDummySaga(Guid Id, Guid CorrelationId) : ICommand
     {
         public static StartDummySaga New() => new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());

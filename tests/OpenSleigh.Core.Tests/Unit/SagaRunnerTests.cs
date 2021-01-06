@@ -13,6 +13,19 @@ namespace OpenSleigh.Core.Tests.Unit
     public class SagaRunnerTests
     {
         [Fact]
+        public void ctor_should_throw_when_arguments_null(){
+            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
+            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(null, sagaStateService, uow, logger));
+            Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(sagaFactory, null, uow, logger));
+            Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, null));
+        }
+
+        [Fact]
         public async Task RunAsync_should_retry_if_saga_state_locked()
         {
             var message = StartDummySaga.New();
@@ -121,6 +134,36 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
+        public async Task RunAsync_should_throw_if_saga_cannot_handle_message()
+        {
+            var message = UnhandledMessage.New();
+
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<UnhandledMessage>>();
+            messageContext.Message.Returns(message);
+
+            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
+
+            var state = new DummySagaState(message.CorrelationId);
+            sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
+                .Returns((state, Guid.NewGuid()));
+
+            var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
+            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
+
+            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
+            sagaFactory.Create(state)
+                .Returns(saga);
+
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
+
+            await Assert.ThrowsAsync<ConsumerNotFoundException>(() => sut.RunAsync(messageContext, CancellationToken.None));
+        }
+
+        [Fact]
         public async Task RunAsync_should_execute_all_registered_sagas()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
@@ -153,7 +196,6 @@ namespace OpenSleigh.Core.Tests.Unit
 
             await saga.Received(1)
                 .HandleAsync(messageContext, Arg.Any<CancellationToken>());
-
         }
     }
 }
