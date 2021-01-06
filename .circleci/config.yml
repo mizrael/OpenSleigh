@@ -11,22 +11,22 @@ jobs:
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
-      - image: cimg/base:2020.01
       
     steps:
       - checkout
 
       - run:
-          name: Build solution
+          name: Install dependencies
+          command: |
+            apt-get install unzip
+
+      - run:
+          name: Build and test
           command: |
             dotnet restore
             dotnet build --configuration Release --no-restore
-
-      - run:
-          name: Test
-          command: |     
             dotnet test --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
-      
+           
       - sonarcloud/scan
 
 workflows:
