@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
+using NSubstitute.Exceptions;
 using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
@@ -69,6 +70,15 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 
             var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), null, CancellationToken.None));
             ex.Message.Should().Contain("unable to release lock on saga state");
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_input_null()
+        {
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseLockAsync<DummyState>(null, Arg.Any<Guid>()));
         }
     }
 }
