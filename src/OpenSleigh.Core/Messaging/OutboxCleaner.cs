@@ -1,22 +1,21 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
-namespace OpenSleigh.Persistence.Mongo.Messaging
+namespace OpenSleigh.Core.Messaging
 {
-    public record MongoOutboxCleanerOptions(TimeSpan Interval)
+    public record OutboxCleanerOptions(TimeSpan Interval)
     {
-        public static readonly MongoOutboxCleanerOptions Default = new MongoOutboxCleanerOptions(TimeSpan.FromSeconds(5));
+        public static readonly OutboxCleanerOptions Default = new OutboxCleanerOptions(TimeSpan.FromSeconds(5));
     }
     
-    public class MongoOutboxCleaner : IOutboxCleaner
+    public class OutboxCleaner : IOutboxCleaner
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly MongoOutboxCleanerOptions _options;
+        private readonly OutboxCleanerOptions _options;
 
-        public MongoOutboxCleaner(IOutboxRepository outboxRepository, MongoOutboxCleanerOptions options)
+        public OutboxCleaner(IOutboxRepository outboxRepository, OutboxCleanerOptions options)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _options = options ?? throw new ArgumentNullException(nameof(options));

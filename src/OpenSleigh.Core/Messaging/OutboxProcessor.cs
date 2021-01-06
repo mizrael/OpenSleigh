@@ -2,27 +2,26 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
-namespace OpenSleigh.Persistence.Mongo.Messaging
+namespace OpenSleigh.Core.Messaging
 {
-    public record MongoOutboxProcessorOptions(TimeSpan Interval)
+    public record OutboxProcessorOptions(TimeSpan Interval)
     {
-        public static readonly MongoOutboxProcessorOptions Default = new MongoOutboxProcessorOptions(TimeSpan.FromSeconds(5));
+        public static readonly OutboxProcessorOptions Default = new (TimeSpan.FromSeconds(5));
     }
     
-    public class MongoOutboxProcessor : IOutboxProcessor
+    public class OutboxProcessor : IOutboxProcessor
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly ILogger<MongoOutboxProcessor> _logger;
+        private readonly ILogger<OutboxProcessor> _logger;
         private readonly IPublisher _publisher;
-        private readonly MongoOutboxProcessorOptions _options;
+        private readonly OutboxProcessorOptions _options;
 
-        public MongoOutboxProcessor(IOutboxRepository outboxRepository,
+        public OutboxProcessor(IOutboxRepository outboxRepository,
             IPublisher publisher, 
-            MongoOutboxProcessorOptions options,
-            ILogger<MongoOutboxProcessor> logger)
+            OutboxProcessorOptions options,
+            ILogger<OutboxProcessor> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));

@@ -45,9 +45,7 @@ namespace OpenSleigh.Samples.Console
                         var mongoSection = hostContext.Configuration.GetSection("Mongo");
                         var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"], 
                                                               mongoSection["DbName"],
-                                                              MongoSagaStateRepositoryOptions.Default,
-                                                              MongoOutboxProcessorOptions.Default, 
-                                                              MongoOutboxCleanerOptions.Default);
+                                                              MongoSagaStateRepositoryOptions.Default);
 
                         var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
                         var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 

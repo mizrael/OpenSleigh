@@ -2,9 +2,7 @@ using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Persistence.Mongo.Utils;
 
@@ -12,9 +10,7 @@ namespace OpenSleigh.Persistence.Mongo
 {
     public record MongoConfiguration(string ConnectionString,
                                      string DbName,
-                                     MongoSagaStateRepositoryOptions RepositoryOptions,
-                                     MongoOutboxProcessorOptions OutboxOptions,
-                                     MongoOutboxCleanerOptions CleanerOptions);
+                                     MongoSagaStateRepositoryOptions RepositoryOptions);
 
     public static class MongoSagaConfiguratorExtensions
     {
@@ -36,19 +32,7 @@ namespace OpenSleigh.Persistence.Mongo
                 .AddSingleton<IUnitOfWork, MongoUnitOfWork>()
                 .AddSingleton(config.RepositoryOptions)
                 .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
-                .AddSingleton<IOutboxRepository, OutboxRepository>()
-                .AddSingleton<IOutboxProcessor>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    var publisher = ctx.GetRequiredService<IPublisher>();
-                    var logger = ctx.GetRequiredService<ILogger<MongoOutboxProcessor>>();
-                    return new MongoOutboxProcessor(repo, publisher, config.OutboxOptions, logger);
-                })
-                .AddSingleton<IOutboxCleaner>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    return new MongoOutboxCleaner(repo, config.CleanerOptions);
-                });
+                .AddSingleton<IOutboxRepository, OutboxRepository>();
             return sagaConfigurator;
         }
     }
