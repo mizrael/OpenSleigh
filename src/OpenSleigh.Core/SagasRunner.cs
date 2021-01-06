@@ -43,10 +43,7 @@ namespace OpenSleigh.Core
             Type runnerType, object runner, 
             CancellationToken cancellationToken) where TM : IMessage
         {
-            var genericHandlerMethod = _typesCache.GetMethod(runnerType, nameof(ISagaRunner<Saga<SagaState>, SagaState>.RunAsync));
-            var handlerMethod = genericHandlerMethod.MakeGenericMethod(typeof(TM));
-
-            await (Task) handlerMethod.Invoke(runner, new[] {(object) messageContext, (object) cancellationToken});
+            await (runner as dynamic).RunAsync(messageContext, cancellationToken);
         }
     }
 }
