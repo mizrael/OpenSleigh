@@ -6,6 +6,7 @@ orbs:
 jobs:
   build:
     docker:
+      - image: cimg/base:2020.01
       - image: mcr.microsoft.com/dotnet/sdk:5.0
       - image: 'circleci/mongo:latest'
         environment:
@@ -18,12 +19,13 @@ jobs:
       - run:
           name: Build solution
           command: |
-            dotnet build
+            dotnet restore
+            dotnet build --configuration Release --no-restore
 
       - run:
           name: Test
           command: |     
-            dotnet test
+            dotnet test --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
       
       - sonarcloud/scan
 
