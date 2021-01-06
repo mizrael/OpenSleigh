@@ -10,6 +10,14 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
     public class InMemorySagaStateRepositoryTests
     {
         [Fact]
+        public async Task ReleaseLockAsync_should_throw_if_input_null()
+        {
+            var sut = new InMemorySagaStateRepository();
+
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseLockAsync<DummyState>(null, Guid.Empty));
+        }
+        
+        [Fact]
         public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
         {
             var sut = new InMemorySagaStateRepository();

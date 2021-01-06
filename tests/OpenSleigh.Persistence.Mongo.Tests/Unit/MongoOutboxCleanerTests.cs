@@ -18,6 +18,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var sut = new MongoOutboxCleaner(repo, options);
 
             var token = new CancellationTokenSource(options.Interval);
+            
             try
             {
                 await sut.StartAsync(token.Token);
