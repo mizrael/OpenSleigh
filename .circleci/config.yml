@@ -6,13 +6,13 @@ orbs:
 jobs:
   build:
     docker:
-      - image: cimg/base:2020.01
       - image: mcr.microsoft.com/dotnet/sdk:5.0
       - image: 'circleci/mongo:latest'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
-
+      - image: cimg/base:2020.01
+      
     steps:
       - checkout
 
