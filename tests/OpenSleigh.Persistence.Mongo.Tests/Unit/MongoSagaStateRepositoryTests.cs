@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Bson;
+using OpenSleigh.Core.Persistence;
 using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
@@ -14,40 +15,6 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 {
     public class MongoSagaStateRepositoryTests
     {
-        [Fact]
-        public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
-        {
-            var newState = DummyState.New();
-
-            var jsonState = Newtonsoft.Json.JsonConvert.SerializeObject(newState);
-            var stateData = Encoding.UTF8.GetBytes(jsonState);
-
-            var entity = new Entities.SagaState(ObjectId.GenerateNewId(), newState.Id, typeof(DummyState).FullName, stateData, Guid.NewGuid(), DateTime.UtcNow);
-
-            var coll = NSubstitute.Substitute.For<IMongoCollection<Entities.SagaState>>();
-            coll.FindOneAndUpdateAsync(Arg.Any<FilterDefinition<Entities.SagaState>>(),
-                    Arg.Any<UpdateDefinition<Entities.SagaState>>(),
-                    Arg.Any<FindOneAndUpdateOptions<Entities.SagaState>>(),
-                    Arg.Any<CancellationToken>())
-                .ReturnsForAnyArgs(entity);
-
-            var dbContext = NSubstitute.Substitute.For<IDbContext>();
-            dbContext.SagaStates.Returns(coll);
-
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
-            serializer.DeserializeAsync<DummyState>(stateData)
-                .Returns(newState);
-
-            var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
-            var sut = new MongoSagaStateRepository(dbContext, serializer, options);
-
-            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
-            state.Should().NotBeNull();
-            state.Id.Should().Be(newState.Id);
-            state.Bar.Should().Be(newState.Bar);
-            state.Foo.Should().Be(newState.Foo);
-        }
-
         [Fact]
         public async Task ReleaseLockAsync_should_throw_when_release_lock_fails()
         {
@@ -77,7 +44,104 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseLockAsync<DummyState>(null, Arg.Any<Guid>()));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseLockAsync<DummyState>(null, Guid.NewGuid()));
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_use_transaction_when_mongo_transaction()
+        {
+            var state = DummyState.New();
+            var lockId = Guid.NewGuid();
+
+            var session = NSubstitute.Substitute.For<IClientSessionHandle>();
+            var mongoTransaction = new MongoTransaction(session);
+
+            var updateResult = NSubstitute.Substitute.ForPartsOf<UpdateResult>();
+            updateResult.MatchedCount.ReturnsForAnyArgs(1);
+            
+            var repo = NSubstitute.Substitute.For<IMongoCollection<Entities.SagaState>>();
+            repo.UpdateOneAsync(session,
+                    (FilterDefinition<Entities.SagaState>)null,
+                    (UpdateDefinition<Entities.SagaState>)null,
+                    (UpdateOptions)null,
+                    CancellationToken.None)
+                .ReturnsForAnyArgs(updateResult);
+            
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            dbContext.SagaStates.Returns(repo);
+            
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
+
+            await sut.ReleaseLockAsync<DummyState>(state, lockId, mongoTransaction);
+
+            await repo.Received(1)
+                .UpdateOneAsync(session,
+                    Arg.Any<FilterDefinition<Entities.SagaState>>(),
+                    Arg.Any<UpdateDefinition<Entities.SagaState>>(),
+                    Arg.Any<UpdateOptions>(),
+                    Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_use_not_transaction_when_type_invalid()
+        {
+            var state = DummyState.New();
+            var lockId = Guid.NewGuid();
+
+            var transaction = new NullTransaction();
+
+            var updateResult = NSubstitute.Substitute.ForPartsOf<UpdateResult>();
+            updateResult.MatchedCount.ReturnsForAnyArgs(1);
+
+            var repo = NSubstitute.Substitute.For<IMongoCollection<Entities.SagaState>>();
+            repo.UpdateOneAsync((FilterDefinition<Entities.SagaState>)null,
+                    (UpdateDefinition<Entities.SagaState>)null,
+                    (UpdateOptions)null,
+                    CancellationToken.None)
+                .ReturnsForAnyArgs(updateResult);
+
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            dbContext.SagaStates.Returns(repo);
+
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
+
+            await sut.ReleaseLockAsync<DummyState>(state, lockId, transaction);
+
+            await repo.Received(1)
+                .UpdateOneAsync(Arg.Any<FilterDefinition<Entities.SagaState>>(),
+                    Arg.Any<UpdateDefinition<Entities.SagaState>>(),
+                    Arg.Any<UpdateOptions>(),
+                    Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_update_fails()
+        {
+            var state = DummyState.New();
+            var lockId = Guid.NewGuid();
+
+            var transaction = new NullTransaction();
+
+            var updateResult = NSubstitute.Substitute.ForPartsOf<UpdateResult>();
+            updateResult.MatchedCount.ReturnsForAnyArgs(0);
+
+            var repo = NSubstitute.Substitute.For<IMongoCollection<Entities.SagaState>>();
+            repo.UpdateOneAsync((FilterDefinition<Entities.SagaState>)null,
+                    (UpdateDefinition<Entities.SagaState>)null,
+                    (UpdateOptions)null,
+                    CancellationToken.None)
+                .ReturnsForAnyArgs(updateResult);
+
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            dbContext.SagaStates.Returns(repo);
+
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
+
+            await Assert.ThrowsAsync<LockException>(async () =>
+                await sut.ReleaseLockAsync<DummyState>(state, lockId, transaction));
         }
     }
 }
