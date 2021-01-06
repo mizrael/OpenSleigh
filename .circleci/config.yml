@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  sonarcloud: sonarsource/sonarcloud@1.0.1
+
 jobs:
   build:
     docker:
@@ -21,3 +24,11 @@ jobs:
           name: Test
           command: |     
             dotnet test
+      
+      - sonarcloud/scan
+
+workflows:
+  main:
+    jobs:
+      - build:
+          context: SonarCloud
