@@ -10,7 +10,6 @@ namespace OpenSleigh.Core.BackgroundServices
     public class SubscribersBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-        private static readonly Type SubscriberRawType = typeof(ISubscriber);
         
         public SubscribersBackgroundService(IServiceScopeFactory scopeFactory)
         {
