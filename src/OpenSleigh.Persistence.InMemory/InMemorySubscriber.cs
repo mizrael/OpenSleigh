@@ -7,7 +7,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
 {
-    internal class InMemorySubscriber<TM> : ISubscriber<TM>
+    internal class InMemorySubscriber<TM> : ISubscriber
         where TM : IMessage
     {
         private readonly IMessageProcessor _messageProcessor;

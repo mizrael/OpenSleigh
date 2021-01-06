@@ -32,7 +32,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
                 var messageType = i.GetGenericArguments().First();
                 
-                sagaConfigurator.Services.AddSingleton(typeof(ISubscriber<>).MakeGenericType(messageType),
+                sagaConfigurator.Services.AddSingleton(typeof(ISubscriber),
                                                        typeof(RabbitSubscriber<>).MakeGenericType(messageType));
             }
 

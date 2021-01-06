@@ -46,7 +46,7 @@ namespace OpenSleigh.Core.DependencyInjection
             var builder = new BusConfigurator(services, stateTypeResolver);
             configure?.Invoke(builder);
 
-            services.AddHostedService<SagasBackgroundService>()
+            services.AddHostedService<SubscribersBackgroundService>()
                    .AddHostedService<OutboxBackgroundService>()
                    .AddHostedService<OutboxCleanerBackgroundService>();
 
