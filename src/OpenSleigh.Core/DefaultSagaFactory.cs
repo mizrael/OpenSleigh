@@ -21,9 +21,14 @@ namespace OpenSleigh.Core
                 throw new ArgumentNullException(nameof(state));
 
             using var scope = _serviceProvider.CreateScope();
+            
             var saga = scope.ServiceProvider.GetRequiredService<TS>();
-            saga.State = state;
-            saga.Bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+
+            saga.SetState(state);
+
+            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+            saga.SetBus(bus);
+            
             return saga;
         }
     }

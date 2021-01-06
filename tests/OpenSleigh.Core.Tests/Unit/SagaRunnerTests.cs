@@ -50,7 +50,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
+            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -148,7 +148,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
+            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
 
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
             sagaFactory.Create(state)
@@ -178,7 +178,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.Bus = NSubstitute.Substitute.For<IMessageBus>();
+            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
