@@ -1,10 +1,14 @@
 version: 2.1
 
 orbs:
-  sonarcloud: ksmc/sonarcloud-dotnet@0.0.29
+  win: circleci/windows@2.2.0
 
 jobs:
   build:
+    executor:
+      name: win/default
+      shell: powershell.exe
+
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:5.0
       - image: 'circleci/mongo:latest'
@@ -16,14 +20,8 @@ jobs:
       - checkout
 
       - run:
-          name: Install dependencies
-          command: |
-            apt-get update && apt-get install -y gnupg2
-
-      - sonarcloud/setup-sonar
-
-      - run:
           name: Build and test
+          shell: powershell.exe
           command: |
             dotnet restore
             dotnet build --configuration Release --no-restore
