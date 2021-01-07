@@ -17,4 +17,4 @@ jobs:
           command: |
             dotnet restore
             dotnet build --configuration Release --no-restore
-            dotnet test --blame --no-restore     
+            dotnet test --blame --no-restore --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
