@@ -1,5 +1,8 @@
 version: 2.1
 
+orbs:
+  sonarcloud-dotnet: ksmc/sonarcloud-dotnet@0.0.29
+
 jobs:
   build:
     docker:
@@ -12,9 +15,18 @@ jobs:
     steps:
       - checkout
 
+      - sonarcloud/setup-sonar
+
       - run:
           name: Build and test
           command: |
             dotnet restore
             dotnet build --configuration Release --no-restore
             dotnet test --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
+
+
+workflows:
+  main:
+    jobs:
+      - build:
+          context: SonarCloud
