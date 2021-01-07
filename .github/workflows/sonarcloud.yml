@@ -33,12 +33,12 @@ jobs:
       run: dotnet test --filter Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
     - name: SonarCloud Scan
       uses: highbyte/sonarscan-dotnet@2.0
-	  with:
-		sonarProjectKey: mizrael_OpenSleigh        
+      with:
+        sonarProjectKey: mizrael_OpenSleigh        
         sonarProjectName: OpenSleigh        
         sonarOrganization: mizrael
-		dotnetTestArguments: --filter=Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
-		sonarBeginArguments: /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"
+        dotnetTestArguments: --filter=Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
+        sonarBeginArguments: /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
