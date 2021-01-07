@@ -1,4 +1,4 @@
-name: Sonarcloud scan
+name: Build and test
 
 on:
   push:
