@@ -59,9 +59,11 @@ namespace OpenSleigh.Samples.Console.Sagas
             await this.Bus.PublishAsync(message, cancellationToken);
         }
 
-        public async Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
+        public Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
         {
+            this.State.MarkAsCompleted(); 
             _logger.LogInformation($"parent saga '{context.Message.CorrelationId}' completed!");
+            return Task.CompletedTask;
         }
     }
 }

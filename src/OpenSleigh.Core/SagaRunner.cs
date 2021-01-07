@@ -49,8 +49,12 @@ namespace OpenSleigh.Core
                     await Task.Delay(TimeSpan.FromMilliseconds(_rand.Next(1, 10)), cancellationToken).ConfigureAwait(false);
                 }
             }
-            
-            //TODO: if saga is marked as complete, stop processing
+
+            if (state.IsCompleted())
+            {
+                _logger.LogWarning($"Stopped processing message '{messageContext.Message.Id}', Saga '{state.Id}' was already marked as completed");
+                return;
+            }
             
             if (state.CheckWasProcessed(messageContext.Message))
             {
@@ -84,7 +88,6 @@ namespace OpenSleigh.Core
                 await transaction.RollbackAsync(cancellationToken);
                 throw;
             }
-    
         }
     }
 }

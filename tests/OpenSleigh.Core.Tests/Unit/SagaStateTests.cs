@@ -24,7 +24,6 @@ namespace OpenSleigh.Core.Tests.Unit
             Assert.Throws<ArgumentException>(() => sut.SetAsProcessed(message));
         }
 
-
         [Fact]
         public void CheckWasProcessed_should_return_false_if_message_not_processed()
         {
@@ -49,6 +48,21 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new DummySagaState(Guid.NewGuid());
             
             Assert.Throws<ArgumentNullException>(() => sut.CheckWasProcessed((IMessage)null));
+        }
+
+        [Fact]
+        public void IsCompleted_should_return_false_when_state_is_initialized_first_time()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            state.IsCompleted().Should().BeFalse();
+        }
+
+        [Fact]
+        public void IsCompleted_should_return_true_after_state_is_marked_as_completed()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            state.MarkAsCompleted();
+            state.IsCompleted().Should().BeTrue();
         }
     }
 }

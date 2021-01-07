@@ -110,6 +110,26 @@ public class MyAwesomeSaga :
 }
 ```
 
+#### Stop Messages execution
+
+A Saga can be marked as completed by calling the `MarkAsCompleted()` on its state:
+
+```
+public class MyAwesomeSaga :
+    Saga<MyAwesomeSagaState>,
+    IStartedBy<StartMyAwesomeSaga>,
+    IHandleMessage<MyAwesomeSagaCompleted>,
+{
+    // code omitted for brevity
+
+    public async Task HandleAsync(IMessageContext<MyAwesomeSagaCompleted> context, CancellationToken cancellationToken = default)
+    {
+        this.State.MarkAsCompleted();
+    }
+}
+```
+A completed Saga will not handle messages anymore. 
+
 #### Publishing messages
 A message can be published by calling the `PublishAsync()` method of `IMessageBus`. Sagas classes get an instance injected as Property:
 
