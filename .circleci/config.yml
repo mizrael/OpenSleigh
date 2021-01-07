@@ -15,6 +15,11 @@ jobs:
     steps:
       - checkout
 
+      - run:
+          name: Install dependencies
+          command: |
+            apt-get update && apt-get install -y gnupg2
+
       - sonarcloud/setup-sonar
 
       - run:
