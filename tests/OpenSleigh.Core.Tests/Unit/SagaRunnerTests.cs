@@ -110,6 +110,43 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
+        public async Task RunAsync_should_not_execute_handler_if_saga_is_marked_as_completed()
+        {
+            var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+            messageContext.Message.Returns(message);
+
+            var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
+            saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
+                .DoNotCallBase();
+
+            var state = new DummySagaState(message.CorrelationId);
+            state.MarkAsCompleted();
+
+            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
+            sagaFactory.Create(state)
+                .Returns(saga);
+
+            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
+
+            sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
+                .Returns((state, Guid.NewGuid()));
+
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
+
+            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+
+            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
+
+            await sut.RunAsync(messageContext, CancellationToken.None);
+
+            sagaFactory.DidNotReceiveWithAnyArgs().Create(null);
+
+            await saga.DidNotReceiveWithAnyArgs()
+                .HandleAsync(messageContext, Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
         public async Task RunAsync_should_throw_SagaNotFoundException_if_saga_cannot_be_build()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
@@ -164,7 +201,7 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_execute_all_registered_sagas()
+        public async Task RunAsync_should_execute_saga_handler()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
 

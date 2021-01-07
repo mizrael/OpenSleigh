@@ -10,6 +10,8 @@ namespace OpenSleigh.Core
     {
         [JsonProperty]
         private readonly Dictionary<Guid, IMessage> _processedMessages = new();
+
+        [JsonProperty] private bool _isComplete;
         
         protected SagaState(Guid id)
         {
@@ -34,5 +36,9 @@ namespace OpenSleigh.Core
             if (message == null) throw new ArgumentNullException(nameof(message));
             return _processedMessages.ContainsKey(message.Id);
         }
+
+        public bool IsCompleted() => _isComplete;
+
+        public void MarkAsCompleted() => _isComplete = true;
     }
 }
