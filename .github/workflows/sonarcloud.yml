@@ -31,6 +31,7 @@ jobs:
         sonarProjectKey: mizrael_OpenSleigh        
         sonarProjectName: OpenSleigh        
         sonarOrganization: mizrael
+        dotnetBuildArguments: --configuration Release
         dotnetTestArguments: --filter=Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
         sonarBeginArguments: /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"
       env:
