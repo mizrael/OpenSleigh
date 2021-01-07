@@ -1,0 +1,22 @@
+name: Sonarcloud scan
+
+on:
+  push:
+  #  paths:
+  #  - 'src/**'
+ #   - 'tests/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: windows-latest
+    steps:    
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis   
+      - name: Build and analyze
+           shell: powershell
+        run: |   
+          dotnet restore
+          dotnet build --configuration Release --no-restore
+          dotnet test --filter Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
