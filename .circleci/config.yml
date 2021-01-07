@@ -1,7 +1,7 @@
 version: 2.1
 
 orbs:
-  sonarcloud-dotnet: ksmc/sonarcloud-dotnet@0.0.29
+  sonarcloud: ksmc/sonarcloud-dotnet@0.0.29
 
 jobs:
   build:
