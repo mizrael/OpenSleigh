@@ -21,6 +21,6 @@ jobs:
       - name: Build and test
         #shell: powershell
         run: |   
-          dotnet restore
-          dotnet build --configuration Release --no-restore
+#  dotnet restore
+#  dotnet build --configuration Release --no-restore
           dotnet test --filter Category!=Integration --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
