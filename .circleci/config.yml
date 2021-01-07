@@ -1,14 +1,7 @@
 version: 2.1
 
-orbs:
-  win: circleci/windows@2.2.0
-
 jobs:
   build:
-    executor:
-      name: win/default
-      shell: powershell.exe
-
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:5.0
       - image: 'circleci/mongo:latest'
@@ -20,8 +13,15 @@ jobs:
       - checkout
 
       - run:
-          name: Build and test
-          shell: powershell.exe
+          name: Install dependencies
+          command: |
+            apt-get update && apt-get install -y openjdk-11-jdk
+            dotnet tool install --global dotnet-sonarscanner
+            dotnet tool install --global coverlet.console
+            PATH="$PATH:/root/.dotnet/tools"
+
+      - run:
+          name: Build and test          
           command: |
             dotnet restore
             dotnet build --configuration Release --no-restore
