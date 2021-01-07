@@ -22,5 +22,6 @@ jobs:
         #shell: powershell
         #  dotnet restore
         #  dotnet build --configuration Release --no-restore
+        # dotnet test --filter Category!=Integration --blame --no-restore --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
         run: |   
-          dotnet test --filter Category!=Integration --blame --no-restore --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
+          dotnet test --filter Category!=Integration /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml
