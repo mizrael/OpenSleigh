@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 0  # Shallow clones should be disabled for a better relevancy of analysis   
       - name: Build and analyze
-           shell: powershell
+        shell: powershell
         run: |   
           dotnet restore
           dotnet build --configuration Release --no-restore
