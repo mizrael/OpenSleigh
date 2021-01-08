@@ -28,7 +28,7 @@ jobs:
               /o:"mizrael" \
               /d:sonar.host.url="https://sonarcloud.io" \
               /d:sonar.login="$SONAR_TOKEN" \
-              /d:sonar.cs.opencover.reportsPaths=/coverage.opencover.xml
+              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"
 
       - run:
           name: Build and test          
