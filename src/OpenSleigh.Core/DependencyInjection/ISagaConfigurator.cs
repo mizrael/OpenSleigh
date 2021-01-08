@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
@@ -13,6 +14,7 @@ namespace OpenSleigh.Core.DependencyInjection
         ISagaConfigurator<TS, TD> UseStateFactory(Func<IMessage, TD> stateFactory);
     }
 
+    [ExcludeFromCodeCoverage]
     internal class SagaConfigurator<TS, TD> : ISagaConfigurator<TS, TD>
         where TS : Saga<TD>
         where TD : SagaState

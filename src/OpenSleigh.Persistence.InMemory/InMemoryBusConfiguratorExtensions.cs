@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
@@ -6,6 +7,7 @@ using OpenSleigh.Persistence.InMemory.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
 {
+    [ExcludeFromCodeCoverage]
     public static class InMemoryBusConfiguratorExtensions
     {
         public static IBusConfigurator UseInMemoryPersistence(

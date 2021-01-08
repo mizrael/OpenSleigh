@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
@@ -5,8 +6,10 @@ using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
+    [ExcludeFromCodeCoverage]
     public record RabbitConfiguration(string HostName, string UserName, string Password);
 
+    [ExcludeFromCodeCoverage]
     public static class RabbitBusConfiguratorExtensions
     {
         public static IBusConfigurator UseRabbitMQTransport(this IBusConfigurator busConfigurator,

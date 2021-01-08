@@ -19,9 +19,11 @@ namespace OpenSleigh.Samples.Sample2.API.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> StartSaga(CancellationToken cancellationToken = default)
+        public async Task<IActionResult> StartSimpleSaga(bool isSimple = true, CancellationToken cancellationToken = default)
         {
-            var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
+            IMessage message = isSimple ? new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid()) :
+                new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
+            
             await _bus.PublishAsync(message, cancellationToken);
 
             return Accepted(new

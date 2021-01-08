@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,11 +8,13 @@ using OpenSleigh.Persistence.Mongo.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {
+    [ExcludeFromCodeCoverage]
     public record MongoConfiguration(string ConnectionString,
                                      string DbName,
                                      MongoSagaStateRepositoryOptions SagaRepositoryOptions,
                                      MongoOutboxRepositoryOptions OutboxRepositoryOptions);
 
+    [ExcludeFromCodeCoverage]
     public static class MongoBusConfiguratorExtensions
     {
         public static IBusConfigurator UseMongoPersistence(

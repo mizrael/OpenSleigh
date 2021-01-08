@@ -7,20 +7,28 @@ using Xunit;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 {
-    public class OutboxRepositoryTests
+    public class MongoOutboxRepositoryTests
     {
         [Fact]
         public void ctor_should_throw_when_DbContext_null()
         {
             var serializer = NSubstitute.Substitute.For<ISerializer>();
-            Assert.Throws<ArgumentNullException>(() => new OutboxRepository(null, serializer));
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(null, serializer, MongoOutboxRepositoryOptions.Default));
         }
 
         [Fact]
         public void ctor_should_throw_when_Serializer_null()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
-            Assert.Throws<ArgumentNullException>(() => new OutboxRepository(dbCtx, null));
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, null, MongoOutboxRepositoryOptions.Default));
+        }
+
+        [Fact]
+        public void ctor_should_throw_when_options_null()
+        {
+            var dbCtx = NSubstitute.Substitute.For<IDbContext>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, serializer, null));
         }
 
         [Fact]
@@ -28,7 +36,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
-            var sut = new OutboxRepository(dbCtx, serializer);
+            var sut = new MongoOutboxRepository(dbCtx, serializer, MongoOutboxRepositoryOptions.Default);
 
             var result = await sut.ReadMessagesToProcess();
             result.Should().NotBeNull().And.BeEmpty();

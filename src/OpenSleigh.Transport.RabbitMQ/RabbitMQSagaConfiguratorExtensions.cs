@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
@@ -5,6 +6,7 @@ using OpenSleigh.Core.DependencyInjection;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
+    [ExcludeFromCodeCoverage]
     public static class RabbitMQSagaConfiguratorExtensions
     {
         public static ISagaConfigurator<TS, TD> UseRabbitMQTransport<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)

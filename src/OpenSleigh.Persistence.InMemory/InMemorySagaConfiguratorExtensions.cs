@@ -2,12 +2,14 @@ using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading.Channels;
 using OpenSleigh.Persistence.InMemory.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
 {
+    [ExcludeFromCodeCoverage]
     public static class InMemorySagaConfiguratorExtensions
     {
         public static ISagaConfigurator<TS, TD> UseInMemoryTransport<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)

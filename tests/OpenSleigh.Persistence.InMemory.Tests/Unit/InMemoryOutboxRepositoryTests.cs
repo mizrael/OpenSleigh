@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using FluentAssertions;
+using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Persistence.InMemory.Messaging;
 using Xunit;
 
@@ -30,10 +31,16 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             foreach (var message in messages)
                 await sut.AppendAsync(message);
 
-            await sut.CleanProcessedAsync();
-            
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull().And.Contain(messages);
+            
+            foreach (var message in messages)
+                await sut.BeginProcessingAsync(message);
+            
+            await sut.CleanProcessedAsync();
+            
+            results = await sut.ReadMessagesToProcess();
+            results.Should().NotBeNull().And.BeEmpty();
         }
 
         [Fact]
@@ -68,7 +75,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             foreach (var message in messages)
                 await sut.AppendAsync(message);
 
-            await sut.MarkAsSentAsync(messages[0]);
+            var lockId = await sut.BeginProcessingAsync(messages[0]);
+            await sut.MarkAsSentAsync(messages[0], lockId);
 
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull()
@@ -77,10 +85,21 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         }
 
         [Fact]
+        public async Task MarkAsSentAsync_should_throw_when_message_lock_id_invalid()
+        {
+            var message = DummyMessage.New();
+            var sut = new InMemoryOutboxRepository();
+
+            await sut.AppendAsync(message);
+            
+            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.MarkAsSentAsync(message, Guid.Empty));
+        }
+
+        [Fact]
         public async Task MarkAsSentAsync_should_throw_when_message_null()
         {
             var sut = new InMemoryOutboxRepository();
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.MarkAsSentAsync(null));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.MarkAsSentAsync(null, Guid.Empty));
         }
 
         [Fact]
@@ -88,6 +107,25 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         {
             var sut = new InMemoryOutboxRepository();
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
+        }
+
+        [Fact]
+        public async Task BeginProcessingAsync_should_throw_when_message_already_locked()
+        {
+            var message = DummyMessage.New(); 
+            
+            var sut = new InMemoryOutboxRepository();
+            await sut.AppendAsync(message);
+            await sut.BeginProcessingAsync(message);
+
+            await Assert.ThrowsAsync<LockException>(async () => await sut.BeginProcessingAsync(message));
+        }
+
+        [Fact]
+        public async Task BeginProcessingAsync_should_throw_when_message_null()
+        {
+            var sut = new InMemoryOutboxRepository();
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.BeginProcessingAsync(null));
         }
     }
 }

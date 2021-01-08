@@ -96,9 +96,6 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             return AppendAsyncCore(message, transaction, cancellationToken);
         }
 
-        public Task CleanProcessedAsync(CancellationToken cancellationToken = default) =>
-            _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
-
         private async Task AppendAsyncCore(IMessage message, ITransaction transaction, CancellationToken cancellationToken)
         {
             var data = await _serializer.SerializeAsync(message, cancellationToken);
@@ -112,8 +109,12 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
                 await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken)
                     .ConfigureAwait(false);
         }
-        
-        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken)
+
+        public Task CleanProcessedAsync(CancellationToken cancellationToken = default) =>
+            _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
+
+
+        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
