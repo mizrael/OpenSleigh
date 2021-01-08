@@ -10,14 +10,14 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
     public class OutboxRepositoryTests
     {
         [Fact]
-        public async Task ctor_should_throw_when_DbContext_null()
+        public void ctor_should_throw_when_DbContext_null()
         {
             var serializer = NSubstitute.Substitute.For<ISerializer>();
             Assert.Throws<ArgumentNullException>(() => new OutboxRepository(null, serializer));
         }
 
         [Fact]
-        public async Task ctor_should_throw_when_Serializer_null()
+        public void ctor_should_throw_when_Serializer_null()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             Assert.Throws<ArgumentNullException>(() => new OutboxRepository(dbCtx, null));

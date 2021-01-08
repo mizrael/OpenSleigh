@@ -12,6 +12,16 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
     public class MongoUnitOfWorkTests
     {
         [Fact]
+        public void ctor_should_throw_when_arguments_null()
+        {
+            var client = NSubstitute.Substitute.For<IMongoClient>();
+            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
+
+            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(null, logger));
+            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(client, null));
+        }
+        
+        [Fact]
         public async Task StartTransactionAsync_should_return_NullTransaction_if_transactions_not_supported()
         {
             var session = NSubstitute.Substitute.For<IClientSessionHandle>();
