@@ -1,11 +1,11 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Core;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Samples.Console.Sagas
+namespace OpenSleigh.Samples.Sample2.Common.Sagas
 {
     public class ParentSagaState : SagaState{
         public ParentSagaState(Guid id) : base(id){}

@@ -1,15 +1,15 @@
 ﻿using System;
 using System.Threading.Tasks;
-using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Persistence.Mongo;
-using OpenSleigh.Samples.Console.Sagas;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Persistence.Mongo;
+using OpenSleigh.Samples.Sample2.Common.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
-namespace OpenSleigh.Samples.Console
+namespace OpenSleigh.Samples.Sample2.Worker
 {
     class Program
     {
@@ -18,15 +18,7 @@ namespace OpenSleigh.Samples.Console
             var hostBuilder = CreateHostBuilder(args);
             var host = hostBuilder.Build();
 
-            using var scope = host.Services.CreateScope();
-            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-            var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
-
-            await Task.WhenAll(new[]
-            {
-                host.RunAsync(),
-                bus.PublishAsync(message)
-            });
+            await host.RunAsync();
         }
 
         static IHostBuilder CreateHostBuilder(string[] args) =>
@@ -39,25 +31,26 @@ namespace OpenSleigh.Samples.Console
                     })
                     .AddOpenSleigh(cfg =>
                     {
-                        var mongoSection = hostContext.Configuration.GetSection("Mongo");
-                        var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"], 
-                                                              mongoSection["DbName"],
-                                                              MongoSagaStateRepositoryOptions.Default);
-
                         var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
                         var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 
                             rabbitSection["UserName"],
                             rabbitSection["Password"]);
 
+                        var mongoSection = hostContext.Configuration.GetSection("Mongo");
+                        var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
+                            mongoSection["DbName"],
+                            MongoSagaStateRepositoryOptions.Default);
+
+                        cfg.UseRabbitMQTransport(rabbitCfg)
+                            .UseMongoPersistence(mongoCfg);
+
                         cfg.AddSaga<ParentSaga, ParentSagaState>()
                             .UseStateFactory(msg => new ParentSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport(rabbitCfg)
-                            .UseMongoPersistence(mongoCfg);
+                            .UseRabbitMQTransport();
 
                         cfg.AddSaga<ChildSaga, ChildSagaState>()
                             .UseStateFactory(msg => new ChildSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport(rabbitCfg)
-                            .UseMongoPersistence(mongoCfg);
+                            .UseRabbitMQTransport();
                     });
             });
     }

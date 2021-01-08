@@ -3,7 +3,7 @@ version: '3.4'
 services:
   openSleigh.samples.infrastructure.mongodb:
     image: mongo:latest
-    container_name: openSleigh.samples.infrastructure.mongodb    
+    container_name: openSleigh.sample2.infrastructure.mongodb    
     restart: always
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
@@ -19,7 +19,7 @@ services:
   
   openSleigh.samples.infrastructure.rabbitmq:        
     image: rabbitmq:3-management-alpine
-    container_name: openSleigh.samples.infrastructure.rabbitmq    
+    container_name: openSleigh.sample2.infrastructure.rabbitmq    
     restart: always
     environment:
      RABBITMQ_DEFAULT_VHOST: "/"

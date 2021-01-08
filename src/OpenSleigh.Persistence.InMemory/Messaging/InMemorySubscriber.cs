@@ -1,11 +1,11 @@
-﻿using OpenSleigh.Core;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Persistence.InMemory
+namespace OpenSleigh.Persistence.InMemory.Messaging
 {
     internal class InMemorySubscriber<TM> : ISubscriber
         where TM : IMessage
@@ -27,10 +27,6 @@ namespace OpenSleigh.Persistence.InMemory
             }
         }
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

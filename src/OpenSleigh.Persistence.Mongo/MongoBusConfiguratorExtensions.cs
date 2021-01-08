@@ -1,4 +1,3 @@
-using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
@@ -12,14 +11,12 @@ namespace OpenSleigh.Persistence.Mongo
                                      string DbName,
                                      MongoSagaStateRepositoryOptions RepositoryOptions);
 
-    public static class MongoSagaConfiguratorExtensions
+    public static class MongoBusConfiguratorExtensions
     {
-        public static ISagaConfigurator<TS, TD> UseMongoPersistence<TS, TD>(
-            this ISagaConfigurator<TS, TD> sagaConfigurator, MongoConfiguration config)
-            where TS : Saga<TD>
-            where TD : SagaState
+        public static IBusConfigurator UseMongoPersistence(
+            this IBusConfigurator busConfigurator, MongoConfiguration config)
         {
-            sagaConfigurator.Services
+            busConfigurator.Services
                 .AddSingleton<IMongoClient>(ctx => new MongoClient(connectionString: config.ConnectionString))
                 .AddSingleton(ctx =>
                 {
@@ -33,7 +30,7 @@ namespace OpenSleigh.Persistence.Mongo
                 .AddSingleton(config.RepositoryOptions)
                 .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
                 .AddSingleton<IOutboxRepository, OutboxRepository>();
-            return sagaConfigurator;
+            return busConfigurator;
         }
     }
 }

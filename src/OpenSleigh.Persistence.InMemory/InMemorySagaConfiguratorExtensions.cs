@@ -1,26 +1,15 @@
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Linq;
 using System.Threading.Channels;
-using OpenSleigh.Core.Messaging;
+using OpenSleigh.Persistence.InMemory.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
 {
     public static class InMemorySagaConfiguratorExtensions
     {
-        public static ISagaConfigurator<TS, TD> UseInMemoryPersistence<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)
-            where TS : Saga<TD>
-            where TD : SagaState
-        {
-            sagaConfigurator.Services.AddSingleton(typeof(ISagaStateRepository), typeof(InMemorySagaStateRepository));
-            sagaConfigurator.Services.AddSingleton<IUnitOfWork, InMemoryUnitOfWork>();
-
-            return sagaConfigurator;
-        }
-
         public static ISagaConfigurator<TS, TD> UseInMemoryTransport<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)
             where TS : Saga<TD>
             where TD : SagaState
@@ -52,9 +41,6 @@ namespace OpenSleigh.Persistence.InMemory
                 sagaConfigurator.Services.AddSingleton(typeof(ISubscriber),
                                                        typeof(InMemorySubscriber<>).MakeGenericType(messageType));
             }
-
-            sagaConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
-                                    .AddSingleton<IChannelFactory, ChannelFactory>();
 
             return sagaConfigurator;
         }

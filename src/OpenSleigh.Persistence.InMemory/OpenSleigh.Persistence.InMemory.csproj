@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <PackageVersion>0.4.0</PackageVersion>
+    <PackageVersion>0.5.0</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Persistence.InMemory</Product>
@@ -23,7 +23,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All"/>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
   </ItemGroup>
 
   <ItemGroup>
