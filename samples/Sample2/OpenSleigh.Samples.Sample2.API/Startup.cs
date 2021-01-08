@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,11 +37,14 @@ namespace OpenSleigh.Samples.Sample2.API
                 var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
                     mongoSection["DbName"],
                     MongoSagaStateRepositoryOptions.Default);
-
+                
                 var rabbitSection = Configuration.GetSection("Rabbit");
                 var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"],
                     rabbitSection["UserName"],
                     rabbitSection["Password"]);
+
+                cfg.UseRabbitMQTransport(rabbitCfg)
+                    .UseMongoPersistence(mongoCfg);
             });
         }
 

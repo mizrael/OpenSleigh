@@ -1,3 +1,5 @@
+using Microsoft.Extensions.DependencyInjection;
+
 namespace OpenSleigh.Core.DependencyInjection
 {
     public interface IBusConfigurator
@@ -5,5 +7,7 @@ namespace OpenSleigh.Core.DependencyInjection
         ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
             where TS : Saga<TD>
             where TD : SagaState;
+
+        IServiceCollection Services { get; }
     }
 }

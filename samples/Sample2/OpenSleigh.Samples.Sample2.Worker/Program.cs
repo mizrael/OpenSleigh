@@ -31,25 +31,26 @@ namespace OpenSleigh.Samples.Sample2.Worker
                     })
                     .AddOpenSleigh(cfg =>
                     {
-                        var mongoSection = hostContext.Configuration.GetSection("Mongo");
-                        var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"], 
-                                                              mongoSection["DbName"],
-                                                              MongoSagaStateRepositoryOptions.Default);
-
                         var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
                         var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 
                             rabbitSection["UserName"],
                             rabbitSection["Password"]);
 
+                        var mongoSection = hostContext.Configuration.GetSection("Mongo");
+                        var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
+                            mongoSection["DbName"],
+                            MongoSagaStateRepositoryOptions.Default);
+
+                        cfg.UseRabbitMQTransport(rabbitCfg)
+                            .UseMongoPersistence(mongoCfg);
+
                         cfg.AddSaga<ParentSaga, ParentSagaState>()
                             .UseStateFactory(msg => new ParentSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport(rabbitCfg)
-                            .UseMongoPersistence(mongoCfg);
+                            .UseRabbitMQTransport();
 
                         cfg.AddSaga<ChildSaga, ChildSagaState>()
                             .UseStateFactory(msg => new ChildSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport(rabbitCfg)
-                            .UseMongoPersistence(mongoCfg);
+                            .UseRabbitMQTransport();
                     });
             });
     }
