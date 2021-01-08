@@ -30,7 +30,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            var context = _publisherChannelFactory.Create(message);
+            using var context = _publisherChannelFactory.Create(message);
 
             var encodedMessage = _encoder.Encode(message);
 

@@ -1,4 +1,6 @@
+using System;
 using FluentAssertions;
+using OpenSleigh.Core.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
@@ -16,6 +18,13 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.QueueName.Should().Be("dummymessage.workers");
             result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
             result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
+        }
+
+        [Fact]
+        public void Create_should_throw_if_message_null()
+        {
+            var sut = new QueueReferenceFactory();
+            Assert.Throws<ArgumentNullException>(() => sut.Create((IMessage) null));
         }
     }
 }

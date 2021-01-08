@@ -3,15 +3,27 @@ using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public sealed record PublisherChannelContext(IModel Channel, QueueReferences QueueReferences) : IDisposable
+    public sealed class PublisherChannelContext : IDisposable
     {
+        private readonly IChannelPool _channelPool;
+
+        public PublisherChannelContext(IModel channel, 
+            QueueReferences queueReferences,
+            IChannelPool channelPool)
+        {
+            Channel = channel ?? throw new ArgumentNullException(nameof(channel));
+            QueueReferences = queueReferences ?? throw new ArgumentNullException(nameof(queueReferences));
+            _channelPool = channelPool ?? throw new ArgumentNullException(nameof(channelPool));
+        }
+
+        public IModel Channel { get; }
+        public QueueReferences QueueReferences { get; }
+
         public void Dispose()
         {
             if (Channel is null)
                 return;
-            if(Channel.IsOpen)
-                Channel.Close();
-            Channel.Dispose();
+            _channelPool.Return(this.Channel, this.QueueReferences);
         }
     }
 }

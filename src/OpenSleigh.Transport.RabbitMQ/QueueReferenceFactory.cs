@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public class QueueReferenceFactory : IQueueReferenceFactory
+    internal class QueueReferenceFactory : IQueueReferenceFactory
     {
+        private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesMap = new();
+        
         public QueueReferences Create<TM>() where TM : IMessage
         {
             var messageType = typeof(TM);
@@ -15,8 +18,12 @@ namespace OpenSleigh.Transport.RabbitMQ
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
+            
             var messageType = message.GetType();
-            return Create(messageType);
+
+            var references = _queueReferencesMap.GetOrAdd(messageType, k => Create(messageType));
+
+            return references;
         }
         
         private static QueueReferences Create(Type messageType)

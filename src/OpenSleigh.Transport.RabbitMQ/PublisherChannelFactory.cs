@@ -1,33 +1,29 @@
 ﻿using System;
-using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using OpenSleigh.Core.Messaging;
-using RabbitMQ.Client;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Transport.RabbitMQ.Tests")]
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public class PublisherChannelFactory : IPublisherChannelFactory
+    internal class PublisherChannelFactory : IPublisherChannelFactory
     {
-        private readonly IBusConnection _connection;
+        private readonly IChannelPool _channelPool;
         private readonly IQueueReferenceFactory _queueReferenceFactory;
-
-        private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesMap = new();
-
-        public PublisherChannelFactory(IBusConnection connection, IQueueReferenceFactory queueReferenceFactory)
+        
+        public PublisherChannelFactory(IChannelPool channelPool, IQueueReferenceFactory queueReferenceFactory)
         {
-            _connection = connection;
-            _queueReferenceFactory = queueReferenceFactory;
+            _channelPool = channelPool ?? throw new ArgumentNullException(nameof(channelPool));
+            _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         }
 
         public PublisherChannelContext Create(IMessage message)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
-
-            var messageType = message.GetType();
-            var references = _queueReferencesMap.GetOrAdd(messageType, k => _queueReferenceFactory.Create(message));
-            var channel = _connection.CreateChannel();
-            channel.ExchangeDeclare(exchange: references.ExchangeName, type: ExchangeType.Fanout);
-            return new PublisherChannelContext(channel, references);
+            
+            var references = _queueReferenceFactory.Create(message);
+            var channel = _channelPool.Get(references);
+            return new PublisherChannelContext(channel, references, _channelPool);
         }
     }
 }
