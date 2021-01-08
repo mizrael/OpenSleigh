@@ -31,6 +31,30 @@ Host.CreateDefaultBuilder(args)
     });
 ```
 
+#### Configuring Transport and Persistence
+OpenSleigh needs to be configured to point to a specific Transport bus and a Persistence mechanism for the Saga States:
+```
+Host.CreateDefaultBuilder(args)
+    .ConfigureServices((hostContext, services) => {
+                services.AddOpenSleigh(cfg =>{ 
+            var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
+            var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 
+                rabbitSection["UserName"],
+                rabbitSection["Password"]);
+
+            gfg.UseRabbitMQTransport(rabbitCfg);
+
+            var mongoSection = hostContext.Configuration.GetSection("Mongo");
+            var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
+                mongoSection["DbName"],
+                MongoSagaStateRepositoryOptions.Default);
+
+            cfg.UseMongoPersistence(mongoCfg);
+        });
+    });
+```
+In this example, the system is configured to use RabbitMQ as message bus and MongoDB to persist the data.
+
 #### Adding a Saga
 
 A Saga is a simple class inheriting from the base [`Saga<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/Saga.cs) class. We also have to create an additional State class holding it's data, by inheriting from [`SagaState`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/SagaState.cs):
@@ -59,11 +83,9 @@ At this point all you have to do is register and configure the Saga:
 services.AddOpenSleigh(cfg =>{
     cfg.AddSaga<MyAwesomeSaga, MyAwesomeSagaState>()
         .UseStateFactory(msg => new MyAwesomeSagaState(msg.CorrelationId))
-        .UseRabbitMQTransport(rabbitConfig)
-        .UseMongoPersistence(mongoConfig);
+        .UseRabbitMQTransport(rabbitConfig);
 });
 ```
-In this example, the State for this Saga will be persisted in MongoDB, and its messages will use RabbitMQ as Transport mechanism.
 
 #### Starting a Saga
 In order to start a Saga, we need to tell OpenSleigh which message type can be used as "initiator". In order to do that, we need to add  the [`IStartedBy<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/IStartedBy.cs) interface to the Saga and implement it:
@@ -147,8 +169,12 @@ public class MyAwesomeSaga :
 ```
 OpenSleigh uses the [Outbox pattern](https://www.davideguida.com/improving-microservices-reliability-part-2-outbox-pattern/) to ensure messages are properly published and the Saga State is persisted.
 
-#### Sample Application
-A .NET Console application is available in the `/samples/` folder. Before running it, make sure to spin-up the required infrastructure using the provided docker-compose configuration using `docker-compose up`.
+#### Samples
+Samples are available in the `/samples/` folder.
+
+- **[Sample1](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample1)** is a simple .NET Console Application showing how to bootstrap OpenSleigh and use In-Memory persistence and transport.
+
+- **[Sample2](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample2)** is a more interesting scenario, with a Web API acting as message producer and a Console Application as subscriber. This example uses RabbitMQ and MongoDB.
 
 ## Roadmap
 - add more tests
