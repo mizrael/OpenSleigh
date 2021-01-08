@@ -87,6 +87,8 @@ services.AddOpenSleigh(cfg =>{
 });
 ```
 
+When adding a Saga, it's important to specify the Transport we want to use for its messages (inbound and outbound). In this example we're using the `UseRabbitMQTransport()` extension method, which tells OpenSleight to use RabbitMQ for this Saga.
+
 #### Starting a Saga
 In order to start a Saga, we need to tell OpenSleigh which message type can be used as "initiator". In order to do that, we need to add  the [`IStartedBy<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/IStartedBy.cs) interface to the Saga and implement it:
 
