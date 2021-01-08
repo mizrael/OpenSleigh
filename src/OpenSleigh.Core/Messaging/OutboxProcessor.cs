@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Core.Messaging
@@ -50,8 +51,13 @@ namespace OpenSleigh.Core.Messaging
             {
                 try
                 {
+                    var lockId = await _outboxRepository.BeginProcessingAsync(message, cancellationToken);
                     await _publisher.PublishAsync(message, cancellationToken);
-                    await _outboxRepository.MarkAsSentAsync(message, cancellationToken);
+                    await _outboxRepository.MarkAsSentAsync(message, lockId, cancellationToken);
+                }
+                catch (LockException e)
+                {
+                    _logger.LogDebug(e, $"message '{message.Id}' was already locked by another consumer. {e.Message}");
                 }
                 catch (Exception e)
                 {
