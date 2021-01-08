@@ -33,8 +33,8 @@ jobs:
       - run:
           name: Build and test          
           command: |            
-            dotnet build --configuration Debug
-            dotnet test --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
+            dotnet build 
+            dotnet test --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
 
       - run:
           name: Stop Sonarcloud 
