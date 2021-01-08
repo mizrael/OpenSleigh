@@ -26,4 +26,5 @@ namespace OpenSleigh.Core.BackgroundServices
             await Task.WhenAll(tasks.ToArray());
         }
     }
+
 }

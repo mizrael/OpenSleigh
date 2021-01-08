@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using OpenSleigh.Core.Messaging;
@@ -7,6 +8,7 @@ using OpenSleigh.Core.Messaging;
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
 {
+    [ExcludeFromCodeCoverage]
     internal class BusConfigurator : IBusConfigurator
     {
         private readonly ISagaTypeResolver _typeResolver;

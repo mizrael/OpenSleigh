@@ -1,9 +1,11 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.Serialization;
 
 namespace OpenSleigh.Core.Exceptions
 {
     [Serializable]
+    [ExcludeFromCodeCoverage]
     public class StateCreationException : Exception
     {
         public StateCreationException(Type stateType, Guid correlationId) 
