@@ -18,12 +18,11 @@ jobs:
             apt-get update && apt-get install -y openjdk-11-jdk
             dotnet tool install --global dotnet-sonarscanner
             dotnet tool install --global coverlet.console            
+            echo 'export PATH="$PATH:/root/.dotnet/tools"' >> $BASH_ENV
 
       - run:
           name: Start Sonarcloud 
           command: |
-            export PATH="$PATH:/root/.dotnet/tools"
-
             dotnet sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
@@ -40,7 +39,7 @@ jobs:
 
       - run:
           name: Stop Sonarcloud 
-          command: |
+          command: |            
             dotnet sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
