@@ -3,17 +3,20 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using MongoDB.Driver;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Persistence.Mongo.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {
+    [ExcludeFromCodeCoverage]
     public record MongoSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
     {
         public static readonly MongoSagaStateRepositoryOptions Default = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
     }
 
+    [ExcludeFromCodeCoverage]
     public class MongoSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;

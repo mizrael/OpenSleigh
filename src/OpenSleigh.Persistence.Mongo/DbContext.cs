@@ -77,7 +77,10 @@ namespace OpenSleigh.Persistence.Mongo
                     mapper.MapProperty(c => c.Type);
                     mapper.MapProperty(c => c.Status);
                     mapper.MapProperty(c => c.PublishingDate).SetDefaultValue(() => null);
-                    mapper.MapCreator(s => new Entities.OutboxMessage(s.Id, s.Data, s.Type, s.Status, s.PublishingDate));
+                    mapper.MapProperty(c => c.LockId).SetSerializer(nullableGuidSerializer)
+                        .SetDefaultValue(() => null);
+                    mapper.MapProperty(c => c.LockTime).SetDefaultValue(() => null);
+                    mapper.MapCreator(s => new Entities.OutboxMessage(s.Id, s.Data, s.Type, s.Status, s.PublishingDate, s.LockId, s.LockTime));
                 });
         }
 

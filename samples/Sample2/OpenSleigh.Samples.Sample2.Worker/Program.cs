@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Persistence.Mongo;
+using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Samples.Sample2.Common.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
@@ -39,10 +40,15 @@ namespace OpenSleigh.Samples.Sample2.Worker
                         var mongoSection = hostContext.Configuration.GetSection("Mongo");
                         var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
                             mongoSection["DbName"],
-                            MongoSagaStateRepositoryOptions.Default);
+                            MongoSagaStateRepositoryOptions.Default,
+                            MongoOutboxRepositoryOptions.Default);
 
                         cfg.UseRabbitMQTransport(rabbitCfg)
                             .UseMongoPersistence(mongoCfg);
+
+                        cfg.AddSaga<SimpleSaga, SimpleSagaState>()
+                            .UseStateFactory(msg => new SimpleSagaState(msg.CorrelationId))
+                            .UseRabbitMQTransport();
 
                         cfg.AddSaga<ParentSaga, ParentSagaState>()
                             .UseStateFactory(msg => new ParentSagaState(msg.CorrelationId))
