@@ -3,7 +3,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Persistence.InMemory
+namespace OpenSleigh.Persistence.InMemory.Messaging
 {
     internal class ChannelFactory : IChannelFactory
     {

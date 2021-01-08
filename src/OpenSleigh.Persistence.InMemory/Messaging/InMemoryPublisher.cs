@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("OpenSleigh.Persistence.InMemory.Tests")]
-namespace OpenSleigh.Persistence.InMemory
+namespace OpenSleigh.Persistence.InMemory.Messaging
 {
     internal class InMemoryPublisher : IPublisher 
     {
