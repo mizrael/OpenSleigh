@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using NSubstitute;
+using OpenSleigh.Persistence.InMemory.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Persistence.InMemory.Tests.Unit
