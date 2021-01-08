@@ -16,9 +16,13 @@ jobs:
           name: Install dependencies
           command: |
             apt-get update && apt-get install -y openjdk-11-jdk
+
+      - run:
+          name: Install Sonarscanner
+          command: |
             dotnet tool install --global dotnet-sonarscanner
             dotnet tool install --global coverlet.console
-            export PATH="$PATH:/root/.dotnet/tools"
+            export PATH="$PATH:/root/.dotnet/tools"            
 
       - run:
           name: Start Sonarcloud 
