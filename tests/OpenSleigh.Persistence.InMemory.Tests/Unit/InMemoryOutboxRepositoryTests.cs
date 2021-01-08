@@ -1,7 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using FluentAssertions;
 using OpenSleigh.Persistence.InMemory.Messaging;
@@ -20,6 +17,26 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         }
 
         [Fact]
+        public async Task CleanProcessedAsync_should_remove_processed_messages()
+        {
+            var messages = new[]
+            {
+                DummyMessage.New(),
+                DummyMessage.New(),
+                DummyMessage.New(),
+            };
+            var sut = new InMemoryOutboxRepository();
+
+            foreach (var message in messages)
+                await sut.AppendAsync(message);
+
+            await sut.CleanProcessedAsync();
+            
+            var results = await sut.ReadMessagesToProcess();
+            results.Should().NotBeNull().And.Contain(messages);
+        }
+
+        [Fact]
         public async Task ReadMessagesToProcess_should_return_pending_messages()
         {
             var messages = new[]
@@ -32,7 +49,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             foreach (var message in messages)
                 await sut.AppendAsync(message);
-            
+
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull().And.Contain(messages);
         }
@@ -57,6 +74,20 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             results.Should().NotBeNull()
                 .And.HaveCount(2)
                 .And.NotContain(messages[0]);
+        }
+
+        [Fact]
+        public async Task MarkAsSentAsync_should_throw_when_message_null()
+        {
+            var sut = new InMemoryOutboxRepository();
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.MarkAsSentAsync(null));
+        }
+
+        [Fact]
+        public async Task AppendAsync_should_throw_when_message_null()
+        {
+            var sut = new InMemoryOutboxRepository();
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
     }
 }

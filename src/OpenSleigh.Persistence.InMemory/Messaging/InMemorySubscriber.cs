@@ -27,10 +27,6 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             }
         }
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
-        {
-            return Task.CompletedTask;
-        }
-
+        public Task StopAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }
