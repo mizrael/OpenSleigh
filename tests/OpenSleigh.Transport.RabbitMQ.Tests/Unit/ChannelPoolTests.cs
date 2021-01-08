@@ -78,5 +78,45 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             Assert.Throws<ArgumentNullException>(() => sut.Return(null, references));
             Assert.Throws<ArgumentNullException>(() => sut.Return(channel, null));
         }
+
+        [Fact]
+        public void Dispose_should_close_open_channels()
+        {
+            var openChannel = NSubstitute.Substitute.For<IModel>();
+            openChannel.IsOpen.Returns(true);
+            
+            var connection = NSubstitute.Substitute.For<IBusConnection>();
+            connection.CreateChannel()
+                .Returns(openChannel);
+
+            var sut = new ChannelPool(connection);
+
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            
+            sut.Return(openChannel, references);
+            sut.Dispose();
+            
+            openChannel.Received(1)
+                .Close();
+        }
+
+        [Fact]
+        public void Dispose_should_dispose_channels()
+        {
+            var openChannel = NSubstitute.Substitute.For<IModel>();
+            
+            var connection = NSubstitute.Substitute.For<IBusConnection>();
+            connection.CreateChannel()
+                .Returns(openChannel);
+
+            var sut = new ChannelPool(connection);
+
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            sut.Return(openChannel, references);
+            sut.Dispose();
+
+            openChannel.Received(1)
+                .Dispose();
+        }
     }
 }
