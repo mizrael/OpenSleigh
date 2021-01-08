@@ -32,9 +32,8 @@ jobs:
 
       - run:
           name: Build and test          
-          command: |
-            dotnet restore
-            dotnet build --configuration Release --no-restore
+          command: |            
+            dotnet build --configuration Debug
             dotnet test --blame --no-restore /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
 
       - run:
