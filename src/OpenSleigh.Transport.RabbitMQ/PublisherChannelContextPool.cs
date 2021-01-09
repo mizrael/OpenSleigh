@@ -4,7 +4,7 @@ using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    internal class PublisherChannelContextPool : IPublisherChannelContextPool, IDisposable
+    internal sealed class PublisherChannelContextPool : IPublisherChannelContextPool, IDisposable
     {
         private readonly IBusConnection _connection;
         private readonly ConcurrentDictionary<string, ConcurrentBag<PublisherChannelContext>> _pools = new ();
