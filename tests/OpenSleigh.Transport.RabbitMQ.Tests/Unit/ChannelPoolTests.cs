@@ -36,7 +36,9 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
             var result = sut.Get(references);
 
-            result.Should().Be(expectedChannel);
+            result.Should().NotBeNull();
+            result.QueueReferences.Should().Be(references);
+            result.Channel.Should().Be(expectedChannel);
 
             expectedChannel.Received(1)
                 .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
@@ -45,24 +47,27 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Return_should_return_channel_to_the_pool()
         {
-            var expectedChannel = NSubstitute.Substitute.For<IModel>();
+            var channel = NSubstitute.Substitute.For<IModel>();
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             connection.CreateChannel()
-                .Returns(expectedChannel);
-
+                .Returns(channel);
+            
             var sut = new ChannelPool(connection);
 
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
-            var result = sut.Get(references);
-            
-            expectedChannel.Received(1)
-                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
-            expectedChannel.ClearReceivedCalls();
-            
-            sut.Return(expectedChannel, references);
+            var ctx = new PublisherChannelContext(channel, references, sut);
 
-            result = sut.Get(references);
-            expectedChannel.DidNotReceive()
+            sut.Get(references);
+            
+            channel.Received(1)
+                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
+            channel.ClearReceivedCalls();
+            
+            sut.Return(ctx);
+
+            sut.Get(references);
+            channel.DidNotReceive()
                 .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
         }
 
@@ -71,12 +76,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             var sut = new ChannelPool(connection);
-
-            var channel = NSubstitute.Substitute.For<IModel>();
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
             
-            Assert.Throws<ArgumentNullException>(() => sut.Return(null, references));
-            Assert.Throws<ArgumentNullException>(() => sut.Return(channel, null));
+            Assert.Throws<ArgumentNullException>(() => sut.Return(null));
         }
 
         [Fact]
@@ -84,16 +85,16 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var openChannel = NSubstitute.Substitute.For<IModel>();
             openChannel.IsOpen.Returns(true);
-            
-            var connection = NSubstitute.Substitute.For<IBusConnection>();
-            connection.CreateChannel()
-                .Returns(openChannel);
-
-            var sut = new ChannelPool(connection);
 
             var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+
+            var connection = NSubstitute.Substitute.For<IBusConnection>();
             
-            sut.Return(openChannel, references);
+            var sut = new ChannelPool(connection);
+
+            var ctx = new PublisherChannelContext(openChannel, references, sut);
+
+            sut.Return(ctx);
             sut.Dispose();
             
             openChannel.Received(1)
@@ -105,14 +106,15 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var openChannel = NSubstitute.Substitute.For<IModel>();
             
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+
             var connection = NSubstitute.Substitute.For<IBusConnection>();
-            connection.CreateChannel()
-                .Returns(openChannel);
 
             var sut = new ChannelPool(connection);
 
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
-            sut.Return(openChannel, references);
+            var ctx = new PublisherChannelContext(openChannel, references, sut);
+
+            sut.Return(ctx);
             sut.Dispose();
 
             openChannel.Received(1)

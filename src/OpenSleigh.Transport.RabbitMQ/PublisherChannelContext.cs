@@ -19,11 +19,6 @@ namespace OpenSleigh.Transport.RabbitMQ
         public IModel Channel { get; }
         public QueueReferences QueueReferences { get; }
 
-        public void Dispose()
-        {
-            if (Channel is null)
-                return;
-            _channelPool.Return(this.Channel, this.QueueReferences);
-        }
+        public void Dispose() => _channelPool.Return(this);
     }
 }
