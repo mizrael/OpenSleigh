@@ -22,7 +22,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();
             busConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
             busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();
-            busConfigurator.Services.AddSingleton<IChannelPool, ChannelPool>();
+            busConfigurator.Services.AddSingleton<IPublisherChannelContextPool, PublisherChannelContextPool>();
             busConfigurator.Services.AddSingleton<IPublisherChannelFactory, PublisherChannelFactory>();
 
             busConfigurator.Services.AddSingleton<IConnectionFactory>(ctx =>

@@ -30,37 +30,40 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            using var context = _publisherChannelFactory.Create(message);
-
-            var encodedMessage = _encoder.Encode(message);
-
-            var properties = context.Channel.CreateBasicProperties();
-            properties.Persistent = true;
-            properties.Headers = new Dictionary<string, object>()
+            return Task.Run(() =>
             {
-                {HeaderNames.MessageType, message.GetType().FullName }
-            };
+                using var context = _publisherChannelFactory.Create(message);
 
-            var policy = Policy.Handle<Exception>()
-                .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
+                var encodedMessage = _encoder.Encode(message);
+
+                var properties = context.Channel.CreateBasicProperties();
+                properties.Persistent = true;
+                properties.Headers = new Dictionary<string, object>()
                 {
-                    _logger.LogWarning(ex, "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}", 
-                        message.Id, context.QueueReferences.ExchangeName, $"{time.TotalSeconds:n1}", ex.Message);
+                    {HeaderNames.MessageType, message.GetType().FullName}
+                };
+
+                var policy = Policy.Handle<Exception>()
+                    .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
+                    {
+                        _logger.LogWarning(ex,
+                            "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}",
+                            message.Id, context.QueueReferences.ExchangeName, $"{time.TotalSeconds:n1}", ex.Message);
+                    });
+
+                policy.Execute(() =>
+                {
+                    context.Channel.BasicPublish(
+                        exchange: context.QueueReferences.ExchangeName,
+                        routingKey: string.Empty,
+                        mandatory: true,
+                        basicProperties: properties,
+                        body: encodedMessage.Value);
+
+                    _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id,
+                        context.QueueReferences.ExchangeName);
                 });
-
-            policy.Execute(() =>
-            {
-                context.Channel.BasicPublish(
-                    exchange: context.QueueReferences.ExchangeName,
-                    routingKey: string.Empty,
-                    mandatory: true,
-                    basicProperties: properties,
-                    body: encodedMessage.Value);
-
-                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id, context.QueueReferences.ExchangeName);
-            });
-            
-            return Task.CompletedTask;
+            }, cancellationToken);
         }
     }
 }

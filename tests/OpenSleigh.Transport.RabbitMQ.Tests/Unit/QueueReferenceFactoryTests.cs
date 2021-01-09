@@ -21,6 +21,18 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         }
 
         [Fact]
+        public void Create_generic_should_return_valid_references()
+        {
+            var sut = new QueueReferenceFactory();
+            var result = sut.Create<DummyMessage>();
+            result.Should().NotBeNull();
+            result.ExchangeName.Should().Be("dummymessage");
+            result.QueueName.Should().Be("dummymessage.workers");
+            result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
+            result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
+        }
+
+        [Fact]
         public void Create_should_throw_if_message_null()
         {
             var sut = new QueueReferenceFactory();

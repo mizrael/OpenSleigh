@@ -7,12 +7,12 @@ namespace OpenSleigh.Transport.RabbitMQ
 {
     internal class PublisherChannelFactory : IPublisherChannelFactory
     {
-        private readonly IChannelPool _channelPool;
+        private readonly IPublisherChannelContextPool _publisherChannelContextPool;
         private readonly IQueueReferenceFactory _queueReferenceFactory;
         
-        public PublisherChannelFactory(IChannelPool channelPool, IQueueReferenceFactory queueReferenceFactory)
+        public PublisherChannelFactory(IPublisherChannelContextPool publisherChannelContextPool, IQueueReferenceFactory queueReferenceFactory)
         {
-            _channelPool = channelPool ?? throw new ArgumentNullException(nameof(channelPool));
+            _publisherChannelContextPool = publisherChannelContextPool ?? throw new ArgumentNullException(nameof(publisherChannelContextPool));
             _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         }
 
@@ -22,7 +22,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 throw new ArgumentNullException(nameof(message));
             
             var references = _queueReferenceFactory.Create(message);
-            var ctx = _channelPool.Get(references);
+            var ctx = _publisherChannelContextPool.Get(references);
             return ctx;
         }
     }

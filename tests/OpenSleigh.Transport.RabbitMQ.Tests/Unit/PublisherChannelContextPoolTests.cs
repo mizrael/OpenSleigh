@@ -6,19 +6,19 @@ using NSubstitute;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 {
-    public class ChannelPoolTests
+    public class PublisherChannelContextPoolTests
     {
         [Fact]
         public void ctor_should_throw_if_argument_null()
         {
-            Assert.Throws<ArgumentNullException>(() => new ChannelPool(null));
+            Assert.Throws<ArgumentNullException>(() => new PublisherChannelContextPool(null));
         }
 
         [Fact]
         public void Get_should_throw_if_argument_null()
         {
             var connection = NSubstitute.Substitute.For<IBusConnection>();
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
             
             Assert.Throws<ArgumentNullException>(() => sut.Get(null));
         }
@@ -31,7 +31,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             connection.CreateChannel()
                 .Returns(expectedChannel);
             
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
 
             var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
             var result = sut.Get(references);
@@ -54,7 +54,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             connection.CreateChannel()
                 .Returns(channel);
             
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
 
             var ctx = new PublisherChannelContext(channel, references, sut);
 
@@ -75,7 +75,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         public void Return_should_throw_if_arguments_null()
         {
             var connection = NSubstitute.Substitute.For<IBusConnection>();
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
             
             Assert.Throws<ArgumentNullException>(() => sut.Return(null));
         }
@@ -90,7 +90,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
 
             var ctx = new PublisherChannelContext(openChannel, references, sut);
 
@@ -110,7 +110,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 
             var connection = NSubstitute.Substitute.For<IBusConnection>();
 
-            var sut = new ChannelPool(connection);
+            var sut = new PublisherChannelContextPool(connection);
 
             var ctx = new PublisherChannelContext(openChannel, references, sut);
 
