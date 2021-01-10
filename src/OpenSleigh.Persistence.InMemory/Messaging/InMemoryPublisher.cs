@@ -15,8 +15,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
         {
             _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         }
-
-
+        
         public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)

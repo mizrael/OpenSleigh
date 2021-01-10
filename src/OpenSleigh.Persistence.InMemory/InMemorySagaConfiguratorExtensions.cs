@@ -4,7 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Channels;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Persistence.InMemory.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
@@ -12,6 +14,9 @@ namespace OpenSleigh.Persistence.InMemory
     [ExcludeFromCodeCoverage]
     public static class InMemorySagaConfiguratorExtensions
     {
+        private static readonly MethodInfo RawRegisterMessageMethod = typeof(InMemorySagaConfiguratorExtensions)
+            .GetMethod("RegisterMessage", BindingFlags.Static | BindingFlags.NonPublic);
+        
         public static ISagaConfigurator<TS, TD> UseInMemoryTransport<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)
             where TS : Saga<TD>
             where TD : SagaState
@@ -30,21 +35,20 @@ namespace OpenSleigh.Persistence.InMemory
 
                 var messageType = i.GetGenericArguments().First();
 
-                var rawMethod = typeof(Channel).GetMethod(nameof(Channel.CreateUnbounded), Array.Empty<Type>());
-                var method = rawMethod.MakeGenericMethod(messageType);
-                dynamic channel = method.Invoke(null, null);
-
-                sagaConfigurator.Services.AddSingleton(typeof(Channel<>).MakeGenericType(messageType), (object)channel);
-
-                sagaConfigurator.Services.AddSingleton(typeof(ChannelWriter<>).MakeGenericType(messageType), (object)channel.Writer);
-
-                sagaConfigurator.Services.AddSingleton(typeof(ChannelReader<>).MakeGenericType(messageType), (object)channel.Reader);
-                
-                sagaConfigurator.Services.AddSingleton(typeof(ISubscriber),
-                                                       typeof(InMemorySubscriber<>).MakeGenericType(messageType));
+                //TODO: ensure the message was not already registered
+                var registerMessageMethod = RawRegisterMessageMethod.MakeGenericMethod(messageType);
+                registerMessageMethod.Invoke(null, new[] {sagaConfigurator.Services});
             }
 
             return sagaConfigurator;
+        }
+
+        private static void RegisterMessage<TM>(IServiceCollection services) where TM : IMessage
+        {
+            var channel = Channel.CreateUnbounded<TM>();
+            services.AddSingleton<ChannelReader<TM>>(channel.Reader)
+                .AddSingleton<ChannelWriter<TM>>(channel.Writer)
+                .AddSingleton<ISubscriber, InMemorySubscriber<TM>>();
         }
     }
 }
