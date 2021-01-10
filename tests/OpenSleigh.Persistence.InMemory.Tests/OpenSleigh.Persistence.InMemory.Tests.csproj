@@ -31,8 +31,4 @@
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="E2E\Sagas\" />
-  </ItemGroup>
-
 </Project>
