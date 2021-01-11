@@ -14,25 +14,22 @@ namespace OpenSleigh.Persistence.InMemory.Tests.E2E
 {
     [Category("E2E")]
     [Trait("Category", "E2E")]
-    public class SimpleSagaScenario
+    public class ParentChildScenario
     {
         [Fact]
-        public async Task run_single_message_scenario()
+        public async Task run_parent_child_scenario()
         {
             var hostBuilder = CreateHostBuilder();
 
-            var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
+            var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
             
             var received = false;
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             
-            Action<StartSimpleSaga> onMessage = msg =>
+            Action<ParentSagaCompleted> onMessage = msg =>
             {
-                received = true; 
-                
-                tokenSource.Cancel(); 
-                
-                msg.Should().Be(message);
+                received = true;
+                tokenSource.Cancel();
             };
 
             hostBuilder.ConfigureServices((ctx, services) =>
@@ -63,8 +60,12 @@ namespace OpenSleigh.Persistence.InMemory.Tests.E2E
                         cfg.UseInMemoryTransport()
                             .UseInMemoryPersistence();
 
-                        cfg.AddSaga<SimpleSaga, SimpleSagaState>()
-                            .UseStateFactory(msg => new SimpleSagaState(msg.CorrelationId))
+                        cfg.AddSaga<ParentSaga, ParentSagaState>()
+                            .UseStateFactory(msg => new ParentSagaState(msg.CorrelationId))
+                            .UseInMemoryTransport();
+
+                        cfg.AddSaga<ChildSaga, ChildSagaState>()
+                            .UseStateFactory(msg => new ChildSagaState(msg.CorrelationId))
                             .UseInMemoryTransport();
                     });
                 });
