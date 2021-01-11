@@ -35,7 +35,6 @@ namespace OpenSleigh.Persistence.InMemory.Tests.E2E
             
             using var scope = host.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-            
 
             var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             
