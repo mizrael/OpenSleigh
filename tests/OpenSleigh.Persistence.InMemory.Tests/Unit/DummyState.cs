@@ -16,4 +16,11 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
         public static DummyState New() => new DummyState(Guid.NewGuid(), "lorem ipsum", 42);
     }
+
+    public class DummyState2 : SagaState
+    {
+        public DummyState2(Guid id) : base(id) { }
+
+        public static DummyState2 New() => new DummyState2(Guid.NewGuid());
+    }
 }
