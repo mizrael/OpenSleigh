@@ -39,7 +39,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
         public virtual Task HandleAsync(IMessageContext<DummySagaStarted> context, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            return Task.CompletedTask;
         }
     }
 }

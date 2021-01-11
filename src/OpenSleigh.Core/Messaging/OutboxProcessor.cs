@@ -38,7 +38,6 @@ namespace OpenSleigh.Core.Messaging
             {
                 await ProcessPendingMessages(cancellationToken);
                 
-                //TODO: make the delay configurable
                 await Task.Delay(_options.Interval, cancellationToken);
             }
         }
