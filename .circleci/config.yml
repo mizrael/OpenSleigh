@@ -8,7 +8,10 @@ jobs:
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
-      
+      - image: 'rabbitmq:3-management-alpine'
+        environment:
+          RABBITMQ_DEFAULT_VHOST: "/"
+
     steps:
       - checkout
 

@@ -30,7 +30,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            var context = _publisherChannelFactory.Create(message);
+            using var context = _publisherChannelFactory.Create(message);
 
             var encodedMessage = _encoder.Encode(message);
 
@@ -38,13 +38,14 @@ namespace OpenSleigh.Transport.RabbitMQ
             properties.Persistent = true;
             properties.Headers = new Dictionary<string, object>()
             {
-                {HeaderNames.MessageType, message.GetType().FullName }
+                {HeaderNames.MessageType, message.GetType().FullName}
             };
 
             var policy = Policy.Handle<Exception>()
                 .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
                 {
-                    _logger.LogWarning(ex, "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}", 
+                    _logger.LogWarning(ex,
+                        "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}",
                         message.Id, context.QueueReferences.ExchangeName, $"{time.TotalSeconds:n1}", ex.Message);
                 });
 
@@ -57,7 +58,8 @@ namespace OpenSleigh.Transport.RabbitMQ
                     basicProperties: properties,
                     body: encodedMessage.Value);
 
-                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id, context.QueueReferences.ExchangeName);
+                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id,
+                    context.QueueReferences.ExchangeName);
             });
             
             return Task.CompletedTask;
