@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System;
+using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
-using System;
 
-namespace OpenSleigh.Persistence.Mongo.Tests.Integration
+namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
@@ -18,17 +18,20 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
                 .AddEnvironmentVariables()
                 .Build();
 
-            var connStr = configuration.GetConnectionString("mongo");
-            if (string.IsNullOrWhiteSpace(connStr))
-                throw new ArgumentException("invalid cosmos connection string");
+           this.ConnectionString = configuration.GetConnectionString("mongo");
+            if (string.IsNullOrWhiteSpace(this.ConnectionString))
+                throw new ArgumentException("invalid connection string");
 
-            _client = new MongoClient(connStr);
+            _client = new MongoClient(this.ConnectionString);
 
-            var dbName = $"mongoLocks_{Guid.NewGuid()}";
-            _db = _client.GetDatabase(dbName);
+            this.DbName = $"openSleigh_{Guid.NewGuid()}";
+            _db = _client.GetDatabase(this.DbName);
 
             DbContext = new DbContext(_db);
         }
+        
+        public string ConnectionString { get; init; }
+        public string DbName { get; init; }
 
         public void Dispose()
         {

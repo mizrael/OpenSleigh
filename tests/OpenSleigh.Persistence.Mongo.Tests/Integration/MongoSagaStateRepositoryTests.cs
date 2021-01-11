@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Exceptions;
+using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
