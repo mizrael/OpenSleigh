@@ -34,8 +34,7 @@ namespace OpenSleigh.Persistence.InMemory
                     continue;
 
                 var messageType = i.GetGenericArguments().First();
-
-                //TODO: ensure the message was not already registered
+                
                 var registerMessageMethod = RawRegisterMessageMethod.MakeGenericMethod(messageType);
                 registerMessageMethod.Invoke(null, new[] {sagaConfigurator.Services});
             }
@@ -45,10 +44,19 @@ namespace OpenSleigh.Persistence.InMemory
 
         private static void RegisterMessage<TM>(IServiceCollection services) where TM : IMessage
         {
-            var channel = Channel.CreateUnbounded<TM>();
-            services.AddSingleton<ChannelReader<TM>>(channel.Reader)
-                .AddSingleton<ChannelWriter<TM>>(channel.Writer)
-                .AddSingleton<ISubscriber, InMemorySubscriber<TM>>();
+            if (services.Any(sd => sd.ServiceType == typeof(Channel<TM>)))
+                return;
+
+            services.AddSingleton<Channel<TM>>(ctx => Channel.CreateUnbounded<TM>())
+                .AddSingleton<ChannelReader<TM>>(ctx =>
+                {
+                    var channel = ctx.GetService<Channel<TM>>();
+                    return channel?.Reader;
+                }).AddSingleton<ChannelWriter<TM>>(ctx =>
+                {
+                    var channel = ctx.GetService<Channel<TM>>();
+                    return channel?.Writer;
+                }).AddSingleton<ISubscriber, InMemorySubscriber<TM>>();
         }
     }
 }

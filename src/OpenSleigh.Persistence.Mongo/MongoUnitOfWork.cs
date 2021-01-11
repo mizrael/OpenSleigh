@@ -25,7 +25,7 @@ namespace OpenSleigh.Persistence.Mongo
             ITransaction transaction;
             try
             {
-                //TODO: the async overload might freeze if transactions are not supported
+                //the async overload might freeze if transactions are not supported
                 var session = _client.StartSession();
                 session.StartTransaction(transactionOptions);
                 transaction = new MongoTransaction(session);
