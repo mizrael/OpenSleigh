@@ -60,16 +60,19 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
 
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(_fixture.DbContext, serializer, options);
+            
+            var correlationId = Guid.NewGuid();
 
-            var newState = DummyState.New();
-            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var newState = new DummyState(correlationId, "lorem", 42);
+            
+            var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
 
             var newState2 = new DummyState2(state.Id);
             newState2.Id.Should().Be(newState.Id);
             
-            var (state2, lockId2) = await sut.LockAsync(newState2.Id, newState2, CancellationToken.None);
+            var (state2, lockId2) = await sut.LockAsync(correlationId, newState2, CancellationToken.None);
             state2.Should().NotBeNull();
-            state2.Id.Should().Be(newState.Id);
+            state2.Id.Should().Be(correlationId);
         }
 
     }
