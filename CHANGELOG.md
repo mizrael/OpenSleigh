@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-01-11](https://github.com/mizrael/OpenSleigh/pull/13)
+### Added
+- added channel pooling
+- added RabbitMQ E2E tests with in-memory transport
+
 ## [2021-01-11](https://github.com/mizrael/OpenSleigh/pull/14)
 ### Added
 - added in-memory E2E tests
