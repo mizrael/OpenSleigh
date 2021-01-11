@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Persistence.InMemory.Tests.E2E
+namespace OpenSleigh.Persistence.InMemory.Tests.E2E.Sagas
 {
     public class SimpleSagaState : SagaState
     {
