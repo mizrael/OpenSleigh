@@ -59,6 +59,24 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         }
 
         [Fact]
+        public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
+        {
+            var sut = new InMemorySagaStateRepository();
+
+            var correlationId = Guid.NewGuid();
+
+            var newState = new DummyState(correlationId, "lorem", 42);
+            var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
+
+            var newState2 = new DummyState2(correlationId);
+            newState2.Id.Should().Be(newState.Id);
+
+            var (state2, lockId2) = await sut.LockAsync(correlationId, newState2, CancellationToken.None);
+            state2.Should().NotBeNull();
+            state2.Id.Should().Be(correlationId);
+        }
+
+        [Fact]
         public async Task UpdateAsync_should_release_lock()
         {
             var sut = new InMemorySagaStateRepository();

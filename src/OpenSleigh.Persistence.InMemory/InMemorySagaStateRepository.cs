@@ -3,6 +3,7 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using System;
 using System.Collections.Concurrent;
+using System.Diagnostics.Contracts;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,18 +11,15 @@ namespace OpenSleigh.Persistence.InMemory
 {
     public class InMemorySagaStateRepository : ISagaStateRepository
     {
-        private readonly ConcurrentDictionary<Guid, (SagaState state, Guid? lockId)> _items;
-        private static readonly SemaphoreSlim _semaphore = new (1, 1);
-
-        public InMemorySagaStateRepository()
-        {
-            _items = new ConcurrentDictionary<Guid, (SagaState state, Guid? lockId)>();
-        }
+        private readonly ConcurrentDictionary<string, (SagaState state, Guid? lockId)> _items = new ();
+        private static readonly SemaphoreSlim ReleaseSemaphore = new (1, 1);
 
         public Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
-            var (state, lockId) = _items.AddOrUpdate(correlationId, 
+            var key = BuildKey<TD>(correlationId);
+            
+            var (state, lockId) = _items.AddOrUpdate(key, 
                 k => (newState, Guid.NewGuid()),
                 (k, v) =>
                 {
@@ -45,21 +43,29 @@ namespace OpenSleigh.Persistence.InMemory
         private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken)
             where TD : SagaState
         {
-            await _semaphore.WaitAsync(cancellationToken);
+            await ReleaseSemaphore.WaitAsync(cancellationToken);
 
+            var key = BuildKey<TD>(state.Id);
+            
             try
             {
-                if (!_items.ContainsKey(state.Id))
+                if (!_items.ContainsKey(key))
                     throw new ArgumentOutOfRangeException(nameof(state), $"invalid state correlationId '{state.Id}'");
-                var stored = _items[state.Id];
+                var stored = _items[key];
                 if (stored.lockId != lockId)
                     throw new LockException($"unable to release lock on saga state '{state.Id}'");
-                _items[state.Id] = (state, null);
+                _items[key] = (state, null);
             }
             finally
             {
-                _semaphore.Release();
+                ReleaseSemaphore.Release();
             }
+        }
+
+        private static string BuildKey<TD>(Guid correlationId)
+        {
+            var stateType = typeof(TD);
+            return $"{correlationId}|{stateType.FullName}";
         }
     }
 }
