@@ -28,6 +28,8 @@ namespace OpenSleigh.Transport.RabbitMQ
         
         private static QueueReferences Create(Type messageType)
         {
+            //TODO: add possibility to customize names (eg. during tests)
+            
             var exchangeName = messageType.Name.ToLower();
             var queueName = exchangeName + ".workers";
             var dlExchangeName = exchangeName + ".dead";
