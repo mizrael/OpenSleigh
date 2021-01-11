@@ -4,7 +4,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    internal class QueueReferenceFactory : IQueueReferenceFactory
+    public class QueueReferenceFactory : IQueueReferenceFactory
     {
         private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesMap = new();
         

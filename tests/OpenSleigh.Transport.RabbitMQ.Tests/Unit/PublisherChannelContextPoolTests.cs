@@ -66,9 +66,34 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             
             sut.Return(ctx);
 
+            sut.GetAvailableCount().Should().Be(1);
+        }
+
+        [Fact]
+        public void Return_should_not_return_channel_to_the_pool_if_closed()
+        {
+            var channel = NSubstitute.Substitute.For<IModel>();
+            channel.IsClosed.Returns(true);
+            
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+
+            var connection = NSubstitute.Substitute.For<IBusConnection>();
+            connection.CreateChannel()
+                .Returns(channel);
+
+            var sut = new PublisherChannelContextPool(connection);
+
+            var ctx = new PublisherChannelContext(channel, references, sut);
+
             sut.Get(references);
-            channel.DidNotReceive()
+
+            channel.Received(1)
                 .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
+            channel.ClearReceivedCalls();
+
+            sut.Return(ctx);
+
+            sut.GetAvailableCount().Should().Be(0);
         }
 
         [Fact]

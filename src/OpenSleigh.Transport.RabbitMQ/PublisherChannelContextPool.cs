@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Linq;
 using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ
@@ -35,11 +36,16 @@ namespace OpenSleigh.Transport.RabbitMQ
         {
             if (ctx == null) 
                 throw new ArgumentNullException(nameof(ctx));
+
+            if (ctx.Channel.IsClosed)
+                return;
             
             var pool = _pools.GetOrAdd(ctx.QueueReferences.ExchangeName, _ => new());
             pool.Add(ctx);
         }
 
+        public int GetAvailableCount() => _pools.Sum(p => p.Value.Count);
+        
         public void Dispose()
         {
             foreach (var pool in _pools.Values)
