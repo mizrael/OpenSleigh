@@ -17,8 +17,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
-        public TM Resolve<TM>(IBasicProperties basicProperties, ReadOnlyMemory<byte> body)
-            where TM : IMessage
+        public IMessage Resolve(IBasicProperties basicProperties, ReadOnlyMemory<byte> body)
         {
             if (basicProperties is null)
                 throw new ArgumentNullException(nameof(basicProperties));
@@ -35,8 +34,8 @@ namespace OpenSleigh.Transport.RabbitMQ
             var dataType = _typeResolver.Resolve(messageTypeName);
 
             var decodedObj = _decoder.Decode(body, dataType);
-            if (decodedObj is not TM message)
-                throw new ArgumentException($"type '{messageTypeName}' is not a valid message");
+            if (decodedObj is not IMessage message)
+                throw new ArgumentException($"message has the wrong type: '{messageTypeName}'");
             return message;
         }
     }

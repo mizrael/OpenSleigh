@@ -6,6 +6,6 @@ namespace OpenSleigh.Transport.RabbitMQ
 {
     public interface IMessageParser
     {
-        TM Resolve<TM>(IBasicProperties basicProperties, ReadOnlyMemory<byte> body) where TM : IMessage;
+        IMessage Resolve(IBasicProperties basicProperties, ReadOnlyMemory<byte> body);
     }
 }
