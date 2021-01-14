@@ -56,7 +56,7 @@ namespace OpenSleigh.Core.Messaging
                 }
                 catch (LockException e)
                 {
-                    _logger.LogDebug(e, $"message '{message.Id}' was already locked by another consumer. {e.Message}");
+                    _logger.LogDebug(e, $"message '{message.Id}' was already locked by another producer. {e.Message}");
                 }
                 catch (Exception e)
                 {
