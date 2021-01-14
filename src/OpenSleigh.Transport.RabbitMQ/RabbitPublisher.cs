@@ -45,21 +45,26 @@ namespace OpenSleigh.Transport.RabbitMQ
                 .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
                 {
                     _logger.LogWarning(ex,
-                        "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}",
-                        message.Id, context.QueueReferences.ExchangeName, $"{time.TotalSeconds:n1}", ex.Message);
+                        "Could not publish message '{MessageId}' to Exchange '{ExchangeName}', Queue '{QueueName}' after {Timeout}s : {ExceptionMessage}",
+                        message.Id, 
+                        context.QueueReferences.ExchangeName,
+                        context.QueueReferences.QueueName,
+                        $"{time.TotalSeconds:n1}", ex.Message);
                 });
 
             policy.Execute(() =>
             {
                 context.Channel.BasicPublish(
                     exchange: context.QueueReferences.ExchangeName,
-                    routingKey: string.Empty,
+                    routingKey: context.QueueReferences.QueueName,
                     mandatory: true,
                     basicProperties: properties,
                     body: encodedMessage.Value);
 
-                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'", message.Id,
-                    context.QueueReferences.ExchangeName);
+                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}', Queue '{QueueName}'", 
+                    message.Id,
+                    context.QueueReferences.ExchangeName,
+                    context.QueueReferences.QueueName);
             });
             
             return Task.CompletedTask;

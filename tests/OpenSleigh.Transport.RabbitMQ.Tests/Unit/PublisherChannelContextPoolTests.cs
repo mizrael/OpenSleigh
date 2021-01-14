@@ -41,7 +41,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Channel.Should().Be(expectedChannel);
 
             expectedChannel.Received(1)
-                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
+                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Topic);
         }
 
         [Fact]
@@ -61,7 +61,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             sut.Get(references);
             
             channel.Received(1)
-                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
+                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Topic);
             channel.ClearReceivedCalls();
             
             sut.Return(ctx);
@@ -88,7 +88,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             sut.Get(references);
 
             channel.Received(1)
-                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Fanout);
+                .ExchangeDeclare(references.ExchangeName, type: ExchangeType.Topic);
             channel.ClearReceivedCalls();
 
             sut.Return(ctx);

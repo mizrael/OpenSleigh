@@ -40,7 +40,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             _channel = _connection.CreateChannel();
 
-            _channel.ExchangeDeclare(exchange: _queueReferences.DeadLetterExchangeName, type: ExchangeType.Fanout);
+            _channel.ExchangeDeclare(exchange: _queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.DeadLetterQueue,
                 durable: true,
                 exclusive: false,
@@ -48,7 +48,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 arguments: null);
             _channel.QueueBind(_queueReferences.DeadLetterQueue, _queueReferences.DeadLetterExchangeName, routingKey: string.Empty, arguments: null);
 
-            _channel.ExchangeDeclare(exchange: _queueReferences.ExchangeName, type: ExchangeType.Fanout);
+            _channel.ExchangeDeclare(exchange: _queueReferences.ExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.QueueName,
                 durable: false,
                 exclusive: false,
@@ -58,7 +58,10 @@ namespace OpenSleigh.Transport.RabbitMQ
                     {Headers.XDeadLetterExchange, _queueReferences.DeadLetterExchangeName},
                     {Headers.XDeadLetterRoutingKey, _queueReferences.ExchangeName}
                 });
-            _channel.QueueBind(_queueReferences.QueueName, _queueReferences.ExchangeName, string.Empty, null);
+            _channel.QueueBind(queue: _queueReferences.QueueName,
+                exchange: _queueReferences.ExchangeName, 
+                routingKey: _queueReferences.QueueName, 
+                arguments: null);
 
             _channel.CallbackException += OnChannelException;
         }
@@ -99,10 +102,10 @@ namespace OpenSleigh.Transport.RabbitMQ
             var consumer = sender as IBasicConsumer;
             var channel = consumer?.Model ?? _channel;
 
-            TM message;
+            IMessage message;
             try
             {
-                message = _messageParser.Resolve<TM>(eventArgs.BasicProperties, eventArgs.Body);
+                message = _messageParser.Resolve(eventArgs.BasicProperties, eventArgs.Body);
             }
             catch (Exception ex)
             {
@@ -112,12 +115,13 @@ namespace OpenSleigh.Transport.RabbitMQ
                 return;
             }
 
-            _logger.LogDebug("received message '{MessageId}' from Exchange '{ExchangeName}'. Processing...", message.Id, _queueReferences.ExchangeName);
+            _logger.LogDebug("received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...", 
+                message.Id, _queueReferences.ExchangeName, _queueReferences.QueueName);
 
             try
             {
                 //TODO: provide valid cancellation token
-                await _messageProcessor.ProcessAsync(message, CancellationToken.None);
+                await _messageProcessor.ProcessAsync((dynamic)message, CancellationToken.None);
 
                 channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
             }
