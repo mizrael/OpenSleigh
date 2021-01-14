@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
@@ -13,7 +14,11 @@ namespace OpenSleigh.Transport.RabbitMQ
     public static class RabbitBusConfiguratorExtensions
     {
         public static IBusConfigurator UseRabbitMQTransport(this IBusConfigurator busConfigurator,
-            RabbitConfiguration config)
+            RabbitConfiguration config) => UseRabbitMQTransport(busConfigurator, config, null);
+        
+        public static IBusConfigurator UseRabbitMQTransport(this IBusConfigurator busConfigurator,
+            RabbitConfiguration config,
+            Action<IRabbitBusConfigurationBuilder> builderFunc)
         {
             var encoder = new JsonEncoder();
             busConfigurator.Services.AddSingleton<IEncoder>(encoder);
@@ -39,6 +44,8 @@ namespace OpenSleigh.Transport.RabbitMQ
             });
 
             busConfigurator.Services.AddSingleton<IBusConnection, RabbitPersistentConnection>();
+
+            builderFunc?.Invoke(new DefaultRabbitBusConfigurationBuilder(busConfigurator));
             
             return busConfigurator;
         }

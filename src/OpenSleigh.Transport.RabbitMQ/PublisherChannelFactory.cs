@@ -21,7 +21,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
             
-            var references = _queueReferenceFactory.Create(message);
+            var references = _queueReferenceFactory.Create((dynamic)message);
             var ctx = _publisherChannelContextPool.Get(references);
             return ctx;
         }

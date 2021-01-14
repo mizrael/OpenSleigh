@@ -1,7 +1,7 @@
 using System;
-using System.Runtime.InteropServices;
 using FluentAssertions;
 using NSubstitute;
+using OpenSleigh.Core.Messaging;
 using RabbitMQ.Client;
 using Xunit;
 
@@ -43,7 +43,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
                 
             var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
             
-            factory.Create(null)
+            factory.Create((IMessage)null)
                 .ReturnsForAnyArgs(references);
             
             var sut = new PublisherChannelFactory(pool, factory);

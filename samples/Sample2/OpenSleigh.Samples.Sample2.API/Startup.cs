@@ -44,8 +44,15 @@ namespace OpenSleigh.Samples.Sample2.API
                 var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"],
                     rabbitSection["UserName"],
                     rabbitSection["Password"]);
-
-                cfg.UseRabbitMQTransport(rabbitCfg)
+                
+                cfg.UseRabbitMQTransport(rabbitCfg, builder =>
+                    {
+                        // using a custom naming policy allows us to define the names for exchanges and queues.
+                        // this allows us to have a single exchange binded to multiple queues.
+                        // messages will be routed using the queue name.
+                        builder.UseMessageNamingPolicy<StartChildSaga>(() => new QueueReferences("child", "child.start", "child.dead", "child.dead.start"));
+                        builder.UseMessageNamingPolicy<ProcessChildSaga>(() => new QueueReferences("child", "child.process", "child.dead", "child.dead.process"));
+                    })
                     .UseMongoPersistence(mongoCfg);
             });
         }

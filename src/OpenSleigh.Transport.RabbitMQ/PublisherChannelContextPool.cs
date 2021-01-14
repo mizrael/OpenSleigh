@@ -25,7 +25,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (!pool.TryTake(out var ctx))
             {
                 var channel = _connection.CreateChannel();
-                channel.ExchangeDeclare(exchange: references.ExchangeName, type: ExchangeType.Fanout);
+                channel.ExchangeDeclare(exchange: references.ExchangeName, type: ExchangeType.Topic);
                 ctx = new PublisherChannelContext(channel, references, this);
             }
 
