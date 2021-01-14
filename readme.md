@@ -162,7 +162,7 @@ public class MyAwesomeSaga :
     Saga<MyAwesomeSagaState>,
     IStartedBy<StartMyAwesomeSaga>
 {
-     public async Task HandleAsync(IMessageContext<StartMyAwesomeSaga> context, CancellationToken cancellationToken = default)
+    public async Task HandleAsync(IMessageContext<StartMyAwesomeSaga> context, CancellationToken cancellationToken = default)
     {
         var message = new MyAwesomeSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
         this.Bus.PublishAsync(message);
@@ -176,7 +176,8 @@ Samples are available in the `/samples/` folder.
 
 - **[Sample1](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample1)** is a simple .NET Console Application showing how to bootstrap OpenSleigh and use In-Memory persistence and transport.
 
-- **[Sample2](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample2)** is a more interesting scenario, with a Web API acting as message producer and a Console Application as subscriber. This example uses RabbitMQ and MongoDB.
+- **[Sample2](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample2)** is a more interesting scenario, with a Web API acting as message producer and a Console Application as subscriber. This example uses RabbitMQ and MongoDB. It also uses a custom naming policy for some messages, which allows greater flexibility with exchanges and queue generation.
+
 
 ## Roadmap
 - add more tests
