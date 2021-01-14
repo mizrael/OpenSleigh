@@ -43,15 +43,13 @@ namespace OpenSleigh.Core.DependencyInjection
                 {
                     var repo = ctx.GetRequiredService<IOutboxRepository>();
                     return new OutboxCleaner(repo, OutboxCleanerOptions.Default);
-                });
+                }).AddHostedService<SubscribersBackgroundService>()
+                .AddHostedService<OutboxBackgroundService>()
+                .AddHostedService<OutboxCleanerBackgroundService>();
 
             var builder = new BusConfigurator(services, stateTypeResolver);
             configure?.Invoke(builder);
-
-            services.AddHostedService<SubscribersBackgroundService>()
-                   .AddHostedService<OutboxBackgroundService>()
-                   .AddHostedService<OutboxCleanerBackgroundService>();
-
+            
             return services;
         }
     }
