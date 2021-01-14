@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-01-14](https://github.com/mizrael/OpenSleigh/pull/15)
+### Added
+- possibility to configure exchange and queue names for each message
+- moved from Fanout to Topic exchanges in the RabbitMQ Transport library
+
 ## [2021-01-11](https://github.com/mizrael/OpenSleigh/pull/13)
 ### Added
 - added channel pooling
