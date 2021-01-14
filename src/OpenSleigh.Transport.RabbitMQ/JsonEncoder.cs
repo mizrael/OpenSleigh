@@ -22,7 +22,5 @@ namespace OpenSleigh.Transport.RabbitMQ
         }
 
         public object Decode(ReadOnlyMemory<byte> data, Type type) => JsonSerializer.Deserialize(data.Span, type, _serializerOptions);
-
-        public T Decode<T>(ReadOnlyMemory<byte> data) => JsonSerializer.Deserialize<T>(data.Span, _serializerOptions);
     }
 }
