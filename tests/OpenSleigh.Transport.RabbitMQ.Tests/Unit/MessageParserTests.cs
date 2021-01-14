@@ -19,7 +19,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
-            Assert.Throws<ArgumentNullException>(() => sut.Resolve<DummyMessage>(null, null));
+            Assert.Throws<ArgumentNullException>(() => sut.Resolve(null, null));
         }
 
         [Fact]
@@ -32,7 +32,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var basicProperties = NSubstitute.Substitute.For<IBasicProperties>();
             basicProperties.Headers.ReturnsNull();
             
-            var ex = Assert.Throws<ArgumentNullException>(() => sut.Resolve<DummyMessage>(basicProperties, null));
+            var ex = Assert.Throws<ArgumentNullException>(() => sut.Resolve(basicProperties, null));
             ex.Message.Should().Contain("message headers are missing");
         }
 
@@ -46,7 +46,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 
             var basicProperties = NSubstitute.Substitute.For<IBasicProperties>();
             
-            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve<DummyMessage>(basicProperties, null));
+            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, null));
             ex.Message.Should().Contain("invalid message type");
         }
 
@@ -67,8 +67,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             };
             basicProperties.Headers.Returns(headers);
             
-            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve<DummyMessage>(basicProperties, null));
-            ex.Message.Should().Contain("is not a valid message");
+            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, null));
+            ex.Message.Should().Contain("message has the wrong type");
         }
 
         [Fact]
@@ -94,7 +94,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 
             resolver.Resolve(messageType.FullName).Returns(messageType);
 
-            var result = sut.Resolve<DummyMessage>(basicProperties, messageBytes);
+            var result = sut.Resolve(basicProperties, messageBytes);
             result.Should().Be(message);
         }
     }
