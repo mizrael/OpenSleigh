@@ -1,6 +1,6 @@
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Core.DependencyInjection
+namespace OpenSleigh.Core
 {
     public interface ISagaStateFactory<out TD>
         where TD : SagaState

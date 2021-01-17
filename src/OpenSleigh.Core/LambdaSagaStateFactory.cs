@@ -1,7 +1,7 @@
 using System;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Core.DependencyInjection
+namespace OpenSleigh.Core
 {
     internal class LambdaSagaStateFactory<TD> : ISagaStateFactory<TD>
         where TD : SagaState
