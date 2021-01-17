@@ -1,10 +1,9 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Transport.RabbitMQ.Tests.E2E.Sagas
+namespace OpenSleigh.Core.Tests.E2E.Sagas
 {
     public class ChildSagaState : SagaState
     {

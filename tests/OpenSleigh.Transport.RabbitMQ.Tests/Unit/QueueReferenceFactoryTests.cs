@@ -1,7 +1,6 @@
 using System;
 using FluentAssertions;
 using NSubstitute;
-using OpenSleigh.Core.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
