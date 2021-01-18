@@ -1,5 +1,4 @@
-﻿using System.ComponentModel;
-using OpenSleigh.Core.DependencyInjection;
+﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Persistence.InMemory;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;

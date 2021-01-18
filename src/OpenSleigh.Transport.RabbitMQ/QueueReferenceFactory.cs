@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
