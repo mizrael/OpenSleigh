@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Core.Tests.Unit
+namespace OpenSleigh.Core.Tests.Sagas
 {
     public class DummySagaState : SagaState
     {

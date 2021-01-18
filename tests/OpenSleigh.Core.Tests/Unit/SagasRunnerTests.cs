@@ -6,6 +6,7 @@ using FluentAssertions;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit

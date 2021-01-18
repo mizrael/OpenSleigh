@@ -7,9 +7,8 @@ namespace OpenSleigh.Core
     public interface ISagaTypeResolver
     {
         (Type sagaType, Type sagaStateType) Resolve<TM>() where TM : IMessage;
-        void Register(Type messageType, (Type sagaType, Type sagaStateType) types);
-
-        IReadOnlyCollection<Type> GetMessageTypes();
+        bool Register<TS, TD>() where TD : SagaState where TS : Saga<TD>;
+        
         IReadOnlyCollection<Type> GetSagaTypes();
     }
 }

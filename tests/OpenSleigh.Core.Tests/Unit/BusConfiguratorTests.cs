@@ -1,6 +1,7 @@
 ﻿using System;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit
