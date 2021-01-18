@@ -7,20 +7,18 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    //TODO: rename
     public class SagaTypeResolver : ISagaTypeResolver
     {
-        private readonly ConcurrentDictionary<Type, (Type sagaType, Type sagaStateType)> _types = new ();
+        private readonly ConcurrentDictionary<Type, IList<(Type sagaType, Type sagaStateType)>> _types = new ();
 
         private static readonly Type MessageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-
-        //TODO: this should return a collection of saga/state types
-        public (Type sagaType, Type sagaStateType) Resolve<TM>() where TM : IMessage
+        
+        public IEnumerable<(Type sagaType, Type sagaStateType)> Resolve<TM>() where TM : IMessage
         {
             var messageType = typeof(TM);
 
             _types.TryGetValue(messageType, out var types);
-            return types;
+            return types ?? Enumerable.Empty<(Type sagaType, Type sagaStateType)>();
         }
 
         public bool Register<TS, TD>() where TD : SagaState where TS : Saga<TD>
@@ -49,18 +47,28 @@ namespace OpenSleigh.Core
 
             return hasMessages;
         }
+    
         private void Register(Type messageType, (Type sagaType, Type sagaStateType) types)
         {
-            //TODO: if message is an event, allow multiple sagas types
-
             var isEvent = messageType.IsAssignableTo(typeof(IEvent));
 
+            // if it's not an event, we allow only one handler
             if (!isEvent && _types.ContainsKey(messageType))
                 throw new TypeAccessException($"there is already a saga for message type '{messageType.FullName}'");
 
-            _types.AddOrUpdate(messageType, types, (k, v) => types);
+            _types.AddOrUpdate(messageType,
+                (k) =>
+                {
+                    var res = new List<(Type sagaType, Type sagaStateType)> {types};
+                    return res;
+                },
+                (k, v) =>
+                {
+                    v.Add(types);
+                    return v;
+                });
         }
 
-        public IReadOnlyCollection<Type> GetSagaTypes() => _types.Values.Select(v => v.sagaStateType).ToImmutableList();
+  //      public IReadOnlyCollection<Type> GetSagaTypes() => _types.Values.Select(v => v.sagaStateType).ToImmutableList();
     }
 }

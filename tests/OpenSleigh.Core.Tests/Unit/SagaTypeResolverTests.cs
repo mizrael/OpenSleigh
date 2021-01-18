@@ -36,13 +36,11 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public void Resolve_should_return_null_when_no_saga_registered_for_message()
+        public void Resolve_should_return_empty_collection_when_no_saga_registered_for_message()
         {
             var sut = new SagaTypeResolver();
             var result = sut.Resolve<StartDummySaga>();
-            result.Should().NotBeNull();
-            result.sagaType.Should().BeNull();
-            result.sagaStateType.Should().BeNull();
+            result.Should().NotBeNull().And.BeEmpty();
         }
 
         [Fact]
@@ -53,9 +51,10 @@ namespace OpenSleigh.Core.Tests.Unit
             sut.Register<DummySaga, DummySagaState>();
             
             var result = sut.Resolve<StartDummySaga>();
-            result.Should().NotBeNull();
-            result.sagaType.Should().Be(typeof(DummySaga));
-            result.sagaStateType.Should().Be(typeof(DummySagaState));
+            result.Should().NotBeNull().And.HaveCount(1);
+            
+            result.First().sagaType.Should().Be(typeof(DummySaga));
+            result.First().sagaStateType.Should().Be(typeof(DummySagaState));
         }
     }
 }

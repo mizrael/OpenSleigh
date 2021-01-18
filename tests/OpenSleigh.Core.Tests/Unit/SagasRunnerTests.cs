@@ -37,7 +37,7 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_throw_if_no_saga_registered()
+        public async Task RunAsync_should_throw_if_no_message_handler_registered()
         {
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
@@ -50,31 +50,42 @@ namespace OpenSleigh.Core.Tests.Unit
             messageContext.Message.Returns(message);
 
             var ex = await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext));
-            ex.Message.Should().Contain("no saga registered for message of type");
+            ex.Message.Should().Contain("no Saga registered for message of type");
         }
 
         [Fact]
-        public async Task RunAsync_should_throw_SagaNotFoundException_if_no_saga_registered_on_DI()
+        public async Task RunAsync_should_throw_if_runner_fails()
         {
+            var message = StartDummySaga.New();
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+            messageContext.Message.Returns(message);
+
+            
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var types = (typeof(DummySaga), typeof(DummySagaState));
             stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(types);
+                .Returns(new[]{types});
 
+            var expectedException = new Exception("whoops");
+            var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
+            runner.When(r => r.RunAsync(messageContext, Arg.Any<CancellationToken>()))
+                .Throw(expectedException);
+                
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-
+            sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
+                .Returns(runner);
+            
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
                         .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
 
             var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
 
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
-            var ex = await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext));
-            ex.Message.Should().Contain("no saga registered on DI for message of type");
+            var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
+            ex.Message.Should().Contain("an error has occurred while processing message");
+            ex.InnerExceptions.Should().NotBeNullOrEmpty()
+                .And.HaveCount(1)
+                .And.Contain(e => e.Message == expectedException.Message);
         }
 
         [Fact]
@@ -83,7 +94,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var types = (typeof(DummySaga), typeof(DummySagaState));
             stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(types);
+                .Returns(new[] { types });
 
             var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
 
