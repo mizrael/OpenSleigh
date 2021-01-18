@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using FluentAssertions;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
@@ -14,7 +11,8 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public void Register_should_return_false_if_saga_handles_no_messages()
         {
-            var sut = new SagaTypeResolver();
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SagaTypeResolver(typeResolver);
             var result = sut.Register<EmptySaga, DummySagaState>();
             result.Should().BeFalse();
         }
@@ -22,7 +20,8 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public void Register_should_return_true_if_saga_handles_messages()
         {
-            var sut = new SagaTypeResolver();
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SagaTypeResolver(typeResolver);
             var result = sut.Register<DummySaga, DummySagaState>();
             result.Should().BeTrue();
         }
@@ -30,7 +29,8 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public void Register_should_throw_if_message_handler_already_registered()
         {
-            var sut = new SagaTypeResolver();
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SagaTypeResolver(typeResolver);
             sut.Register<DummySaga, DummySagaState>();
             Assert.Throws<TypeAccessException>(() => sut.Register<DummySaga, DummySagaState>());
         }
@@ -38,7 +38,8 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public void Resolve_should_return_empty_collection_when_no_saga_registered_for_message()
         {
-            var sut = new SagaTypeResolver();
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SagaTypeResolver(typeResolver);
             var result = sut.Resolve<StartDummySaga>();
             result.Should().NotBeNull().And.BeEmpty();
         }
@@ -46,8 +47,9 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public void Resolve_should_return_registered_saga()
         {
-            var sut = new SagaTypeResolver();
-            
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SagaTypeResolver(typeResolver);
+
             sut.Register<DummySaga, DummySagaState>();
             
             var result = sut.Resolve<StartDummySaga>();

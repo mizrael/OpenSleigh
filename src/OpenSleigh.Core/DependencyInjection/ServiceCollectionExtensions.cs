@@ -13,22 +13,13 @@ namespace OpenSleigh.Core.DependencyInjection
     {
         public static IServiceCollection AddOpenSleigh(this IServiceCollection services, Action<IBusConfigurator> configure = null)
         {
-            var stateTypeResolver = new SagaTypeResolver();
+            var typeResolver = new TypeResolver();
+            var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
-            services.AddSingleton<ISagaTypeResolver>(stateTypeResolver)
+            services.AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
                 .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
-                .AddSingleton<ITypeResolver>(ctx =>
-                {
-                    var resolver = new TypeResolver();
-
-                    var sagaTypeResolver = ctx.GetRequiredService<ISagaTypeResolver>();
-                    var sagaTypes = sagaTypeResolver.GetSagaTypes();
-                    foreach (var t in sagaTypes)
-                        resolver.Register(t);
-
-                    return resolver;
-                })
+                .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
                 .AddSingleton<IMessageProcessor, MessageProcessor>()
@@ -47,7 +38,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddHostedService<OutboxBackgroundService>()
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
-            var builder = new BusConfigurator(services, stateTypeResolver);
+            var builder = new BusConfigurator(services, sagaTypeResolver);
             configure?.Invoke(builder);
             
             return services;

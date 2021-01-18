@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
-using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;

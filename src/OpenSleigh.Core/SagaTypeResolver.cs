@@ -9,10 +9,16 @@ namespace OpenSleigh.Core
 {
     public class SagaTypeResolver : ISagaTypeResolver
     {
+        private readonly ITypeResolver _typeResolver;
         private readonly ConcurrentDictionary<Type, IList<(Type sagaType, Type sagaStateType)>> _types = new ();
 
         private static readonly Type MessageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-        
+
+        public SagaTypeResolver(ITypeResolver typeResolver)
+        {
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        }
+
         public IEnumerable<(Type sagaType, Type sagaStateType)> Resolve<TM>() where TM : IMessage
         {
             var messageType = typeof(TM);
@@ -39,12 +45,12 @@ namespace OpenSleigh.Core
                     continue;
 
                 var messageType = i.GetGenericArguments().First();
-
+                
                 Register(messageType, (sagaType, sagaStateType));
 
                 hasMessages = true;
             }
-
+            
             return hasMessages;
         }
     
@@ -59,6 +65,7 @@ namespace OpenSleigh.Core
             _types.AddOrUpdate(messageType,
                 (k) =>
                 {
+                    _typeResolver.Register(messageType);
                     var res = new List<(Type sagaType, Type sagaStateType)> {types};
                     return res;
                 },
@@ -68,9 +75,5 @@ namespace OpenSleigh.Core
                     return v;
                 });
         }
-
-        public IReadOnlyCollection<Type> GetSagaTypes() => _types.Values
-            .SelectMany(st => st.Select(t => t.sagaStateType))
-            .ToImmutableList();
     }
 }
