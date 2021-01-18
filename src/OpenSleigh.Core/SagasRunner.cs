@@ -39,7 +39,7 @@ namespace OpenSleigh.Core
                 try
                 {
                     var runnerType = _typesCache.GetGeneric(typeof(ISagaRunner<,>), types.sagaType, types.sagaStateType);
-                    var runner = _serviceProvider.GetService(runnerType);
+                    var runner = (ISagaRunner)_serviceProvider.GetService(runnerType);
                     if (null != runner)
                         await RunAsyncCore(messageContext, runner, cancellationToken);
                 }
@@ -54,10 +54,10 @@ namespace OpenSleigh.Core
                                                 exceptions);
         }
 
-        private static async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, object runner, 
+        private static async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, ISagaRunner runner, 
             CancellationToken cancellationToken) where TM : IMessage
         {
-            await (runner as dynamic).RunAsync(messageContext, cancellationToken);
+            await runner.RunAsync(messageContext, cancellationToken);
         }
     }
 }

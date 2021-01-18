@@ -69,6 +69,8 @@ namespace OpenSleigh.Core
                 });
         }
 
-  //      public IReadOnlyCollection<Type> GetSagaTypes() => _types.Values.Select(v => v.sagaStateType).ToImmutableList();
+        public IReadOnlyCollection<Type> GetSagaTypes() => _types.Values
+            .SelectMany(st => st.Select(t => t.sagaStateType))
+            .ToImmutableList();
     }
 }

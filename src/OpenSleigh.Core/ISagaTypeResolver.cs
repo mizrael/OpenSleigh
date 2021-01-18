@@ -8,5 +8,6 @@ namespace OpenSleigh.Core
     {
         IEnumerable<(Type sagaType, Type sagaStateType)> Resolve<TM>() where TM : IMessage;
         bool Register<TS, TD>() where TD : SagaState where TS : Saga<TD>;
+        IReadOnlyCollection<Type> GetSagaTypes();
     }
 }
