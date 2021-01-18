@@ -7,15 +7,15 @@ using Xunit;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.E2E
 {
-    public class MongoSimpleSagaScenario : SimpleSagaScenario, IClassFixture<DbFixture>
+    public class MongoEventBroadcastingScenario : EventBroadcastingScenario, IClassFixture<DbFixture>
     {
         private readonly DbFixture _fixture;
 
-        public MongoSimpleSagaScenario(DbFixture fixture)
+        public MongoEventBroadcastingScenario(DbFixture fixture)
         {
             _fixture = fixture;
         }
-    
+        
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
             var mongoCfg = new MongoConfiguration(_fixture.ConnectionString,
@@ -27,7 +27,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.E2E
                 .UseMongoPersistence(mongoCfg);
         }
 
-        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) => 
+        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseInMemoryTransport();
     }
 }

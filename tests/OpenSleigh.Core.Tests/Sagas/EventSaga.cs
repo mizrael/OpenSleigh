@@ -5,16 +5,16 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {
-    public class EventSagaState : SagaState
+    public record DummyEvent(Guid Id, Guid CorrelationId) : IEvent;
+    
+    public class EventSagaState1 : SagaState
     {
-        public EventSagaState(Guid id) : base(id)
+        public EventSagaState1(Guid id) : base(id)
         {
         }
     }
 
-    public record DummyEvent(Guid Id, Guid CorrelationId) : IEvent;
-
-    public class EventSaga1 : Saga<EventSagaState>, 
+    public class EventSaga1 : Saga<EventSagaState1>, 
         IStartedBy<DummyEvent>
     {
         private readonly Action<DummyEvent> _onStart;
@@ -31,7 +31,14 @@ namespace OpenSleigh.Core.Tests.Sagas
         }
     }
 
-    public class EventSaga2 : Saga<EventSagaState>,
+    public class EventSagaState2 : SagaState
+    {
+        public EventSagaState2(Guid id) : base(id)
+        {
+        }
+    }
+
+    public class EventSaga2 : Saga<EventSagaState2>,
         IStartedBy<DummyEvent>
     {
         private readonly Action<DummyEvent> _onStart;
