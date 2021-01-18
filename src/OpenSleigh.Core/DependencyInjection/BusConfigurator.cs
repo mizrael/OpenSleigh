@@ -42,16 +42,7 @@ namespace OpenSleigh.Core.DependencyInjection
                     continue;
 
                 var messageType = i.GetGenericArguments().First();
-
-                //TODO: move this check into SagaTypeResolver
-                if (messageType.IsAssignableTo(typeof(ICommand)))
-                {
-                    var commandHandlerType = typeof(IHandleMessage<>).MakeGenericType(messageType);
-                    if (Services.Any(sd => sd.ServiceType == commandHandlerType))
-                        throw new TypeLoadException(
-                            $"there is already one handler registered for command type '{messageType.FullName}'");
-                }
-
+                
                 _typeResolver.Register(messageType, (sagaType, sagaStateType));
 
                 Services.AddTransient(i, sagaType);
