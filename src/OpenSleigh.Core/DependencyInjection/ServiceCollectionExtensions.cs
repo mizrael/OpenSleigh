@@ -17,12 +17,12 @@ namespace OpenSleigh.Core.DependencyInjection
             var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
             services.AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
-                .AddSingleton<ISagasRunner, SagasRunner>()
+                .AddScoped<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
-                .AddSingleton<IMessageProcessor, MessageProcessor>()
+                .AddScoped<IMessageProcessor, MessageProcessor>()
                 .AddSingleton<IOutboxProcessor>(ctx =>
                 {
                     var repo = ctx.GetRequiredService<IOutboxRepository>();
