@@ -23,9 +23,10 @@ namespace OpenSleigh.Core.Tests.E2E
                     });
                 });
         
-        protected void AddSaga<TS, TD>(IBusConfigurator cfg, Func<IMessage, TD> stateFactory) 
+        protected void AddSaga<TS, TD, TM>(IBusConfigurator cfg, Func<TM, TD> stateFactory) 
             where TD : SagaState 
             where TS : Saga<TD>
+            where TM : IMessage
         {
             var sagaCfg = cfg.AddSaga<TS, TD>()
                 .UseStateFactory(stateFactory);

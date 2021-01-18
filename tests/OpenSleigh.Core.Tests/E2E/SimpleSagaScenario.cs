@@ -54,7 +54,7 @@ namespace OpenSleigh.Core.Tests.E2E
         
         protected override void AddSagas(IBusConfigurator cfg)
         {
-            AddSaga<SimpleSaga, SimpleSagaState>(cfg, msg => new SimpleSagaState(msg.CorrelationId));
+            AddSaga<SimpleSaga, SimpleSagaState, StartSimpleSaga>(cfg, msg => new SimpleSagaState(msg.CorrelationId));
         }
     }
 

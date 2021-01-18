@@ -54,15 +54,15 @@ namespace OpenSleigh.Samples.Sample2.Worker
                             .UseMongoPersistence(mongoCfg);
 
                         cfg.AddSaga<SimpleSaga, SimpleSagaState>()
-                            .UseStateFactory(msg => new SimpleSagaState(msg.CorrelationId))
+                            .UseStateFactory<StartSimpleSaga>(msg => new SimpleSagaState(msg.CorrelationId))
                             .UseRabbitMQTransport();
 
                         cfg.AddSaga<ParentSaga, ParentSagaState>()
-                            .UseStateFactory(msg => new ParentSagaState(msg.CorrelationId))
+                            .UseStateFactory<StartParentSaga>(msg => new ParentSagaState(msg.CorrelationId))
                             .UseRabbitMQTransport();
 
                         cfg.AddSaga<ChildSaga, ChildSagaState>()
-                            .UseStateFactory(msg => new ChildSagaState(msg.CorrelationId))
+                            .UseStateFactory<StartChildSaga>(msg => new ChildSagaState(msg.CorrelationId))
                             .UseRabbitMQTransport();
                     });
             });

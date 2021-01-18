@@ -1,4 +1,3 @@
-using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using System;

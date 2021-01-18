@@ -14,12 +14,12 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var expectedState = new DummySagaState(Guid.NewGuid());
             var expectedMessage = StartDummySaga.New();
             
-            Func<IMessage, DummySagaState> factory = (msg) =>
+            Func<StartDummySaga, DummySagaState> factory = (msg) =>
             {
                 msg.Should().Be(expectedMessage);
                 return expectedState;
             };
-            var sut = new LambdaSagaStateFactory<DummySagaState>(factory);
+            var sut = new LambdaSagaStateFactory<StartDummySaga, DummySagaState>(factory);
             var result = sut.Create(expectedMessage);
             result.Should().Be(expectedState);
         }
