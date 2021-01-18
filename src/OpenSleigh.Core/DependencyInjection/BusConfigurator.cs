@@ -24,31 +24,7 @@ namespace OpenSleigh.Core.DependencyInjection
             where TD : SagaState
             where TS : Saga<TD>
         {
-            bool hasMessages = false;
-            
-            var sagaType = typeof(TS);
-            var sagaStateType = typeof(TD);
-            
-            var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-
-            var interfaces = sagaType.GetInterfaces();
-            foreach (var i in interfaces)
-            {
-                if (!i.IsGenericType)
-                    continue;
-
-                var openGeneric = i.GetGenericTypeDefinition();
-                if (!openGeneric.IsAssignableFrom(messageHandlerType))
-                    continue;
-
-                var messageType = i.GetGenericArguments().First();
-                
-                _typeResolver.Register(messageType, (sagaType, sagaStateType));
-
-                Services.AddTransient(i, sagaType);
-
-                hasMessages = true;
-            }
+            var hasMessages = _typeResolver.Register<TS, TD>();
 
             if (hasMessages)
             {
