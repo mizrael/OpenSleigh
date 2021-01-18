@@ -5,7 +5,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Core.DependencyInjection
+namespace OpenSleigh.Core
 {
     //TODO: rename
     public class SagaTypeResolver : ISagaTypeResolver
@@ -25,8 +25,10 @@ namespace OpenSleigh.Core.DependencyInjection
         {
             //TODO: if message is an event, allow multiple sagas types
             //TODO: throw only if message is a command and there is already a saga registered
-            
-            if (_types.ContainsKey(messageType))
+
+            var isEvent = messageType.IsAssignableTo(typeof(IEvent));
+
+            if (!isEvent && _types.ContainsKey(messageType))
                 throw new TypeAccessException($"there is already a saga for message type '{messageType.FullName}'");
 
             _types.AddOrUpdate(messageType, types, (k, v) => types);
