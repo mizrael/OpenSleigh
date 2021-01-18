@@ -1,4 +1,3 @@
-using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using System;
@@ -25,10 +24,13 @@ namespace OpenSleigh.Core
             CancellationToken cancellationToken = default) where TM : IMessage
         {
             var correlationId = messageContext.Message.CorrelationId;
-
-            var defaultState = _sagaStateFactory.Create(messageContext.Message);
-
-            var result = await _sagaStateRepository.LockAsync(correlationId, defaultState, cancellationToken);
+            
+            var isStartMessage = (typeof(IStartedBy<TM>).IsAssignableFrom(typeof(TS)));
+            TD initialState = null;
+            if (isStartMessage)
+                initialState = _sagaStateFactory.Create(messageContext.Message);
+            
+            var result = await _sagaStateRepository.LockAsync(correlationId, initialState, cancellationToken);
 
             if (null != result.state)
                 return result;
@@ -36,7 +38,7 @@ namespace OpenSleigh.Core
             // if state is null, we're probably starting a new saga.
             // We have to check if the current message can
             // actually start the specified saga or not
-            if (!typeof(IStartedBy<TM>).IsAssignableFrom(typeof(TS)))
+            if (!isStartMessage)
                 throw new MessageException($"Saga '{correlationId}' cannot be started by message '{typeof(TM).FullName}'");
 
             throw new StateCreationException(typeof(TD), correlationId);

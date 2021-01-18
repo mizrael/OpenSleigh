@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
-using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
@@ -58,6 +57,9 @@ namespace OpenSleigh.Core.Tests.Unit
             var ex = await Assert.ThrowsAsync<MessageException>(() =>
                          sut.GetAsync(messageContext, CancellationToken.None));
             ex.Message.Should().Contain($"Saga '{message.CorrelationId}' cannot be started by message");
+
+            sagaStateFactory.DidNotReceiveWithAnyArgs()
+                .Create(null);
         }
 
         [Fact]

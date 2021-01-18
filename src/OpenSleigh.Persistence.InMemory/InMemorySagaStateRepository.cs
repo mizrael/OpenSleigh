@@ -3,7 +3,6 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics.Contracts;
 using System.Threading;
 using System.Threading.Tasks;
 

@@ -42,7 +42,7 @@ namespace OpenSleigh.Samples.Sample1.Console
                             .UseInMemoryPersistence();
                         
                         cfg.AddSaga<MySaga, MySagaState>()
-                            .UseStateFactory(msg => new MySagaState(msg.CorrelationId))
+                            .UseStateFactory<StartSaga>(msg => new MySagaState(msg.CorrelationId))
                             .UseInMemoryTransport();
                     });
             });

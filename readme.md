@@ -81,8 +81,7 @@ Dependency injection can be used to reference services from Sagas.
 At this point all you have to do is register and configure the Saga:
 ```
 services.AddOpenSleigh(cfg =>{
-    cfg.AddSaga<MyAwesomeSaga, MyAwesomeSagaState>()
-        .UseStateFactory(msg => new MyAwesomeSagaState(msg.CorrelationId))
+    cfg.AddSaga<MyAwesomeSaga, MyAwesomeSagaState>()      
         .UseRabbitMQTransport(rabbitConfig);
 });
 ```
@@ -114,6 +113,17 @@ Each message has to expose an `Id` property and a `CorrelationId`. Those are use
 **IMPORTANT**: 
 If a Saga is sending a message to itself (loopback), or spawning child Sagas, the `CorrelationId` has to be kept unchanged on all the messages. 
 Also, make sure the `Id` and the `CorrelationId` don't match!
+
+We also have to specify the starting message for a Saga when registering it on our DI container, by calling the `UseStateFactory()` method:
+
+```
+services.AddOpenSleigh(cfg =>{
+    cfg.AddSaga<MyAwesomeSaga, MyAwesomeSagaState>()
+        .UseStateFactory<StartMyAwesomeSaga>(msg => new MyAwesomeSagaState(msg.CorrelationId))
+        .UseRabbitMQTransport(rabbitConfig);
+});
+```
+This call will tell OpenSleigh how it can build the initial State for the current Saga when loading it for the first time.
 
 #### Handling messages
 

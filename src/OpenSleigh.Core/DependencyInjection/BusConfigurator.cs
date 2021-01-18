@@ -20,14 +20,15 @@ namespace OpenSleigh.Core.DependencyInjection
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
-        public ISagaConfigurator<TS, TD> AddSaga<TS, TD>() 
-            where TS : Saga<TD> where TD : SagaState
+        public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
+            where TD : SagaState
+            where TS : Saga<TD>
         {
+            bool hasMessages = false;
+            
             var sagaType = typeof(TS);
             var sagaStateType = typeof(TD);
-
-            Services.AddScoped<TS>();
-
+            
             var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
 
             var interfaces = sagaType.GetInterfaces();
@@ -54,16 +55,18 @@ namespace OpenSleigh.Core.DependencyInjection
                 _typeResolver.Register(messageType, (sagaType, sagaStateType));
 
                 Services.AddTransient(i, sagaType);
+
+                hasMessages = true;
             }
 
-            Services.AddSingleton(typeof(ISagaStateService<,>).MakeGenericType(sagaType, sagaStateType),
-                                 typeof(SagaStateService<,>).MakeGenericType(sagaType, sagaStateType));
-
-            Services.AddSingleton(typeof(ISagaRunner<,>).MakeGenericType(sagaType, sagaStateType),
-                                  typeof(SagaRunner<,>).MakeGenericType(sagaType, sagaStateType));
-
-            Services.AddSingleton(typeof(ISagaFactory<,>).MakeGenericType(sagaType, sagaStateType),
-                                typeof(DefaultSagaFactory<,>).MakeGenericType(sagaType, sagaStateType));
+            if (hasMessages)
+            {
+                Services.AddScoped<TS>();
+                Services.AddSingleton<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>();
+                Services.AddSingleton<ISagaRunner<TS, TD>, SagaRunner<TS, TD>>();
+                Services.AddSingleton<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>();
+                Services.AddSingleton<ISagaStateFactory<TD>, DefaultSagaStateFactory<TD>>();
+            }
 
             return new SagaConfigurator<TS, TD>(Services);
         }

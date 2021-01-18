@@ -11,7 +11,8 @@ namespace OpenSleigh.Core.DependencyInjection
         where TD : SagaState
     {
         IServiceCollection Services { get; }
-        ISagaConfigurator<TS, TD> UseStateFactory(Func<IMessage, TD> stateFactory);
+        ISagaConfigurator<TS, TD> UseStateFactory<TM>(Func<TM, TD> stateFactory)
+            where TM : IMessage;
     }
 
     [ExcludeFromCodeCoverage]
@@ -26,12 +27,16 @@ namespace OpenSleigh.Core.DependencyInjection
 
         public IServiceCollection Services { get; }
 
-        public ISagaConfigurator<TS, TD> UseStateFactory(Func<IMessage, TD> stateFactory)
+        public ISagaConfigurator<TS, TD> UseStateFactory<TM>(Func<TM, TD> stateFactory)
+            where TM : IMessage
         {
+            var messageType = typeof(TM);
             var stateType = typeof(TD);
-            var factory = new LambdaSagaStateFactory<TD>(stateFactory);
 
-            var descriptor = ServiceDescriptor.Singleton(typeof(ISagaStateFactory<>).MakeGenericType(stateType), factory);
+            var factoryInterfaceType = typeof(ISagaStateFactory<,>).MakeGenericType(messageType, stateType);
+            var factory = new LambdaSagaStateFactory<TM, TD>(stateFactory);
+
+            var descriptor = ServiceDescriptor.Singleton(factoryInterfaceType, factory);
             this.Services.Replace(descriptor);
 
             return this;
