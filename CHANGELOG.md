@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-01-14](https://github.com/mizrael/OpenSleigh/pull/16)
+### Added
+- Saga States can now be reconstructed from typed messages
+
 ## [2021-01-14](https://github.com/mizrael/OpenSleigh/pull/15)
 ### Added
 - possibility to configure exchange and queue names for each message
