@@ -1,8 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Persistence.InMemory.Messaging;
@@ -17,9 +20,11 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         {
             var processor = NSubstitute.Substitute.For<IMessageProcessor>();
             var reader = NSubstitute.Substitute.For<ChannelReader<DummyMessage>>();
+            var logger = NSubstitute.Substitute.For<ILogger<InMemorySubscriber<DummyMessage>>>();
 
-            Assert.Throws<ArgumentNullException>(() => new InMemorySubscriber<DummyMessage>(null, reader));
-            Assert.Throws<ArgumentNullException>(() => new InMemorySubscriber<DummyMessage>(processor, null));
+            Assert.Throws<ArgumentNullException>(() => new InMemorySubscriber<DummyMessage>(null, reader, logger));
+            Assert.Throws<ArgumentNullException>(() => new InMemorySubscriber<DummyMessage>(processor, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new InMemorySubscriber<DummyMessage>(processor, reader, null));
         }
 
         [Fact]
@@ -38,11 +43,40 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             reader.ReadAllAsync()
                 .ReturnsForAnyArgs(asyncMessages);
 
-            var sut = new InMemorySubscriber<DummyMessage>(processor, reader);
+            var logger = NSubstitute.Substitute.For<ILogger<InMemorySubscriber<DummyMessage>>>();
+
+            var sut = new InMemorySubscriber<DummyMessage>(processor, reader, logger);
             await sut.StartAsync();
 
             foreach(var message in messages)
                 await processor.Received(1).ProcessAsync(message);
+        }
+
+        [Fact]
+        public async Task StartAsync_should_log_exceptions()
+        {
+            var messages = new[]
+            {
+                DummyMessage.New(),
+            };
+            var asyncMessages = GetMessagesAsync(messages);
+            
+            var processor = NSubstitute.Substitute.For<IMessageProcessor>();
+            var ex = new Exception("whoops");
+            processor.When(p => p.ProcessAsync(messages[0], Arg.Any<CancellationToken>()))
+                .Throw(ex);
+
+            var reader = NSubstitute.Substitute.For<ChannelReader<DummyMessage>>();
+            reader.ReadAllAsync()
+                .ReturnsForAnyArgs(asyncMessages);
+
+            var logger = new FakeLogger<InMemorySubscriber<DummyMessage>>();
+
+            var sut = new InMemorySubscriber<DummyMessage>(processor, reader, logger);
+            await sut.StartAsync();
+
+            logger.Logs.Count.Should().Be(1);
+            logger.Logs.Should().Contain(l => l.ex == ex);
         }
 
         private static async IAsyncEnumerable<DummyMessage> GetMessagesAsync(IEnumerable<DummyMessage> messages)
@@ -57,7 +91,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         {
             var processor = NSubstitute.Substitute.For<IMessageProcessor>();
             var reader = NSubstitute.Substitute.For<ChannelReader<DummyMessage>>();
-            var sut = new InMemorySubscriber<DummyMessage>(processor, reader);
+            var logger = NSubstitute.Substitute.For<ILogger<InMemorySubscriber<DummyMessage>>>();
+            var sut = new InMemorySubscriber<DummyMessage>(processor, reader, logger);
             var result = sut.StopAsync();
             result.Should().Be(Task.CompletedTask);
         }
