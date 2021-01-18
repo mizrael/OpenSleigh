@@ -3,7 +3,7 @@ using OpenSleigh.Core.Tests.E2E;
 
 namespace OpenSleigh.Persistence.InMemory.Tests.E2E
 {
-    public class InMemorySimpleSagaScenario : SimpleSagaScenario
+    public class InMemoryEventBroadcastingScenario : EventBroadcastingScenario
     {
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg) =>
             cfg.UseInMemoryTransport()

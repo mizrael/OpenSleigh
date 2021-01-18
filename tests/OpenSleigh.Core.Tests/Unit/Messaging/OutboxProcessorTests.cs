@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
+using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit.Messaging

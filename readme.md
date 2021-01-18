@@ -78,6 +78,9 @@ public class MyAwesomeSaga :
 
 Dependency injection can be used to reference services from Sagas.
 
+**IMPORTANT**: 
+Each Saga should have its own State class. Don't reuse State classes!
+
 At this point all you have to do is register and configure the Saga:
 ```
 services.AddOpenSleigh(cfg =>{

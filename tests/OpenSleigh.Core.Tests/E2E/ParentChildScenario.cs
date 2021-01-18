@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Tests.E2E.Sagas;
+using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.E2E

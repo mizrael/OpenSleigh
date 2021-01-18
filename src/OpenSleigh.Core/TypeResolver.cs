@@ -10,8 +10,6 @@ namespace OpenSleigh.Core
         private readonly HashSet<Assembly> _assemblies = new ();
         private readonly ConcurrentDictionary<string, Type> _typesByName = new();
         
-        public void Register<T>() => Register(typeof(T));
-
         public void Register(Type type)
         {
             if (type == null) 

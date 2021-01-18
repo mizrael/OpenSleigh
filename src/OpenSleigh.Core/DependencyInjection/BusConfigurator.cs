@@ -1,9 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using System.Runtime.CompilerServices;
-using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
@@ -24,40 +22,7 @@ namespace OpenSleigh.Core.DependencyInjection
             where TD : SagaState
             where TS : Saga<TD>
         {
-            bool hasMessages = false;
-            
-            var sagaType = typeof(TS);
-            var sagaStateType = typeof(TD);
-            
-            var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-
-            var interfaces = sagaType.GetInterfaces();
-            foreach (var i in interfaces)
-            {
-                if (!i.IsGenericType)
-                    continue;
-
-                var openGeneric = i.GetGenericTypeDefinition();
-                if (!openGeneric.IsAssignableFrom(messageHandlerType))
-                    continue;
-
-                var messageType = i.GetGenericArguments().First();
-
-                //TODO: move this check into SagaTypeResolver
-                if (messageType.IsAssignableTo(typeof(ICommand)))
-                {
-                    var commandHandlerType = typeof(IHandleMessage<>).MakeGenericType(messageType);
-                    if (Services.Any(sd => sd.ServiceType == commandHandlerType))
-                        throw new TypeLoadException(
-                            $"there is already one handler registered for command type '{messageType.FullName}'");
-                }
-
-                _typeResolver.Register(messageType, (sagaType, sagaStateType));
-
-                Services.AddTransient(i, sagaType);
-
-                hasMessages = true;
-            }
+            var hasMessages = _typeResolver.Register<TS, TD>();
 
             if (hasMessages)
             {

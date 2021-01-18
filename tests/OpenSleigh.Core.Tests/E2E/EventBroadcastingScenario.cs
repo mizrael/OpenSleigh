@@ -11,25 +11,25 @@ using Xunit;
 
 namespace OpenSleigh.Core.Tests.E2E
 {
-    public abstract class SimpleSagaScenario : E2ETestsBase
+    public abstract class EventBroadcastingScenario : E2ETestsBase
     {
         [Fact]
-        public async Task run_single_message_scenario()
+        public async Task run_event_broadcasting_scenario()
         {
             var hostBuilder = CreateHostBuilder();
 
-            var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
-
-            var received = false;
+            var message = new DummyEvent(Guid.NewGuid(), Guid.NewGuid());
+            
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-
-            Action<StartSimpleSaga> onMessage = msg =>
+            var callsCount = 0;
+            var expectedCount = 2;
+            
+            Action<DummyEvent> onMessage = msg =>
             {
-                received = true;
+                callsCount++;
 
-                tokenSource.Cancel();
-
-                msg.Should().Be(message);
+                if(callsCount >= expectedCount)
+                    tokenSource.Cancel();
             };
 
             hostBuilder.ConfigureServices((ctx, services) =>
@@ -48,12 +48,13 @@ namespace OpenSleigh.Core.Tests.E2E
                 bus.PublishAsync(message, tokenSource.Token)
             });
 
-            received.Should().BeTrue();
+            callsCount.Should().Be(expectedCount);
         }
         
         protected override void AddSagas(IBusConfigurator cfg)
         {
-            AddSaga<SimpleSaga, SimpleSagaState, StartSimpleSaga>(cfg, msg => new SimpleSagaState(msg.CorrelationId));
+            AddSaga<EventSaga1, EventSagaState1, DummyEvent>(cfg, msg => new EventSagaState1(msg.CorrelationId));
+            AddSaga<EventSaga2, EventSagaState2, DummyEvent>(cfg, msg => new EventSagaState2(msg.CorrelationId));
         }
     }
 

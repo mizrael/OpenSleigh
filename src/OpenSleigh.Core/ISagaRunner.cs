@@ -4,11 +4,15 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    public interface ISagaRunner<TS, TD>
-        where TS : Saga<TD>
-        where TD : SagaState
+    public interface ISagaRunner
     {
         Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
             where TM : IMessage;
+    }
+    
+    public interface ISagaRunner<TS, TD> : ISagaRunner
+        where TS : Saga<TD>
+        where TD : SagaState
+    {
     }
 }
