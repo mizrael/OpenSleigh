@@ -23,5 +23,18 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var result = sut.Create(expectedMessage);
             result.Should().Be(expectedState);
         }
+
+        [Fact]
+        public void Create_should_return_null_when_message_has_wrong_type()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            var message = UnhandledMessage.New();
+
+            Func<StartDummySaga, DummySagaState> factory = (msg) => state;
+            
+            var sut = new LambdaSagaStateFactory<StartDummySaga, DummySagaState>(factory);
+            var result = sut.Create(message);
+            result.Should().BeNull();
+        }
     }
 }
