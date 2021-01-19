@@ -21,7 +21,7 @@ namespace OpenSleigh.Core
             _typesCache = typesCache ?? throw new ArgumentNullException(nameof(typesCache));
         }
 
-        public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        public Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
             where TM : IMessage
         {
             if (messageContext == null)
@@ -31,16 +31,22 @@ namespace OpenSleigh.Core
             if (null == sagaTypes || !sagaTypes.Any())
                 throw new SagaNotFoundException($"no Saga registered for message of type '{typeof(TM).FullName}'");
 
+           return RunAsyncCore(messageContext, cancellationToken, sagaTypes);
+        }
+
+        private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken,
+            IEnumerable<(Type sagaType, Type sagaStateType)> sagaTypes) where TM : IMessage
+        {
             var exceptions = new List<Exception>();
-            
+
             foreach (var types in sagaTypes)
             {
                 try
                 {
                     var runnerType = _typesCache.GetGeneric(typeof(ISagaRunner<,>), types.sagaType, types.sagaStateType);
-                    var runner = (ISagaRunner)_serviceProvider.GetService(runnerType);
+                    var runner = (ISagaRunner) _serviceProvider.GetService(runnerType);
                     if (null != runner)
-                        await RunAsyncCore(messageContext, runner, cancellationToken);
+                        await runner.RunAsync(messageContext, cancellationToken);
                 }
                 catch (Exception e)
                 {
@@ -49,14 +55,8 @@ namespace OpenSleigh.Core
             }
 
             if (exceptions.Any())
-                throw new AggregateException($"an error has occurred while processing message '{messageContext.Message.Id}'", 
-                                                exceptions);
-        }
-
-        private static async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, ISagaRunner runner, 
-            CancellationToken cancellationToken) where TM : IMessage
-        {
-            await runner.RunAsync(messageContext, cancellationToken);
+                throw new AggregateException($"an error has occurred while processing message '{messageContext.Message.Id}'",
+                    exceptions);
         }
     }
 }
