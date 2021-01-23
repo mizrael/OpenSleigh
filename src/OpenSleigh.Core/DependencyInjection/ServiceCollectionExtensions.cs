@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
@@ -20,6 +21,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddScoped<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
+                .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
                 .AddScoped<IMessageProcessor, MessageProcessor>()

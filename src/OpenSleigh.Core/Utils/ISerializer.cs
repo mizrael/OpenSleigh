@@ -1,7 +1,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.Mongo.Utils
+namespace OpenSleigh.Core.Utils
 {
     public interface ISerializer
     {

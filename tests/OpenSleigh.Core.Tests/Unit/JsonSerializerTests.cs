@@ -1,10 +1,11 @@
 ﻿using FluentAssertions;
+using OpenSleigh.Core.Tests.Sagas;
+using OpenSleigh.Core.Utils;
 using System;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Mongo.Tests.Unit
+namespace OpenSleigh.Core.Tests.Unit
 {
     public class JsonSerializerTests
     {

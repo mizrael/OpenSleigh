@@ -4,7 +4,6 @@ using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using OpenSleigh.Persistence.Mongo.Messaging;
-using OpenSleigh.Persistence.Mongo.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {
@@ -28,7 +27,6 @@ namespace OpenSleigh.Persistence.Mongo
                     var database = client.GetDatabase(config.DbName);
                     return database;
                 })
-                .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IDbContext, DbContext>()
                 .AddSingleton<ITransactionManager, MongoTransactionManager>()
                 .AddSingleton(config.SagaRepositoryOptions)

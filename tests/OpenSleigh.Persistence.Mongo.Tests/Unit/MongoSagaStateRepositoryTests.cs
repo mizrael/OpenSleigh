@@ -6,8 +6,8 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Persistence;
-using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 {

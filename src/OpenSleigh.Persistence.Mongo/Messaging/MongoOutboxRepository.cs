@@ -6,7 +6,7 @@ using MongoDB.Driver;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
-using OpenSleigh.Persistence.Mongo.Utils;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.Mongo.Messaging
 {

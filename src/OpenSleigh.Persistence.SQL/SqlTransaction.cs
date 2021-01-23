@@ -6,9 +6,9 @@ using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Persistence.SQL
 {
-    internal class SqlTransaction : ITransaction
+    internal sealed class SqlTransaction : ITransaction, IDisposable
     {
-        private readonly IDbContextTransaction _transaction;
+        private IDbContextTransaction _transaction;
 
         public SqlTransaction(IDbContextTransaction transaction)
         {
@@ -20,5 +20,11 @@ namespace OpenSleigh.Persistence.SQL
 
         public Task RollbackAsync(CancellationToken cancellationToken = default) =>
             _transaction.RollbackAsync(cancellationToken);
+
+        public void Dispose()
+        {
+            _transaction?.Dispose();
+            _transaction = null;
+        }
     }
 }

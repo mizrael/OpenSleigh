@@ -6,7 +6,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.Mongo.Utils;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {

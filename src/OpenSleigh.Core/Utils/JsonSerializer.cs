@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace OpenSleigh.Persistence.Mongo.Utils
+namespace OpenSleigh.Core.Utils
 {
     /// <summary>
     /// can't use System.Text.Json, polymorfic support is not mature: https://github.com/dotnet/runtime/issues/45189

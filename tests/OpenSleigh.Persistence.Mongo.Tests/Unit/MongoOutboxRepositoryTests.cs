@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Threading.Tasks;
 using FluentAssertions;
+using OpenSleigh.Core.Utils;
 using OpenSleigh.Persistence.Mongo.Messaging;
-using OpenSleigh.Persistence.Mongo.Utils;
 using Xunit;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit
