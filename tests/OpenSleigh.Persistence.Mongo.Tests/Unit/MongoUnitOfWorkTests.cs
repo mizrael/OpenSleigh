@@ -15,10 +15,10 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         public void ctor_should_throw_when_arguments_null()
         {
             var client = NSubstitute.Substitute.For<IMongoClient>();
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
 
-            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(null, logger));
-            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(client, null));
+            Assert.Throws<ArgumentNullException>(() => new MongoTransactionManager(null, logger));
+            Assert.Throws<ArgumentNullException>(() => new MongoTransactionManager(client, null));
         }
         
         [Fact]
@@ -31,8 +31,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             client.StartSession()
                 .ReturnsForAnyArgs(session);
             
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
-            var sut = new MongoUnitOfWork(client,  logger);
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
+            var sut = new MongoTransactionManager(client,  logger);
 
             var result = await sut.StartTransactionAsync();
             result.Should().BeOfType<NullTransaction>();
@@ -46,8 +46,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             client.StartSession()
                 .ReturnsForAnyArgs(session);
 
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
-            var sut = new MongoUnitOfWork(client, logger);
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
+            var sut = new MongoTransactionManager(client, logger);
 
             var result = await sut.StartTransactionAsync();
             result.Should().BeOfType<MongoTransaction>();
