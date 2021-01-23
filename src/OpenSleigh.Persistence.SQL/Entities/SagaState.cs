@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace OpenSleigh.Persistence.SQL.Entities
 {
-    internal class SagaState
+    public class SagaState
     {
         private SagaState() { }
         

@@ -1,9 +1,15 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System.Runtime.CompilerServices;
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
 
 namespace OpenSleigh.Persistence.SQL
 {
-    internal class SagaDbContext : DbContext
+    public interface ISagaDbContext
+    {
+        DbSet<SagaState> SagaStates { get; set; }
+    }
+
+    public class SagaDbContext : DbContext, ISagaDbContext
     {
         public SagaDbContext(DbContextOptions<SagaDbContext> options)
             : base(options)
