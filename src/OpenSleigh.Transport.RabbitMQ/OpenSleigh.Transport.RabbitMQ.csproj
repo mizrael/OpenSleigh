@@ -9,10 +9,10 @@
     <NeutralLanguage>en-US</NeutralLanguage>
     <Title>OpenSleigh.Transport.RabbitMQ</Title>
     <PackageDescription>RabbitMQ transport for OpenSleigh.</PackageDescription>
-    <Copyright>Copyright 2020</Copyright>
+    <Copyright>Copyright 2021</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport</PackageTags>
+    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport rabbitmq</PackageTags>
     <PackageOutputPath>../../packages/</PackageOutputPath>
     <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
     <PackageProjectUrl>https://github.com/mizrael/OpenSleigh/</PackageProjectUrl>
