@@ -14,13 +14,13 @@ namespace OpenSleigh.Core
     {
         private readonly ISagaStateService<TS, TD> _sagaStateService;
         private readonly ISagaFactory<TS, TD> _sagaFactory;
-        private readonly IUnitOfWork _uow;
+        private readonly ITransactionManager _uow;
         private readonly ILogger<SagaRunner<TS, TD>> _logger;
         private static readonly Random _rand = new();
         
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
                           ISagaStateService<TS, TD> sagaStateService, 
-                          IUnitOfWork uow,
+                          ITransactionManager uow,
                           ILogger<SagaRunner<TS, TD>> logger)
         {
             _sagaFactory = sagaFactory ?? throw new ArgumentNullException(nameof(sagaFactory));
