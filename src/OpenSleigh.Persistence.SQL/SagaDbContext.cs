@@ -11,6 +11,7 @@ namespace OpenSleigh.Persistence.SQL
         DbSet<SagaState> SagaStates { get; set; }
 
         Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default);
+        Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 
     public class SagaDbContext : DbContext, ISagaDbContext
@@ -18,7 +19,7 @@ namespace OpenSleigh.Persistence.SQL
         public SagaDbContext(DbContextOptions<SagaDbContext> options)
             : base(options)
         {
-            Database.EnsureCreated();
+            Database.EnsureCreated(); 
         }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
