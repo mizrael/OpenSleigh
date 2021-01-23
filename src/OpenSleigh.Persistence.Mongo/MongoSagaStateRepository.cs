@@ -15,8 +15,7 @@ namespace OpenSleigh.Persistence.Mongo
     {
         public static readonly MongoSagaStateRepositoryOptions Default = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
     }
-
-    [ExcludeFromCodeCoverage]
+    
     public class MongoSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;
