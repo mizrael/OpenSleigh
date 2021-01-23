@@ -7,12 +7,12 @@ using Microsoft.Extensions.Logging;
 
 namespace OpenSleigh.Persistence.Mongo
 {
-    public class MongoUnitOfWork : IUnitOfWork
+    public class MongoTransactionManager : ITransactionManager
     {
         private readonly IMongoClient _client;
-        private readonly ILogger<MongoUnitOfWork> _logger;
+        private readonly ILogger<MongoTransactionManager> _logger;
 
-        public MongoUnitOfWork(IMongoClient client, ILogger<MongoUnitOfWork> logger)
+        public MongoTransactionManager(IMongoClient client, ILogger<MongoTransactionManager> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _client = client ?? throw new ArgumentNullException(nameof(client));

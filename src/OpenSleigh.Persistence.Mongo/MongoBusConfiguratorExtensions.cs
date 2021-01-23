@@ -30,7 +30,7 @@ namespace OpenSleigh.Persistence.Mongo
                 })
                 .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IDbContext, DbContext>()
-                .AddSingleton<IUnitOfWork, MongoUnitOfWork>()
+                .AddSingleton<ITransactionManager, MongoTransactionManager>()
                 .AddSingleton(config.SagaRepositoryOptions)
                 .AddSingleton(config.OutboxRepositoryOptions)
                 .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
