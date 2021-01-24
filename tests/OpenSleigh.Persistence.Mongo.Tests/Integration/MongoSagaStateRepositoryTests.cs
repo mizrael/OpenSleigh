@@ -57,7 +57,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
 
             var filter = Builders<Entities.SagaState>.Filter.Eq(e => e.LockId, lockId);
-            var lockedState = await _fixture.DbContext.SagaStates.FindAsync(filter);
+            var cursor = await _fixture.DbContext.SagaStates.FindAsync(filter);
+            var lockedState = await cursor.FirstOrDefaultAsync();
             lockedState.Should().NotBeNull();
         }
 
