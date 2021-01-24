@@ -8,7 +8,6 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using Xunit;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.Mongo.Entities;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration
 {
