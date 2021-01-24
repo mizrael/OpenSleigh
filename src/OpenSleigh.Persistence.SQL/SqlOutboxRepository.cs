@@ -72,6 +72,9 @@ namespace OpenSleigh.Persistence.SQL
                 if (entity is null)
                     throw new ArgumentException($"message '{message.Id}' not found");
 
+                if(!entity.LockId.HasValue)
+                    throw new LockException($"message '{message.Id}' is not locked");
+                
                 if (entity.LockId != lockId)
                     throw new LockException($"invalid lock id '{lockId}' on message '{message.Id}'");
 
@@ -109,37 +112,61 @@ namespace OpenSleigh.Persistence.SQL
                 .ConfigureAwait(false);
         }
 
-        public Task CleanProcessedAsync(CancellationToken cancellationToken = default)
+        public async Task CleanProcessedAsync(CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
+            try
+            {
+                var messages = await _dbContext.OutboxMessages
+                    .Where(e => e.Status == MessageStatuses.Processed.ToString())
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
+
+                _dbContext.OutboxMessages.RemoveRange(messages);
+                
+                await _dbContext.SaveChangesAsync(cancellationToken)
+                                .ConfigureAwait(false);
+
+                await transaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await transaction.RollbackAsync(cancellationToken);
+                throw;
+            }
         }
 
-        public async Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
+            return LockAsyncCore(message, cancellationToken);
+        }
+        
+        private async Task<Guid> LockAsyncCore(IMessage message, CancellationToken cancellationToken)
+        {
             var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
             try
             {
                 var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id,
-                                                                    cancellationToken: cancellationToken)
-                                                                    .ConfigureAwait(false);
+                        cancellationToken: cancellationToken)
+                    .ConfigureAwait(false);
                 if (entity is null)
                     throw new ArgumentException($"message '{message.Id}' not found");
-                
-                if(entity.LockId.HasValue && entity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
+
+                if (entity.LockId.HasValue && entity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
                     throw new LockException($"message '{message.Id}' is already locked");
-                
-                if(entity.Status == MessageStatuses.Processed.ToString())
+
+                if (entity.Status == MessageStatuses.Processed.ToString())
                     throw new LockException($"message '{message.Id}' was already processed");
-                
+
                 entity.LockId = Guid.NewGuid();
                 entity.LockTime = DateTime.UtcNow;
 
                 await _dbContext.SaveChangesAsync(cancellationToken)
-                    .ConfigureAwait(false); 
-                
+                    .ConfigureAwait(false);
+
                 await transaction.CommitAsync(cancellationToken);
 
                 return entity.LockId.Value;

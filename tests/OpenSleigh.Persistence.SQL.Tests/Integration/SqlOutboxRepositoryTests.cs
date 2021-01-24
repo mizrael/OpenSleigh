@@ -109,6 +109,86 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
         }
 
+        [Fact]
+        public async Task ReleaseAsync_should_throw_if_message_not_appended()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
+        }
+
+        [Fact]
+        public async Task ReleaseAsync_should_throw_if_message_not_locked()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+
+            await sut.AppendAsync(message);
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
+            ex.Message.Should().Contain($"message '{message.Id}' is not locked");
+        }
+
+        [Fact]
+        public async Task ReleaseAsync_should_throw_if_message_already_locked()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+
+            await sut.AppendAsync(message);
+            await sut.LockAsync(message);
+
+            var lockId = Guid.NewGuid();
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(message, lockId));
+            ex.Message.Should().Contain($"invalid lock id '{lockId}' on message '{message.Id}'");
+        }
+
+        [Fact]
+        public async Task ReleaseAsync_should_update_message_status()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+
+            await sut.AppendAsync(message);
+            var lockId = await sut.LockAsync(message);
+            await sut.ReleaseAsync(message, lockId);
+
+            var lockedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            lockedMessage.Status.Should().Be("Processed");
+            lockedMessage.LockId.Should().BeNull();
+            lockedMessage.LockTime.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task CleanProcessedAsync_should_clear_processed_messages()
+        {
+            var sut = CreateSut();
+
+            var messages = new[]
+            {
+                StartDummySaga.New(),
+                StartDummySaga.New(),
+                StartDummySaga.New()
+            };
+            foreach (var message in messages)
+                await sut.AppendAsync(message);
+
+            var processedMessage = StartDummySaga.New();
+
+            await sut.AppendAsync(processedMessage);
+            var lockId = await sut.LockAsync(processedMessage);
+            await sut.ReleaseAsync(processedMessage, lockId);
+            
+            var count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+            count.Should().Be(1);
+
+            await sut.CleanProcessedAsync();
+
+            count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+            count.Should().Be(0);
+        }
+
         private SqlOutboxRepository CreateSut()
         {
             var sut = new SqlOutboxRepository(_fixture.DbContext, new JsonSerializer(), SqlOutboxRepositoryOptions.Default);
