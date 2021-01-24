@@ -99,6 +99,44 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             state2.Id.Should().Be(correlationId);
         }
 
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_state_not_found()
+        {
+            var sut = CreateSut();
+
+            var correlationId = Guid.NewGuid();
+            var state = new DummyState(correlationId, "lorem", 42);
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(state, Guid.NewGuid()));
+            ex.Message.Should().Contain($"unable to find Saga State '{state.Id}'");
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_release_lock_and_update_state()
+        {
+            var sut = CreateSut();
+
+            var correlationId = Guid.NewGuid();
+            var newState = new DummyState(correlationId, "lorem", 42);
+
+            var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
+            
+            var updatedState = new DummyState(correlationId, "ipsum", 71);
+            await sut.ReleaseLockAsync(updatedState, lockId);
+
+            var unLockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
+            unLockedState.Should().NotBeNull();
+            unLockedState.LockId.Should().BeNull();
+            unLockedState.LockTime.Should().BeNull();
+            unLockedState.Data.Should().NotBeNull();
+
+            var serializer = new JsonSerializer();
+            var deserializedState = await serializer.DeserializeAsync<DummyState>(unLockedState.Data);
+            deserializedState.Id.Should().Be(updatedState.Id);
+            deserializedState.Bar.Should().Be(updatedState.Bar);
+            deserializedState.Foo.Should().Be(updatedState.Foo);
+        }
+
         private SqlSagaStateRepository CreateSut(SqlSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();
