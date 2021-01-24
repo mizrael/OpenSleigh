@@ -35,5 +35,15 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
             var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
+
+        [Fact]
+        public async Task ReleaseAsync_should_throw_if_message_null()
+        {
+            var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
+            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
+
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
+        }
     }
 }
