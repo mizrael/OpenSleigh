@@ -81,6 +81,8 @@ namespace OpenSleigh.Persistence.SQL
         public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
             CancellationToken cancellationToken = default) where TD : SagaState
         {
+            if (state == null) 
+                throw new ArgumentNullException(nameof(state));
             throw new NotImplementedException();
         }
     }

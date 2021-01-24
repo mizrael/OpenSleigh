@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.Tests")]
 namespace OpenSleigh.Persistence.SQL
 {
     internal class SqlTransactionManager : ITransactionManager
