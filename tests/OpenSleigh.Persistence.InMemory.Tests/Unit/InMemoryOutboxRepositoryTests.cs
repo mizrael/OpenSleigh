@@ -76,7 +76,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
                 await sut.AppendAsync(message);
 
             var lockId = await sut.LockAsync(messages[0]);
-            await sut.MarkAsSentAsync(messages[0], lockId);
+            await sut.ReleaseAsync(messages[0], lockId);
 
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull()
@@ -92,14 +92,14 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             await sut.AppendAsync(message);
             
-            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.MarkAsSentAsync(message, Guid.Empty));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.Empty));
         }
 
         [Fact]
         public async Task MarkAsSentAsync_should_throw_when_message_null()
         {
             var sut = new InMemoryOutboxRepository();
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.MarkAsSentAsync(null, Guid.Empty));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
         }
 
         [Fact]

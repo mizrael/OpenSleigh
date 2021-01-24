@@ -81,7 +81,7 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             {
                 await publisher.Received(1)
                     .PublishAsync(message, Arg.Any<CancellationToken>());
-                await repo.MarkAsSentAsync(message, Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+                await repo.ReleaseAsync(message, Arg.Any<Guid>(), Arg.Any<CancellationToken>());
             }
         }
     }

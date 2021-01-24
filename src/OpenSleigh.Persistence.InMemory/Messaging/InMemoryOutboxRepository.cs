@@ -18,7 +18,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             Task.FromResult(_messages.Values.Where(m => m.lockId == null && !m.processed)
                 .Select(m => m.message));
 
-        public Task MarkAsSentAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));

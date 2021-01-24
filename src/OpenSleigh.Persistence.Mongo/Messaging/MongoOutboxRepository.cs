@@ -54,7 +54,7 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             return messages;
         }
 
-        public Task MarkAsSentAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
