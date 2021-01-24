@@ -33,6 +33,7 @@ namespace OpenSleigh.Core.Messaging
             where TM : IMessage
         => _outboxRepository.AppendAsync(message, _transaction, cancellationToken);
 
+        //TODO: get rid of this. use some kind of scoped transaction manager on the UoW
         public void SetTransaction(ITransaction transaction) => _transaction = transaction;
     }
 }

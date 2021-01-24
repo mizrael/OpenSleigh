@@ -48,6 +48,16 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         }
 
         [Fact]
+        public async Task AppendAsync_should_fail_if_message_already_appended()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+            await sut.AppendAsync(message);
+
+            await Assert.ThrowsAsync<MongoDB.Driver.MongoWriteException> (async () => await sut.AppendAsync(message));
+        }
+
+        [Fact]
         public async Task ReadMessagesToProcess_should_return_available_messages()
         {
             var message = StartDummySaga.New();

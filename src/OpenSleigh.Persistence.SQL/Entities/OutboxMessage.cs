@@ -4,9 +4,13 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace OpenSleigh.Persistence.SQL.Entities
 {
-    public record OutboxMessage(Guid Id, byte[] Data, string Type, string Status,
-        DateTime? PublishingDate = null,
-        Guid? LockId = null, DateTime? LockTime = null);
+    public record OutboxMessage(Guid Id, byte[] Data, string Type)
+    {
+        public string Status { get; set; }
+        public Guid? LockId { get; set; }
+        public DateTime? LockTime { get; set; }
+        public DateTime? PublishingDate{ get; set; }
+    }
     
     internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfiguration<OutboxMessage>
     {

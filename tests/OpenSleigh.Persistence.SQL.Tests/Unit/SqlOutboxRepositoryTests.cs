@@ -12,8 +12,10 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, serializer));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null));
+            var options = SqlOutboxRepositoryOptions.Default;
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, serializer, options));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null, options));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, null));
         }
 
         [Fact]
@@ -21,7 +23,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
-            var sut = new SqlOutboxRepository(dbContext, serializer);
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.LockAsync(null));
         }
 
@@ -30,7 +32,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
-            var sut = new SqlOutboxRepository(dbContext, serializer);
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
     }

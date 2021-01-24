@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Driver;
@@ -12,7 +13,7 @@ namespace OpenSleigh.Persistence.Mongo
 {
     public record MongoOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     {
-        public static readonly MongoOutboxRepositoryOptions Default = new MongoOutboxRepositoryOptions(TimeSpan.FromMinutes(1));
+        public static readonly MongoOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
     }
     
     public class MongoOutboxRepository : IOutboxRepository
@@ -43,6 +44,8 @@ namespace OpenSleigh.Persistence.Mongo
                 .Limit(10)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
+            if (entities is null)
+                return Enumerable.Empty<IMessage>();
 
             var messages = new List<IMessage>();
             foreach (var entity in entities)
@@ -59,10 +62,10 @@ namespace OpenSleigh.Persistence.Mongo
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return MarkAsSentAsyncCore(message, lockId, cancellationToken);
+            return ReleaseAsyncCore(message, lockId, cancellationToken);
         }
 
-        private async Task MarkAsSentAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
+        private async Task ReleaseAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
         {
             var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
             var filter = filterBuilder.And(
@@ -110,9 +113,11 @@ namespace OpenSleigh.Persistence.Mongo
                     .ConfigureAwait(false);
         }
 
-        public Task CleanProcessedAsync(CancellationToken cancellationToken = default) =>
-            _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
-
+        public async Task CleanProcessedAsync(CancellationToken cancellationToken = default)
+        {
+            await _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken)
+                .ConfigureAwait(false);
+        }
 
         public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
