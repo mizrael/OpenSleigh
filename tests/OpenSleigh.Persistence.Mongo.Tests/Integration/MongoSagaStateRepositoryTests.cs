@@ -3,10 +3,12 @@ using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
+using MongoDB.Driver;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using Xunit;
 using OpenSleigh.Core.Utils;
+using OpenSleigh.Persistence.Mongo.Entities;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration
 {
@@ -43,6 +45,20 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             state.Id.Should().Be(newState.Id);
             state.Bar.Should().Be(newState.Bar);
             state.Foo.Should().Be(newState.Foo);
+        }
+
+        [Fact]
+        public async Task LockAsync_should_lock_item()
+        {
+            var sut = CreateSut();
+
+            var newState = DummyState.New();
+
+            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+
+            var filter = Builders<Entities.SagaState>.Filter.Eq(e => e.LockId, lockId);
+            var lockedState = await _fixture.DbContext.SagaStates.FindAsync(filter);
+            lockedState.Should().NotBeNull();
         }
 
         [Fact]
