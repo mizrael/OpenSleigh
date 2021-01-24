@@ -1,7 +1,6 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Persistence.InMemory;
-using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using Xunit;
 

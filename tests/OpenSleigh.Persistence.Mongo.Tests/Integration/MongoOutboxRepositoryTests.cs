@@ -10,7 +10,6 @@ using MongoDB.Driver;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using Xunit;
 

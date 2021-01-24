@@ -8,7 +8,7 @@ using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
 
-namespace OpenSleigh.Persistence.Mongo.Messaging
+namespace OpenSleigh.Persistence.Mongo
 {
     public record MongoOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     {
