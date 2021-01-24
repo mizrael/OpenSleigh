@@ -12,6 +12,6 @@ namespace OpenSleigh.Core.Persistence
         Task MarkAsSentAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default);
         Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default);
         Task CleanProcessedAsync(CancellationToken cancellationToken = default);
-        Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default);
+        Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default);
     }
 }

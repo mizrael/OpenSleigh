@@ -114,15 +114,15 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
 
 
-        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return BeginProcessingAsyncCore(message, cancellationToken);
+            return LockAsyncCore(message, cancellationToken);
         }
 
-        private async Task<Guid> BeginProcessingAsyncCore(IMessage message, CancellationToken cancellationToken)
+        private async Task<Guid> LockAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             var lockId = Guid.NewGuid();
 

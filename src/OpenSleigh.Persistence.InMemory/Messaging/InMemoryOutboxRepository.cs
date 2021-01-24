@@ -46,7 +46,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             return Task.CompletedTask;
         }
 
-        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));

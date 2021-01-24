@@ -50,7 +50,7 @@ namespace OpenSleigh.Core.Messaging
             {
                 try
                 {
-                    var lockId = await _outboxRepository.BeginProcessingAsync(message, cancellationToken);
+                    var lockId = await _outboxRepository.LockAsync(message, cancellationToken);
                     await _publisher.PublishAsync(message, cancellationToken);
                     await _outboxRepository.MarkAsSentAsync(message, lockId, cancellationToken);
                 }
