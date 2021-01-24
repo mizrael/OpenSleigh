@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Utils;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
@@ -28,11 +29,25 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
 
             var newState = DummyState.New();
 
-            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var (state, _) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
             state.Should().NotBeNull();
             state.Id.Should().Be(newState.Id);
             state.Bar.Should().Be(newState.Bar);
             state.Foo.Should().Be(newState.Foo);
+        }
+
+        [Fact]
+        public async Task LockAsync_should_lock_item()
+        {
+            var sut = CreateSut();
+
+            var newState = DummyState.New();
+
+            var (_, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+
+            var lockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e =>
+                                        e.LockId == lockId && e.CorrelationId == newState.Id);
+            lockedState.Should().NotBeNull();
         }
 
         [Fact]

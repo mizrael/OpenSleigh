@@ -14,7 +14,7 @@ namespace OpenSleigh.Persistence.SQL
     [ExcludeFromCodeCoverage]
     public record SqlSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
     {
-        public static readonly SqlSagaStateRepositoryOptions Default = new SqlSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
+        public static readonly SqlSagaStateRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
     }
     
     public class SqlSagaStateRepository : ISagaStateRepository
@@ -43,7 +43,9 @@ namespace OpenSleigh.Persistence.SQL
                 var stateEntity = await _dbContext.SagaStates
                     .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.CorrelationId == correlationId && 
-                                              e.Type == stateType.FullName, cancellationToken);
+                                              e.Type == stateType.FullName, cancellationToken)
+                    .ConfigureAwait(false); 
+                
                 if (stateEntity is null)
                 {
                     resultState = newState;
@@ -66,7 +68,8 @@ namespace OpenSleigh.Persistence.SQL
                     resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
                 }
 
-                await _dbContext.SaveChangesAsync(cancellationToken);
+                await _dbContext.SaveChangesAsync(cancellationToken)
+                                .ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken);
             }
             catch
@@ -83,7 +86,29 @@ namespace OpenSleigh.Persistence.SQL
         {
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
-            throw new NotImplementedException();
+
+            return ReleaseLockAsyncCore(state, cancellationToken);
+        }
+
+        private async Task ReleaseLockAsyncCore<TD>(TD state, CancellationToken cancellationToken) where TD : SagaState
+        {
+            var stateType = typeof(TD);
+
+            var stateEntity = await _dbContext.SagaStates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.CorrelationId == state.Id &&
+                                          e.Type == stateType.FullName, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (null == stateEntity)
+                throw new LockException($"unable to find Saga State '{state.Id}'");
+
+            stateEntity.LockTime = null;
+            stateEntity.LockId = null;
+            stateEntity.Data = await _serializer.SerializeAsync(state, cancellationToken);
+
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                .ConfigureAwait(false);
         }
     }
 }
