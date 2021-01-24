@@ -95,7 +95,6 @@ namespace OpenSleigh.Persistence.SQL
             var stateType = typeof(TD);
 
             var stateEntity = await _dbContext.SagaStates
-                .AsNoTracking()
                 .FirstOrDefaultAsync(e => e.CorrelationId == state.Id &&
                                           e.Type == stateType.FullName, cancellationToken)
                 .ConfigureAwait(false);
