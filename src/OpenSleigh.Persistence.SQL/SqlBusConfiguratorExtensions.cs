@@ -20,6 +20,7 @@ namespace OpenSleigh.Persistence.SQL
                 builder.UseSqlServer(config.ConnectionString);
             }).AddScoped<ISagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())
             .AddSingleton<ITransactionManager, SqlTransactionManager>()
+            .AddSingleton<IOutboxRepository, SqlOutboxRepository>()
             .AddSingleton<ISagaStateRepository, SqlSagaStateRepository>();
             
             return busConfigurator;

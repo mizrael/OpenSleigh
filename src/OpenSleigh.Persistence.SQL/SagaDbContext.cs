@@ -9,6 +9,7 @@ namespace OpenSleigh.Persistence.SQL
     public interface ISagaDbContext
     {
         DbSet<SagaState> SagaStates { get; set; }
+        DbSet<OutboxMessage> OutboxMessages { get; set; }
 
         Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
@@ -34,5 +35,6 @@ namespace OpenSleigh.Persistence.SQL
         }
 
         public DbSet<SagaState> SagaStates { get; set; }
+        public DbSet<OutboxMessage> OutboxMessages { get; set; }
     }
 }

@@ -31,11 +31,7 @@ namespace OpenSleigh.Persistence.SQL.Entities
             builder.ToTable("SagaStates", "dbo");
 
             builder.HasKey(e => new {e.CorrelationId, e.Type});
-
-            builder.Property(e => e.Data);
-
-            builder.Property(e => e.LockId);
-            builder.Property(e => e.LockTime);
         }
     }
+
 }

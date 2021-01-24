@@ -48,6 +48,17 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         }
 
         [Fact]
+        public async Task ReadMessagesToProcess_should_return_available_messages()
+        {
+            var message = StartDummySaga.New();
+            var sut = CreateSut();
+            await sut.AppendAsync(message);
+
+            var messages = await sut.ReadMessagesToProcess();
+            messages.Should().NotBeNullOrEmpty();
+        }
+
+        [Fact]
         public async Task LockAsync_should_lock_existing_message()
         {
             var message = StartDummySaga.New();
