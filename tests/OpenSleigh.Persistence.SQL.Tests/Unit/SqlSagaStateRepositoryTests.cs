@@ -12,8 +12,10 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var serializer = NSubstitute.Substitute.For<ISerializer>();
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            Assert.Throws<ArgumentNullException>(() => new SqlSagaStateRepository(null, serializer));
-            Assert.Throws<ArgumentNullException>(() => new SqlSagaStateRepository(dbContext, null));
+            var options = SqlSagaStateRepositoryOptions.Default;
+            Assert.Throws<ArgumentNullException>(() => new SqlSagaStateRepository(null, null, options));
+            Assert.Throws<ArgumentNullException>(() => new SqlSagaStateRepository(null, serializer, null));
+            Assert.Throws<ArgumentNullException>(() => new SqlSagaStateRepository(dbContext, null, null));
         }
     }
 }
