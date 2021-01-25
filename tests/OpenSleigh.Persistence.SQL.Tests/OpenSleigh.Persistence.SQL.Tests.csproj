@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
@@ -31,6 +31,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
   </ItemGroup>
