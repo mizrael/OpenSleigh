@@ -7,7 +7,12 @@ using OpenSleigh.Core.Persistence;
 namespace OpenSleigh.Persistence.SQL
 {
     [ExcludeFromCodeCoverage]
-    public record SqlConfiguration(string ConnectionString);
+    public record SqlConfiguration(string ConnectionString,
+        SqlSagaStateRepositoryOptions SagaRepositoryOptions,
+        SqlOutboxRepositoryOptions OutboxRepositoryOptions)
+    {
+        public SqlConfiguration(string connectionString) : this(connectionString, SqlSagaStateRepositoryOptions.Default, SqlOutboxRepositoryOptions.Default) { }
+    }
     
     [ExcludeFromCodeCoverage]
     public static class SqlBusConfiguratorExtensions
@@ -20,8 +25,10 @@ namespace OpenSleigh.Persistence.SQL
                 builder.UseSqlServer(config.ConnectionString);
             }).AddScoped<ISagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())
             .AddSingleton<ITransactionManager, SqlTransactionManager>()
-            .AddSingleton<IOutboxRepository, SqlOutboxRepository>()
-            .AddSingleton<ISagaStateRepository, SqlSagaStateRepository>();
+            .AddSingleton(config.SagaRepositoryOptions)
+            .AddSingleton(config.OutboxRepositoryOptions)
+            .AddScoped<IOutboxRepository, SqlOutboxRepository>()
+            .AddScoped<ISagaStateRepository, SqlSagaStateRepository>();
             
             return busConfigurator;
         }
