@@ -6,7 +6,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute.ReturnsExtensions;
-using OpenSleigh.Core.Persistence;
 using Xunit;
 using OpenSleigh.Core.Utils;
 

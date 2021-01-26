@@ -1,7 +1,6 @@
 using OpenSleigh.Core.Persistence;
 using MongoDB.Driver;
 using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
