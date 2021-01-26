@@ -88,7 +88,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
 
             var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
-            ex.Message.Should().Contain("an error has occurred while processing message");
+            ex.Message.Should().Contain("an error has occurred");
             ex.InnerExceptions.Should().NotBeNullOrEmpty()
                 .And.HaveCount(1)
                 .And.Contain(e => e.Message == expectedException.Message);
