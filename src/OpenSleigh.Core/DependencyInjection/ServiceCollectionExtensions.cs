@@ -24,7 +24,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
-                .AddScoped<IMessageProcessor, MessageProcessor>()
+                .AddSingleton<IMessageProcessor, MessageProcessor>()
                 .AddSingleton<IOutboxProcessor>(ctx =>
                 {
                     var repo = ctx.GetRequiredService<IOutboxRepository>();
