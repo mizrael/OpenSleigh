@@ -10,7 +10,7 @@ namespace OpenSleigh.Core.Persistence
     {
         Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default);
         Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default);
-        Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default);
+        Task AppendAsync(IMessage message, CancellationToken cancellationToken = default);
         Task CleanProcessedAsync(CancellationToken cancellationToken = default);
         Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default);
     }

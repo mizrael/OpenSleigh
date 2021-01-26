@@ -44,9 +44,9 @@ namespace OpenSleigh.Core
             throw new StateCreationException(typeof(TD), correlationId);
         }
 
-        public async Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
         {
-            await _sagaStateRepository.ReleaseLockAsync(state, lockId, transaction, cancellationToken);
+            await _sagaStateRepository.ReleaseLockAsync(state, lockId, cancellationToken);
         }
     }
 }

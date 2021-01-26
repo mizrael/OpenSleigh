@@ -6,5 +6,7 @@ namespace OpenSleigh.Persistence.Mongo
     {
         IMongoCollection<Entities.SagaState> SagaStates { get; }
         IMongoCollection<Entities.OutboxMessage> Outbox { get; }
+
+        MongoTransaction Transaction { get; set; }
     }
 }

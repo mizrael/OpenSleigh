@@ -11,10 +11,14 @@ namespace OpenSleigh.Persistence.Mongo
     {
         private readonly IMongoClient _client;
         private readonly ILogger<MongoTransactionManager> _logger;
-
-        public MongoTransactionManager(IMongoClient client, ILogger<MongoTransactionManager> logger)
+        private readonly IDbContext _dbContext;
+        
+        public MongoTransactionManager(IMongoClient client, 
+            ILogger<MongoTransactionManager> logger, 
+            IDbContext dbContext)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _client = client ?? throw new ArgumentNullException(nameof(client));
         }
 
@@ -28,7 +32,9 @@ namespace OpenSleigh.Persistence.Mongo
                 //the async overload might freeze if transactions are not supported
                 var session = _client.StartSession();
                 session.StartTransaction(transactionOptions);
-                transaction = new MongoTransaction(session);
+                
+                //TODO: I don't really like this coupling.
+                transaction = _dbContext.Transaction = new MongoTransaction(session);
             }
             catch (NotSupportedException ex)
             {

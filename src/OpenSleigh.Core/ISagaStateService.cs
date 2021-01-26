@@ -13,6 +13,6 @@ namespace OpenSleigh.Core
         Task<(TD state, Guid lockId)> GetAsync<TM>(IMessageContext<TM> messageContext,
                               CancellationToken cancellationToken = default) where TM : IMessage;
 
-        Task SaveAsync(TD state, Guid lockId, ITransaction transaction = null, CancellationToken cancellationToken = default);
+        Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default);
     }
 }

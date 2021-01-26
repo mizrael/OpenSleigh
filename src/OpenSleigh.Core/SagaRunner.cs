@@ -72,14 +72,12 @@ namespace OpenSleigh.Core
                 if (saga is not IHandleMessage<TM> handler)
                     throw new ConsumerNotFoundException(typeof(TM));
 
-                saga.Bus.SetTransaction(transaction);
-                
                 //TODO: add configurable retry policy
                 await handler.HandleAsync(messageContext, cancellationToken);
 
                 state.SetAsProcessed(messageContext.Message);
 
-                await _sagaStateService.SaveAsync(state, lockId, transaction, cancellationToken);
+                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
             }

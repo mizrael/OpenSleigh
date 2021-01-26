@@ -26,12 +26,13 @@ namespace OpenSleigh.Persistence.Mongo
                     var database = client.GetDatabase(config.DbName);
                     return database;
                 })
-                .AddSingleton<IDbContext, DbContext>()
-                .AddSingleton<ITransactionManager, MongoTransactionManager>()
                 .AddSingleton(config.SagaRepositoryOptions)
                 .AddSingleton(config.OutboxRepositoryOptions)
-                .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
-                .AddSingleton<IOutboxRepository, MongoOutboxRepository>();
+                
+                .AddScoped<IDbContext, DbContext>()
+                .AddScoped<ITransactionManager, MongoTransactionManager>()
+                .AddScoped<ISagaStateRepository, MongoSagaStateRepository>()
+                .AddScoped<IOutboxRepository, MongoOutboxRepository>();
             return busConfigurator;
         }
     }

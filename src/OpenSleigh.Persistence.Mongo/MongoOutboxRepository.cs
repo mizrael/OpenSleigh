@@ -21,14 +21,15 @@ namespace OpenSleigh.Persistence.Mongo
         private readonly IDbContext _dbContext;
         private readonly ISerializer _serializer;
         private readonly MongoOutboxRepositoryOptions _options;
-
+        
         private enum MessageStatuses
         {
             Pending,
             Processed
         }
 
-        public MongoOutboxRepository(IDbContext dbContext, ISerializer serializer, MongoOutboxRepositoryOptions options)
+        public MongoOutboxRepository(IDbContext dbContext, ISerializer serializer, 
+            MongoOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -91,22 +92,22 @@ namespace OpenSleigh.Persistence.Mongo
                 throw new ArgumentException($"message '{message.Id}' not found. Maybe it was already processed?");
         }
 
-        public Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return AppendAsyncCore(message, transaction, cancellationToken);
+            return AppendAsyncCore(message, cancellationToken);
         }
 
-        private async Task AppendAsyncCore(IMessage message, ITransaction transaction, CancellationToken cancellationToken)
+        private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             var data = await _serializer.SerializeAsync(message, cancellationToken);
             var entity =
                 new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
-
-            if (transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
-                await _dbContext.Outbox.InsertOneAsync(mongoTransaction.Session, entity, null, cancellationToken)
+           
+            if (_dbContext.Transaction?.Session != null)
+                await _dbContext.Outbox.InsertOneAsync(_dbContext.Transaction.Session, entity, null, cancellationToken)
                     .ConfigureAwait(false);
             else
                 await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken)
@@ -159,4 +160,5 @@ namespace OpenSleigh.Persistence.Mongo
             return lockId;
         }
     }
+    
 }

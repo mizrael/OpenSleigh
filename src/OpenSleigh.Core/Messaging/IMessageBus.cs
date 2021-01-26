@@ -8,13 +8,11 @@ namespace OpenSleigh.Core.Messaging
     public interface IMessageBus
     {
         Task PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
-        void SetTransaction(ITransaction transaction);
     }
 
     internal class DefaultMessageBus : IMessageBus
     {
         private readonly IOutboxRepository _outboxRepository;
-        private ITransaction _transaction;
         
         public DefaultMessageBus(IOutboxRepository outboxRepository)
         {
@@ -31,9 +29,6 @@ namespace OpenSleigh.Core.Messaging
 
         private Task PublishAsyncCore<TM>(TM message, CancellationToken cancellationToken) 
             where TM : IMessage
-        => _outboxRepository.AppendAsync(message, _transaction, cancellationToken);
-
-        //TODO: get rid of this. use some kind of scoped transaction manager on the UoW
-        public void SetTransaction(ITransaction transaction) => _transaction = transaction;
+        => _outboxRepository.AppendAsync(message, cancellationToken);
     }
 }
