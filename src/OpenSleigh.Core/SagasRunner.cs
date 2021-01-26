@@ -4,19 +4,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
     public class SagasRunner : ISagasRunner
     {
-        private readonly IServiceProvider _serviceProvider;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ISagaTypeResolver _stateTypeResolver;
         private readonly ITypesCache _typesCache;
 
-        public SagasRunner(IServiceProvider serviceProvider, ISagaTypeResolver stateTypeResolver, ITypesCache typesCache)
+        public SagasRunner(IServiceScopeFactory scopeFactory, ISagaTypeResolver stateTypeResolver, ITypesCache typesCache)
         {
-            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
+            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _stateTypeResolver = stateTypeResolver ?? throw new ArgumentNullException(nameof(stateTypeResolver));
             _typesCache = typesCache ?? throw new ArgumentNullException(nameof(typesCache));
         }
@@ -41,10 +42,11 @@ namespace OpenSleigh.Core
 
             foreach (var types in sagaTypes)
             {
+                using var scope = _scopeFactory.CreateScope();
                 try
                 {
                     var runnerType = _typesCache.GetGeneric(typeof(ISagaRunner<,>), types.sagaType, types.sagaStateType);
-                    var runner = (ISagaRunner) _serviceProvider.GetService(runnerType);
+                    var runner = (ISagaRunner)scope.ServiceProvider.GetService(runnerType);
                     if (null != runner)
                         await runner.RunAsync(messageContext, cancellationToken);
                 }

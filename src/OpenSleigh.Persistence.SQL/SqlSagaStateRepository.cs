@@ -80,7 +80,7 @@ namespace OpenSleigh.Persistence.SQL
             return (resultState, lockId);
         }
 
-        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
+        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, 
             CancellationToken cancellationToken = default) where TD : SagaState
         {
             if (state == null) 

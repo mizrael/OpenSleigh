@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,22 +10,33 @@ namespace OpenSleigh.Core.BackgroundServices
 {
     public class SubscribersBackgroundService : BackgroundService
     {
-        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly IEnumerable<ISubscriber> _subscribers;
+
+        public SubscribersBackgroundService(IEnumerable<ISubscriber> subscribers)
+        {
+            _subscribers = subscribers ?? throw new ArgumentNullException(nameof(subscribers));
+        }
+
+        public override async Task StartAsync(CancellationToken cancellationToken)
+        {
+            foreach (var subscriber in _subscribers)
+                await subscriber.StartAsync(cancellationToken);
+
+            await base.StartAsync(cancellationToken);
+        }
+
+        public override async Task StopAsync(CancellationToken cancellationToken)
+        {
+            foreach (var subscriber in _subscribers)
+                await subscriber.StopAsync(cancellationToken);
+
+            await base.StopAsync(cancellationToken);
+        }
+
+        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        {
+        }
         
-        public SubscribersBackgroundService(IServiceScopeFactory scopeFactory)
-        {
-            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-        }
-
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            using var scope = _scopeFactory.CreateScope();
-
-            var subscribers = scope.ServiceProvider.GetServices<ISubscriber>();
-            var tasks = subscribers.Select(s => s.StartAsync(stoppingToken));
-
-            await Task.WhenAll(tasks.ToArray());
-        }
     }
 
 }

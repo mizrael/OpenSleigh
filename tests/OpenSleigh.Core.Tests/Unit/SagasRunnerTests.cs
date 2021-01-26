@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
@@ -16,7 +17,7 @@ namespace OpenSleigh.Core.Tests.Unit
         public void ctor_should_throw_if_arguments_null(){
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
 
             Assert.Throws<ArgumentNullException>(() => new SagasRunner(null, stateTypeResolver, typesCache));
             Assert.Throws<ArgumentNullException>(() => new SagasRunner(sp, null, typesCache));
@@ -28,7 +29,7 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
 
             var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
 
@@ -40,7 +41,7 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
 
             var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
 
@@ -73,12 +74,18 @@ namespace OpenSleigh.Core.Tests.Unit
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
             sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
                 .Returns(runner);
+
+            var scope = NSubstitute.Substitute.For<IServiceScope>();
+            scope.ServiceProvider.Returns(sp);
+            
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            scopeFactory.CreateScope().Returns(scope);
             
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
                         .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
 
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
 
             var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
             ex.Message.Should().Contain("an error has occurred while processing message");
@@ -101,11 +108,17 @@ namespace OpenSleigh.Core.Tests.Unit
             sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
                 .Returns(runner);
 
+            var scope = NSubstitute.Substitute.For<IServiceScope>();
+            scope.ServiceProvider.Returns(sp);
+
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            scopeFactory.CreateScope().Returns(scope);
+
             var typesCache = NSubstitute.Substitute.For<ITypesCache>();
             typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
                         .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
 
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
 
             var message = StartDummySaga.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();

@@ -26,17 +26,8 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
                 NSubstitute.Substitute.For<ISubscriber>(),
                 NSubstitute.Substitute.For<ISubscriber>()
             };
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService<IEnumerable<ISubscriber>>()
-                .Returns(subscribers);
-            
-            var scope = NSubstitute.Substitute.For<IServiceScope>();
-            scope.ServiceProvider.Returns(sp);
-            
-            var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            factory.CreateScope().Returns(scope);
-            
-            var sut = new SubscribersBackgroundService(factory);
+
+            var sut = new SubscribersBackgroundService(subscribers);
             
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);

@@ -18,7 +18,7 @@ namespace OpenSleigh.Core.DependencyInjection
             var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
             services.AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
-                .AddScoped<ISagasRunner, SagasRunner>()
+                .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<ISerializer, JsonSerializer>()
