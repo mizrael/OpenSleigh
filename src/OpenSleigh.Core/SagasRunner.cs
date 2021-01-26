@@ -57,7 +57,7 @@ namespace OpenSleigh.Core
             }
 
             if (exceptions.Any())
-                throw new AggregateException($"an error has occurred while processing message '{messageContext.Message.Id}'",
+                throw new AggregateException($"an error has occurred while processing '{typeof(TM).FullName}' message '{messageContext.Message.Id}'",
                     exceptions);
         }
     }
