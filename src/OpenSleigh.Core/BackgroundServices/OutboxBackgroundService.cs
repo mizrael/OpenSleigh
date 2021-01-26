@@ -22,10 +22,12 @@ namespace OpenSleigh.Core.BackgroundServices
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = _scopeFactory.CreateScope();
-                var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
-                await service.ProcessPendingMessagesAsync(stoppingToken);
-
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
+                    await service.ProcessPendingMessagesAsync(stoppingToken);
+                }
+                
                 await Task.Delay(_options.Interval, stoppingToken);
             }
         }
