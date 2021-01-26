@@ -2,7 +2,6 @@
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 
 [assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.Tests")]
@@ -10,19 +9,16 @@ namespace OpenSleigh.Persistence.SQL
 {
     internal class SqlTransactionManager : ITransactionManager
     {
-        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly ISagaDbContext _dbContext;
 
-        public SqlTransactionManager(IServiceScopeFactory scopeFactory)
+        public SqlTransactionManager(ISagaDbContext dbContext)
         {
-            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         }
 
         public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
         {
-            //TODO: I don't like this. Consider changing lifetime from Singleton to Scoped
-            using var scope = _scopeFactory.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<ISagaDbContext>();
-            var transaction = await dbContext.StartTransactionAsync(cancellationToken);
+            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
             return transaction;
         }
     }
