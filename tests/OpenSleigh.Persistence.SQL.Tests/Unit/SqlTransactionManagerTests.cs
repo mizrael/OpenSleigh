@@ -23,17 +23,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
             
             var dbCtx = NSubstitute.Substitute.For<ISagaDbContext>();
             dbCtx.StartTransactionAsync(default).ReturnsForAnyArgs(expectedTransaction);
-            
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(ISagaDbContext)).ReturnsForAnyArgs(dbCtx);
-            
-            var scope = NSubstitute.Substitute.For<IServiceScope>();
-            scope.ServiceProvider.ReturnsForAnyArgs(sp);
-            
-            var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            factory.CreateScope().Returns(scope);
-            
-            var sut = new SqlTransactionManager(factory);
+
+            var sut = new SqlTransactionManager(dbCtx);
 
             var transaction = await sut.StartTransactionAsync(default);
             transaction.Should().Be(expectedTransaction);
