@@ -24,20 +24,15 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
-                .AddSingleton<IMessageProcessor, MessageProcessor>()
-                .AddSingleton<IOutboxProcessor>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    var publisher = ctx.GetRequiredService<IPublisher>();
-                    var logger = ctx.GetRequiredService<ILogger<OutboxProcessor>>();
-                    return new OutboxProcessor(repo, publisher, OutboxProcessorOptions.Default, logger);
-                })
-                .AddSingleton<IOutboxCleaner>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    return new OutboxCleaner(repo, OutboxCleanerOptions.Default);
-                }).AddHostedService<SubscribersBackgroundService>()
+                .AddScoped<IMessageProcessor, MessageProcessor>()
+                .AddHostedService<SubscribersBackgroundService>()
+
+                .AddScoped<IOutboxProcessor, OutboxProcessor>()
+                .AddSingleton(OutboxProcessorOptions.Default)
                 .AddHostedService<OutboxBackgroundService>()
+                
+                .AddScoped<IOutboxCleaner, OutboxCleaner>()
+                .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
             var builder = new BusConfigurator(services, sagaTypeResolver);

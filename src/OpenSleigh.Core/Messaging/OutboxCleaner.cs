@@ -13,24 +13,13 @@ namespace OpenSleigh.Core.Messaging
     public class OutboxCleaner : IOutboxCleaner
     {
         private readonly IOutboxRepository _outboxRepository;
-        private readonly OutboxCleanerOptions _options;
-
-        public OutboxCleaner(IOutboxRepository outboxRepository, OutboxCleanerOptions options)
+        
+        public OutboxCleaner(IOutboxRepository outboxRepository)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken = default)
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await RunCleanup(cancellationToken);
-                await Task.Delay(_options.Interval, cancellationToken);
-            }
-        }
-
-        private Task RunCleanup(CancellationToken cancellationToken) =>
+        public Task RunCleanupAsync(CancellationToken cancellationToken = default) =>
             _outboxRepository.CleanProcessedAsync(cancellationToken);
     }
 }

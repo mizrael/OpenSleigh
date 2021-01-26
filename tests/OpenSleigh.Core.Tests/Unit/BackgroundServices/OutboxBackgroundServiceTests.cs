@@ -14,7 +14,10 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         [Fact]
         public void ctor_should_throw_if_input_null()
         {
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null));
+            var options = OutboxProcessorOptions.Default;
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null, options));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, null));
         }
 
         [Fact]
@@ -31,13 +34,13 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             factory.CreateScope().Returns(scope);
 
-            var sut = new OutboxBackgroundService(factory);
+            var sut = new OutboxBackgroundService(factory, OutboxProcessorOptions.Default);
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);
 
             await cleaner.Received(1)
-                .StartAsync(Arg.Any<CancellationToken>());
+                .ProcessPendingMessagesAsync(Arg.Any<CancellationToken>());
         }
     }
 }

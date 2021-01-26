@@ -17,30 +17,27 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
         {
             var repo = NSubstitute.Substitute.For<IOutboxRepository>();
             var publisher = NSubstitute.Substitute.For<IPublisher>();
-            var options = OutboxProcessorOptions.Default;
             var logger = NSubstitute.Substitute.For<ILogger<OutboxProcessor>>();
             
-            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(null, publisher, options, logger));
-            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(repo, null, options, logger));
-            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(repo, publisher, null, logger));
-            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(repo, publisher, options, null));
+            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(null, publisher, logger));
+            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(repo, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new OutboxProcessor(repo, publisher, null));
         }
 
         [Fact]
-        public async Task StartAsync_should_do_nothing_when_no_pending_messages_available()
+        public async Task ProcessPendingMessagesAsync_should_do_nothing_when_no_pending_messages_available()
         {
             var repo = NSubstitute.Substitute.For<IOutboxRepository>();
             var publisher = NSubstitute.Substitute.For<IPublisher>();
-            var options = new OutboxProcessorOptions(TimeSpan.FromSeconds(2));
             var logger = NSubstitute.Substitute.For<ILogger<OutboxProcessor>>();
 
-            var sut = new OutboxProcessor(repo, publisher, options, logger);
+            var sut = new OutboxProcessor(repo, publisher, logger);
 
-            var token = new CancellationTokenSource(options.Interval);
+            var token = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
             try
             {
-                await sut.StartAsync(token.Token);
+                await sut.ProcessPendingMessagesAsync(token.Token);
             }
             catch (TaskCanceledException) { }
 
@@ -62,16 +59,15 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
                 .ReturnsForAnyArgs(messages);
             
             var publisher = NSubstitute.Substitute.For<IPublisher>();
-            var options = new OutboxProcessorOptions(TimeSpan.FromSeconds(2));
             var logger = NSubstitute.Substitute.For<ILogger<OutboxProcessor>>();
 
-            var sut = new OutboxProcessor(repo, publisher, options, logger);
+            var sut = new OutboxProcessor(repo, publisher, logger);
 
-            var token = new CancellationTokenSource(options.Interval);
+            var token = new CancellationTokenSource(TimeSpan.FromSeconds(2));
 
             try
             {
-                await sut.StartAsync(token.Token);
+                await sut.ProcessPendingMessagesAsync(token.Token);
             }
             catch (TaskCanceledException) { }
 

@@ -1,14 +1,12 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.InMemory.Tests")]
 namespace OpenSleigh.Persistence.InMemory.Messaging
 {
-    internal class InMemoryPublisher : IPublisher 
+    public class InMemoryPublisher : IPublisher 
     {
         private readonly IChannelFactory _channelFactory;
         private readonly ILogger<InMemoryPublisher> _logger;
