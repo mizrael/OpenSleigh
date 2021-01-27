@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Persistence.InMemory.Messaging;
 using Xunit;
@@ -11,11 +12,21 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
     public class InMemoryPublisherTests
     {
         [Fact]
+        public void ctor_should_fail_when_arguments_null()
+        {
+            var channelFactory = NSubstitute.Substitute.For<IChannelFactory>();
+            var logger = NSubstitute.Substitute.For<ILogger<InMemoryPublisher>>();
+            Assert.Throws<ArgumentNullException>(() => new InMemoryPublisher(null, logger));
+            Assert.Throws<ArgumentNullException>(() => new InMemoryPublisher(channelFactory, null));
+        }
+        
+        [Fact]
         public async Task PublishAsync_should_throw_ArgumentNullException_when_message_null()
         {
             var channelFactory = NSubstitute.Substitute.For<IChannelFactory>();
-
-            var sut = new InMemoryPublisher(channelFactory);
+            var logger = NSubstitute.Substitute.For<ILogger<InMemoryPublisher>>();
+            
+            var sut = new InMemoryPublisher(channelFactory, logger);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(null));
         }
 
@@ -28,8 +39,10 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             var writer = NSubstitute.Substitute.For<ChannelWriter<DummyMessage>>();
             channelFactory.GetWriter<DummyMessage>()
                         .Returns(writer);
-        
-            var sut = new InMemoryPublisher(channelFactory);
+
+            var logger = NSubstitute.Substitute.For<ILogger<InMemoryPublisher>>();
+            
+            var sut = new InMemoryPublisher(channelFactory, logger);
 
             await sut.PublishAsync(message);
 

@@ -17,7 +17,7 @@ namespace OpenSleigh.Core.Tests.Unit
         public void ctor_should_throw_when_arguments_null(){
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
             var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(null, sagaStateService, uow, logger));
@@ -61,7 +61,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
@@ -98,7 +98,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
@@ -135,7 +135,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
@@ -164,7 +164,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
@@ -194,7 +194,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
@@ -226,7 +226,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
-            var uow = NSubstitute.Substitute.For<IUnitOfWork>();
+            var uow = NSubstitute.Substitute.For<ITransactionManager>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 

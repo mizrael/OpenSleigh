@@ -1,10 +1,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Persistence;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
@@ -17,25 +16,21 @@ namespace OpenSleigh.Core.DependencyInjection
             var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
             services.AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
-                .AddScoped<ISagasRunner, SagasRunner>()
+                .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
+                .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddScoped<IMessageBus, DefaultMessageBus>()
                 .AddScoped<IMessageProcessor, MessageProcessor>()
-                .AddSingleton<IOutboxProcessor>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    var publisher = ctx.GetRequiredService<IPublisher>();
-                    var logger = ctx.GetRequiredService<ILogger<OutboxProcessor>>();
-                    return new OutboxProcessor(repo, publisher, OutboxProcessorOptions.Default, logger);
-                })
-                .AddSingleton<IOutboxCleaner>(ctx =>
-                {
-                    var repo = ctx.GetRequiredService<IOutboxRepository>();
-                    return new OutboxCleaner(repo, OutboxCleanerOptions.Default);
-                }).AddHostedService<SubscribersBackgroundService>()
+                .AddHostedService<SubscribersBackgroundService>()
+
+                .AddScoped<IOutboxProcessor, OutboxProcessor>()
+                .AddSingleton(OutboxProcessorOptions.Default)
                 .AddHostedService<OutboxBackgroundService>()
+                
+                .AddScoped<IOutboxCleaner, OutboxCleaner>()
+                .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
             var builder = new BusConfigurator(services, sagaTypeResolver);

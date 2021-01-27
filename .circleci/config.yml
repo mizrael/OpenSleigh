@@ -11,6 +11,10 @@ jobs:
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/"
+      - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
+        environment:
+          SA_PASSWORD: "Sup3r_p4ssword123"
+          ACCEPT_EULA: "Y"
 
     steps:
       - checkout    
@@ -30,6 +34,10 @@ jobs:
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/"
+      - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
+        environment:
+          SA_PASSWORD: "Sup3r_p4ssword123"
+          ACCEPT_EULA: "Y"
 
     steps:
       - checkout

@@ -14,11 +14,13 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         [Fact]
         public void ctor_should_throw_when_arguments_null()
         {
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
             var client = NSubstitute.Substitute.For<IMongoClient>();
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
 
-            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(null, logger));
-            Assert.Throws<ArgumentNullException>(() => new MongoUnitOfWork(client, null));
+            Assert.Throws<ArgumentNullException>(() => new MongoTransactionManager(null, logger, dbContext));
+            Assert.Throws<ArgumentNullException>(() => new MongoTransactionManager(client, null, dbContext));
+            Assert.Throws<ArgumentNullException>(() => new MongoTransactionManager(client, logger, null));
         }
         
         [Fact]
@@ -31,8 +33,9 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             client.StartSession()
                 .ReturnsForAnyArgs(session);
             
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
-            var sut = new MongoUnitOfWork(client,  logger);
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            var sut = new MongoTransactionManager(client, logger, dbContext);
 
             var result = await sut.StartTransactionAsync();
             result.Should().BeOfType<NullTransaction>();
@@ -46,8 +49,9 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             client.StartSession()
                 .ReturnsForAnyArgs(session);
 
-            var logger = NSubstitute.Substitute.For<ILogger<MongoUnitOfWork>>();
-            var sut = new MongoUnitOfWork(client, logger);
+            var logger = NSubstitute.Substitute.For<ILogger<MongoTransactionManager>>();
+            var dbContext = NSubstitute.Substitute.For<IDbContext>();
+            var sut = new MongoTransactionManager(client, logger, dbContext);
 
             var result = await sut.StartTransactionAsync();
             result.Should().BeOfType<MongoTransaction>();

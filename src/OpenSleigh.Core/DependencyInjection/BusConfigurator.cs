@@ -26,11 +26,13 @@ namespace OpenSleigh.Core.DependencyInjection
 
             if (hasMessages)
             {
-                Services.AddScoped<TS>();
-                Services.AddSingleton<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>();
-                Services.AddSingleton<ISagaRunner<TS, TD>, SagaRunner<TS, TD>>();
-                Services.AddSingleton<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>();
-                Services.AddSingleton<ISagaStateFactory<TD>, DefaultSagaStateFactory<TD>>();
+                Services.AddScoped<TS>()
+                        .AddScoped<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>()
+                        .AddScoped<ISagaRunner<TS, TD>, SagaRunner<TS, TD>>();
+                
+                Services
+                    .AddSingleton<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>()
+                    .AddSingleton<ISagaStateFactory<TD>, DefaultSagaStateFactory<TD>>();
             }
 
             return new SagaConfigurator<TS, TD>(Services);

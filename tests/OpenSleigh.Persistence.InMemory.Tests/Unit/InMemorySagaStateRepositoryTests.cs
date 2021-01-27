@@ -86,7 +86,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             var updatedItem = new DummyState(lockedState.Id, "dolor amet", 71);
 
-            await sut.ReleaseLockAsync(updatedItem, lockId, null, CancellationToken.None);
+            await sut.ReleaseLockAsync(updatedItem, lockId, CancellationToken.None);
         }
 
         [Fact]
@@ -96,7 +96,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             var newState = DummyState.New();
 
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), null, CancellationToken.None));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), CancellationToken.None));
         }
 
         [Fact]
@@ -109,9 +109,9 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             var updatedItem = new DummyState(lockedState.Id, "dolor amet", 71);
 
-            await sut.ReleaseLockAsync(updatedItem, lockId, null, CancellationToken.None);
+            await sut.ReleaseLockAsync(updatedItem, lockId, CancellationToken.None);
 
-            await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(updatedItem, lockId, null, CancellationToken.None));
+            await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(updatedItem, lockId, CancellationToken.None));
         }
 
         [Fact]
@@ -124,7 +124,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             var updatedItem = new DummyState(lockedState.Id, "dolor amet", 71);
 
-            await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(updatedItem, Guid.NewGuid(), null, CancellationToken.None));
+            await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(updatedItem, Guid.NewGuid(), CancellationToken.None));
         }
     }
 }

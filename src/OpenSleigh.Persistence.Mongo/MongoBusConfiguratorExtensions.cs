@@ -3,16 +3,26 @@ using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
-using OpenSleigh.Persistence.Mongo.Messaging;
-using OpenSleigh.Persistence.Mongo.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {
     [ExcludeFromCodeCoverage]
-    public record MongoConfiguration(string ConnectionString,
-                                     string DbName,
-                                     MongoSagaStateRepositoryOptions SagaRepositoryOptions,
-                                     MongoOutboxRepositoryOptions OutboxRepositoryOptions);
+    public record MongoConfiguration(string ConnectionString, string DbName)
+    {
+        public MongoConfiguration(string connectionString, string dbName,
+            MongoSagaStateRepositoryOptions sagaRepositoryOptions,
+            MongoOutboxRepositoryOptions outboxRepositoryOptions) : this(connectionString, dbName)
+        {
+            this.SagaRepositoryOptions = sagaRepositoryOptions;
+            this.OutboxRepositoryOptions = outboxRepositoryOptions;
+        }
+            
+        public MongoSagaStateRepositoryOptions SagaRepositoryOptions { get; init; } =
+            MongoSagaStateRepositoryOptions.Default;
+
+        public MongoOutboxRepositoryOptions OutboxRepositoryOptions { get; init; } =
+            MongoOutboxRepositoryOptions.Default;
+    }
 
     [ExcludeFromCodeCoverage]
     public static class MongoBusConfiguratorExtensions
@@ -28,13 +38,13 @@ namespace OpenSleigh.Persistence.Mongo
                     var database = client.GetDatabase(config.DbName);
                     return database;
                 })
-                .AddSingleton<ISerializer, JsonSerializer>()
-                .AddSingleton<IDbContext, DbContext>()
-                .AddSingleton<IUnitOfWork, MongoUnitOfWork>()
                 .AddSingleton(config.SagaRepositoryOptions)
                 .AddSingleton(config.OutboxRepositoryOptions)
-                .AddSingleton<ISagaStateRepository, MongoSagaStateRepository>()
-                .AddSingleton<IOutboxRepository, MongoOutboxRepository>();
+                
+                .AddScoped<IDbContext, DbContext>()
+                .AddScoped<ITransactionManager, MongoTransactionManager>()
+                .AddScoped<ISagaStateRepository, MongoSagaStateRepository>()
+                .AddScoped<IOutboxRepository, MongoOutboxRepository>();
             return busConfigurator;
         }
     }

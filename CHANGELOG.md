@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-01-27](https://github.com/mizrael/OpenSleigh/pull/21)
+### Added
+- multiple Sagas can be registered to handle the same message type
+- minor refactorings
+- added SQL persistence library
+- refactored transaction handling
+- updated dependencies lifetimes
+- improved test coverage
+- minor refactorings and performance improvements
+
 ## [2021-01-14](https://github.com/mizrael/OpenSleigh/pull/17)
 ### Added
 - multiple Sagas can be registered to handle the same message type

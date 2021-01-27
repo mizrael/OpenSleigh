@@ -18,7 +18,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             Task.FromResult(_messages.Values.Where(m => m.lockId == null && !m.processed)
                 .Select(m => m.message));
 
-        public Task MarkAsSentAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
@@ -29,7 +29,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             return Task.CompletedTask;
         }
 
-        public Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
@@ -46,7 +46,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             return Task.CompletedTask;
         }
 
-        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));

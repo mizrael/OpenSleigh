@@ -29,23 +29,7 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var message = StartDummySaga.New();
             await sut.PublishAsync(message);
 
-            await repo.Received(1).AppendAsync(message, null, Arg.Any<CancellationToken>());
-        }
-
-        [Fact]
-        public async Task PublishAsync_should_pass_transaction_if_set()
-        {
-            var repo = NSubstitute.Substitute.For<IOutboxRepository>();
-            var sut = new DefaultMessageBus(repo);
-
-            var message = StartDummySaga.New();
-
-            var transaction = NSubstitute.Substitute.For<ITransaction>();
-            sut.SetTransaction(transaction);
-            
-            await sut.PublishAsync(message);
-
-            await repo.Received(1).AppendAsync(message, transaction, Arg.Any<CancellationToken>());
+            await repo.Received(1).AppendAsync(message, Arg.Any<CancellationToken>());
         }
     }
 }

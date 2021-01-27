@@ -6,7 +6,7 @@ using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.Mongo.Utils;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.Mongo
 {
@@ -15,8 +15,7 @@ namespace OpenSleigh.Persistence.Mongo
     {
         public static readonly MongoSagaStateRepositoryOptions Default = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
     }
-
-    [ExcludeFromCodeCoverage]
+    
     public class MongoSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;
@@ -81,18 +80,16 @@ namespace OpenSleigh.Persistence.Mongo
             }
         }
 
-        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, ITransaction transaction = null,
-            CancellationToken cancellationToken = default)
+        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, CancellationToken cancellationToken = default)
             where TD : SagaState
         {
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
-            return ReleaseLockAsyncCore(state, lockId, transaction, cancellationToken);
+            return ReleaseLockAsyncCore(state, lockId, cancellationToken);
         }
 
-        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, ITransaction transaction,
-            CancellationToken cancellationToken) where TD : SagaState
+        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken) where TD : SagaState
         {
             var serializedState = await _serializer.SerializeAsync(state, cancellationToken);
             var stateType = typeof(TD);
@@ -115,8 +112,8 @@ namespace OpenSleigh.Persistence.Mongo
             };
 
             UpdateResult result = null;
-            if (transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
-                result = await _dbContext.SagaStates.UpdateOneAsync(mongoTransaction?.Session, filter, update, options,
+            if (_dbContext.Transaction?.Session is not null)
+                result = await _dbContext.SagaStates.UpdateOneAsync(_dbContext.Transaction.Session, filter, update, options,
                         cancellationToken)
                     .ConfigureAwait(false);
             else

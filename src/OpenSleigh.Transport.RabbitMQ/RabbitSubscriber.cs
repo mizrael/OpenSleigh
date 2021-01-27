@@ -10,7 +10,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public class RabbitSubscriber<TM> : IAsyncDisposable, ISubscriber<TM>
+    public sealed class RabbitSubscriber<TM> : ISubscriber<TM>, IDisposable
         where TM : IMessage
     {
         private readonly IBusConnection _connection;
@@ -39,6 +39,8 @@ namespace OpenSleigh.Transport.RabbitMQ
             StopChannel();
 
             _channel = _connection.CreateChannel();
+            
+            _logger.LogInformation($"initializing queue '{_queueReferences.DeadLetterQueue}' on exchange '{_queueReferences.DeadLetterExchangeName}'...");
 
             _channel.ExchangeDeclare(exchange: _queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.DeadLetterQueue,
@@ -48,6 +50,8 @@ namespace OpenSleigh.Transport.RabbitMQ
                 arguments: null);
             _channel.QueueBind(_queueReferences.DeadLetterQueue, _queueReferences.DeadLetterExchangeName, routingKey: string.Empty, arguments: null);
 
+            _logger.LogInformation($"initializing queue '{_queueReferences.QueueName}' on exchange '{_queueReferences.ExchangeName}'...");
+            
             _channel.ExchangeDeclare(exchange: _queueReferences.ExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.QueueName,
                 durable: false,
@@ -80,6 +84,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             consumer.Received += OnMessageReceivedAsync;
 
+            _logger.LogInformation($"initializing subscription on queue '{_queueReferences.QueueName}' ...");
             _channel.BasicConsume(queue: _queueReferences.QueueName, autoAck: false, consumer: consumer);
         }
 
@@ -151,7 +156,10 @@ namespace OpenSleigh.Transport.RabbitMQ
             StopChannel();
             return Task.CompletedTask;
         }
-
-        public ValueTask DisposeAsync() => new ValueTask(StopAsync());
+        
+        public void Dispose()
+        {
+            StopChannel();
+        } 
     }
 }

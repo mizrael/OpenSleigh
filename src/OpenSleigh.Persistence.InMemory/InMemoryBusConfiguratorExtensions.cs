@@ -15,7 +15,7 @@ namespace OpenSleigh.Persistence.InMemory
         {
             busConfigurator.Services.AddSingleton<ISagaStateRepository, InMemorySagaStateRepository>()
                                     .AddSingleton<IOutboxRepository, InMemoryOutboxRepository>()
-                                    .AddSingleton<IUnitOfWork, InMemoryUnitOfWork>();
+                                    .AddSingleton<ITransactionManager, InMemoryTransactionManager>();
 
             return busConfigurator;
         }

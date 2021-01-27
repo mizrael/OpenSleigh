@@ -5,9 +5,9 @@ using NSubstitute;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using OpenSleigh.Core.Persistence;
-using OpenSleigh.Persistence.Mongo.Utils;
+using NSubstitute.ReturnsExtensions;
 using Xunit;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 {
@@ -32,7 +32,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(dbContext, serializer, options);
 
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), null, CancellationToken.None));
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(newState, Guid.NewGuid(), CancellationToken.None));
             ex.Message.Should().Contain("unable to release lock on saga state");
         }
 
@@ -46,7 +46,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         }
 
         [Fact]
-        public async Task ReleaseLockAsync_should_use_transaction_when_mongo_transaction()
+        public async Task ReleaseLockAsync_should_use_transaction_when_available()
         {
             var state = DummyState.New();
             var lockId = Guid.NewGuid();
@@ -67,11 +67,12 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(repo);
+            dbContext.Transaction.Returns(mongoTransaction);
             
             var serializer = NSubstitute.Substitute.For<ISerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
-            await sut.ReleaseLockAsync<DummyState>(state, lockId, mongoTransaction);
+            await sut.ReleaseLockAsync<DummyState>(state, lockId);
 
             await repo.Received(1)
                 .UpdateOneAsync(session,
@@ -82,13 +83,11 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         }
 
         [Fact]
-        public async Task ReleaseLockAsync_should_use_not_transaction_when_type_invalid()
+        public async Task ReleaseLockAsync_should_use_not_transaction_when_not_available()
         {
             var state = DummyState.New();
             var lockId = Guid.NewGuid();
-
-            var transaction = new NullTransaction();
-
+            
             var updateResult = NSubstitute.Substitute.ForPartsOf<UpdateResult>();
             updateResult.MatchedCount.ReturnsForAnyArgs(1);
 
@@ -101,11 +100,12 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
 
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(repo);
+            dbContext.Transaction.ReturnsNull();
 
             var serializer = NSubstitute.Substitute.For<ISerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
-            await sut.ReleaseLockAsync<DummyState>(state, lockId, transaction);
+            await sut.ReleaseLockAsync<DummyState>(state, lockId);
 
             await repo.Received(1)
                 .UpdateOneAsync(Arg.Any<FilterDefinition<Entities.SagaState>>(),
@@ -119,9 +119,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         {
             var state = DummyState.New();
             var lockId = Guid.NewGuid();
-
-            var transaction = new NullTransaction();
-
+            
             var updateResult = NSubstitute.Substitute.ForPartsOf<UpdateResult>();
             updateResult.MatchedCount.ReturnsForAnyArgs(0);
 
@@ -139,7 +137,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
             await Assert.ThrowsAsync<LockException>(async () =>
-                await sut.ReleaseLockAsync<DummyState>(state, lockId, transaction));
+                await sut.ReleaseLockAsync<DummyState>(state, lockId));
         }
     }
 }

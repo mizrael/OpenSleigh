@@ -10,17 +10,26 @@ namespace OpenSleigh.Core.BackgroundServices
     public class OutboxCleanerBackgroundService : BackgroundService
     {
         private readonly IServiceScopeFactory _scopeFactory;
-
-        public OutboxCleanerBackgroundService(IServiceScopeFactory scopeFactory)
+        private readonly OutboxCleanerOptions _options;
+        
+        public OutboxCleanerBackgroundService(IServiceScopeFactory scopeFactory, OutboxCleanerOptions options)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+            _options = options ?? throw new ArgumentNullException(nameof(options));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            using var scope = _scopeFactory.CreateScope();
-            var service = scope.ServiceProvider.GetRequiredService<IOutboxCleaner>();
-            await service.StartAsync(stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                using (var scope = _scopeFactory.CreateScope())
+                {
+                    var service = scope.ServiceProvider.GetRequiredService<IOutboxCleaner>();
+                    await service.RunCleanupAsync(stoppingToken);
+                }
+
+                await Task.Delay(_options.Interval, stoppingToken);
+            }
         }
     }
 }

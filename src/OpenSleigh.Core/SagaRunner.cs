@@ -14,19 +14,19 @@ namespace OpenSleigh.Core
     {
         private readonly ISagaStateService<TS, TD> _sagaStateService;
         private readonly ISagaFactory<TS, TD> _sagaFactory;
-        private readonly IUnitOfWork _uow;
+        private readonly ITransactionManager _transactionManager;
         private readonly ILogger<SagaRunner<TS, TD>> _logger;
         private static readonly Random _rand = new();
         
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
                           ISagaStateService<TS, TD> sagaStateService, 
-                          IUnitOfWork uow,
+                          ITransactionManager transactionManager,
                           ILogger<SagaRunner<TS, TD>> logger)
         {
             _sagaFactory = sagaFactory ?? throw new ArgumentNullException(nameof(sagaFactory));
             _sagaStateService = sagaStateService ?? throw new ArgumentNullException(nameof(sagaStateService));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _uow = uow ?? throw new ArgumentNullException(nameof(uow));
+            _transactionManager = transactionManager ?? throw new ArgumentNullException(nameof(transactionManager));
         }
 
         public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
@@ -62,7 +62,7 @@ namespace OpenSleigh.Core
                 return;
             }
 
-            var transaction = await _uow.StartTransactionAsync(cancellationToken);
+            var transaction = await _transactionManager.StartTransactionAsync(cancellationToken);
             try
             {
                 var saga = _sagaFactory.Create(state);
@@ -72,14 +72,12 @@ namespace OpenSleigh.Core
                 if (saga is not IHandleMessage<TM> handler)
                     throw new ConsumerNotFoundException(typeof(TM));
 
-                saga.Bus.SetTransaction(transaction);
-                
                 //TODO: add configurable retry policy
                 await handler.HandleAsync(messageContext, cancellationToken);
 
                 state.SetAsProcessed(messageContext.Message);
 
-                await _sagaStateService.SaveAsync(state, lockId, transaction, cancellationToken);
+                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
             }

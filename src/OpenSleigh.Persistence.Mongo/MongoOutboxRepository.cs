@@ -1,18 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Driver;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
-using OpenSleigh.Persistence.Mongo.Utils;
+using OpenSleigh.Core.Utils;
 
-namespace OpenSleigh.Persistence.Mongo.Messaging
+namespace OpenSleigh.Persistence.Mongo
 {
     public record MongoOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     {
-        public static readonly MongoOutboxRepositoryOptions Default = new MongoOutboxRepositoryOptions(TimeSpan.FromMinutes(1));
+        public static readonly MongoOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
     }
     
     public class MongoOutboxRepository : IOutboxRepository
@@ -20,14 +21,15 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
         private readonly IDbContext _dbContext;
         private readonly ISerializer _serializer;
         private readonly MongoOutboxRepositoryOptions _options;
-
+        
         private enum MessageStatuses
         {
             Pending,
             Processed
         }
 
-        public MongoOutboxRepository(IDbContext dbContext, ISerializer serializer, MongoOutboxRepositoryOptions options)
+        public MongoOutboxRepository(IDbContext dbContext, ISerializer serializer, 
+            MongoOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -43,6 +45,8 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
                 .Limit(10)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
+            if (entities is null)
+                return Enumerable.Empty<IMessage>();
 
             var messages = new List<IMessage>();
             foreach (var entity in entities)
@@ -54,15 +58,15 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             return messages;
         }
 
-        public Task MarkAsSentAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return MarkAsSentAsyncCore(message, lockId, cancellationToken);
+            return ReleaseAsyncCore(message, lockId, cancellationToken);
         }
 
-        private async Task MarkAsSentAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
+        private async Task ReleaseAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
         {
             var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
             var filter = filterBuilder.And(
@@ -88,41 +92,43 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
                 throw new ArgumentException($"message '{message.Id}' not found. Maybe it was already processed?");
         }
 
-        public Task AppendAsync(IMessage message, ITransaction transaction = null, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return AppendAsyncCore(message, transaction, cancellationToken);
+            return AppendAsyncCore(message, cancellationToken);
         }
 
-        private async Task AppendAsyncCore(IMessage message, ITransaction transaction, CancellationToken cancellationToken)
+        private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             var data = await _serializer.SerializeAsync(message, cancellationToken);
             var entity =
                 new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
-
-            if (transaction is MongoTransaction mongoTransaction && mongoTransaction.Session is not null)
-                await _dbContext.Outbox.InsertOneAsync(mongoTransaction.Session, entity, null, cancellationToken)
+           
+            if (_dbContext.Transaction?.Session != null)
+                await _dbContext.Outbox.InsertOneAsync(_dbContext.Transaction.Session, entity, null, cancellationToken)
                     .ConfigureAwait(false);
             else
                 await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken)
                     .ConfigureAwait(false);
         }
 
-        public Task CleanProcessedAsync(CancellationToken cancellationToken = default) =>
-            _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken);
+        public async Task CleanProcessedAsync(CancellationToken cancellationToken = default)
+        {
+            await _dbContext.Outbox.DeleteManyAsync(e => e.Status == MessageStatuses.Processed.ToString(), cancellationToken)
+                .ConfigureAwait(false);
+        }
 
-
-        public Task<Guid> BeginProcessingAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
 
-            return BeginProcessingAsyncCore(message, cancellationToken);
+            return LockAsyncCore(message, cancellationToken);
         }
 
-        private async Task<Guid> BeginProcessingAsyncCore(IMessage message, CancellationToken cancellationToken)
+        private async Task<Guid> LockAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             var lockId = Guid.NewGuid();
 
@@ -154,4 +160,5 @@ namespace OpenSleigh.Persistence.Mongo.Messaging
             return lockId;
         }
     }
+    
 }

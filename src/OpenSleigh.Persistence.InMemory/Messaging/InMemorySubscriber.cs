@@ -34,7 +34,8 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
                 }
                 catch (Exception e)
                 {
-                    _logger.LogError(e, $"an exception has occurred while processing message '{message.Id}': {e.Message}");
+                    _logger.LogError(e,
+                        $"an exception has occurred while processing '{message.GetType().FullName}' message '{message.Id}': {e.Message}");
                 }
             }
         }

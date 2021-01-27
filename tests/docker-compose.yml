@@ -1,0 +1,36 @@
+version: '3.4'
+
+services:
+  openSleigh.tests.infrastructure.sql:
+    container_name: openSleigh.tests.infrastructure.sql    
+    image: "mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04"
+    environment:
+      SA_PASSWORD: "Sup3r_p4ssword123"
+      ACCEPT_EULA: "Y"
+    ports:
+      - 1433:1433    
+
+  openSleigh.tests.infrastructure.mongodb:
+    image: mongo:latest
+    container_name: openSleigh.tests.infrastructure.mongodb    
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_REPLICA_SET_NAME: opensleigh
+    command: ["--replSet", "opensleigh", "--bind_ip_all"]  
+    healthcheck:
+      test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo -u root -p password --quiet) -eq 1
+      interval: 10s
+      start_period: 30s
+    ports:
+      - 27017:27017    
+  
+  openSleigh.tests.infrastructure.rabbitmq:        
+    image: rabbitmq:3-management-alpine
+    container_name: openSleigh.tests.infrastructure.rabbitmq    
+    environment:
+      RABBITMQ_DEFAULT_VHOST: "/"
+    ports:     
+      - "15671:15671"
+      - "15672:15672"   
+      - "5672:5672"

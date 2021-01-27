@@ -17,42 +17,28 @@ namespace OpenSleigh.Core.Messaging
         private readonly IOutboxRepository _outboxRepository;
         private readonly ILogger<OutboxProcessor> _logger;
         private readonly IPublisher _publisher;
-        private readonly OutboxProcessorOptions _options;
+
 
         public OutboxProcessor(IOutboxRepository outboxRepository,
             IPublisher publisher, 
-            OutboxProcessorOptions options,
             ILogger<OutboxProcessor> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
             _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken = default)
-        {
-            //TODO: use change stream when available
-            
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                await ProcessPendingMessages(cancellationToken);
-                
-                await Task.Delay(_options.Interval, cancellationToken);
-            }
-        }
-
-        private async Task ProcessPendingMessages(CancellationToken cancellationToken)
+        public async Task ProcessPendingMessagesAsync(CancellationToken cancellationToken = default)
         {
             var messages = await _outboxRepository.ReadMessagesToProcess(cancellationToken);
-          
+
             foreach (var message in messages)
             {
                 try
                 {
-                    var lockId = await _outboxRepository.BeginProcessingAsync(message, cancellationToken);
+                    var lockId = await _outboxRepository.LockAsync(message, cancellationToken);
                     await _publisher.PublishAsync(message, cancellationToken);
-                    await _outboxRepository.MarkAsSentAsync(message, lockId, cancellationToken);
+                    await _outboxRepository.ReleaseAsync(message, lockId, cancellationToken);
                 }
                 catch (LockException e)
                 {

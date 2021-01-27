@@ -5,6 +5,6 @@ namespace OpenSleigh.Core.Messaging
 {
     public interface IOutboxProcessor
     {
-        Task StartAsync(CancellationToken cancellationToken = default);
+        Task ProcessPendingMessagesAsync(CancellationToken cancellationToken = default);
     }
 }

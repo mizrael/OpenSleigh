@@ -35,7 +35,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             results.Should().NotBeNull().And.Contain(messages);
             
             foreach (var message in messages)
-                await sut.BeginProcessingAsync(message);
+                await sut.LockAsync(message);
             
             await sut.CleanProcessedAsync();
             
@@ -75,8 +75,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             foreach (var message in messages)
                 await sut.AppendAsync(message);
 
-            var lockId = await sut.BeginProcessingAsync(messages[0]);
-            await sut.MarkAsSentAsync(messages[0], lockId);
+            var lockId = await sut.LockAsync(messages[0]);
+            await sut.ReleaseAsync(messages[0], lockId);
 
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull()
@@ -92,14 +92,14 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 
             await sut.AppendAsync(message);
             
-            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.MarkAsSentAsync(message, Guid.Empty));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.Empty));
         }
 
         [Fact]
         public async Task MarkAsSentAsync_should_throw_when_message_null()
         {
             var sut = new InMemoryOutboxRepository();
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.MarkAsSentAsync(null, Guid.Empty));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
         }
 
         [Fact]
@@ -116,16 +116,16 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             
             var sut = new InMemoryOutboxRepository();
             await sut.AppendAsync(message);
-            await sut.BeginProcessingAsync(message);
+            await sut.LockAsync(message);
 
-            await Assert.ThrowsAsync<LockException>(async () => await sut.BeginProcessingAsync(message));
+            await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
         }
 
         [Fact]
         public async Task BeginProcessingAsync_should_throw_when_message_null()
         {
             var sut = new InMemoryOutboxRepository();
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.BeginProcessingAsync(null));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.LockAsync(null));
         }
     }
 }

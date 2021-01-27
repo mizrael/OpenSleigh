@@ -1,14 +1,12 @@
 using OpenSleigh.Core.Persistence;
 using MongoDB.Driver;
 using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.Mongo.Tests")]
 namespace OpenSleigh.Persistence.Mongo
 {
-    internal sealed class MongoTransaction : ITransaction, IDisposable
+    public sealed class MongoTransaction : ITransaction, IDisposable
     {
         public readonly IClientSessionHandle Session;
 

@@ -98,10 +98,10 @@ namespace OpenSleigh.Core.Tests.Unit
             var state = new DummySagaState(Guid.NewGuid());
             var lockId = Guid.NewGuid();
 
-            await sut.SaveAsync(state, lockId, null, CancellationToken.None);
+            await sut.SaveAsync(state, lockId, CancellationToken.None);
 
             await sagaStateRepo.Received(1)
-                .ReleaseLockAsync(state, lockId, null, CancellationToken.None);
+                .ReleaseLockAsync(state, lockId, CancellationToken.None);
         }
     }
 }
