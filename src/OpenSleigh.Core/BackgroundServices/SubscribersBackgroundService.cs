@@ -30,7 +30,7 @@ namespace OpenSleigh.Core.BackgroundServices
             await base.StopAsync(cancellationToken);
         }
 
-        protected override async Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
         }
         

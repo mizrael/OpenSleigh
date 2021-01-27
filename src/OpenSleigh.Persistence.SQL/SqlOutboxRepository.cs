@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,6 +12,7 @@ using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.SQL
 {
+    [ExcludeFromCodeCoverage]
     public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     {
         public static readonly SqlOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
@@ -58,11 +60,16 @@ namespace OpenSleigh.Persistence.SQL
             return messages;
         }
 
-        public async Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
+        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
+            return ReleaseAsyncCore(message, lockId, cancellationToken);
+        }
+
+        private async Task ReleaseAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
+        {
             var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
             try
             {
@@ -72,9 +79,9 @@ namespace OpenSleigh.Persistence.SQL
                 if (entity is null)
                     throw new ArgumentException($"message '{message.Id}' not found");
 
-                if(!entity.LockId.HasValue)
+                if (!entity.LockId.HasValue)
                     throw new LockException($"message '{message.Id}' is not locked");
-                
+
                 if (entity.LockId != lockId)
                     throw new LockException($"invalid lock id '{lockId}' on message '{message.Id}'");
 
@@ -121,11 +128,14 @@ namespace OpenSleigh.Persistence.SQL
                     .Where(e => e.Status == MessageStatuses.Processed.ToString())
                     .ToListAsync(cancellationToken)
                     .ConfigureAwait(false);
-
-                _dbContext.OutboxMessages.RemoveRange(messages);
                 
-                await _dbContext.SaveChangesAsync(cancellationToken)
-                                .ConfigureAwait(false);
+                if (messages.Any())
+                {
+                    _dbContext.OutboxMessages.RemoveRange(messages);
+
+                    await _dbContext.SaveChangesAsync(cancellationToken)
+                        .ConfigureAwait(false);
+                }
 
                 await transaction.CommitAsync(cancellationToken);
             }
