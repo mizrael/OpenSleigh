@@ -55,6 +55,8 @@ Host.CreateDefaultBuilder(args)
 ```
 In this example, the system is configured to use RabbitMQ as message bus and MongoDB to persist the data.
 
+##### For detailed instructions on each Transport and Persistence library, please refer to the specific README file located in the library's root folder.
+
 #### Adding a Saga
 
 A Saga is a simple class inheriting from the base [`Saga<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/Saga.cs) class. We also have to create an additional State class holding it's data, by inheriting from [`SagaState`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/SagaState.cs):
