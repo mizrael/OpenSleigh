@@ -1,10 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Core.DependencyInjection

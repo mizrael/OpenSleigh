@@ -1,12 +1,9 @@
-﻿using System;
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Persistence.Mongo;
-using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Samples.Sample2.Common.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 

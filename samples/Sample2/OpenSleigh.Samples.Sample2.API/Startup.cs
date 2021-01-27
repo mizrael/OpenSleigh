@@ -1,13 +1,11 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.TagHelpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.Mongo;
-using OpenSleigh.Persistence.Mongo.Messaging;
 using OpenSleigh.Samples.Sample2.Common.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
@@ -36,9 +34,7 @@ namespace OpenSleigh.Samples.Sample2.API
             {
                 var mongoSection = Configuration.GetSection("Mongo");
                 var mongoCfg = new MongoConfiguration(mongoSection["ConnectionString"],
-                    mongoSection["DbName"],
-                    MongoSagaStateRepositoryOptions.Default,
-                    MongoOutboxRepositoryOptions.Default);
+                    mongoSection["DbName"]);
                 
                 var rabbitSection = Configuration.GetSection("Rabbit");
                 var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"],
