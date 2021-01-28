@@ -17,6 +17,7 @@ However, a Transport and Persistence library are necessary to properly use the l
 These are the libraries available at the moment:
 - https://www.nuget.org/packages/OpenSleigh.Persistence.InMemory/
 - https://www.nuget.org/packages/OpenSleigh.Persistence.Mongo/
+- https://www.nuget.org/packages/OpenSleigh.Persistence.SQL/
 - https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/
 
 ## How-to
