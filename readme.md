@@ -196,6 +196,8 @@ Samples are available in the `/samples/` folder. The required infrastructure for
 
 - **[Sample3](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample3)** is the same as Sample2, but with SQL Server instead of MongoDB.
 
+- **[Sample4](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample4)** mimicks an order processing scenario, showing how to orchestrate multiple services. It uses RabbitMQ and SQL Server.
+
 ## Roadmap
 - add more tests
 - add more logging
