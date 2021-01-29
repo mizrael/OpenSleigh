@@ -13,13 +13,15 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
 
         public Guid OrderId { get; set; }
         public bool CreditCheckCompleted { get; set; } = false;
+        public bool InventoryCheckCompleted{ get; set; } = false;
     }
 
     public class OrderSaga :
         Saga<OrderSagaState>,
         IStartedBy<SaveOrder>,
         IHandleMessage<CrediCheckCompleted>,
-        IHandleMessage<OrderSagaCompleted>
+        IHandleMessage<InventoryCheckCompleted>,
+        IHandleMessage<ShippingCompleted>
     {
         private readonly ILogger<OrderSaga> _logger;
 
@@ -34,8 +36,11 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
 
             this.State.OrderId = context.Message.OrderId;
 
-            var message = ProcessCreditCheck.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            var startCreditCheck = ProcessCreditCheck.New(context.Message.OrderId);
+            await this.Bus.PublishAsync(startCreditCheck, cancellationToken);
+
+            var startInventoryCheck = CheckInventory.New(context.Message.OrderId);
+            await this.Bus.PublishAsync(startInventoryCheck, cancellationToken);
         }
         
         public async Task HandleAsync(IMessageContext<CrediCheckCompleted> context, CancellationToken cancellationToken = default)
@@ -47,20 +52,33 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
             await CheckStateAsync(cancellationToken);
         }
 
-        public Task HandleAsync(IMessageContext<OrderSagaCompleted> context, CancellationToken cancellationToken = default)
+        public async Task HandleAsync(IMessageContext<InventoryCheckCompleted> context, CancellationToken cancellationToken = default)
         {
-            this.State.MarkAsCompleted(); 
-            _logger.LogInformation($"Order saga '{context.Message.CorrelationId}' completed!");
-            return Task.CompletedTask;
+            _logger.LogInformation($"inventory check for order '{context.Message.OrderId}' completed!");
+
+            this.State.InventoryCheckCompleted = true;
+
+            await CheckStateAsync(cancellationToken);
+        }
+
+        public async Task HandleAsync(IMessageContext<ShippingCompleted> context, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"shipping for order '{context.Message.OrderId}' completed!");
+
+            var message = OrderSagaCompleted.New(this.State.OrderId);
+            await this.Bus.PublishAsync(message, cancellationToken);
+
+            this.State.MarkAsCompleted();
         }
         
         private async Task CheckStateAsync(CancellationToken cancellationToken = default)
         {
-            var checksFulfilled = this.State.CreditCheckCompleted;
+            var checksFulfilled = this.State.CreditCheckCompleted &&
+                                  this.State.InventoryCheckCompleted;
             if (!checksFulfilled)
                 return;
 
-            var message = OrderSagaCompleted.New(this.State.OrderId);
+            var message = ProcessShipping.New(this.State.OrderId);
             await this.Bus.PublishAsync(message, cancellationToken);
         }
 

@@ -6,10 +6,10 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Samples.Sample4.Common;
-using OpenSleigh.Samples.Sample4.Orchestrator.Sagas;
+using OpenSleigh.Samples.Sample4.InventoryService.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
-namespace OpenSleigh.Samples.Sample4.Orchestrator
+namespace OpenSleigh.Samples.Sample4.InventoryService
 {
     class Program
     {
@@ -38,16 +38,12 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator
 
                         var sqlConnStr = hostContext.Configuration.GetConnectionString("sql");
                         var sqlConfig = new SqlConfiguration(sqlConnStr);
-                        
+
                         cfg.UseRabbitMQTransport(rabbitCfg)
                             .UseSqlPersistence(sqlConfig);
 
-                        cfg.AddSaga<OrderSaga, OrderSagaState>()
-                            .UseStateFactory<SaveOrder>(msg => new OrderSagaState(msg.CorrelationId))
-                            .UseStateFactory<CrediCheckCompleted>(msg => new OrderSagaState(msg.CorrelationId))
-                            .UseStateFactory<InventoryCheckCompleted>(msg => new OrderSagaState(msg.CorrelationId))
-                            .UseStateFactory<ShippingCompleted>(msg => new OrderSagaState(msg.CorrelationId))
-                            .UseStateFactory<OrderSagaCompleted>(msg => new OrderSagaState(msg.CorrelationId))
+                        cfg.AddSaga<InventoryCheckSaga, InventoryCheckSagaState>()
+                            .UseStateFactory<CheckInventory>(msg => new InventoryCheckSagaState(msg.CorrelationId))
                             .UseRabbitMQTransport();
                     });
             });

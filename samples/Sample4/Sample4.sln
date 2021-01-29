@@ -19,6 +19,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.PaymentService", "OpenSleigh.Samples.Sample4.PaymentService\OpenSleigh.Samples.Sample4.PaymentService.csproj", "{FFA3D34A-5F38-44FE-8C74-33CF681242A1}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.ShippingService", "OpenSleigh.Samples.Sample4.ShippingService\OpenSleigh.Samples.Sample4.ShippingService.csproj", "{EE7BC61D-35BF-418D-A01A-786DF1B9B93E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.InventoryService", "OpenSleigh.Samples.Sample4.InventoryService\OpenSleigh.Samples.Sample4.InventoryService.csproj", "{78FC631B-514A-48F9-8E04-02204C1DB690}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -53,6 +57,14 @@ Global
 		{FFA3D34A-5F38-44FE-8C74-33CF681242A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FFA3D34A-5F38-44FE-8C74-33CF681242A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FFA3D34A-5F38-44FE-8C74-33CF681242A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EE7BC61D-35BF-418D-A01A-786DF1B9B93E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EE7BC61D-35BF-418D-A01A-786DF1B9B93E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EE7BC61D-35BF-418D-A01A-786DF1B9B93E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EE7BC61D-35BF-418D-A01A-786DF1B9B93E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{78FC631B-514A-48F9-8E04-02204C1DB690}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{78FC631B-514A-48F9-8E04-02204C1DB690}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{78FC631B-514A-48F9-8E04-02204C1DB690}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{78FC631B-514A-48F9-8E04-02204C1DB690}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

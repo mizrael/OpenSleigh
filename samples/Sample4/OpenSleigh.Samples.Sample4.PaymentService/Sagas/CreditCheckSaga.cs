@@ -25,10 +25,12 @@ namespace OpenSleigh.Samples.Sample4.PaymentService.Sagas
         
         public async Task HandleAsync(IMessageContext<ProcessCreditCheck> context, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation($"processing credit check '{context.Message.OrderId}'...");
+            _logger.LogInformation($"processing credit check for order '{context.Message.OrderId}'...");
             
             var message = CrediCheckCompleted.New(context.Message.OrderId);
             await this.Bus.PublishAsync(message, cancellationToken);
+
+            this.State.MarkAsCompleted();
         }
     }
 }
