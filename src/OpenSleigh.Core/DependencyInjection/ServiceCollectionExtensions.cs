@@ -15,21 +15,21 @@ namespace OpenSleigh.Core.DependencyInjection
             var typeResolver = new TypeResolver();
             var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
-            services.AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
+            services.AddTransient<IMessageBus, DefaultMessageBus>()
+                .AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
                 .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<ISerializer, JsonSerializer>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
-                .AddScoped<IMessageBus, DefaultMessageBus>()
-                .AddScoped<IMessageProcessor, MessageProcessor>()
+                .AddSingleton<IMessageProcessor, MessageProcessor>()
                 .AddHostedService<SubscribersBackgroundService>()
 
-                .AddScoped<IOutboxProcessor, OutboxProcessor>()
+                .AddTransient<IOutboxProcessor, OutboxProcessor>()
                 .AddSingleton(OutboxProcessorOptions.Default)
                 .AddHostedService<OutboxBackgroundService>()
                 
-                .AddScoped<IOutboxCleaner, OutboxCleaner>()
+                .AddTransient<IOutboxCleaner, OutboxCleaner>()
                 .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
