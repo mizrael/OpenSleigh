@@ -20,10 +20,6 @@ namespace OpenSleigh.Transport.RabbitMQ
             RabbitConfiguration config,
             Action<IRabbitBusConfigurationBuilder> builderFunc)
         {
-            var encoder = new JsonEncoder();
-            busConfigurator.Services.AddSingleton<IEncoder>(encoder);
-            busConfigurator.Services.AddSingleton<IDecoder>(encoder);
-
             busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();
             busConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
             busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();

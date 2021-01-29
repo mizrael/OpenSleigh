@@ -5,6 +5,7 @@ using FluentAssertions;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Core;
+using OpenSleigh.Core.Utils;
 using RabbitMQ.Client;
 using Xunit;
 
@@ -15,7 +16,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_null()
         {
-            var decoder = NSubstitute.Substitute.For<IDecoder>();
+            var decoder = NSubstitute.Substitute.For<ISerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -25,7 +26,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_headers_null()
         {
-            var decoder = NSubstitute.Substitute.For<IDecoder>();
+            var decoder = NSubstitute.Substitute.For<ISerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
             
@@ -40,7 +41,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_headers_do_not_contain_message_type()
         {
-            var decoder = NSubstitute.Substitute.For<IDecoder>();
+            var decoder = NSubstitute.Substitute.For<ISerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -53,7 +54,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_message_type_header_does_not_match()
         {
-            var decoder = NSubstitute.Substitute.For<IDecoder>();
+            var decoder = NSubstitute.Substitute.For<ISerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -74,7 +75,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_return_message()
         {
-            var decoder = NSubstitute.Substitute.For<IDecoder>();
+            var decoder = NSubstitute.Substitute.For<ISerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -90,7 +91,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var message = DummyMessage.New();
             var encodedMessage = Newtonsoft.Json.JsonConvert.SerializeObject(message);
             var messageBytes = Encoding.UTF8.GetBytes(encodedMessage);
-            decoder.Decode(messageBytes, messageType).Returns(message);
+            decoder.Deserialize(messageBytes, messageType).Returns(message);
 
             resolver.Resolve(messageType.FullName).Returns(messageType);
 

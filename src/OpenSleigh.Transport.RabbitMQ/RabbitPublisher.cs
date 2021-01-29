@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -13,10 +14,10 @@ namespace OpenSleigh.Transport.RabbitMQ
     {
         private readonly IPublisherChannelFactory _publisherChannelFactory;
         private readonly ILogger<RabbitPublisher> _logger;
-        private readonly IEncoder _encoder;
+        private readonly ISerializer _encoder;
         
         public RabbitPublisher(
-            IEncoder encoder,
+            ISerializer encoder,
             ILogger<RabbitPublisher> logger, 
             IPublisherChannelFactory publisherChannelFactory)
         {
@@ -25,14 +26,14 @@ namespace OpenSleigh.Transport.RabbitMQ
             _publisherChannelFactory = publisherChannelFactory ?? throw new ArgumentNullException(nameof(publisherChannelFactory));
         }
 
-        public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
+        public async Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
             using var context = _publisherChannelFactory.Create(message);
 
-            var encodedMessage = _encoder.Encode(message);
+            var encodedMessage = await _encoder.SerializeAsync(message, cancellationToken);
 
             var properties = context.Channel.CreateBasicProperties();
             properties.Persistent = true;
@@ -59,15 +60,13 @@ namespace OpenSleigh.Transport.RabbitMQ
                     routingKey: context.QueueReferences.QueueName,
                     mandatory: true,
                     basicProperties: properties,
-                    body: encodedMessage.Value);
+                    body: encodedMessage);
 
                 _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}', Queue '{QueueName}'", 
                     message.Id,
                     context.QueueReferences.ExchangeName,
                     context.QueueReferences.QueueName);
             });
-            
-            return Task.CompletedTask;
         }
     }
 }

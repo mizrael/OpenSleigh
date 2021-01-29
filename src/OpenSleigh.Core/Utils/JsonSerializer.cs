@@ -1,3 +1,5 @@
+using System;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,6 +28,13 @@ namespace OpenSleigh.Core.Utils
             var json = Encoding.UTF8.GetString(data);
             return ValueTask.FromResult(Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json, Settings));
         }
+
+        public object Deserialize(ReadOnlyMemory<byte> data, Type type)
+        {
+            var json = System.Text.Encoding.UTF8.GetString(data.Span);
+            return Newtonsoft.Json.JsonConvert.DeserializeObject(json, type, Settings);
+        }
+            
     }
 
 }
