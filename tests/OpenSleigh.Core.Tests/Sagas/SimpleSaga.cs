@@ -12,7 +12,12 @@ namespace OpenSleigh.Core.Tests.Sagas
         }
     }
 
-    public record StartSimpleSaga(Guid Id, Guid CorrelationId) : ICommand;
+    public record StartSimpleSaga(Guid Id, Guid CorrelationId) : ICommand
+    {
+        public int Foo { get; init; }
+        public string Bar { get; init; }
+        public Guid Baz => this.CorrelationId;
+    }
 
     public class SimpleSaga : Saga<SimpleSagaState>, IStartedBy<StartSimpleSaga>
     {
