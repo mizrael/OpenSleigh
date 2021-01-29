@@ -194,6 +194,7 @@ Samples are available in the `/samples/` folder.
 
 - **[Sample2](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample2)** is a more interesting scenario, with a Web API acting as message producer and a Console Application as subscriber. This example uses RabbitMQ and MongoDB. It also uses a custom naming policy for some messages, which allows greater flexibility with exchanges and queue generation.
 
+- **[Sample3](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample3)** is the same as Sample2, but with SQL Server instead of MongoDB.
 
 ## Roadmap
 - add more tests
