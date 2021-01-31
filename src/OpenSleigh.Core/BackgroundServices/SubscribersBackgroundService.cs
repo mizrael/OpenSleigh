@@ -9,23 +9,26 @@ namespace OpenSleigh.Core.BackgroundServices
     public class SubscribersBackgroundService : BackgroundService
     {
         private readonly IEnumerable<ISubscriber> _subscribers;
+        private readonly SystemInfo _systemInfo;
 
-        public SubscribersBackgroundService(IEnumerable<ISubscriber> subscribers)
+        public SubscribersBackgroundService(IEnumerable<ISubscriber> subscribers, SystemInfo systemInfo)
         {
             _subscribers = subscribers ?? throw new ArgumentNullException(nameof(subscribers));
+            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
 
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
-            Parallel.ForEach(_subscribers, async subscriber => await subscriber.StartAsync(cancellationToken));
-            
+            if (!_systemInfo.PublishOnly)
+                Parallel.ForEach(_subscribers, async subscriber => await subscriber.StartAsync(cancellationToken));
+
             await base.StartAsync(cancellationToken);
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
-            foreach (var subscriber in _subscribers)
-                await subscriber.StopAsync(cancellationToken);
+            if (!_systemInfo.PublishOnly)
+                Parallel.ForEach(_subscribers, async subscriber => await subscriber.StopAsync(cancellationToken));
 
             await base.StopAsync(cancellationToken);
         }
@@ -33,7 +36,5 @@ namespace OpenSleigh.Core.BackgroundServices
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
         }
-        
     }
-
 }

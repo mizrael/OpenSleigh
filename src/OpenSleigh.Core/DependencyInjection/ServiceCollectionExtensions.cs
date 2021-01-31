@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
@@ -12,10 +13,13 @@ namespace OpenSleigh.Core.DependencyInjection
     {
         public static IServiceCollection AddOpenSleigh(this IServiceCollection services, Action<IBusConfigurator> configure = null)
         {
+            var systemInfo = SystemInfo.New();
+
             var typeResolver = new TypeResolver();
             var sagaTypeResolver = new SagaTypeResolver(typeResolver);
 
             services.AddTransient<IMessageBus, DefaultMessageBus>()
+                .AddSingleton(systemInfo)
                 .AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
                 .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
@@ -33,7 +37,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
-            var builder = new BusConfigurator(services, sagaTypeResolver);
+            var builder = new BusConfigurator(services, sagaTypeResolver, systemInfo);
             configure?.Invoke(builder);
             
             return services;
