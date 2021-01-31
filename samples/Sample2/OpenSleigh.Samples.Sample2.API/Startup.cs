@@ -41,7 +41,8 @@ namespace OpenSleigh.Samples.Sample2.API
                     rabbitSection["UserName"],
                     rabbitSection["Password"]);
                 
-                cfg.UseRabbitMQTransport(rabbitCfg, builder =>
+                cfg.SetPublishOnly()
+                    .UseRabbitMQTransport(rabbitCfg, builder =>
                     {
                         // using a custom naming policy allows us to define the names for exchanges and queues.
                         // this allows us to have a single exchange binded to multiple queues.
