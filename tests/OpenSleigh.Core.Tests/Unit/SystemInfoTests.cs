@@ -12,7 +12,7 @@ namespace OpenSleigh.Core.Tests.Unit
             sut.Should().NotBeNull();
             sut.ClientId.Should().NotBeEmpty();
             sut.PublishOnly.Should().BeFalse();
-            sut.ClientGroup.Should().NotBeNullOrWhiteSpace();
+            sut.ClientGroup.Should().Be(System.AppDomain.CurrentDomain.FriendlyName);
         }
     }
 }

@@ -21,7 +21,7 @@ namespace OpenSleigh.Core.DependencyInjection
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
 
-        public IBusConfigurator SetPublishOnly(bool value)
+        public IBusConfigurator SetPublishOnly(bool value = true)
         {
             _systemInfo.PublishOnly = value;
             return this;
