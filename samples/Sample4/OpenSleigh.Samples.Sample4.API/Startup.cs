@@ -39,7 +39,8 @@ namespace OpenSleigh.Samples.Sample4.API
                     rabbitSection["UserName"],
                     rabbitSection["Password"]);
                 
-                cfg.UseRabbitMQTransport(rabbitCfg)
+                cfg.SetPublishOnly()
+                    .UseRabbitMQTransport(rabbitCfg)
                     .UseSqlPersistence(sqlConfig);
             });
         }
