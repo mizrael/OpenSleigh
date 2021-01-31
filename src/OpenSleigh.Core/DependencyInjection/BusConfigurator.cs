@@ -10,13 +10,22 @@ namespace OpenSleigh.Core.DependencyInjection
     internal class BusConfigurator : IBusConfigurator
     {
         private readonly ISagaTypeResolver _typeResolver;
+        private readonly SystemInfo _systemInfo;
+        
         public IServiceCollection Services { get; }
 
-        public BusConfigurator(IServiceCollection services, ISagaTypeResolver typeResolver)
+        public BusConfigurator(IServiceCollection services, ISagaTypeResolver typeResolver, SystemInfo systemInfo)
         {
             Services = services ?? throw new ArgumentNullException(nameof(services));
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
+
+        public IBusConfigurator SetPublishOnly(bool value = true)
+        {
+            _systemInfo.PublishOnly = value;
+            return this;
+        } 
 
         public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
             where TD : SagaState

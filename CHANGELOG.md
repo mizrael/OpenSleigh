@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-01-30](https://github.com/mizrael/OpenSleigh/pull/22)
+### Added
+- added System Info singleton instance
+- added possibility to set client as "publish only"
+- updated samples
+### Fixed
+- fixed samples connection strings
+
 ## [2021-01-27](https://github.com/mizrael/OpenSleigh/pull/21)
 ### Added
 - multiple Sagas can be registered to handle the same message type
