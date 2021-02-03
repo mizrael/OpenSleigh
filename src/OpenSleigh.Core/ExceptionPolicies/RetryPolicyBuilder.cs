@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
@@ -23,9 +24,26 @@ namespace OpenSleigh.Core.ExceptionPolicies
         }
         
         public OnExceptionHandler OnExceptionHandler { get; private set; }
-        public RetryPolicyBuilder OnException(OnExceptionHandler value)
+        public RetryPolicyBuilder OnException(Func<ExceptionContext, Task> value)
         {
-            this.OnExceptionHandler = value;
+            if (value == null) 
+                throw new ArgumentNullException(nameof(value));
+            this.OnExceptionHandler = new OnExceptionHandler(value);
+            return this;
+        }
+
+        public RetryPolicyBuilder OnException(Action<ExceptionContext> value)
+        {
+            if (value == null)
+                throw new ArgumentNullException(nameof(value));
+
+            Func<ExceptionContext, Task> wrapped = ctx =>
+            {
+                value(ctx);
+                return Task.CompletedTask;
+            };
+            
+            this.OnExceptionHandler = new OnExceptionHandler(wrapped);
             return this;
         }
     }

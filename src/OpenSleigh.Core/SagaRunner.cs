@@ -3,6 +3,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 
@@ -32,23 +33,18 @@ namespace OpenSleigh.Core
         public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
             where TM : IMessage
         {
-            var done = false;
-            TD state = null;
-            var lockId = Guid.Empty;
-            while (!done) // TODO: better retry policy (max retries? Polly?)
+            var policy = Policy.DelayedRetry(builder =>
             {
-                try
-                {
-                    (state, lockId) = await _sagaStateService.GetAsync(messageContext, cancellationToken);
-
-                    done = true;
-                }
-                catch (LockException ex)
-                {
-                    _logger.LogWarning($"unable to lock state for saga '{messageContext.Message.CorrelationId}': '{ex.Message}'. Retrying...");
-                    await Task.Delay(TimeSpan.FromMilliseconds(_rand.Next(1, 10)), cancellationToken).ConfigureAwait(false);
-                }
-            }
+                builder.WithDelayFactory(i => TimeSpan.FromSeconds(_rand.Next(1, 5)))
+                    .Handle<LockException>()
+                    .WithMaxRetries(10)
+                    .OnException(ctx =>
+                    {
+                        _logger.LogWarning(
+                            $"unable to lock state for saga '{messageContext.Message.CorrelationId}': '{ctx.Exception.Message}'. Retrying...");
+                    });
+            });
+            var (state, lockId) = await policy.WrapAsync(() => _sagaStateService.GetAsync(messageContext, cancellationToken));
 
             if (state.IsCompleted())
             {

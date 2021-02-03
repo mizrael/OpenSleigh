@@ -38,9 +38,16 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             
             sut.OnExceptionHandler.Should().BeNull();
 
-            var handler = new OnExceptionHandler(ctx => Task.CompletedTask);
+            Func<ExceptionContext, Task> handler = _ => Task.CompletedTask;
             sut.OnException(handler);
-            sut.OnExceptionHandler.Should().Be(handler);
+            sut.OnExceptionHandler.Should().NotBeNull();
+        }
+
+        [Fact]
+        public void OnException_should_throw_when_input_null()
+        {
+            var sut = new RetryPolicyBuilder();
+            Assert.Throws<ArgumentNullException>(() => sut.OnException(null));
         }
     }
 }
