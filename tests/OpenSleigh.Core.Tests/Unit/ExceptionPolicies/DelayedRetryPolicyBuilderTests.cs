@@ -11,9 +11,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         public void WithDelayFactory_should_add_handler()
         {
             var sut = new DelayedRetryPolicyBuilder();
-
-            sut.DelayFactory.Should().BeNull();
-
+            
             var handler = new DelayFactory(i => TimeSpan.Zero);
             sut.WithDelayFactory(handler);
             

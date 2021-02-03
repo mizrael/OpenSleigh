@@ -7,6 +7,8 @@ namespace OpenSleigh.Core.ExceptionPolicies
     
     internal class DelayedRetryPolicy : RetryPolicy
     {
+        public static readonly DelayFactory DefaultDelayFactory = new(i => TimeSpan.Zero);
+        
         public DelayedRetryPolicy(int maxRetries,
             ExceptionFilters exceptionFilters,
             DelayFactory delayFactory,
@@ -17,9 +19,8 @@ namespace OpenSleigh.Core.ExceptionPolicies
         private static OnExceptionHandler OnExceptionWrapper(DelayFactory delayFactory,
             OnExceptionHandler action)
         {
-            if (delayFactory == null) 
-                throw new ArgumentNullException(nameof(delayFactory));
-            
+            delayFactory ??= DefaultDelayFactory;
+
             OnExceptionHandler res = async (ctx) =>
             {
                 var delay = delayFactory(ctx.ExecutionIndex);

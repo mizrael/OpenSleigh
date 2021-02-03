@@ -12,11 +12,9 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         [Fact]
         public void ctor_should_throw_when_arguments_null()
         {
-            var filters = new ExceptionFilters(Enumerable.Empty<ExceptionFilter>());
             DelayFactory delayFactory = i => TimeSpan.Zero;
 
             Assert.Throws<ArgumentNullException>(() => new DelayedRetryPolicy(1, null, delayFactory));
-            Assert.Throws<ArgumentNullException>(() => new DelayedRetryPolicy(1, filters, null));
         }
 
         [Fact]

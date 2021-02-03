@@ -8,7 +8,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
     internal abstract class PolicyBase
     {
         private readonly OnExceptionHandler _onExceptionHandler;
-        private static readonly OnExceptionHandler DefaultExceptionHandler = new(ctx => Task.CompletedTask);
+        private static readonly OnExceptionHandler DefaultExceptionHandler = new(_ => Task.CompletedTask);
         private readonly ExceptionFilters _exceptionFilters;
         
         protected PolicyBase(ExceptionFilters exceptionFilters, OnExceptionHandler onExceptionHandler = null)
