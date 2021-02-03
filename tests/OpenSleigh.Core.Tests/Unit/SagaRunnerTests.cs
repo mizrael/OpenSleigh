@@ -168,7 +168,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, uow, logger);
 
-            await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext, CancellationToken.None));
+            await Assert.ThrowsAsync<SagaException>(() => sut.RunAsync(messageContext, CancellationToken.None));
         }
 
         [Fact]

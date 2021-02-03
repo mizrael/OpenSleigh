@@ -17,7 +17,6 @@ namespace OpenSleigh.Core
         private readonly ISagaFactory<TS, TD> _sagaFactory;
         private readonly ITransactionManager _transactionManager;
         private readonly ILogger<SagaRunner<TS, TD>> _logger;
-        private static readonly Random _rand = new();
         
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
                           ISagaStateService<TS, TD> sagaStateService, 
@@ -35,7 +34,7 @@ namespace OpenSleigh.Core
         {
             var policy = Policy.DelayedRetry(builder =>
             {
-                builder.WithDelayFactory(i => TimeSpan.FromSeconds(_rand.Next(1, 5)))
+                builder.WithDelayFactory(i => TimeSpan.FromSeconds(i))
                     .Handle<LockException>()
                     .WithMaxRetries(10)
                     .OnException(ctx =>
@@ -63,7 +62,7 @@ namespace OpenSleigh.Core
             {
                 var saga = _sagaFactory.Create(state);
                 if (null == saga)
-                    throw new SagaNotFoundException($"unable to create Saga of type '{typeof(TS).FullName}'");
+                    throw new SagaException($"unable to create Saga of type '{typeof(TS).FullName}'");
 
                 if (saga is not IHandleMessage<TM> handler)
                     throw new ConsumerNotFoundException(typeof(TM));

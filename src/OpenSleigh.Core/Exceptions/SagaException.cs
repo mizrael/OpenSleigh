@@ -6,11 +6,11 @@ namespace OpenSleigh.Core.Exceptions
 {
     [Serializable]
     [ExcludeFromCodeCoverage]
-    public class SagaNotFoundException : Exception
+    public class SagaException : Exception
     {
-        public SagaNotFoundException(string message) : base(message) { }
+        public SagaException(string message) : base(message) { }
 
-        protected SagaNotFoundException(SerializationInfo info, StreamingContext context)
+        protected SagaException(SerializationInfo info, StreamingContext context)
             : base(info, context) { }
     }
 }
