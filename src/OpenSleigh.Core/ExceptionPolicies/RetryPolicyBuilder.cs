@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    internal class RetryPolicyBuilder
+    public class RetryPolicyBuilder
     {
         internal RetryPolicyBuilder() { }
 
@@ -44,6 +44,14 @@ namespace OpenSleigh.Core.ExceptionPolicies
             };
             
             this.OnExceptionHandler = new OnExceptionHandler(wrapped);
+            return this;
+        }
+
+        public DelayFactory DelayFactory { get; private set; } = new(i => TimeSpan.Zero);
+
+        public RetryPolicyBuilder WithDelay(DelayFactory value)
+        {
+            this.DelayFactory = value ?? throw new ArgumentNullException(nameof(value));
             return this;
         }
     }

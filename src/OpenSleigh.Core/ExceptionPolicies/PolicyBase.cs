@@ -3,9 +3,9 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    internal delegate Task OnExceptionHandler(ExceptionContext ctx);
-    
-    internal abstract class PolicyBase
+    public delegate Task OnExceptionHandler(ExceptionContext ctx);
+
+    public abstract class PolicyBase
     {
         private readonly OnExceptionHandler _onExceptionHandler;
         private static readonly OnExceptionHandler DefaultExceptionHandler = new(_ => Task.CompletedTask);

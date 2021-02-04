@@ -3,12 +3,17 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    internal class RetryPolicy : PolicyBase
+    public class RetryPolicy : PolicyBase
     {
+        public static readonly DelayFactory DefaultDelayFactory = new(i => TimeSpan.Zero);
+
         private readonly int _maxRetries = 3;
 
-        public RetryPolicy(int maxRetries, ExceptionFilters exceptionFilters, OnExceptionHandler onException = null) : 
-            base(exceptionFilters, onException)
+        public RetryPolicy(int maxRetries, 
+            ExceptionFilters exceptionFilters,
+            DelayFactory delayFactory = null,
+            OnExceptionHandler onException = null) : 
+            base(exceptionFilters, OnExceptionWrapper(delayFactory, onException))
         {
             _maxRetries = maxRetries;
         }
@@ -44,6 +49,21 @@ namespace OpenSleigh.Core.ExceptionPolicies
                 throw lastException;
 
             return default;
+        }
+
+        private static OnExceptionHandler OnExceptionWrapper(DelayFactory delayFactory,
+            OnExceptionHandler action)
+        {
+            delayFactory ??= DefaultDelayFactory;
+
+            OnExceptionHandler res = async (ctx) =>
+            {
+                var delay = delayFactory(ctx.ExecutionIndex);
+                await Task.Delay(delay).ConfigureAwait(false);
+                if (action is not null)
+                    await action(ctx).ConfigureAwait(false);
+            };
+            return res;
         }
     }
 }

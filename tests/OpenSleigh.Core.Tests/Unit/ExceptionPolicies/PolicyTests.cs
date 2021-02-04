@@ -14,12 +14,5 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
                 .And.BeOfType<RetryPolicy>();
         }
 
-        [Fact]
-        public void DelayedRetry_should_build_retry_policy()
-        {
-            var policy = Policy.DelayedRetry(builder => { });
-            policy.Should().NotBeNull()
-                .And.BeOfType<DelayedRetryPolicy>();
-        }
     }
 }

@@ -4,9 +4,9 @@ using System.Linq;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    internal delegate bool ExceptionFilter(Exception ex);
-    
-    internal class ExceptionFilters
+    public delegate bool ExceptionFilter(Exception ex);
+
+    public class ExceptionFilters
     {
         private readonly IEnumerable<ExceptionFilter> _filters;
 

@@ -49,5 +49,16 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             var sut = new RetryPolicyBuilder();
             Assert.Throws<ArgumentNullException>(() => sut.OnException(null));
         }
+
+        [Fact]
+        public void WithDelayFactory_should_add_handler()
+        {
+            var sut = new RetryPolicyBuilder();
+
+            var handler = new DelayFactory(i => TimeSpan.Zero);
+            sut.WithDelay(handler);
+
+            sut.DelayFactory.Should().Be(handler);
+        }
     }
 }

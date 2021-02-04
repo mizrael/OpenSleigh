@@ -92,7 +92,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
                 return Task.CompletedTask;
             };
             
-            var sut = new RetryPolicy(maxRetries, filters, onException);
+            var sut = new RetryPolicy(maxRetries, filters, null, onException);
             
             Func<Task<bool>> action = () => throw new ApplicationException();
             await Assert.ThrowsAsync<ApplicationException>(async () => await sut.WrapAsync(action));
@@ -114,6 +114,54 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             var res = await sut.WrapAsync(action);
 
             res.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task WrapAsync_should_run_delay_factory_on_exception()
+        {
+            var filters = new ExceptionFilters(Enumerable.Empty<ExceptionFilter>());
+
+            var hit = false;
+            DelayFactory delayFactory = i =>
+            {
+                hit = true;
+                return TimeSpan.Zero;
+            };
+
+            var sut = new RetryPolicy(1, filters, delayFactory);
+
+            await Assert.ThrowsAsync<ApplicationException>(async () => await sut.WrapAsync(() =>
+            {
+                throw new ApplicationException();
+                return Task.FromResult(true);
+            }));
+
+            hit.Should().BeTrue();
+        }
+
+        [Fact]
+        public async Task WrapAsync_should_run_OnException_handler()
+        {
+            var filters = new ExceptionFilters(Enumerable.Empty<ExceptionFilter>());
+
+            DelayFactory delayFactory = i => TimeSpan.Zero;
+
+            var hit = false;
+            OnExceptionHandler onException = ctx =>
+            {
+                hit = true;
+                return Task.CompletedTask;
+            };
+
+            var sut = new RetryPolicy(1, filters, delayFactory, onException);
+
+            await Assert.ThrowsAsync<ApplicationException>(async () => await sut.WrapAsync(() =>
+            {
+                throw new ApplicationException();
+                return Task.FromResult(true);
+            }));
+
+            hit.Should().BeTrue();
         }
     }
 }
