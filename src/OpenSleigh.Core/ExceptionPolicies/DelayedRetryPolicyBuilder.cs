@@ -8,7 +8,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
 
         public DelayFactory DelayFactory { get; private set; } = new (i => TimeSpan.Zero);
 
-        public DelayedRetryPolicyBuilder WithDelayFactory(DelayFactory value)
+        public DelayedRetryPolicyBuilder WithDelay(DelayFactory value)
         {
             this.DelayFactory = value ?? throw new ArgumentNullException(nameof(value));
             return this;

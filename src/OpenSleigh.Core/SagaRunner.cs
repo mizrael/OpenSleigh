@@ -34,7 +34,7 @@ namespace OpenSleigh.Core
         {
             var policy = Policy.DelayedRetry(builder =>
             {
-                builder.WithDelayFactory(i => TimeSpan.FromSeconds(i))
+                builder.WithDelay(i => TimeSpan.FromSeconds(i))
                     .Handle<LockException>()
                     .WithMaxRetries(10)
                     .OnException(ctx =>

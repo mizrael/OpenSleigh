@@ -13,7 +13,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             var sut = new DelayedRetryPolicyBuilder();
             
             var handler = new DelayFactory(i => TimeSpan.Zero);
-            sut.WithDelayFactory(handler);
+            sut.WithDelay(handler);
             
             sut.DelayFactory.Should().Be(handler);
         }
