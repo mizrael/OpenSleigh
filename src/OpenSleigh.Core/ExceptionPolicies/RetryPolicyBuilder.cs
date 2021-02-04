@@ -16,7 +16,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
         }
 
         private readonly List<ExceptionFilter> _exceptionFilters = new();
-        public ExceptionFilters ExceptionFilters => new ExceptionFilters(_exceptionFilters);
+        public ExceptionFilters ExceptionFilters => new (_exceptionFilters);
         public RetryPolicyBuilder Handle<TEx>() where TEx : Exception
         {
             _exceptionFilters.Add(ex => ex is TEx);
@@ -47,7 +47,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
             return this;
         }
 
-        public DelayFactory DelayFactory { get; private set; } = new(i => TimeSpan.Zero);
+        public DelayFactory DelayFactory { get; private set; } = RetryPolicy.DefaultDelayFactory;
 
         public RetryPolicyBuilder WithDelay(DelayFactory value)
         {
