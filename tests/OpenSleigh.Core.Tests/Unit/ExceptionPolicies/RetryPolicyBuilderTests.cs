@@ -60,5 +60,15 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
 
             sut.DelayFactory.Should().Be(handler);
         }
+
+        [Fact]
+        public void Build_should_return_valid_instance()
+        {
+            var sut = new RetryPolicyBuilder();
+
+            var result = sut.Build();
+
+            result.Should().NotBeNull();
+        }
     }
 }
