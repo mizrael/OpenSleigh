@@ -94,6 +94,27 @@ services.AddOpenSleigh(cfg =>{
 
 When adding a Saga, it's important to specify the Transport we want to use for its messages (inbound and outbound). In this example we're using the `UseRabbitMQTransport()` extension method, which tells OpenSleight to use RabbitMQ for this Saga.
 
+#### Retry Policies
+Sagas can be configured to use a Retry Policy in case a message handler fails. Each message handler on a Saga can have its own policy:
+
+```
+services.AddOpenSleigh(cfg =>{
+    cfg.AddSaga<MyAwesomeSaga, MyAwesomeSagaState>()      
+        .UseRetryPolicy<StartSagaMessage>(builder => {
+            builder.WithMaxRetries(5)
+                .Handle<ApplicationException>()
+                .WithDelay(executionIndex => TimeSpan.FromSeconds(executionIndex))
+                .OnException(ctx =>
+                {
+                    System.Console.WriteLine(
+                        $"tentative #{ctx.ExecutionIndex} failed: {ctx.Exception.Message}");
+                });
+        });
+});
+```
+
+Calls to the `.Handle<>()` method can be chained to register multiple exception types.
+
 #### Starting a Saga
 In order to start a Saga, we need to tell OpenSleigh which message type can be used as "initiator". In order to do that, we need to add  the [`IStartedBy<>`](https://github.com/mizrael/OpenSleigh/blob/develop/src/OpenSleigh.Core/IStartedBy.cs) interface to the Saga and implement it:
 
@@ -200,6 +221,9 @@ Samples are available in the `/samples/` folder. The required infrastructure for
 - **[Sample3](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample3)** is the same as Sample2, but with SQL Server instead of MongoDB.
 
 - **[Sample4](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample4)** mimicks an order processing scenario, showing how to orchestrate multiple services. It uses RabbitMQ and SQL Server.
+
+- **[Sample5](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample5)** shows how to configure retry policies on a Saga.
+
 
 ## Roadmap
 - add more tests
