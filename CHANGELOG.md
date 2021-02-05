@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-02-04](https://github.com/mizrael/OpenSleigh/pull/24)
+### Added
+- Sagas can be configured to use a retry policy when handling messages
+- added a new sample
+- minor bugfixes
+
 ## [2021-01-30](https://github.com/mizrael/OpenSleigh/pull/22)
 ### Added
 - added System Info singleton instance
