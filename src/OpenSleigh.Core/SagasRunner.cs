@@ -30,7 +30,7 @@ namespace OpenSleigh.Core
             
             var sagaTypes = _stateTypeResolver.Resolve<TM>();
             if (null == sagaTypes || !sagaTypes.Any())
-                throw new SagaNotFoundException($"no Saga registered for message of type '{typeof(TM).FullName}'");
+                throw new SagaException($"no Saga registered for message of type '{typeof(TM).FullName}'");
 
            return RunAsyncCore(messageContext, cancellationToken, sagaTypes);
         }

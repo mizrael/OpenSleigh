@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using OpenSleigh.Core.ExceptionPolicies;
 
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
@@ -36,6 +37,7 @@ namespace OpenSleigh.Core.DependencyInjection
             if (hasMessages)
             {
                 Services.AddTransient<TS>()
+                        .AddTransient<ISagaPolicyFactory<TS>, DefaultSagaPolicyFactory<TS>>()
                         .AddTransient<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>()
                         .AddTransient<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>()
                         .AddTransient<ISagaRunner<TS, TD>, SagaRunner<TS, TD>>()

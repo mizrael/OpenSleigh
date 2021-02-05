@@ -49,7 +49,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
             messageContext.Message.Returns(message);
 
-            var ex = await Assert.ThrowsAsync<SagaNotFoundException>(() => sut.RunAsync(messageContext));
+            var ex = await Assert.ThrowsAsync<SagaException>(() => sut.RunAsync(messageContext));
             ex.Message.Should().Contain("no Saga registered for message of type");
         }
 

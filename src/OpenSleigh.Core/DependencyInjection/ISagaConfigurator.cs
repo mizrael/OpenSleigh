@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
@@ -12,6 +13,9 @@ namespace OpenSleigh.Core.DependencyInjection
     {
         IServiceCollection Services { get; }
         ISagaConfigurator<TS, TD> UseStateFactory<TM>(Func<TM, TD> stateFactory)
+            where TM : IMessage;
+
+        ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<RetryPolicyBuilder> builderAction)
             where TM : IMessage;
     }
 
@@ -39,6 +43,20 @@ namespace OpenSleigh.Core.DependencyInjection
             var descriptor = ServiceDescriptor.Singleton(factoryInterfaceType, factory);
             this.Services.Replace(descriptor);
 
+            return this;
+        }
+
+        public ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<RetryPolicyBuilder> builderAction)
+            where TM : IMessage
+        {
+            if (builderAction == null) 
+                throw new ArgumentNullException(nameof(builderAction));
+            
+            var builder = new RetryPolicyBuilder();
+            builderAction(builder);
+            
+            this.Services.AddTransient<IMessagePolicyFactory<TS, TM>>(_ => new MessagePolicyFactory<TS, TM>(builder));
+            
             return this;
         }
     }

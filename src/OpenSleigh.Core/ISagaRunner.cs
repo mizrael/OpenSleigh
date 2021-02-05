@@ -6,7 +6,7 @@ namespace OpenSleigh.Core
 {
     public interface ISagaRunner
     {
-        Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
+        Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
             where TM : IMessage;
     }
     

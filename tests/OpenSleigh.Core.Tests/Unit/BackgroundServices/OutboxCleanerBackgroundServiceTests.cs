@@ -21,7 +21,7 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         }
 
         [Fact]
-        public async Task StartAsync_should_start_subscribers()
+        public async Task StartAsync_should_cleanup_messages()
         {
             var cleaner = NSubstitute.Substitute.For<IOutboxCleaner>();
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
@@ -38,8 +38,8 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);
-
-            await cleaner.Received(1)
+            await Task.Delay(200);
+            await cleaner.Received()
                 .RunCleanupAsync(Arg.Any<CancellationToken>());
         }
     }

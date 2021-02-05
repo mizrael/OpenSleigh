@@ -5,7 +5,7 @@ using OpenSleigh.Core.Messaging;
 [assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
 namespace OpenSleigh.Core
 {
-    public abstract class Saga<TD>
+    public abstract class Saga<TD> : ISaga
         where TD : SagaState
     {
         public TD State { get; private set; }
