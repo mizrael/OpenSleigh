@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
@@ -30,11 +29,11 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddHostedService<SubscribersBackgroundService>()
 
                 .AddTransient<IOutboxProcessor, OutboxProcessor>()
-                .AddSingleton(OutboxProcessorOptions.Default)
+                .AddSingleton(OutboxProcessorOptions.Default) //TODO: this should be configurable
                 .AddHostedService<OutboxBackgroundService>()
                 
                 .AddTransient<IOutboxCleaner, OutboxCleaner>()
-                .AddSingleton(OutboxCleanerOptions.Default)
+                .AddSingleton(OutboxCleanerOptions.Default) //TODO: this should be configurable
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
             var builder = new BusConfigurator(services, sagaTypeResolver, systemInfo);

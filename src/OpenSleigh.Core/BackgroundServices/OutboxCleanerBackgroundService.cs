@@ -20,16 +20,21 @@ namespace OpenSleigh.Core.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            await Task.Run(async () =>
             {
-                using (var scope = _scopeFactory.CreateScope())
+                while (true)
                 {
-                    var service = scope.ServiceProvider.GetRequiredService<IOutboxCleaner>();
-                    await service.RunCleanupAsync(stoppingToken);
-                }
+                    using (var scope = _scopeFactory.CreateScope())
+                    {
+                        var service = scope.ServiceProvider.GetRequiredService<IOutboxCleaner>();
+                        await service.RunCleanupAsync(stoppingToken)
+                            .ConfigureAwait(false);
+                    }
 
-                await Task.Delay(_options.Interval, stoppingToken);
-            }
+                    await Task.Delay(_options.Interval, stoppingToken)
+                        .ConfigureAwait(false);
+                }
+            }, stoppingToken);
         }
     }
 }

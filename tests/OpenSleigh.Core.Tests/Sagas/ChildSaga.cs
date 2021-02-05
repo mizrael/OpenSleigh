@@ -30,6 +30,8 @@ namespace OpenSleigh.Core.Tests.Sagas
 
         public async Task HandleAsync(IMessageContext<ProcessChildSaga> context, CancellationToken cancellationToken = default)
         {
+            this.State.MarkAsCompleted();
+            
             var completedEvent = new ChildSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
             await this.Bus.PublishAsync(completedEvent, cancellationToken);
         }

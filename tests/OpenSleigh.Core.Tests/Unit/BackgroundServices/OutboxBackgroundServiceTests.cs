@@ -21,12 +21,12 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         }
 
         [Fact]
-        public async Task StartAsync_should_start_subscribers()
+        public async Task StartAsync_should_process_pending_messages()
         {
-            var cleaner = NSubstitute.Substitute.For<IOutboxProcessor>();
+            var processor = NSubstitute.Substitute.For<IOutboxProcessor>();
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
             sp.GetService(typeof(IOutboxProcessor))
-                .Returns(cleaner);
+                .Returns(processor);
 
             var scope = NSubstitute.Substitute.For<IServiceScope>();
             scope.ServiceProvider.Returns(sp);
@@ -38,8 +38,8 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);
-
-            await cleaner.Received(1)
+            await Task.Delay(200);
+            await processor.Received()
                 .ProcessPendingMessagesAsync(Arg.Any<CancellationToken>());
         }
     }
