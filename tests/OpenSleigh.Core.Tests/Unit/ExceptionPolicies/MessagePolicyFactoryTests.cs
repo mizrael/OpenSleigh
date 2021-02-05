@@ -12,7 +12,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         [Fact]
         public void ctor_should_throw_if_arguments_null()
         {
-            Assert.Throws<ArgumentNullException>(() => new MessagePolicyFactory<DummySaga, DummySagaState, StartDummySaga>(null));
+            Assert.Throws<ArgumentNullException>(() => new MessagePolicyFactory<DummySaga, StartDummySaga>(null));
         }
 
         [Fact]
@@ -22,7 +22,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             var builder = NSubstitute.Substitute.For<IPolicyBuilder>();
             builder.Build().Returns(expectedFactory);
             
-            var sut = new MessagePolicyFactory<DummySaga, DummySagaState, StartDummySaga>(builder);
+            var sut = new MessagePolicyFactory<DummySaga, StartDummySaga>(builder);
             var result = sut.Create();
             result.Should().Be(expectedFactory);
         }

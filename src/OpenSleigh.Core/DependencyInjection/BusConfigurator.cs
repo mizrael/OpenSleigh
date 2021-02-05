@@ -37,7 +37,7 @@ namespace OpenSleigh.Core.DependencyInjection
             if (hasMessages)
             {
                 Services.AddTransient<TS>()
-                        .AddTransient<ISagaPolicyFactory<TS, TD>, DefaultSagaPolicyFactory<TS, TD>>()
+                        .AddTransient<ISagaPolicyFactory<TS>, DefaultSagaPolicyFactory<TS>>()
                         .AddTransient<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>()
                         .AddTransient<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>()
                         .AddTransient<ISagaRunner<TS, TD>, SagaRunner<TS, TD>>()

@@ -4,16 +4,14 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    public interface ISagaPolicyFactory<TS, TD>
-        where TD : SagaState
-        where TS : Saga<TD>
+    public interface ISagaPolicyFactory<TS>
+        where TS : ISaga
     {
         IPolicy Create<TM>() where TM : IMessage;
     }
 
-    internal class DefaultSagaPolicyFactory<TS, TD> : ISagaPolicyFactory<TS, TD>
-        where TD : SagaState
-        where TS : Saga<TD>
+    internal class DefaultSagaPolicyFactory<TS> : ISagaPolicyFactory<TS>
+        where TS : ISaga
     {
         private readonly IServiceProvider _serviceProvider;
 
@@ -24,7 +22,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
 
         public IPolicy Create<TM>() where TM : IMessage
         {
-            var factory = _serviceProvider.GetService<IMessagePolicyFactory<TS, TD, TM>>();
+            var factory = _serviceProvider.GetService<IMessagePolicyFactory<TS, TM>>();
             return factory?.Create();
         }
     }

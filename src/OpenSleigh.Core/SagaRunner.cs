@@ -17,12 +17,12 @@ namespace OpenSleigh.Core
         private readonly ISagaFactory<TS, TD> _sagaFactory;
         private readonly ITransactionManager _transactionManager;
         private readonly ILogger<SagaRunner<TS, TD>> _logger;
-        private readonly ISagaPolicyFactory<TS, TD> _policyFactory;
+        private readonly ISagaPolicyFactory<TS> _policyFactory;
 
         public SagaRunner(ISagaFactory<TS, TD> sagaFactory,
                           ISagaStateService<TS, TD> sagaStateService, 
                           ITransactionManager transactionManager,
-                          ISagaPolicyFactory<TS, TD> policyFactory,
+                          ISagaPolicyFactory<TS> policyFactory,
                           ILogger<SagaRunner<TS, TD>> logger)
         {
             _sagaFactory = sagaFactory ?? throw new ArgumentNullException(nameof(sagaFactory));

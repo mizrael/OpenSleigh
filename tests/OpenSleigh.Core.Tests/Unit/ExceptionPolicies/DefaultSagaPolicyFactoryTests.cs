@@ -13,7 +13,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         [Fact]
         public void ctor_should_throw_if_arguments_null()
         {
-            Assert.Throws<ArgumentNullException>(() => new DefaultSagaPolicyFactory<DummySaga, DummySagaState>(null));
+            Assert.Throws<ArgumentNullException>(() => new DefaultSagaPolicyFactory<DummySaga>(null));
         }
 
         [Fact]
@@ -21,7 +21,7 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
             
-            var sut = new DefaultSagaPolicyFactory<DummySaga, DummySagaState>(sp);
+            var sut = new DefaultSagaPolicyFactory<DummySaga>(sp);
             var policy = sut.Create<StartDummySaga>();
             policy.Should().BeNull();
         }
@@ -30,13 +30,13 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         public void Create_should_return_policy_when_policy_not_configured()
         {
             var expectedPolicy = NSubstitute.Substitute.For<IPolicy>();
-            var factory = NSubstitute.Substitute.For<IMessagePolicyFactory<DummySaga, DummySagaState, StartDummySaga>>();
+            var factory = NSubstitute.Substitute.For<IMessagePolicyFactory<DummySaga, StartDummySaga>>();
             factory.Create().Returns(expectedPolicy);
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(IMessagePolicyFactory<DummySaga, DummySagaState, StartDummySaga>))
+            sp.GetService(typeof(IMessagePolicyFactory<DummySaga, StartDummySaga>))
                 .Returns(factory);
 
-            var sut = new DefaultSagaPolicyFactory<DummySaga, DummySagaState>(sp);
+            var sut = new DefaultSagaPolicyFactory<DummySaga>(sp);
             var policy = sut.Create<StartDummySaga>();
             policy.Should().Be(expectedPolicy);
         }

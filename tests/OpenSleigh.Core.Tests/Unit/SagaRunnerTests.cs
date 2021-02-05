@@ -21,7 +21,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
             var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             Assert.Throws<ArgumentNullException>(() => new SagaRunner<DummySaga, DummySagaState>(null, sagaStateService, transactionManager, policyFactory, logger));
@@ -67,7 +67,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
 
@@ -103,7 +103,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
 
@@ -141,7 +141,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
 
@@ -171,7 +171,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
 
@@ -202,7 +202,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
 
@@ -235,7 +235,7 @@ namespace OpenSleigh.Core.Tests.Unit
             var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             policyFactory.Create<StartDummySaga>().ReturnsNullForAnyArgs();
             
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
@@ -273,7 +273,7 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
             
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             var policy = new FakePolicy();
             policyFactory.Create<StartDummySaga>().ReturnsForAnyArgs(policy);
 
@@ -315,7 +315,7 @@ namespace OpenSleigh.Core.Tests.Unit
             transactionManager.StartTransactionAsync(default)
                 .ReturnsForAnyArgs(transaction);
             
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             policyFactory.Create<StartDummySaga>().ReturnsNullForAnyArgs();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
@@ -358,7 +358,7 @@ namespace OpenSleigh.Core.Tests.Unit
             transactionManager.StartTransactionAsync(default)
                 .ReturnsForAnyArgs(transaction);
 
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga, DummySagaState>>();
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
             policyFactory.Create<StartDummySaga>().ReturnsNullForAnyArgs();
 
             var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);

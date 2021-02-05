@@ -3,10 +3,9 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.ExceptionPolicies
 {
-    public class MessagePolicyFactory<TS, TD, TM> :
-        IMessagePolicyFactory<TS, TD, TM>
-        where TD : SagaState
-        where TS : Saga<TD>
+    public class MessagePolicyFactory<TS, TM> :
+        IMessagePolicyFactory<TS, TM>
+        where TS : ISaga
         where TM : IMessage
     {
         private readonly IPolicyBuilder _builder;

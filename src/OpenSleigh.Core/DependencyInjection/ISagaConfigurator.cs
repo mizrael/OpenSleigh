@@ -52,7 +52,7 @@ namespace OpenSleigh.Core.DependencyInjection
             var builder = new RetryPolicyBuilder();
             builderAction(builder);
             
-            this.Services.AddTransient<IMessagePolicyFactory<TS, TD, TM>>(_ => new MessagePolicyFactory<TS, TD, TM>(builder));
+            this.Services.AddTransient<IMessagePolicyFactory<TS, TM>>(_ => new MessagePolicyFactory<TS, TM>(builder));
             
             return this;
         }
