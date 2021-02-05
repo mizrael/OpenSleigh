@@ -14,6 +14,9 @@ namespace OpenSleigh.Core.DependencyInjection
         IServiceCollection Services { get; }
         ISagaConfigurator<TS, TD> UseStateFactory<TM>(Func<TM, TD> stateFactory)
             where TM : IMessage;
+
+        ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<RetryPolicyBuilder> builderAction)
+            where TM : IMessage;
     }
 
     [ExcludeFromCodeCoverage]
