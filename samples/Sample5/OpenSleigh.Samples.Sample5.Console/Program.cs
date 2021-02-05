@@ -48,6 +48,7 @@ namespace OpenSleigh.Samples.Sample5.Console
                             {
                                 builder.WithMaxRetries(5)
                                     .Handle<ApplicationException>()
+                                    .WithDelay(executionIndex => TimeSpan.FromSeconds(executionIndex))
                                     .OnException(ctx =>
                                     {
                                         System.Console.WriteLine(
