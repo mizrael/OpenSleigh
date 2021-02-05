@@ -133,7 +133,6 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             await Assert.ThrowsAsync<ApplicationException>(async () => await sut.WrapAsync(() =>
             {
                 throw new ApplicationException();
-                return Task.FromResult(true);
             }));
 
             hit.Should().BeTrue();
@@ -158,7 +157,6 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
             await Assert.ThrowsAsync<ApplicationException>(async () => await sut.WrapAsync(() =>
             {
                 throw new ApplicationException();
-                return Task.FromResult(true);
             }));
 
             hit.Should().BeTrue();

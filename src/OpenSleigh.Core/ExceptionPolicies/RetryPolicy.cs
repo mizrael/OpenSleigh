@@ -7,7 +7,7 @@ namespace OpenSleigh.Core.ExceptionPolicies
     {
         public static readonly DelayFactory DefaultDelayFactory = new(i => TimeSpan.Zero);
 
-        private readonly int _maxRetries = 3;
+        private readonly int _maxRetries;
 
         public RetryPolicy(int maxRetries, 
             ExceptionFilters exceptionFilters,
