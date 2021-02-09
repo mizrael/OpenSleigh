@@ -17,7 +17,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
     {
         private readonly ServiceBusFixture _fixture;
         private readonly string _topicName;
-        private readonly string _subscriptioName;
+        private readonly string _subscriptionName;
         
         public ServiceBusSimpleSagaScenario(ServiceBusFixture fixture)
         {
@@ -25,14 +25,14 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
 
             var messageName = nameof(StartSimpleSaga).ToLower();
             _topicName =  $"{messageName}.tests.{Guid.NewGuid()}";
-            _subscriptioName = $"{messageName}.workers";
+            _subscriptionName = $"{messageName}.workers";
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
             cfg.UseAzureServiceBusTransport(_fixture.Configuration, builder =>
                 {
-                    QueueReferencesPolicy<StartSimpleSaga> policy = () => new QueueReferences(_topicName, _subscriptioName);
+                    QueueReferencesPolicy<StartSimpleSaga> policy = () => new QueueReferences(_topicName, _subscriptionName);
                     builder.UseMessageNamingPolicy(policy);
                 })
                 .UseInMemoryPersistence();
@@ -48,14 +48,14 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
             if (!(await adminClient.TopicExistsAsync(_topicName)))
                 await adminClient.CreateTopicAsync(_topicName);
 
-            if (!(await adminClient.SubscriptionExistsAsync(_topicName, _subscriptioName)))
-                await adminClient.CreateSubscriptionAsync(_topicName, _subscriptioName);
+            if (!(await adminClient.SubscriptionExistsAsync(_topicName, _subscriptionName)))
+                await adminClient.CreateSubscriptionAsync(_topicName, _subscriptionName);
         }
 
         public async Task DisposeAsync()
         {
             var adminClient = new ServiceBusAdministrationClient(_fixture.Configuration.ConnectionString);
-            await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptioName);
+            await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptionName);
             await adminClient.DeleteTopicAsync(_topicName);
         }
     }

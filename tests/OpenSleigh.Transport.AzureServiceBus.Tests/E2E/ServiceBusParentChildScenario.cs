@@ -17,13 +17,13 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
         private readonly ServiceBusFixture _fixture;
         private readonly string _topicName;
         private readonly Dictionary<Type, string> _subscriptions = new();
-        
+
         public ServiceBusParentChildScenario(ServiceBusFixture fixture)
         {
             _fixture = fixture;
-            
+
             _topicName = $"ServiceBusParentChildScenario.tests.{Guid.NewGuid()}";
-            
+
             _subscriptions[typeof(StartParentSaga)] = Guid.NewGuid().ToString();
             _subscriptions[typeof(ProcessParentSaga)] = Guid.NewGuid().ToString();
             _subscriptions[typeof(ParentSagaCompleted)] = Guid.NewGuid().ToString();
@@ -31,22 +31,28 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
             _subscriptions[typeof(ProcessChildSaga)] = Guid.NewGuid().ToString();
             _subscriptions[typeof(ChildSagaCompleted)] = Guid.NewGuid().ToString();
         }
-        
+
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
             cfg.UseAzureServiceBusTransport(_fixture.Configuration, builder =>
                 {
-                    builder.UseMessageNamingPolicy<StartParentSaga>(() => new QueueReferences(_topicName, _subscriptions[typeof(StartParentSaga)]));
-                    builder.UseMessageNamingPolicy<ProcessParentSaga>(() => new QueueReferences(_topicName, _subscriptions[typeof(ProcessParentSaga)]));
-                    builder.UseMessageNamingPolicy<ParentSagaCompleted>(() => new QueueReferences(_topicName, _subscriptions[typeof(ParentSagaCompleted)]));
-                    builder.UseMessageNamingPolicy<StartChildSaga>(() => new QueueReferences(_topicName, _subscriptions[typeof(StartChildSaga)]));
-                    builder.UseMessageNamingPolicy<ProcessChildSaga>(() => new QueueReferences(_topicName, _subscriptions[typeof(ProcessChildSaga)]));
-                    builder.UseMessageNamingPolicy<ChildSagaCompleted>(() => new QueueReferences(_topicName, _subscriptions[typeof(ChildSagaCompleted)]));
+                    builder.UseMessageNamingPolicy<StartParentSaga>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(StartParentSaga)]));
+                    builder.UseMessageNamingPolicy<ProcessParentSaga>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(ProcessParentSaga)]));
+                    builder.UseMessageNamingPolicy<ParentSagaCompleted>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(ParentSagaCompleted)]));
+                    builder.UseMessageNamingPolicy<StartChildSaga>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(StartChildSaga)]));
+                    builder.UseMessageNamingPolicy<ProcessChildSaga>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(ProcessChildSaga)]));
+                    builder.UseMessageNamingPolicy<ChildSagaCompleted>(() =>
+                        new QueueReferences(_topicName, _subscriptions[typeof(ChildSagaCompleted)]));
                 })
                 .UseInMemoryPersistence();
         }
 
-        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg)=>
+        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseAzureServiceBusTransport();
 
         public async Task InitializeAsync()
@@ -64,7 +70,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
         public async Task DisposeAsync()
         {
             var adminClient = new ServiceBusAdministrationClient(_fixture.Configuration.ConnectionString);
-            foreach (var val in _subscriptions.Values) 
+            foreach (var val in _subscriptions.Values)
                 await adminClient.DeleteSubscriptionAsync(_topicName, val);
             await adminClient.DeleteTopicAsync(_topicName);
         }
