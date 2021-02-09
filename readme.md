@@ -15,10 +15,11 @@ OpenSleigh can be installed from Nuget. The Core module is available here: https
 However, a Transport and Persistence library are necessary to properly use the library.
 
 These are the libraries available at the moment:
-- https://www.nuget.org/packages/OpenSleigh.Persistence.InMemory/
-- https://www.nuget.org/packages/OpenSleigh.Persistence.Mongo/
-- https://www.nuget.org/packages/OpenSleigh.Persistence.SQL/
-- https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/
+- [InMemory](https://www.nuget.org/packages/OpenSleigh.Persistence.InMemory/)
+- [MongoDB](https://www.nuget.org/packages/OpenSleigh.Persistence.Mongo/)
+- [MSSQL](https://www.nuget.org/packages/OpenSleigh.Persistence.SQL/)
+- [Azure Service Bus](https://www.nuget.org/packages/OpenSleigh.Transport.AzureServiceBus/)
+- [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/)
 
 ## How-to
 OpenSleigh is intended to be flexible and developer friendly. It makes use of Dependency Injection for its own initialization and the setup of the dependencies.
