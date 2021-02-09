@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using System;
+using Microsoft.Extensions.Configuration;
 
 namespace OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures
 {
@@ -8,10 +9,14 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures
         {
             var configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
+                .AddUserSecrets<ServiceBusFixture>()
                 .AddEnvironmentVariables()
                 .Build();
 
             var connectionString = configuration.GetConnectionString("AzureServiceBus");
+            if (string.IsNullOrWhiteSpace(connectionString))
+                throw new ArgumentException("missing Service Bus connection");
+            
             this.Configuration = new AzureServiceBusConfiguration(connectionString);
         }
 
