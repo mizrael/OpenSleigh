@@ -1,8 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -13,24 +13,11 @@ namespace OpenSleigh.Transport.RabbitMQ
             where TS : Saga<TD>
             where TD : SagaState
         {
-            var sagaType = typeof(TS);
-            var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-            var interfaces = sagaType.GetInterfaces();
-            foreach (var i in interfaces)
-            {
-                if (!i.IsGenericType)
-                    continue;
-
-                var openGeneric = i.GetGenericTypeDefinition();
-                if (!openGeneric.IsAssignableFrom(messageHandlerType))
-                    continue;
-
-                var messageType = i.GetGenericArguments().First();
-                
+            var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
+            foreach(var messageType in messageTypes)
                 sagaConfigurator.Services.AddSingleton(typeof(ISubscriber),
                     typeof(RabbitSubscriber<>).MakeGenericType(messageType));
-            }
-
+            
             return sagaConfigurator;
         }
     }

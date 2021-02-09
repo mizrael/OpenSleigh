@@ -6,6 +6,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Channels;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 using OpenSleigh.Persistence.InMemory.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory
@@ -14,28 +15,17 @@ namespace OpenSleigh.Persistence.InMemory
     public static class InMemorySagaConfiguratorExtensions
     {
         private static readonly MethodInfo RawRegisterMessageMethod = typeof(InMemorySagaConfiguratorExtensions)
-            .GetMethod("RegisterMessage", BindingFlags.Static | BindingFlags.NonPublic);
+            .GetMethod(nameof(RegisterMessage), BindingFlags.Static | BindingFlags.NonPublic);
         
         public static ISagaConfigurator<TS, TD> UseInMemoryTransport<TS, TD>(this ISagaConfigurator<TS, TD> sagaConfigurator)
             where TS : Saga<TD>
             where TD : SagaState
         {
-            var sagaType = typeof(TS);
-            var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
-            var interfaces = sagaType.GetInterfaces();
-            foreach (var i in interfaces)
+            var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
+            foreach (var messageType in messageTypes)
             {
-                if (!i.IsGenericType)
-                    continue;
-
-                var openGeneric = i.GetGenericTypeDefinition();
-                if (!openGeneric.IsAssignableFrom(messageHandlerType))
-                    continue;
-
-                var messageType = i.GetGenericArguments().First();
-                
                 var registerMessageMethod = RawRegisterMessageMethod.MakeGenericMethod(messageType);
-                registerMessageMethod.Invoke(null, new[] {sagaConfigurator.Services});
+                registerMessageMethod.Invoke(null, new[] { sagaConfigurator.Services });
             }
 
             return sagaConfigurator;
