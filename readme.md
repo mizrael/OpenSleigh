@@ -227,7 +227,4 @@ Samples are available in the `/samples/` folder. The required infrastructure for
 
 
 ## Roadmap
-- add more tests
-- add more logging
-- add Azure ServiceBus message transport
 - add CosmosDB saga state persistence
