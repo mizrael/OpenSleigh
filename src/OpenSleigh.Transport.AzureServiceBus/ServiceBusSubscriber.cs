@@ -1,14 +1,14 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
+﻿using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
-    internal class ServiceBusSubscriber<TM> : ISubscriber<TM>, IDisposable
+    internal sealed class ServiceBusSubscriber<TM> : ISubscriber<TM>, IDisposable
         where TM : IMessage
     {
         private ServiceBusProcessor _processor;
