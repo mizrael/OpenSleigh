@@ -32,11 +32,12 @@ namespace OpenSleigh.Core
             if (null == sagaTypes || !sagaTypes.Any())
                 throw new SagaException($"no Saga registered for message of type '{typeof(TM).FullName}'");
 
-           return RunAsyncCore(messageContext, cancellationToken, sagaTypes);
+           return RunAsyncCore(messageContext, sagaTypes, cancellationToken);
         }
 
-        private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken,
-            IEnumerable<(Type sagaType, Type sagaStateType)> sagaTypes) where TM : IMessage
+        private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext,
+            IEnumerable<(Type sagaType, Type sagaStateType)> sagaTypes, 
+            CancellationToken cancellationToken) where TM : IMessage
         {
             var exceptions = new List<Exception>();
 

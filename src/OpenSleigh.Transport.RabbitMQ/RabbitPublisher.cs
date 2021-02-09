@@ -26,11 +26,16 @@ namespace OpenSleigh.Transport.RabbitMQ
             _publisherChannelFactory = publisherChannelFactory ?? throw new ArgumentNullException(nameof(publisherChannelFactory));
         }
 
-        public async Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
+            return PublishAsyncCore(message, cancellationToken);
+        }
+
+        private async Task PublishAsyncCore(IMessage message, CancellationToken cancellationToken)
+        {
             using var context = _publisherChannelFactory.Create(message);
 
             var encodedMessage = await _encoder.SerializeAsync(message, cancellationToken);
@@ -47,7 +52,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 {
                     _logger.LogWarning(ex,
                         "Could not publish message '{MessageId}' to Exchange '{ExchangeName}', Queue '{QueueName}' after {Timeout}s : {ExceptionMessage}",
-                        message.Id, 
+                        message.Id,
                         context.QueueReferences.ExchangeName,
                         context.QueueReferences.QueueName,
                         $"{time.TotalSeconds:n1}", ex.Message);
@@ -62,7 +67,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                     basicProperties: properties,
                     body: encodedMessage);
 
-                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}', Queue '{QueueName}'", 
+                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}', Queue '{QueueName}'",
                     message.Id,
                     context.QueueReferences.ExchangeName,
                     context.QueueReferences.QueueName);
