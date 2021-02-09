@@ -5,6 +5,6 @@ namespace OpenSleigh.Transport.AzureServiceBus
 {
     internal interface IMessageParser
     {
-        TM Resolve<TM>(ServiceBusReceivedMessage message) where TM : IMessage;
+        TM Resolve<TM>(ServiceBusReceivedMessage busMessage) where TM : IMessage;
     }
 }
