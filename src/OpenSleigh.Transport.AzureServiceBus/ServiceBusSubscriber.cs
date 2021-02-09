@@ -66,10 +66,6 @@ namespace OpenSleigh.Transport.AzureServiceBus
 
         public void Dispose()
         {
-            //if (_processor is null)
-            //    return;
-            //_processor.ProcessMessageAsync -= MessageHandler;
-            //_processor.ProcessErrorAsync -= ErrorHandler;
             _processor = null;
         }
     }

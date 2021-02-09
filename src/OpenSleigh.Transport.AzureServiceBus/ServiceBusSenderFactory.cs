@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using OpenSleigh.Core.Messaging;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Transport.AzureServiceBus.Tests")]
 namespace OpenSleigh.Transport.AzureServiceBus
 {
-    
     internal class ServiceBusSenderFactory : IAsyncDisposable, IServiceBusSenderFactory
     {
         private readonly IQueueReferenceFactory _queueReferenceFactory;
@@ -24,7 +25,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             var references = _queueReferenceFactory.Create<TM>();
             
             var sender = _senders.GetOrAdd(references, _ => _serviceBusClient.CreateSender(references.TopicName));
-            if (sender.IsClosed)
+            if (sender is null || sender.IsClosed)
                 sender = _senders[references] = _serviceBusClient.CreateSender(references.TopicName);
          
             return sender;
