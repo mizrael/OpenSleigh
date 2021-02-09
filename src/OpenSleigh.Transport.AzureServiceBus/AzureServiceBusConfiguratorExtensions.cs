@@ -1,3 +1,4 @@
+using System;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
@@ -13,7 +14,8 @@ namespace OpenSleigh.Transport.AzureServiceBus
     public static class AzureServiceBusConfiguratorExtensions
     {
         public static IBusConfigurator UseAzureServiceBusTransport(this IBusConfigurator busConfigurator,
-            AzureServiceBusConfiguration config)
+            AzureServiceBusConfiguration config,
+            Action<IAzureServiceBusConfigurationBuilder> builderFunc = null)
         {
             busConfigurator.Services.AddAzureClients(builder =>
             {
@@ -29,6 +31,8 @@ namespace OpenSleigh.Transport.AzureServiceBus
                 .AddSingleton<IServiceBusProcessorFactory, ServiceBusProcessorFactory>()
                 .AddTransient<IMessageParser, MessageParser>()
                 .AddTransient<IPublisher, ServiceBusPublisher>();
+
+            builderFunc?.Invoke(new DefaultAzureServiceBusConfigurationBuilder(busConfigurator));
 
             return busConfigurator;
         }
