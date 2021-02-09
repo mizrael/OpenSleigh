@@ -32,7 +32,8 @@ namespace OpenSleigh.Transport.AzureServiceBus
         public async ValueTask DisposeAsync()
         {
             foreach (var sender in _processors.Values)
-                await sender.DisposeAsync();
+                await sender.CloseAsync().ConfigureAwait(false);
+            _processors.Clear();
         }
     }
 }

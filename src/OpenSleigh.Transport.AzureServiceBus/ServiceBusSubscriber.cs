@@ -46,31 +46,30 @@ namespace OpenSleigh.Transport.AzureServiceBus
 
                 await _messageProcessor.ProcessAsync((dynamic)message, args.CancellationToken);
 
-                await args.CompleteMessageAsync(args.Message);
+                await args.CompleteMessageAsync(args.Message).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"an error has occurred while processing message '{args.Message.MessageId}': {ex.Message}");
-                
                 if (args.Message.DeliveryCount > 3)
-                    await args.DeadLetterMessageAsync(args.Message);
+                    await args.DeadLetterMessageAsync(args.Message).ConfigureAwait(false);
                 else
-                    await args.AbandonMessageAsync(args.Message);
+                    await args.AbandonMessageAsync(args.Message).ConfigureAwait(false);
             }
         }
 
-        public Task StartAsync(CancellationToken cancellationToken = default) 
-            => _processor.StartProcessingAsync(cancellationToken);
+        public async Task StartAsync(CancellationToken cancellationToken = default) 
+            => await _processor.StartProcessingAsync(cancellationToken).ConfigureAwait(false);
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
-            => _processor.StartProcessingAsync(cancellationToken);
+        public async Task StopAsync(CancellationToken cancellationToken = default)
+            => await _processor.StopProcessingAsync(cancellationToken).ConfigureAwait(false);
 
         public void Dispose()
         {
-            if (_processor is null)
-                return;
-            _processor.ProcessMessageAsync -= MessageHandler;
-            _processor.ProcessErrorAsync -= ErrorHandler;
+            //if (_processor is null)
+            //    return;
+            //_processor.ProcessMessageAsync -= MessageHandler;
+            //_processor.ProcessErrorAsync -= ErrorHandler;
             _processor = null;
         }
     }

@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 
@@ -11,19 +12,24 @@ namespace OpenSleigh.Transport.AzureServiceBus
     {
         private readonly IServiceBusSenderFactory _senderFactory;
         private readonly ISerializer _serializer;
+        private readonly ILogger<ServiceBusPublisher> _logger;
 
-        public ServiceBusPublisher(IServiceBusSenderFactory senderFactory, ISerializer serializer)
+        public ServiceBusPublisher(IServiceBusSenderFactory senderFactory, 
+            ISerializer serializer, 
+            ILogger<ServiceBusPublisher> logger)
         {
             _senderFactory = senderFactory ?? throw new ArgumentNullException(nameof(senderFactory));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         public async Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
-            
-            var sender = _senderFactory.Create(message);
+
+            ServiceBusSender sender = _senderFactory.Create((dynamic)message);
+            _logger.LogInformation($"publishing message '{message.Id}' to {sender.FullyQualifiedNamespace}/{sender.EntityPath}");
 
             var serializedMessage = await _serializer.SerializeAsync(message, cancellationToken);
             var busMessage = new ServiceBusMessage(serializedMessage)
@@ -36,7 +42,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
                 }
             };
 
-            await sender.SendMessageAsync(busMessage, cancellationToken);
+            await sender.SendMessageAsync(busMessage, cancellationToken).ConfigureAwait(false);
         }
     }
 }

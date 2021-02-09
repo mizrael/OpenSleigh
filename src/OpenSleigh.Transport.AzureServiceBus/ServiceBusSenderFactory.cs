@@ -34,6 +34,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
         {
             foreach (var sender in _senders.Values)
                 await sender.DisposeAsync();
+            _senders.Clear();
         }
     }
 }
