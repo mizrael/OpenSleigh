@@ -1,6 +1,4 @@
 ﻿using System;
-using Azure.Messaging.ServiceBus;
-using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 
@@ -15,18 +13,12 @@ namespace OpenSleigh.Transport.AzureServiceBus
             _decoder = encoder ?? throw new ArgumentNullException(nameof(encoder));
         }
 
-        public TM Resolve<TM>(ServiceBusReceivedMessage busMessage) where TM : IMessage
+        public TM Resolve<TM>(BinaryData messageData) where TM : IMessage
         {
-            if (busMessage is null)
-                throw new ArgumentNullException(nameof(busMessage));
-          
-            var body = busMessage.Body.ToMemory();
-            
-            var deserializedObj = _decoder.Deserialize(body, typeof(TM));
-            if (deserializedObj is not TM message)
-                throw new ArgumentException($"unable to deserialize message '{busMessage.MessageId}' into '{typeof(TM).FullName}'");
-            return message;
+            if (messageData is null)
+                throw new ArgumentNullException(nameof(messageData));
+
+            return (TM)_decoder.Deserialize(messageData, typeof(TM));
         }
-        
     }
 }

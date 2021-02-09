@@ -42,7 +42,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
         {
             try
             {
-                var message = _messageParser.Resolve<TM>(args.Message);
+                var message = _messageParser.Resolve<TM>(args.Message.Body);
 
                 await _messageProcessor.ProcessAsync((dynamic)message, args.CancellationToken);
 

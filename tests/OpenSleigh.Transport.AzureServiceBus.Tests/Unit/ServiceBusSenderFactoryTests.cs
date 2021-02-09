@@ -56,7 +56,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
                 .Returns(references);
 
             var sut = new ServiceBusSenderFactory(factory, serviceBusClient);
-            var result = sut.Create<DummyMessage>();
+            sut.Create<DummyMessage>();
 
             serviceBusClient.Received(2)
                 .CreateSender(references.TopicName);

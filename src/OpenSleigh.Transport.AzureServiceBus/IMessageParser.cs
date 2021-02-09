@@ -1,10 +1,10 @@
-﻿using Azure.Messaging.ServiceBus;
+﻿using System;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
     internal interface IMessageParser
     {
-        TM Resolve<TM>(ServiceBusReceivedMessage busMessage) where TM : IMessage;
+        TM Resolve<TM>(BinaryData messageData) where TM : IMessage;
     }
 }
