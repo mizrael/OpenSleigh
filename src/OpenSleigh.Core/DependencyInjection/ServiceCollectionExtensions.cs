@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
@@ -39,6 +40,13 @@ namespace OpenSleigh.Core.DependencyInjection
             var builder = new BusConfigurator(services, sagaTypeResolver, systemInfo);
             configure?.Invoke(builder);
             
+            return services;
+        }
+        
+        public static IServiceCollection AddBusSubscriber(this IServiceCollection services, Type subscriberType)
+        {
+            if (!services.Any(s => s.ImplementationType == subscriberType))
+                services.AddSingleton(typeof(ISubscriber), subscriberType);
             return services;
         }
     }
