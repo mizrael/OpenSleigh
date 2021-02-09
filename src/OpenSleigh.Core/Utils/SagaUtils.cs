@@ -9,7 +9,6 @@ namespace OpenSleigh.Core.Utils
         where TD : SagaState
     {
         public static IEnumerable<Type> GetHandledMessageTypes()
-          
         {
             var sagaType = typeof(TS);
             var messageHandlerType = typeof(IHandleMessage<>).GetGenericTypeDefinition();
