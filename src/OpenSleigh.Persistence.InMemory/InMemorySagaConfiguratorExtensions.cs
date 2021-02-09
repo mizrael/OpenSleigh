@@ -45,7 +45,7 @@ namespace OpenSleigh.Persistence.InMemory
                 {
                     var channel = ctx.GetService<Channel<TM>>();
                     return channel?.Writer;
-                }).AddSingleton<ISubscriber, InMemorySubscriber<TM>>();
+                }).AddBusSubscriber(typeof(InMemorySubscriber<TM>));
         }
     }
 }

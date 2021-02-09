@@ -29,8 +29,8 @@ namespace OpenSleigh.Transport.AzureServiceBus
                 .AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>()
                 .AddSingleton<IServiceBusSenderFactory, ServiceBusSenderFactory>()
                 .AddSingleton<IServiceBusProcessorFactory, ServiceBusProcessorFactory>()
-                .AddTransient<IMessageParser, MessageParser>()
-                .AddTransient<IPublisher, ServiceBusPublisher>();
+                .AddSingleton<IMessageParser, MessageParser>()
+                .AddSingleton<IPublisher, ServiceBusPublisher>();
 
             builderFunc?.Invoke(new DefaultAzureServiceBusConfigurationBuilder(busConfigurator));
 
