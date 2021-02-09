@@ -23,7 +23,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             var references = _queueReferenceFactory.Create<TM>();
 
             var processor = _processors.GetOrAdd(references, _ => _serviceBusClient.CreateProcessor(references.TopicName, references.SubscriptionName));
-            if (processor.IsClosed)
+            if (processor is null || processor.IsClosed)
                 processor = _processors[references] = _serviceBusClient.CreateProcessor(references.TopicName, references.SubscriptionName);
 
             return processor;
