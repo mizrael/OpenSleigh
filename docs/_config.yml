@@ -1,1 +1,22 @@
+# title: Architect theme
+# description: Architect is a theme for GitHub Pages.
+google_analytics:
 theme: jekyll-theme-architect
+
+github:
+  repository_url: https://github.com/mizrael/OpenSleigh
+  repository_name: OpenSleigh
+  owner_url: https://www.davideguida.com
+  owner_name: David Guida
+
+nugets:
+  Core: https://www.nuget.org/packages/OpenSleigh.Core/
+  In-Memory: https://www.nuget.org/packages/OpenSleigh.Persistence.InMemory/
+  MongoDB: https://www.nuget.org/packages/OpenSleigh.Persistence.Mongo/
+  MSSQL: https://www.nuget.org/packages/OpenSleigh.Persistence.SQL/
+  Azure Service Bus: https://www.nuget.org/packages/OpenSleigh.Transport.AzureServiceBus/
+  RabbitMQ: https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/
+
+# sidebar:
+#   link1: https://www.google.com
+#   link2: https://www.google.com
