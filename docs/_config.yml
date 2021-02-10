@@ -1,5 +1,3 @@
-# title: Architect theme
-# description: Architect is a theme for GitHub Pages.
 google_analytics:
 theme: jekyll-theme-architect
 
@@ -17,6 +15,7 @@ nugets:
   Azure Service Bus: https://www.nuget.org/packages/OpenSleigh.Transport.AzureServiceBus/
   RabbitMQ: https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/
 
-# sidebar:
-#   link1: https://www.google.com
-#   link2: https://www.google.com
+sidebar:
+  Home: /
+  How-to: /how-to.html
+  Samples: /samples.html

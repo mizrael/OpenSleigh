@@ -38,7 +38,7 @@
 
         <aside id="sidebar">
           {% if site.sidebar %}            
-            <ul>
+            <ul id="sidebar-links">
             {% for item in site.sidebar %}
               <li><a href="{{ item[1] }}">{{ item[0] }}</a></li>
             {% endfor %}          
@@ -47,7 +47,7 @@
 
           <h2>Download from Nuget</h2>
           {% if site.nugets %}
-            <ul>
+            <ul id="nuget-links">
               {% for item in site.nugets %}
                 <li><a href="{{ item[1] }}" target="_blank" class="button">{{ item[0] }}</a></li>
               {% endfor %}          
