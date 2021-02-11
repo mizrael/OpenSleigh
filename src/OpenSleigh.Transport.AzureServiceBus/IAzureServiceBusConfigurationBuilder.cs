@@ -8,7 +8,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
 {
     public interface IAzureServiceBusConfigurationBuilder
     {
-        void UseMessageNamingPolicy<TM>(QueueReferencesPolicy<TM> policy) where TM : IMessage;
+        IAzureServiceBusConfigurationBuilder UseMessageNamingPolicy<TM>(QueueReferencesPolicy<TM> policy) where TM : IMessage;
     }
 
     [ExcludeFromCodeCoverage]
@@ -21,12 +21,13 @@ namespace OpenSleigh.Transport.AzureServiceBus
             _busConfigurator = busConfigurator;
         }
 
-        public void UseMessageNamingPolicy<TM>(QueueReferencesPolicy<TM> policy) where TM : IMessage
+        public IAzureServiceBusConfigurationBuilder UseMessageNamingPolicy<TM>(QueueReferencesPolicy<TM> policy) where TM : IMessage
         {
             if (policy == null)
                 throw new ArgumentNullException(nameof(policy));
 
             _busConfigurator.Services.AddSingleton(policy);
+            return this;
         }
     }
 }

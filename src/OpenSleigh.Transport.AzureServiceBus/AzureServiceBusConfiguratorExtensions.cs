@@ -26,6 +26,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
 
             //https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-performance-improvements?tabs=net-standard-sdk-2#reusing-factories-and-clients
             busConfigurator.Services
+                .AddSingleton(config)
                 .AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>()
                 .AddSingleton<IServiceBusSenderFactory, ServiceBusSenderFactory>()
                 .AddSingleton<IServiceBusProcessorFactory, ServiceBusProcessorFactory>()
