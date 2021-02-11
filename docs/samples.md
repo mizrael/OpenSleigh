@@ -15,3 +15,5 @@ Samples are available in the `/samples/` folder. The required infrastructure for
 
 - **[Sample5](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample5)** shows how to configure retry policies on a Saga.
 
+- **[Sample6](https://github.com/mizrael/OpenSleigh/tree/develop/samples/Sample6)** shows how to use Azure Service Bus as Transport mechanism and how to automatically provision the infrastructure.
+
