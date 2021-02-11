@@ -20,7 +20,6 @@ namespace OpenSleigh.Samples.Sample6.Console
             var hostBuilder = CreateHostBuilder(args);
             var host = hostBuilder.Build();
             
-            //TODO: update readme
             await host.SetupInfrastructureAsync();
 
             using var scope = host.Services.CreateScope();
@@ -43,6 +42,10 @@ namespace OpenSleigh.Samples.Sample6.Console
                         .AddOpenSleigh(cfg =>
                         {
                             var connStr = hostContext.Configuration.GetConnectionString("AzureServiceBus");
+                            if (string.IsNullOrWhiteSpace(connStr))
+                                throw new ArgumentNullException(
+                                    "please provide a valid Azure Service Bus connection string");
+                            
                             var azureSBCfg = new AzureServiceBusConfiguration(connStr);
                             cfg.UseAzureServiceBusTransport(azureSBCfg)
                                 .UseInMemoryPersistence();
