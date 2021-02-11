@@ -4,13 +4,14 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    public interface IInfrastructureCreator<TM> : IInfrastructureCreator
-        where TM : IMessage
-    {
-    }
-
+    //TODO: SQL creator
     public interface IInfrastructureCreator
     {
         Task SetupAsync(IHost host);
+    }
+    
+    public interface IInfrastructureCreator<TM> : IInfrastructureCreator
+        where TM : IMessage
+    {
     }
 }
