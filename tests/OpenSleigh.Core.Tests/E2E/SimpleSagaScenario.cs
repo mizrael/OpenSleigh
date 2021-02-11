@@ -42,6 +42,8 @@ namespace OpenSleigh.Core.Tests.E2E
             using var scope = host.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 
+            await host.SetupInfrastructureAsync();
+
             await Task.WhenAll(new[]
             {
                 host.RunAsync(token: tokenSource.Token),

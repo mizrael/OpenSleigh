@@ -36,18 +36,8 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseAzureServiceBusTransport();
-
-
-        public async Task InitializeAsync()
-        {
-            var adminClient = new ServiceBusAdministrationClient(_fixture.Configuration.ConnectionString);
-
-            if (!(await adminClient.TopicExistsAsync(_topicName)))
-                await adminClient.CreateTopicAsync(_topicName);
-            
-            if (!(await adminClient.SubscriptionExistsAsync(_topicName, _subscriptionName)))
-                await adminClient.CreateSubscriptionAsync(_topicName, _subscriptionName);
-        }
+        
+        public Task InitializeAsync() => Task.CompletedTask;
 
         public async Task DisposeAsync()
         {

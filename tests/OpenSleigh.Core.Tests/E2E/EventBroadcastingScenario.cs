@@ -39,6 +39,8 @@ namespace OpenSleigh.Core.Tests.E2E
 
             var host = hostBuilder.Build();
 
+            await host.SetupInfrastructureAsync();
+            
             using var scope = host.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 

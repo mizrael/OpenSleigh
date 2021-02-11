@@ -21,11 +21,10 @@ namespace OpenSleigh.Transport.AzureServiceBus
             {
                 builder.AddServiceBusClient(config.ConnectionString);
             });
-
-            //TODO: evaluate programmatic topics/subscriptions/queues creation based on https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-management-libraries#azuremessagingservicebusadministration
-
+            
             //https://docs.microsoft.com/en-us/azure/service-bus-messaging/service-bus-performance-improvements?tabs=net-standard-sdk-2#reusing-factories-and-clients
             busConfigurator.Services
+                .AddSingleton(config)
                 .AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>()
                 .AddSingleton<IServiceBusSenderFactory, ServiceBusSenderFactory>()
                 .AddSingleton<IServiceBusProcessorFactory, ServiceBusProcessorFactory>()

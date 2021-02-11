@@ -1,7 +1,9 @@
 using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Utils;
+using OpenSleigh.Samples.Sample6.Console;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
@@ -14,9 +16,13 @@ namespace OpenSleigh.Transport.AzureServiceBus
         {
             var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
             foreach (var messageType in messageTypes)
+            {
                 sagaConfigurator.Services.AddBusSubscriber(
                     typeof(ServiceBusSubscriber<>).MakeGenericType(messageType));
-
+                sagaConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator),
+                    typeof(AzureServiceBusInfrastructureCreator<>).MakeGenericType(messageType));
+            }
+            
             return sagaConfigurator;
         }
 
