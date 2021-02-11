@@ -1,6 +1,5 @@
 ﻿using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus.Administration;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core;
