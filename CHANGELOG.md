@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-02-11](https://github.com/mizrael/OpenSleigh/pull/26)
+### Added
+- added automatic infrastructure provisioning
+
 ## [2021-02-09](https://github.com/mizrael/OpenSleigh/pull/25)
 ### Added
 - added support for Azure Service Bus
