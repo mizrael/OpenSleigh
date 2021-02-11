@@ -14,39 +14,40 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
     public class ServiceBusParentChildScenario : ParentChildScenario, IClassFixture<ServiceBusFixture>, IAsyncLifetime
     {
         private readonly ServiceBusFixture _fixture;
-        private readonly string _topicName;
-        private readonly Dictionary<Type, string> _subscriptions = new();
+        
+        private readonly Dictionary<Type, string> _topics = new();
 
         public ServiceBusParentChildScenario(ServiceBusFixture fixture)
         {
             _fixture = fixture;
 
-            _topicName = $"ServiceBusParentChildScenario.tests.{Guid.NewGuid()}";
-
-            _subscriptions[typeof(StartParentSaga)] = Guid.NewGuid().ToString();
-            _subscriptions[typeof(ProcessParentSaga)] = Guid.NewGuid().ToString();
-            _subscriptions[typeof(ParentSagaCompleted)] = Guid.NewGuid().ToString();
-            _subscriptions[typeof(StartChildSaga)] = Guid.NewGuid().ToString();
-            _subscriptions[typeof(ProcessChildSaga)] = Guid.NewGuid().ToString();
-            _subscriptions[typeof(ChildSagaCompleted)] = Guid.NewGuid().ToString();
+            AddTopicName<StartParentSaga>();
+            AddTopicName<ProcessParentSaga>();
+            AddTopicName<ParentSagaCompleted>();
+            AddTopicName<StartChildSaga>();
+            AddTopicName<ProcessChildSaga>();
+            AddTopicName<ChildSagaCompleted>();
         }
+
+        private void AddTopicName<T>() =>
+            _topics[typeof(T)] = Guid.NewGuid().ToString();
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
             cfg.UseAzureServiceBusTransport(_fixture.Configuration, builder =>
                 {
                     builder.UseMessageNamingPolicy<StartParentSaga>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(StartParentSaga)]));
+                        new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)]));
                     builder.UseMessageNamingPolicy<ProcessParentSaga>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(ProcessParentSaga)]));
+                        new QueueReferences(_topics[typeof(ProcessParentSaga)], _topics[typeof(ProcessParentSaga)]));
                     builder.UseMessageNamingPolicy<ParentSagaCompleted>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(ParentSagaCompleted)]));
+                        new QueueReferences(_topics[typeof(ParentSagaCompleted)], _topics[typeof(ParentSagaCompleted)]));
                     builder.UseMessageNamingPolicy<StartChildSaga>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(StartChildSaga)]));
+                        new QueueReferences(_topics[typeof(StartChildSaga)], _topics[typeof(StartChildSaga)]));
                     builder.UseMessageNamingPolicy<ProcessChildSaga>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(ProcessChildSaga)]));
+                        new QueueReferences(_topics[typeof(ProcessChildSaga)], _topics[typeof(ProcessChildSaga)]));
                     builder.UseMessageNamingPolicy<ChildSagaCompleted>(() =>
-                        new QueueReferences(_topicName, _subscriptions[typeof(ChildSagaCompleted)]));
+                        new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)]));
                 })
                 .UseInMemoryPersistence();
         }
@@ -54,24 +55,13 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.E2E
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseAzureServiceBusTransport();
 
-        public async Task InitializeAsync()
-        {
-            var adminClient = new ServiceBusAdministrationClient(_fixture.Configuration.ConnectionString);
-
-            if (!(await adminClient.TopicExistsAsync(_topicName)))
-                await adminClient.CreateTopicAsync(_topicName);
-
-            foreach (var val in _subscriptions.Values)
-                if (!(await adminClient.SubscriptionExistsAsync(_topicName, val)))
-                    await adminClient.CreateSubscriptionAsync(_topicName, val);
-        }
+        public Task InitializeAsync() => Task.CompletedTask;
 
         public async Task DisposeAsync()
         {
             var adminClient = new ServiceBusAdministrationClient(_fixture.Configuration.ConnectionString);
-            foreach (var val in _subscriptions.Values)
-                await adminClient.DeleteSubscriptionAsync(_topicName, val);
-            await adminClient.DeleteTopicAsync(_topicName);
+            foreach(var topicName in _topics.Values)
+                await adminClient.DeleteTopicAsync(topicName);
         }
     }
 }
