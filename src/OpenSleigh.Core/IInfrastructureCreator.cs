@@ -4,7 +4,6 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    //TODO: SQL creator
     public interface IInfrastructureCreator
     {
         Task SetupAsync(IHost host);
