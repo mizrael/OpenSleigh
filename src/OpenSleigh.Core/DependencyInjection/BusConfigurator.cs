@@ -2,7 +2,9 @@ using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.ExceptionPolicies;
+using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
@@ -26,7 +28,27 @@ namespace OpenSleigh.Core.DependencyInjection
         {
             _systemInfo.PublishOnly = value;
             return this;
-        } 
+        }
+
+        public IBusConfigurator WithOutboxProcessorOptions(OutboxProcessorOptions options)
+        {
+            if (options == null) 
+                throw new ArgumentNullException(nameof(options));
+
+            this.Services.Replace(ServiceDescriptor.Singleton(options));
+            
+            return this;
+        }
+
+        public IBusConfigurator WithOutboxCleanerOptions(OutboxCleanerOptions options)
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            this.Services.Replace(ServiceDescriptor.Singleton(options));
+
+            return this;
+        }
 
         public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
             where TD : SagaState

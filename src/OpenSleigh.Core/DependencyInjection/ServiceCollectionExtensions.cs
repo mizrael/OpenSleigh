@@ -30,11 +30,11 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddHostedService<SubscribersBackgroundService>()
 
                 .AddTransient<IOutboxProcessor, OutboxProcessor>()
-                .AddSingleton(OutboxProcessorOptions.Default) //TODO: this should be configurable
+                .AddSingleton(OutboxProcessorOptions.Default)
                 .AddHostedService<OutboxBackgroundService>()
                 
                 .AddTransient<IOutboxCleaner, OutboxCleaner>()
-                .AddSingleton(OutboxCleanerOptions.Default) //TODO: this should be configurable
+                .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
             var builder = new BusConfigurator(services, sagaTypeResolver, systemInfo);

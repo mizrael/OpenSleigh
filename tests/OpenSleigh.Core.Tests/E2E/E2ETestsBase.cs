@@ -1,7 +1,5 @@
 ﻿using System;
 using System.ComponentModel;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
@@ -21,11 +19,10 @@ namespace OpenSleigh.Core.Tests.E2E
                     {
                         ConfigureTransportAndPersistence(cfg);
                         
+                        cfg.WithOutboxProcessorOptions(new OutboxProcessorOptions(TimeSpan.Zero));
+                        
                         AddSagas(cfg);
                     });
-                    
-                    services.Replace(new ServiceDescriptor(typeof(OutboxProcessorOptions),
-                                                           new OutboxProcessorOptions(TimeSpan.Zero)));
                 });
         
         protected void AddSaga<TS, TD, TM>(IBusConfigurator cfg, Func<TM, TD> stateFactory) 
