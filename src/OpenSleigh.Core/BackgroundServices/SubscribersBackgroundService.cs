@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
@@ -20,16 +21,16 @@ namespace OpenSleigh.Core.BackgroundServices
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
             if (!_systemInfo.PublishOnly)
-                Parallel.ForEach(_subscribers, async subscriber => await subscriber.StartAsync(cancellationToken));
-
+                await Task.WhenAll(_subscribers.Select(s => s.StartAsync(cancellationToken)));
+            
             await base.StartAsync(cancellationToken);
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
         {
             if (!_systemInfo.PublishOnly)
-                Parallel.ForEach(_subscribers, async subscriber => await subscriber.StopAsync(cancellationToken));
-
+                await Task.WhenAll(_subscribers.Select(s => s.StopAsync(cancellationToken)));
+            
             await base.StopAsync(cancellationToken);
         }
 
