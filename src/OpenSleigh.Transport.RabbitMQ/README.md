@@ -24,7 +24,7 @@ services.AddOpenSleigh(cfg =>{
 });
 ```
 
-It is also possible to use a custom naming policy to define the names for exchanges and queues. This allows us to have a single exchange binded to multiple queues. Messages will be routed using the queue name.
+It is also possible to use a custom naming policy to define the names for exchanges and queues. This allows us to have a single exchange bound to multiple queues. Messages will be routed using the queue name.
 
 ```
 services.AddOpenSleigh(cfg =>{  
