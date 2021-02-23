@@ -4,7 +4,7 @@ jobs:
   build:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:5.0.101-focal-amd64
-      - image: 'circleci/mongo:latest'
+      - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
@@ -27,7 +27,7 @@ jobs:
   sonarscan:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:5.0.101-focal-amd64
-      - image: 'circleci/mongo:latest'
+      - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password

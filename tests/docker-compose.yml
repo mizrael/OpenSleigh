@@ -12,7 +12,7 @@ services:
       - 1433:1433    
 
   openSleigh.tests.infrastructure.mongodb:
-    image: mongo:latest
+    image: mongo:4.4.3
     container_name: openSleigh.tests.infrastructure.mongodb    
     restart: always
     environment:
