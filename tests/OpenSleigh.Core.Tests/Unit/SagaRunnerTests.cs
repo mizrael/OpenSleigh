@@ -327,7 +327,7 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_rollback_transaction_if_exception_occurs()
+        public async Task RunAsync_should_rollback_transaction_if_exception_occurs_and_rethrow()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
 
@@ -368,6 +368,53 @@ namespace OpenSleigh.Core.Tests.Unit
             
             await transaction.Received(1)
                 .RollbackAsync(default);
+        }
+
+        [Fact]
+        public async Task RunAsync_should_rollback_transaction_when_exception_occurs_and_execute_compensation_if_available()
+        {
+            var message = new StartCompensatingSaga(Guid.NewGuid(), Guid.NewGuid());
+
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartCompensatingSaga>>();
+            messageContext.Message.Returns(message);
+
+            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<CompensatingSaga, CompensatingSagaState>>();
+
+            var state = new CompensatingSagaState(message.CorrelationId);
+            sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
+                .Returns((state, Guid.NewGuid()));
+
+            var called = false;
+            Action<IMessageContext<StartCompensatingSaga>> onCompensate = (ctx) =>
+            {
+                called = true;
+            };
+            Action<IMessageContext<StartCompensatingSaga>> onStart = (ctx) => throw new ApplicationException("whoops");
+            var saga = new CompensatingSaga(onStart, onCompensate);
+            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
+            
+            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<CompensatingSaga, CompensatingSagaState>>();
+            sagaFactory.Create(state)
+                .Returns(saga);
+
+            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<CompensatingSaga, CompensatingSagaState>>>();
+
+            var transaction = NSubstitute.Substitute.For<ITransaction>();
+            var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
+            transactionManager.StartTransactionAsync(default)
+                .ReturnsForAnyArgs(transaction);
+
+            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<CompensatingSaga>>();
+            policyFactory.Create<StartCompensatingSaga>().ReturnsNullForAnyArgs();
+
+            var sut = new SagaRunner<CompensatingSaga, CompensatingSagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
+
+            await sut.RunAsync(messageContext);
+
+            await transaction.Received(1)
+                .RollbackAsync(default);
+
+            called.Should().BeTrue();
         }
     }
 
