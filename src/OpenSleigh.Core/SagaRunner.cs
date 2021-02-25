@@ -77,6 +77,7 @@ namespace OpenSleigh.Core
                 if (saga is not ICompensateMessage<TM> compensatingHandler)
                     throw;
 
+                _logger.LogWarning($"executing compensation for message '{messageContext.Message.Id}' on saga '{state.Id}'...");
                 await compensatingHandler.CompensateAsync(messageContext, cancellationToken);
             }
         }
