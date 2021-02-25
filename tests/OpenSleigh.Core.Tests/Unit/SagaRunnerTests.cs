@@ -384,12 +384,17 @@ namespace OpenSleigh.Core.Tests.Unit
             sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
                 .Returns((state, Guid.NewGuid()));
 
+            var expectedException = new ApplicationException("whoops");
+            Action<IMessageContext<StartCompensatingSaga>> onStart = (ctx) => throw expectedException;
+            
             var called = false;
-            Action<IMessageContext<StartCompensatingSaga>> onCompensate = (ctx) =>
+            Action<ICompensationContext<StartCompensatingSaga>> onCompensate = (ctx) =>
             {
+                ctx.Should().NotBeNull();
+                ctx.Exception.Should().Be(expectedException);
                 called = true;
             };
-            Action<IMessageContext<StartCompensatingSaga>> onStart = (ctx) => throw new ApplicationException("whoops");
+            
             var saga = new CompensatingSaga(onStart, onCompensate);
             saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             

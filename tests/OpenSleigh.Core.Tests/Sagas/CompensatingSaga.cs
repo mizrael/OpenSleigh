@@ -25,10 +25,10 @@ namespace OpenSleigh.Core.Tests.Sagas
         , ICompensateMessage<StartCompensatingSaga>
     {
         private readonly Action<IMessageContext<StartCompensatingSaga>> _onStart;
-        private readonly Action<IMessageContext<StartCompensatingSaga>> _onCompensate;
+        private readonly Action<ICompensationContext<StartCompensatingSaga>> _onCompensate;
 
         public CompensatingSaga(Action<IMessageContext<StartCompensatingSaga>> onStart,
-                                Action<IMessageContext<StartCompensatingSaga>> onCompensate)
+                                Action<ICompensationContext<StartCompensatingSaga>> onCompensate)
         {
             _onStart = onStart;
             _onCompensate = onCompensate;
@@ -40,7 +40,7 @@ namespace OpenSleigh.Core.Tests.Sagas
             return Task.CompletedTask;
         }
 
-        public Task CompensateAsync(IMessageContext<StartCompensatingSaga> context, CancellationToken cancellationToken = default)
+        public Task CompensateAsync(ICompensationContext<StartCompensatingSaga> context, CancellationToken cancellationToken = default)
         {
             _onCompensate?.Invoke(context);
             return Task.CompletedTask;
