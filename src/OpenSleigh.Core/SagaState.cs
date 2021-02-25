@@ -8,7 +8,7 @@ namespace OpenSleigh.Core
     //TODO: get rid of Newtonsoft.JSON dependency
     public abstract class SagaState
     {
-        [JsonProperty]
+        [JsonProperty] //TODO: can we use an HashSet here ?
         private readonly Dictionary<Guid, IMessage> _processedMessages = new();
 
         [JsonProperty] private bool _isComplete;
@@ -28,7 +28,7 @@ namespace OpenSleigh.Core
             if (this.Id != message.CorrelationId)
                 throw new ArgumentException($"invalid message correlation id", nameof(message));
             
-            _processedMessages.Add(message.Id, message);
+            _processedMessages[message.Id] = message;
         }
 
         public bool CheckWasProcessed<TM>(TM message) where TM : IMessage
