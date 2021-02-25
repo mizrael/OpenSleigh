@@ -89,10 +89,10 @@ namespace OpenSleigh.Core
             Guid lockId,
             CancellationToken cancellationToken) where TM : IMessage
         {
+            _logger.LogWarning(exception, $"something went wrong when processing saga '{messageContext.Message.CorrelationId}' : {exception.Message}. executing compensation ...");
+            
             var compensatingTransaction = await _transactionManager.StartTransactionAsync(cancellationToken);
-
-            _logger.LogWarning($"executing compensation for message '{messageContext.Message.Id}' on saga '{state.Id}'...");
-
+            
             var compensationContext = DefaultCompensationContext<TM>.Build(messageContext, exception);
             
             try
