@@ -74,11 +74,34 @@ namespace OpenSleigh.Core
             catch
             {
                 await transaction.RollbackAsync(cancellationToken);
+                
                 if (saga is not ICompensateMessage<TM> compensatingHandler)
                     throw;
 
-                _logger.LogWarning($"executing compensation for message '{messageContext.Message.Id}' on saga '{state.Id}'...");
+                await ExecuteCompensationAsync(messageContext, cancellationToken, state, compensatingHandler, lockId);
+            }
+        }
+
+        private async Task ExecuteCompensationAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken, TD state,
+            ICompensateMessage<TM> compensatingHandler, Guid lockId) where TM : IMessage
+        {
+            var compensatingTransaction = await _transactionManager.StartTransactionAsync(cancellationToken);
+
+            _logger.LogWarning($"executing compensation for message '{messageContext.Message.Id}' on saga '{state.Id}'...");
+
+            try
+            {
                 await compensatingHandler.CompensateAsync(messageContext, cancellationToken);
+
+                state.SetAsProcessed(messageContext.Message);
+                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+
+                await compensatingTransaction.CommitAsync(cancellationToken);
+            }
+            catch
+            {
+                await compensatingTransaction.RollbackAsync(cancellationToken);
+                throw;
             }
         }
 
