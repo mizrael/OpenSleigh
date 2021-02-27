@@ -3,13 +3,15 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.30804.86
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample8.API", "OpenSleigh.Samples.Sample8.API\OpenSleigh.Samples.Sample8.API.csproj", "{A94C718C-3B49-4E67-BACB-4B6615C97839}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "library", "library", "{179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core", "..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj", "{CE375B34-1590-4544-9B33-70EF4C25D54C}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.InMemory", "..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj", "{82226D9A-2C90-4FC2-9480-2323F3711B0A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample8.Server", "Server\OpenSleigh.Samples.Sample8.Server.csproj", "{98DF7BB7-8553-4AE9-A8C9-747722AE8FD8}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample8.Client", "Client\OpenSleigh.Samples.Sample8.Client.csproj", "{35030B79-6964-46A3-8C4C-2471F4041E34}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -17,10 +19,6 @@ Global
 		Release|Any CPU = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{A94C718C-3B49-4E67-BACB-4B6615C97839}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{A94C718C-3B49-4E67-BACB-4B6615C97839}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{A94C718C-3B49-4E67-BACB-4B6615C97839}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{A94C718C-3B49-4E67-BACB-4B6615C97839}.Release|Any CPU.Build.0 = Release|Any CPU
 		{CE375B34-1590-4544-9B33-70EF4C25D54C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{CE375B34-1590-4544-9B33-70EF4C25D54C}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CE375B34-1590-4544-9B33-70EF4C25D54C}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -29,6 +27,14 @@ Global
 		{82226D9A-2C90-4FC2-9480-2323F3711B0A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{82226D9A-2C90-4FC2-9480-2323F3711B0A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{82226D9A-2C90-4FC2-9480-2323F3711B0A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{98DF7BB7-8553-4AE9-A8C9-747722AE8FD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{98DF7BB7-8553-4AE9-A8C9-747722AE8FD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{98DF7BB7-8553-4AE9-A8C9-747722AE8FD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{98DF7BB7-8553-4AE9-A8C9-747722AE8FD8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{35030B79-6964-46A3-8C4C-2471F4041E34}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{35030B79-6964-46A3-8C4C-2471F4041E34}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{35030B79-6964-46A3-8C4C-2471F4041E34}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{35030B79-6964-46A3-8C4C-2471F4041E34}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

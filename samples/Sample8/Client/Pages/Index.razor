@@ -1,0 +1,71 @@
+﻿@page "/"
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+@if (IsConnected)
+{
+    @if (isProcessing)
+    {
+        <pre>processing...</pre>
+    }
+    else
+    {
+        <div class="form-inline mb-4">
+            <div class="form-group mr-2">
+                <label for="stepsCount" class="mr-2">Steps count:</label>
+                <input type="number" min="1" @bind="stepsCount" id="stepsCount" />
+            </div>
+            <button class="btn btn-primary" @onclick="StartSaga">Start!</button>
+        </div>
+    }
+
+    <ul class="list-group">
+        @foreach (var message in messages)
+        {
+            <li class="list-group-item">@message</li>
+        }
+    </ul>
+}
+else
+{
+    <pre>loading...</pre>
+}
+
+@code {
+    private HubConnection hubConnection;
+    private List<string> messages = new List<string>();
+    private bool isProcessing = false;
+    private int stepsCount = 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/sagahub"))
+            .Build();
+
+        hubConnection.On<string, bool>("Notification", (message, isDone) =>
+        {
+            isProcessing = !isDone;
+            messages.Add(message);
+            StateHasChanged();
+        });
+
+        await hubConnection.StartAsync();
+    }
+
+    private async Task StartSaga()
+    {
+        messages.Clear();
+        isProcessing = true;
+        StateHasChanged();
+
+        await hubConnection.SendAsync("StartSaga", hubConnection.ConnectionId, stepsCount);
+    }
+
+    public bool IsConnected => hubConnection.State == HubConnectionState.Connected;
+
+    public async ValueTask DisposeAsync()
+    {
+        await hubConnection.DisposeAsync();
+    }
+}

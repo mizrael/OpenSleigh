@@ -1,7 +1,13 @@
-using Microsoft.AspNetCore.Hosting;
+﻿using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
-namespace OpenSleigh.Samples.Sample8.API
+namespace OpenSleigh.Samples.Sample8.Server
 {
     public class Program
     {

@@ -1,13 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Samples.Sample8.Server.Hubs;
 
-namespace OpenSleigh.Samples.Sample8.API.Sagas
+namespace OpenSleigh.Samples.Sample8.Server.Sagas
 {
     public class StepsSagaState : SagaState
     {
@@ -15,11 +15,12 @@ namespace OpenSleigh.Samples.Sample8.API.Sagas
         {
         }
         
+        public string ClientId { get; set; }
         public int TotalSteps { get; set; }
         public int CurrentStep { get; set; }
     }
 
-    public record StartSaga(int StepsCount, Guid Id, Guid CorrelationId) : IMessage;
+    public record StartSaga(int StepsCount, string ClientId, Guid Id, Guid CorrelationId) : IMessage;
     public record ProcessNextStep(Guid Id, Guid CorrelationId) : IMessage;
     public record SagaCompleted(Guid Id, Guid CorrelationId) : IEvent;
 
@@ -28,20 +29,31 @@ namespace OpenSleigh.Samples.Sample8.API.Sagas
         IHandleMessage<ProcessNextStep>,
         IHandleMessage<SagaCompleted>
     {
+        private readonly IHubContext<SagaHub> _hubContext;
         private readonly ILogger<StepsSaga> _logger;
 
-        public StepsSaga(ILogger<StepsSaga> logger)
+        public StepsSaga(ILogger<StepsSaga> logger, IHubContext<SagaHub> hubContext)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
         }
 
+        private async Task SendNotification(string text, bool done = false)
+        {
+            _logger.LogInformation(text);
+
+            var client = _hubContext.Clients.Client(this.State.ClientId);
+            await client?.SendAsync("Notification", text, done);
+        }
+        
         public async Task HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
         {
+            this.State.ClientId = context.Message.ClientId;
             this.State.TotalSteps = context.Message.StepsCount;
             this.State.CurrentStep = 0;
-            
-            _logger.LogInformation($"starting saga {context.Message.CorrelationId} with {State.TotalSteps} total steps...");
 
+            await SendNotification($"starting saga {context.Message.CorrelationId} with {State.TotalSteps} total steps...");
+                
             await this.Bus.PublishAsync(
                 new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId),
                 cancellationToken);
@@ -60,20 +72,19 @@ namespace OpenSleigh.Samples.Sample8.API.Sagas
                 return;
             }
 
-            _logger.LogInformation($"processing step {State.CurrentStep}/{State.TotalSteps} on saga {context.Message.CorrelationId} ...");
+            await SendNotification($"processing step {State.CurrentStep}/{State.TotalSteps} on saga {context.Message.CorrelationId} ...");
 
-            await Task.Delay(1000, cancellationToken);
+            await Task.Delay(250, cancellationToken);
 
             await this.Bus.PublishAsync(
                 new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId),
                 cancellationToken);
         }
 
-        public Task HandleAsync(IMessageContext<SagaCompleted> context, CancellationToken cancellationToken = default)
+        public async Task HandleAsync(IMessageContext<SagaCompleted> context, CancellationToken cancellationToken = default)
         {
-            this.State.MarkAsCompleted(); 
-            _logger.LogInformation($"saga {context.Message.CorrelationId} completed!");
-            return Task.CompletedTask;
+            this.State.MarkAsCompleted();
+            await SendNotification($"saga {context.Message.CorrelationId} completed!", true);
         }
     }
 }

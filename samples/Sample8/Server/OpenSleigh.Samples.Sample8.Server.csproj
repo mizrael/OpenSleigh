@@ -5,14 +5,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="5.0.1" NoWarn="NU1605" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="5.0.1" NoWarn="NU1605" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="5.6.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="5.0.3" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Client\OpenSleigh.Samples.Sample8.Client.csproj" />
     <ProjectReference Include="..\..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj" />
     <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
   </ItemGroup>
+
 
 </Project>
