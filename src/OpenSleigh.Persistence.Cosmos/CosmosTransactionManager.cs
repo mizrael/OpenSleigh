@@ -24,7 +24,7 @@ namespace OpenSleigh.Persistence.Cosmos
 
         public Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
         {
-            // as of today, Cosmos has no support for multi-document transactions across collections.
+            // TODO: as of today, Cosmos has no support for multi-document transactions across collections.
             // https://docs.microsoft.com/en-ca/azure/cosmos-db/mongodb-feature-support-40#transactions
             ITransaction transaction = new NullTransaction();
             return Task.FromResult(transaction);
