@@ -1,18 +1,18 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <PackageVersion>1.0.0</PackageVersion>
+    <PackageVersion>0.0.1</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
-    <Product>OpenSleigh.Transport.AzureServiceBus</Product>
+    <Product>OpenSleigh.Persistence.Cosmos</Product>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <Title>OpenSleigh.Transport.AzureServiceBus</Title>
-    <PackageDescription>Azure Service Bus transport for OpenSleigh.</PackageDescription>
+    <Title>OpenSleigh.Persistence.Cosmos</Title>
+    <PackageDescription>CosmosDB persistence for OpenSleigh.</PackageDescription>
     <Copyright>Copyright 2021</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
-    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport azure service-bus</PackageTags>
+    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport cosmosdb</PackageTags>
     <PackageOutputPath>../../packages/</PackageOutputPath>
     <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
     <PackageProjectUrl>https://www.opensleigh.net/</PackageProjectUrl>
@@ -23,14 +23,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.1.0" />
-    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.0.0" />
+    <PackageReference Include="Mongodb.Driver" Version="2.11.6" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpenSleigh.Core\OpenSleigh.Core.csproj" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
 
 </Project>
