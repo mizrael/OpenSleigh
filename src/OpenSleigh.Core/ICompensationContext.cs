@@ -4,7 +4,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    public interface ICompensationContext<TM>
+    public interface ICompensationContext<out TM>
         where TM : IMessage
     {
         IMessageContext<TM> MessageContext { get; }
