@@ -26,6 +26,7 @@ namespace OpenSleigh.Persistence.SQL
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
+            modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
         }
 
         public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
