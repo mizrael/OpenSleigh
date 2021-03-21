@@ -31,9 +31,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.AzureS
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.AzureServiceBus.Tests", "tests\OpenSleigh.Transport.AzureServiceBus.Tests\OpenSleigh.Transport.AzureServiceBus.Tests.csproj", "{483B93A9-3650-4823-ADE2-CA4A1B71EEF6}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.Mongo", "src\OpenSleigh.Persistence.Cosmos\OpenSleigh.Persistence.Cosmos.Mongo.csproj", "{12D4B1D4-927A-437C-8174-6F72A9BB154E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.Mongo", "src\OpenSleigh.Persistence.Cosmos.Mongo\OpenSleigh.Persistence.Cosmos.Mongo.csproj", "{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.Mongo.Tests", "tests\OpenSleigh.Persistence.Cosmos.Tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests.csproj", "{9A067917-3BF5-41AC-B139-CCD37D5C9AED}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.Mongo.Tests", "tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests.csproj", "{13805E00-0578-4E71-AB8B-0AAFCCFD3551}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -89,14 +89,14 @@ Global
 		{483B93A9-3650-4823-ADE2-CA4A1B71EEF6}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{483B93A9-3650-4823-ADE2-CA4A1B71EEF6}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{483B93A9-3650-4823-ADE2-CA4A1B71EEF6}.Release|Any CPU.Build.0 = Release|Any CPU
-		{12D4B1D4-927A-437C-8174-6F72A9BB154E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{12D4B1D4-927A-437C-8174-6F72A9BB154E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{12D4B1D4-927A-437C-8174-6F72A9BB154E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{12D4B1D4-927A-437C-8174-6F72A9BB154E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{9A067917-3BF5-41AC-B139-CCD37D5C9AED}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{9A067917-3BF5-41AC-B139-CCD37D5C9AED}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{9A067917-3BF5-41AC-B139-CCD37D5C9AED}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{9A067917-3BF5-41AC-B139-CCD37D5C9AED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446}.Release|Any CPU.Build.0 = Release|Any CPU
+		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -112,8 +112,8 @@ Global
 		{0799A41D-483D-412C-BD10-E2BB3FB907E4} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 		{CA4B0C5D-200A-4D3D-8C5A-D0910E11585D} = {86CDC8FD-5E6F-4F45-A073-9F2749192582}
 		{483B93A9-3650-4823-ADE2-CA4A1B71EEF6} = {86CDC8FD-5E6F-4F45-A073-9F2749192582}
-		{12D4B1D4-927A-437C-8174-6F72A9BB154E} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
-		{9A067917-3BF5-41AC-B139-CCD37D5C9AED} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{13805E00-0578-4E71-AB8B-0AAFCCFD3551} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D5297242-16B4-43D7-B329-362EBCE2A5A5}
