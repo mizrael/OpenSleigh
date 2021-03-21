@@ -6,11 +6,11 @@ using Xunit;
 
 namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 {
-    public class CosmosSimpleSagaScenario : SimpleSagaScenario, IClassFixture<DbFixture>
+    public class CosmosMongoSimpleSagaScenario : SimpleSagaScenario, IClassFixture<DbFixture>
     {
         private readonly DbFixture _fixture;
 
-        public CosmosSimpleSagaScenario(DbFixture fixture)
+        public CosmosMongoSimpleSagaScenario(DbFixture fixture)
         {
             _fixture = fixture;
         }
