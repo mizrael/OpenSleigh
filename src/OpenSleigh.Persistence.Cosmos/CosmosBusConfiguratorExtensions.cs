@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Driver;
 using System.Security.Authentication;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     [ExcludeFromCodeCoverage]
     public record CosmosConfiguration(string ConnectionString, string DbName)

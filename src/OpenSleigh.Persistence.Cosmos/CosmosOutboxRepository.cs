@@ -9,7 +9,7 @@ using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     public record CosmosOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     {

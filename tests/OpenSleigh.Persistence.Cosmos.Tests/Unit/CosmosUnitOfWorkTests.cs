@@ -3,7 +3,7 @@ using FluentAssertions;
 using OpenSleigh.Core.Persistence;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.Unit
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
 {
     public class CosmosUnitOfWorkTests
     {

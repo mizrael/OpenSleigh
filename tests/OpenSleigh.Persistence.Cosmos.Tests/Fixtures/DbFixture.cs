@@ -3,7 +3,7 @@ using System.Security.Authentication;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.Fixtures
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {

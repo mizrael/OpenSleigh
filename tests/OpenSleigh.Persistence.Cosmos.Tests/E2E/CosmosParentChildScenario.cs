@@ -1,10 +1,10 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Persistence.InMemory;
-using OpenSleigh.Persistence.Cosmos.Tests.Fixtures;
+using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.E2E
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 {
     public class CosmosParentChildScenario : ParentChildScenario, IClassFixture<DbFixture>
     {

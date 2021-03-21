@@ -6,10 +6,10 @@ using MongoDB.Driver;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.Cosmos.Tests.Fixtures;
+using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.Integration
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
 {
     [Category("Integration")]
     [Trait("Category", "Integration")]

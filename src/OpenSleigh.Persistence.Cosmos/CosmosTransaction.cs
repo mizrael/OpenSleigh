@@ -4,7 +4,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     public sealed class CosmosTransaction : ITransaction, IDisposable
     {

@@ -2,7 +2,7 @@ using OpenSleigh.Core.Persistence;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     public class CosmosTransactionManager : ITransactionManager
     {

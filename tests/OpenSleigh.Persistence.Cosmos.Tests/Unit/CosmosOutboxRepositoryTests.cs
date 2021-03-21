@@ -4,7 +4,7 @@ using FluentAssertions;
 using OpenSleigh.Core.Utils;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.Unit
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
 {
     public class CosmosOutboxRepositoryTests
     {

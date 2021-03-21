@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Utils;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     [ExcludeFromCodeCoverage]
     public record CosmosSagaStateRepositoryOptions(TimeSpan LockMaxDuration)

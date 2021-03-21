@@ -1,7 +1,7 @@
 ﻿using OpenSleigh.Core;
 using System;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests
 {
     public class DummyState : SagaState
     {

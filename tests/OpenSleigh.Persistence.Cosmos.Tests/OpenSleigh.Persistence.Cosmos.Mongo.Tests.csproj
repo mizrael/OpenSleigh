@@ -35,7 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
-    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.Cosmos\OpenSleigh.Persistence.Cosmos.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.Cosmos\OpenSleigh.Persistence.Cosmos.Mongo.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
   </ItemGroup>
 

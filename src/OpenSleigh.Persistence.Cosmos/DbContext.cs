@@ -2,10 +2,10 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Bson.Serialization.Serializers;
 using MongoDB.Driver;
-using OpenSleigh.Persistence.Cosmos.Entities;
+using OpenSleigh.Persistence.Cosmos.Mongo.Entities;
 using System;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     public class DbContext : IDbContext
     {

@@ -1,6 +1,6 @@
 using System;
 
-namespace OpenSleigh.Persistence.Cosmos.Entities
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Entities
 {
     public record OutboxMessage(Guid Id, byte[] Data, string Type, string Status,
         DateTime? PublishingDate = null, 

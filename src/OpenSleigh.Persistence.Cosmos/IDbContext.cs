@@ -1,6 +1,6 @@
 using MongoDB.Driver;
 
-namespace OpenSleigh.Persistence.Cosmos
+namespace OpenSleigh.Persistence.Cosmos.Mongo
 {
     public interface IDbContext
     {

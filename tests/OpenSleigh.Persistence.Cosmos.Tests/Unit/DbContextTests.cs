@@ -4,7 +4,7 @@ using MongoDB.Driver;
 using NSubstitute;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Tests.Unit
+namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
 {
     public class DbContextTests
     {
