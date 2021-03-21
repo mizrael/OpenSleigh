@@ -2,9 +2,9 @@
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Persistence;
-using OpenSleigh.Persistence.SQL.Entities;
+using OpenSleigh.Persistence.Cosmos.SQL.Entities;
 
-namespace OpenSleigh.Persistence.SQL
+namespace OpenSleigh.Persistence.Cosmos.SQL
 {
     public interface ISagaDbContext
     {
@@ -30,10 +30,7 @@ namespace OpenSleigh.Persistence.SQL
         }
 
         public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            var transaction = await this.Database.BeginTransactionAsync(cancellationToken);
-            return new SqlTransaction(transaction);
-        }
+            => new NullTransaction(); // https://github.com/dotnet/efcore/issues/16836
 
         public DbSet<SagaState> SagaStates { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
