@@ -30,11 +30,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
         }
 
         public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            //            var transaction = await this.Database.BeginTransactionAsync(cancellationToken);
-            //    return new CosmosSqlTransaction(transaction);
-            return new NullTransaction();
-        }
+            => new NullTransaction(); // https://github.com/dotnet/efcore/issues/16836
 
         public DbSet<SagaState> SagaStates { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
