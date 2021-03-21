@@ -14,7 +14,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
                 .AddUserSecrets<DbFixture>()
                 .Build();
 
-            this.ConnectionString = configuration.GetConnectionString("cosmos");
+            this.ConnectionString = configuration.GetConnectionString("cosmosSQL");
             if (string.IsNullOrWhiteSpace(this.ConnectionString))
                 throw new ArgumentException("invalid connection string");
 
