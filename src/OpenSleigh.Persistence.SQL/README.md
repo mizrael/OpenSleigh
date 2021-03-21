@@ -14,10 +14,10 @@ The first thing to do is build an instance of `SqlConfiguration` with the connec
 services.AddOpenSleigh(cfg =>{ 
     var connectionString = Configuration.GetConnectionString("sql");
     var sqlCfg = new SqlConfiguration(connectionString);
-    cfg.UseSqlPersistence(mongoCfg);
+    cfg.UseSqlPersistence(sqlCfg);
     
     // register the Sagas here
 });
 ```
 
-Of course it can be used in conjunction with any other Transport library as well (eg. InMemory or RabbitMQ).
+Of course it can be used in conjunction with any other Transport library as well (eg. [InMemory](https://www.nuget.org/packages/OpenSleigh.Persistence.InMemory/) or [Azure Service Bus](https://www.nuget.org/packages/OpenSleigh.Transport.AzureServiceBus/)).
