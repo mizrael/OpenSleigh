@@ -35,6 +35,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosm
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.Mongo.Tests", "tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests.csproj", "{13805E00-0578-4E71-AB8B-0AAFCCFD3551}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.SQL", "src\OpenSleigh.Persistence.Cosmos.SQL\OpenSleigh.Persistence.Cosmos.SQL.csproj", "{E367B2EF-2111-4BBB-B37F-0263559E5FD2}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Cosmos.SQL.Tests", "tests\OpenSleigh.Persistence.Cosmos.SQL.Tests\OpenSleigh.Persistence.Cosmos.SQL.Tests.csproj", "{08E996DB-3D0C-4A63-8166-BF61732D3B21}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -97,6 +101,14 @@ Global
 		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{13805E00-0578-4E71-AB8B-0AAFCCFD3551}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E367B2EF-2111-4BBB-B37F-0263559E5FD2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E367B2EF-2111-4BBB-B37F-0263559E5FD2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E367B2EF-2111-4BBB-B37F-0263559E5FD2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E367B2EF-2111-4BBB-B37F-0263559E5FD2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{08E996DB-3D0C-4A63-8166-BF61732D3B21}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{08E996DB-3D0C-4A63-8166-BF61732D3B21}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{08E996DB-3D0C-4A63-8166-BF61732D3B21}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{08E996DB-3D0C-4A63-8166-BF61732D3B21}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -114,6 +126,8 @@ Global
 		{483B93A9-3650-4823-ADE2-CA4A1B71EEF6} = {86CDC8FD-5E6F-4F45-A073-9F2749192582}
 		{EDF56F6E-BDB1-4EBB-AF83-2DB2A553C446} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 		{13805E00-0578-4E71-AB8B-0AAFCCFD3551} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{E367B2EF-2111-4BBB-B37F-0263559E5FD2} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{08E996DB-3D0C-4A63-8166-BF61732D3B21} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D5297242-16B4-43D7-B329-362EBCE2A5A5}
