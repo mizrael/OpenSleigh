@@ -24,9 +24,10 @@ namespace OpenSleigh.Core.Tests.E2E
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
 
             Action<ParentSagaCompleted> onMessage = msg =>
-            {
-                received = true;
+            {                
                 tokenSource.Cancel();
+                msg.CorrelationId.Should().Be(message.CorrelationId);
+                received = true;
             };
 
             hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
