@@ -22,8 +22,17 @@ namespace OpenSleigh.Core.BackgroundServices
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
             if (!_systemInfo.PublishOnly)
-                await Task.WhenAll(_subscribers.Select(s => s.StartAsync(cancellationToken)));
-            
+            {
+                await Task.Factory.StartNew(async () =>
+                {
+                    var tasks = _subscribers.Select(s => s.StartAsync(cancellationToken)).ToArray();
+                    await Task.WhenAll(tasks);
+                },
+                cancellationToken,
+                TaskCreationOptions.LongRunning,
+                TaskScheduler.Current);
+            }
+
             await base.StartAsync(cancellationToken);
         }
 

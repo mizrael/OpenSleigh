@@ -1,0 +1,38 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net5.0</TargetFramework>
+    <PackageVersion>1.0.1</PackageVersion>
+    <IsPackable>true</IsPackable>
+    <Authors>davidguida</Authors>
+    <Product>OpenSleigh.Transport.Kafka</Product>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Title>OpenSleigh.Transport.Kafka</Title>
+    <PackageDescription>Kafka transport for OpenSleigh.</PackageDescription>
+    <Copyright>Copyright 2021</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport kafka</PackageTags>
+    <PackageOutputPath>../../packages/</PackageOutputPath>
+    <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
+    <PackageProjectUrl>https://www.opensleigh.net/</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" Version="1.6.3" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="5.0.0" />        
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenSleigh.Core\OpenSleigh.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+</Project>
