@@ -14,11 +14,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 
     [Category("Integration")]
     [Trait("Category", "Integration")]
-    public class SqlOutboxRepositoryTests : IClassFixture<DbFixture>
+    public class CosmosSqlOutboxRepositoryTests : IClassFixture<DbFixture>
     {
         private readonly DbFixture _fixture;
 
-        public SqlOutboxRepositoryTests(DbFixture fixture)
+        public CosmosSqlOutboxRepositoryTests(DbFixture fixture)
         {
             _fixture = fixture;
         }
@@ -37,12 +37,14 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             var message = StartDummySaga.New();
             var sut = CreateSut();
             await sut.AppendAsync(message);
-            
-            var appendedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+
+            var dbContext = _fixture.CreateDbContext();
+
+            var appendedMessage = await dbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
             appendedMessage.Should().NotBeNull();
             appendedMessage.LockId.Should().BeNull();
             appendedMessage.LockTime.Should().BeNull();
-            appendedMessage.Status.Should().Be("Pending");
+            appendedMessage.Status.Should().Be(Entities.OutboxMessage.MessageStatuses.Pending);
         }
 
         [Fact]
@@ -75,7 +77,9 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 
             var lockId = await sut.LockAsync(message);
 
-            var lockedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            var dbContext = _fixture.CreateDbContext();
+
+            var lockedMessage = await dbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
             lockedMessage.Should().NotBeNull();
             lockedMessage.LockId.Should().Be(lockId);
             lockedMessage.LockTime.Should().NotBeNull();
@@ -151,8 +155,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             var lockId = await sut.LockAsync(message);
             await sut.ReleaseAsync(message, lockId);
 
-            var lockedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
-            lockedMessage.Status.Should().Be("Processed");
+            var dbContext = _fixture.CreateDbContext();
+
+            var lockedMessage = await dbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            lockedMessage.Status.Should().Be(Entities.OutboxMessage.MessageStatuses.Processed);
             lockedMessage.LockId.Should().BeNull();
             lockedMessage.LockTime.Should().BeNull();
         }
@@ -176,19 +182,22 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             await sut.AppendAsync(processedMessage);
             var lockId = await sut.LockAsync(processedMessage);
             await sut.ReleaseAsync(processedMessage, lockId);
-            
-            var count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+
+            var dbContext = _fixture.CreateDbContext();
+
+            var count = await dbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
             count.Should().Be(1);
 
             await sut.CleanProcessedAsync();
 
-            count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+            count = await dbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
             count.Should().Be(0);
         }
 
         private CosmosSqlOutboxRepository CreateSut()
         {
-            var sut = new CosmosSqlOutboxRepository(_fixture.DbContext, new JsonSerializer(), CosmosSqlOutboxRepositoryOptions.Default);
+            var dbContext = _fixture.CreateDbContext();
+            var sut = new CosmosSqlOutboxRepository(dbContext, new JsonSerializer(), CosmosSqlOutboxRepositoryOptions.Default);
             return sut;
         }
     }

@@ -20,22 +20,22 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
 
             this.DbName = $"tests_{Guid.NewGuid()}";
             
-            var options = new DbContextOptionsBuilder<SagaDbContext>()
+            _dbContextOptions = new DbContextOptionsBuilder<SagaDbContext>()
                 .UseCosmos(this.ConnectionString, this.DbName)
                 .EnableSensitiveDataLogging()
                 .Options;
-            _dbContext = new SagaDbContext(options);
         }
         
         public string ConnectionString { get; }
         public string DbName{ get; }
 
-        private readonly SagaDbContext _dbContext;
-        public ISagaDbContext DbContext => _dbContext;
+        private readonly DbContextOptions<SagaDbContext> _dbContextOptions;
+        public ISagaDbContext CreateDbContext() => new SagaDbContext(_dbContextOptions);
 
         public void Dispose()
         {
-            _dbContext?.Database.EnsureDeleted();
+            var dbContext = new SagaDbContext(_dbContextOptions);
+            dbContext.Database.EnsureDeleted();
         }
     }
 }

@@ -9,6 +9,7 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
+using OpenSleigh.Persistence.Cosmos.SQL.Entities;
 
 namespace OpenSleigh.Persistence.Cosmos.SQL
 {
@@ -24,12 +25,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
         private readonly ISerializer _serializer;
         private readonly CosmosSqlOutboxRepositoryOptions _options;
 
-        private enum MessageStatuses
-        {
-            Pending,
-            Processed
-        }
-
         public CosmosSqlOutboxRepository(ISagaDbContext dbContext, ISerializer serializer, CosmosSqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -42,7 +37,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             var maxLockDate = DateTime.UtcNow - _options.LockMaxDuration;
             var entities = await _dbContext.OutboxMessages.AsNoTracking()
                     .Where(e =>
-                        e.Status == MessageStatuses.Pending.ToString() &&
+                        e.Status == OutboxMessage.MessageStatuses.Pending &&
                         (e.LockId == null || e.LockTime > maxLockDate))
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -85,10 +80,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                 if (entity.LockId != lockId)
                     throw new LockException($"invalid lock id '{lockId}' on message '{message.Id}'");
 
-                entity.LockId = null;
-                entity.LockTime = null;
-                entity.PublishingDate = DateTime.UtcNow;
-                entity.Status = MessageStatuses.Processed.ToString();
+                entity.Release();
+
                 await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -110,10 +103,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             var serialized = await _serializer.SerializeAsync(message, cancellationToken);
-            var entity = new Entities.OutboxMessage(message.Id, serialized, message.GetType().FullName, PartitionKey: Guid.NewGuid().ToString())
-            {
-                Status = MessageStatuses.Pending.ToString()
-            };
+            var entity = OutboxMessage.New(message.Id, serialized, message.GetType().FullName, message.CorrelationId);
             _dbContext.OutboxMessages.Add(entity);
             await _dbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);
@@ -125,7 +115,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             try
             {
                 var messages = await _dbContext.OutboxMessages
-                    .Where(e => e.Status == MessageStatuses.Processed.ToString())
+                    .Where(e => e.Status == OutboxMessage.MessageStatuses.Processed)
                     .ToListAsync(cancellationToken)
                     .ConfigureAwait(false);
                 
@@ -168,11 +158,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                 if (entity.LockId.HasValue && entity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
                     throw new LockException($"message '{message.Id}' is already locked");
 
-                if (entity.Status == MessageStatuses.Processed.ToString())
+                if (entity.Status == OutboxMessage.MessageStatuses.Processed)
                     throw new LockException($"message '{message.Id}' was already processed");
-
-                entity.LockId = Guid.NewGuid();
-                entity.LockTime = DateTime.UtcNow;
+                
+                entity.Lock();
 
                 await _dbContext.SaveChangesAsync(cancellationToken)
                     .ConfigureAwait(false);

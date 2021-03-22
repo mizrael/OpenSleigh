@@ -13,11 +13,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 {
     [Category("Integration")]
     [Trait("Category", "Integration")]
-    public class SqlSagaStateRepositoryTests : IClassFixture<DbFixture>
+    public class CosmosSqlSagaStateRepositoryTests : IClassFixture<DbFixture>
     {
         private readonly DbFixture _fixture;
 
-        public SqlSagaStateRepositoryTests(DbFixture fixture)
+        public CosmosSqlSagaStateRepositoryTests(DbFixture fixture)
         {
             _fixture = fixture;
         }
@@ -44,8 +44,9 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             var newState = DummyState.New();
 
             var (_, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
-
-            var lockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e =>
+                        
+            var dbContext = _fixture.CreateDbContext();
+            var lockedState = await dbContext.SagaStates.FirstOrDefaultAsync(e =>
                                         e.LockId == lockId && e.CorrelationId == newState.Id);
             lockedState.Should().NotBeNull();
         }
@@ -124,7 +125,9 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             var updatedState = new DummyState(correlationId, "ipsum", 71);
             await sut.ReleaseLockAsync(updatedState, lockId);
 
-            var unLockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
+            var dbContext = _fixture.CreateDbContext();
+
+            var unLockedState = await dbContext.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
             unLockedState.Should().NotBeNull();
             unLockedState.LockId.Should().BeNull();
             unLockedState.LockTime.Should().BeNull();
@@ -140,7 +143,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         private CosmosSqlSagaStateRepository CreateSut(CosmosSqlSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();
-            var sut = new CosmosSqlSagaStateRepository(_fixture.DbContext, serializer, options ?? CosmosSqlSagaStateRepositoryOptions.Default);
+            var dbContext = _fixture.CreateDbContext();
+            var sut = new CosmosSqlSagaStateRepository(dbContext, serializer, options ?? CosmosSqlSagaStateRepositoryOptions.Default);
             return sut;
         }
     }
