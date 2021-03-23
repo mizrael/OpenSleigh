@@ -68,9 +68,11 @@ namespace OpenSleigh.Transport.Kafka
                 }
                 catch(ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
                 {
-                    continue;
                     // noop. seems to be a known issue in the c# Kafka driver
                     // occurring when consumers are started before producers.
+
+                    _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}", _queueReferences.TopicName, ex.Message);
+                    continue;
                 }
                 catch (Exception ex) 
                 {
