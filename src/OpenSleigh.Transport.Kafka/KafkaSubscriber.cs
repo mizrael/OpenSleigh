@@ -30,7 +30,6 @@ namespace OpenSleigh.Transport.Kafka
             if (queueReferenceFactory is null)            
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
             
-
             _consumer = builder.Build();            
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
