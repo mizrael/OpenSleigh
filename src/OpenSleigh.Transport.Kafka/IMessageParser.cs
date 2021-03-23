@@ -6,6 +6,6 @@ namespace OpenSleigh.Transport.Kafka
 {
     public interface IMessageParser
     {
-        IMessage Parse(ConsumeResult<Guid, byte[]> cr);
+        IMessage Parse(ConsumeResult<Guid, byte[]> consumeResult);
     }
 }

@@ -19,12 +19,20 @@ namespace OpenSleigh.Transport.Kafka
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         }
 
-        public IMessage Parse(ConsumeResult<Guid, byte[]> cr)
+        public IMessage Parse(ConsumeResult<Guid, byte[]> consumeResult)
         {
-            var messageTypeHeader = cr.Message.Headers.First(h => h.Key == HeaderNames.MessageType);
+            if (consumeResult is null)
+                throw new ArgumentNullException(nameof(consumeResult));
+            if (consumeResult.Message?.Headers is null)
+                throw new ArgumentNullException(nameof(consumeResult), "message headers are missing");
+
+            var messageTypeHeader = consumeResult.Message.Headers.FirstOrDefault(h => h.Key == HeaderNames.MessageType);
+            if(messageTypeHeader is null)
+                throw new ArgumentException("invalid message type");
+
             var messageTypeName = Encoding.UTF8.GetString(messageTypeHeader.GetValueBytes());
             var messageType = _typeResolver.Resolve(messageTypeName);
-            var decodedObj = _serializer.Deserialize(cr.Message.Value, messageType);
+            var decodedObj = _serializer.Deserialize(consumeResult.Message.Value, messageType);
             if (decodedObj is not IMessage message)
                 throw new ArgumentException($"message has the wrong type: '{messageTypeName}'");
             return message;
