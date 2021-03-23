@@ -47,7 +47,7 @@ namespace OpenSleigh.Transport.Kafka
             {
                 GroupId = config.ConsumerGroup,
                 BootstrapServers = config.ConnectionString,
-                AutoOffsetReset = AutoOffsetReset.Latest,               
+                AutoOffsetReset = AutoOffsetReset.Earliest,               
                 EnablePartitionEof = true
             });
             busConfigurator.Services.AddSingleton(ctx =>

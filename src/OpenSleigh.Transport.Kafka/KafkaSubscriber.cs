@@ -67,14 +67,31 @@ namespace OpenSleigh.Transport.Kafka
                     _logger.LogDebug("received message '{MessageId}' from Topic '{ExchangeName}'. Processing...",
                                      message.Id, _queueReferences.TopicName);
                 }
-                catch (Exception ex)
+                catch(ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
                 {
-                    _logger.LogError(ex, $"an exception has occurred while consuming a message: {ex.Message}");
+                    continue;
+                    // noop. seems to be a known issue in the c# Kafka driver
+                    // occurring when consumers are started before producers.
+                }
+                catch (Exception ex) 
+                {
+                    _logger.LogError(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
                 }
 
-                //TODO: logging
-                //TODO: retry/deadlettering
-                await _messageProcessor.ProcessAsync((dynamic)message, cancellationToken);
+                try
+                {
+                    await _messageProcessor.ProcessAsync((dynamic)message, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    if(message is null)
+                        _logger.LogWarning(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
+                    else
+                        _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
+                                            message.Id, ex.Message);
+
+                    //TODO: retry/deadlettering
+                }
             }
         }
 
