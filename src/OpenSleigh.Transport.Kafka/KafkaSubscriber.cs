@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    public class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
+    public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
         where TM : IMessage
     {
         private IConsumer<Guid, byte[]> _consumer;
@@ -44,7 +44,7 @@ namespace OpenSleigh.Transport.Kafka
 
             _started = true;
 
-            return Task.Run(async () => await ConsumeMessages(cancellationToken));
+            return Task.Run(async () => await ConsumeMessages(cancellationToken), cancellationToken);
         }
 
         private async Task ConsumeMessages(CancellationToken cancellationToken)

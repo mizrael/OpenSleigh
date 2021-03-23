@@ -51,7 +51,7 @@ namespace OpenSleigh.Transport.Kafka
 
             var result = await _producer.ProduceAsync(queueRefs.TopicName, kafkaMessage, cancellationToken);
             if (result.Status == PersistenceStatus.NotPersisted)
-                throw new Exception($"unable to publish message '{message.Id}'");
+                throw new ApplicationException($"unable to publish message '{message.Id}'");
         }
     }
 }
