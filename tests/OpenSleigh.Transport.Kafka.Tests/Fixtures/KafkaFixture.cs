@@ -18,9 +18,8 @@ namespace OpenSleigh.Transport.Kafka.Tests.Fixtures
             var kafkaSection = configuration.GetSection("Kafka");
             var consumerGroup = $"{kafkaSection["ConsumerGroup"]}.{executionId}";
 
-            this.KafkaConfiguration = new KafkaConfiguration(connStr, consumerGroup, t => {
-                return new QueueReferences($"{executionId}.{t.FullName}");
-            });
+            this.KafkaConfiguration = new KafkaConfiguration(connStr, consumerGroup, 
+                t => new QueueReferences($"{executionId}.{t.FullName}", $"{executionId}.{t.FullName}.dead"));
         }
 
         public KafkaConfiguration KafkaConfiguration { get; init; }

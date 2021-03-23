@@ -39,6 +39,7 @@ namespace OpenSleigh.Transport.Kafka
                 var builder = ctx.GetRequiredService<ProducerBuilder<Guid, byte[]>>();
                 return builder.Build();
             });
+            busConfigurator.Services.AddTransient<IKafkaPublisherExecutor, KafkaPublisherExecutor>();
             busConfigurator.Services.AddTransient<IPublisher, KafkaPublisher>();
 
             busConfigurator.Services.AddTransient<IMessageParser, MessageParser>();

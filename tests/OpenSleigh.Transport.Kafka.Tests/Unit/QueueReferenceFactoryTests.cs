@@ -14,13 +14,14 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var sut = new QueueReferenceFactory(sp, messageType =>
             {
                 var topicName = messageType.Name.ToLower();
-                return new QueueReferences(topicName);
+                return new QueueReferences(topicName, topicName + ".dead");
             });
             
             var message = DummyMessage.New();
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
+            result.DeadLetterTopicName.Should().Be("dummymessage.dead");
         }
 
         [Fact]
@@ -28,11 +29,8 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
 
-            var policy = new QueueReferencesPolicy<DummyMessage>(() =>
-            {
-                var topicName = "dummy";
-                return new QueueReferences(topicName);
-            });
+            var policy = new QueueReferencesPolicy<DummyMessage>(() => new QueueReferences("dummy", "dummy.dead"));
+
             sp.GetService(typeof(QueueReferencesPolicy<DummyMessage>))
                 .Returns(policy);
             var sut = new QueueReferenceFactory(sp);
@@ -40,6 +38,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var result = sut.Create<DummyMessage>();
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummy");
+            result.DeadLetterTopicName.Should().Be("dummy.dead");
         }
 
         [Fact]
@@ -51,6 +50,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
+            result.DeadLetterTopicName.Should().Be("dummymessage.dead");
         }
 
         [Fact]
@@ -61,6 +61,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var result = sut.Create<DummyMessage>();
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
+            result.DeadLetterTopicName.Should().Be("dummymessage.dead");
         }
 
         [Fact]

@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 using System;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,14 +16,16 @@ namespace OpenSleigh.Transport.Kafka
         private readonly ILogger<KafkaSubscriber<TM>> _logger;
         private readonly IMessageParser _messageParser;
         private readonly IMessageProcessor _messageProcessor;
-        
+        private readonly IKafkaPublisherExecutor _publisher;
+
         private bool _started = false;
 
         public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder, 
             IMessageParser messageParser, 
             ILogger<KafkaSubscriber<TM>> logger,
             IQueueReferenceFactory queueReferenceFactory,
-            IMessageProcessor messageProcessor)
+            IMessageProcessor messageProcessor,
+            IKafkaPublisherExecutor publisher)
         {
             if (builder is null)
                 throw new ArgumentNullException(nameof(builder));
@@ -34,6 +37,7 @@ namespace OpenSleigh.Transport.Kafka
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+            _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
             _queueReferences = queueReferenceFactory.Create<TM>();
         }
 
@@ -63,7 +67,7 @@ namespace OpenSleigh.Transport.Kafka
 
                     message = _messageParser.Parse(result);
 
-                    _logger.LogDebug("received message '{MessageId}' from Topic '{ExchangeName}'. Processing...",
+                    _logger.LogDebug("received message '{MessageId}' from Topic '{Topic}'. Processing...",
                                      message.Id, _queueReferences.TopicName);
                 }
                 catch(ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
@@ -88,10 +92,28 @@ namespace OpenSleigh.Transport.Kafka
                     if(message is null)
                         _logger.LogWarning(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
                     else
-                        _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
-                                            message.Id, ex.Message);
-
-                    //TODO: retry/deadlettering
+                    {
+                        _logger.LogWarning(ex,
+                            "an exception has occurred while consuming message '{MessageId}': {Exception}",
+                            message.Id, ex.Message);
+                        try
+                        {
+                            if (!string.IsNullOrWhiteSpace(_queueReferences.DeadLetterTopicName))
+                                await _publisher.PublishAsync(message, _queueReferences.DeadLetterTopicName,
+                                    additionalHeaders: new[]
+                                    {
+                                        new Header(HeaderNames.Error, Encoding.UTF8.GetBytes(ex.Message))
+                                    },
+                                    cancellationToken: cancellationToken);
+                        }
+                        catch (Exception e)
+                        {
+                            _logger.LogWarning(ex, "an exception has occurred while publishing message '{MessageId}' to DLQ '{DeadLetterQueue}': {Exception}",
+                                message.Id,
+                                _queueReferences.DeadLetterTopicName,
+                                ex.Message);
+                        }
+                    }
                 }
             }
         }

@@ -18,7 +18,7 @@ namespace OpenSleigh.Transport.Kafka
             _defaultCreator = defaultCreator ?? (messageType =>
             {
                 var topicName = messageType.Name.ToLower();
-                return new QueueReferences(topicName);
+                return new QueueReferences(topicName, $"{topicName}.dead");
             });
         }
 
