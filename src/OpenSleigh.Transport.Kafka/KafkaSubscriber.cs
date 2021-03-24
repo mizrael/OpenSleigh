@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    internal sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
+    public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
         where TM : IMessage
     {
         private IConsumer<Guid, byte[]> _consumer;
