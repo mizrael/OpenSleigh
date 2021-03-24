@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Core.Messaging;
 using Xunit;
 
@@ -110,6 +111,29 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
                 Arg.Any<string>(),
                 null,
                 Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task StartAsync_should_hanle_null_messages()
+        {
+            var consumeResult = new ConsumeResult<Guid, byte[]>();
+            var queueRefs = new QueueReferences("lorem", "ipsum");
+
+            var parser = NSubstitute.Substitute.For<IMessageParser>();
+            parser.Parse(consumeResult)
+                .ReturnsNull();
+
+            var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
+
+            var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
+            var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
+
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+
+            await sut.HandleAsync(consumeResult, queueRefs);
+
+            await messageProcessor.DidNotReceiveWithAnyArgs()
+                                .ProcessAsync(Arg.Any<IMessage>(), Arg.Any<CancellationToken>());
         }
     }
 }
