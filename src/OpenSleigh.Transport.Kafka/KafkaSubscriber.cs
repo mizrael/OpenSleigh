@@ -40,7 +40,7 @@ namespace OpenSleigh.Transport.Kafka
 
             _started = true;
 
-            return Task.Run(async () => await ConsumeMessages(cancellationToken), cancellationToken);
+            return Task.Run(async () => await ConsumeMessages(cancellationToken));
         }
 
         private async Task ConsumeMessages(CancellationToken cancellationToken)
@@ -49,7 +49,7 @@ namespace OpenSleigh.Transport.Kafka
             {
                 try
                 {
-                    var result = _consumer.Consume(cancellationToken);
+                    var result = _consumer.Consume(10);
                     if (result is null || result.IsPartitionEOF)
                         continue;
 
@@ -61,6 +61,11 @@ namespace OpenSleigh.Transport.Kafka
                     // occurring when consumers are started before producers.
 
                     _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}", _queueReferences.TopicName, ex.Message);
+                }
+                catch(TaskCanceledException ex)
+                {
+                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'", _queueReferences.TopicName);
+                    break;
                 }
             }
         }
