@@ -51,10 +51,7 @@ namespace OpenSleigh.Transport.Kafka
             }
             catch (Exception ex)
             {
-                if (message is null)
-                    _logger.LogWarning(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
-                else
-                    await PushToDeadLetter(queueReferences, message, ex, cancellationToken);
+                await PushToDeadLetter(queueReferences, message, ex, cancellationToken);
             }
         }
 
