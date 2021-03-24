@@ -15,6 +15,8 @@ namespace OpenSleigh.Transport.Kafka
         private IKafkaMessageHandler _messageHandler;
         private ILogger<KafkaSubscriber<TM>> _logger;
 
+        private static readonly TimeSpan _consumeTimeout = TimeSpan.FromMilliseconds(100);
+
         private bool _started = false;
 
         public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder,
@@ -49,7 +51,7 @@ namespace OpenSleigh.Transport.Kafka
             {
                 try
                 {
-                    var result = _consumer.Consume(10);
+                    var result = _consumer.Consume(_consumeTimeout);
                     if (result is null || result.IsPartitionEOF)
                         continue;
 
@@ -60,12 +62,19 @@ namespace OpenSleigh.Transport.Kafka
                     // noop. seems to be a known issue in the c# Kafka driver
                     // occurring when consumers are started before producers.
 
-                    _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}", _queueReferences.TopicName, ex.Message);
+                    _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
+                        _queueReferences.TopicName, ex.Message);
                 }
-                catch(TaskCanceledException ex)
+                catch (TaskCanceledException ex)
                 {
-                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'", _queueReferences.TopicName);
+                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                        _queueReferences.TopicName);
                     break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
+                        _queueReferences.TopicName, ex.Message);
                 }
             }
         }

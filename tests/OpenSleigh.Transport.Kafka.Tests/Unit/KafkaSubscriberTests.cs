@@ -37,7 +37,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var tokenSource = new CancellationTokenSource(1000);
             await sut.StartAsync(tokenSource.Token);
 
-            consumer.Received().Consume(Arg.Any<CancellationToken>());
+            consumer.ReceivedWithAnyArgs().Consume(Arg.Any<TimeSpan>());
         }
 
         [Fact]
@@ -46,7 +46,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var queueRefs = new QueueReferences("lorem", "ipsum");
             var consumeResult = new ConsumeResult<Guid, byte[]>();
             var consumer = NSubstitute.Substitute.For<IConsumer<Guid, byte[]>>();
-            consumer.Consume().ReturnsForAnyArgs(consumeResult);
+            consumer.Consume(Arg.Any<TimeSpan>()).ReturnsForAnyArgs(consumeResult);
 
             var handler = NSubstitute.Substitute.For<IKafkaMessageHandler>();
 
