@@ -28,12 +28,12 @@ namespace OpenSleigh.Transport.Kafka
 
         public async Task HandleAsync(ConsumeResult<Guid, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
         {
-            var message = Parse(result, queueReferences);
+            var message = Parse(result);
             if (message is not null)
                 await Process(message, queueReferences, cancellationToken);
         }
 
-        private IMessage Parse(ConsumeResult<Guid, byte[]> result, QueueReferences queueReferences)
+        private IMessage Parse(ConsumeResult<Guid, byte[]> result)
         {
             try
             {
