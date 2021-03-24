@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -13,46 +14,57 @@ namespace OpenSleigh.Core.Tests.E2E
 {
     public abstract class SimpleSagaScenario : E2ETestsBase
     {
-        [Fact]
-        public async Task run_single_message_scenario()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(10)]
+        public async Task run_single_message_scenario(int hostsCount)
         {
-            var hostBuilder = CreateHostBuilder();
-
             var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
-
-            var received = false;
+            
+            var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
 
-            Action<StartSimpleSaga> onMessage = msg =>
+            Action<StartSimpleSaga> onMessage = async msg =>
             {
-                received = true;
+                msg.Id.Should().Be(message.Id);
+                msg.CorrelationId.Should().Be(message.CorrelationId);
 
+                receivedCount++;
+
+                await Task.Delay(TimeSpan.FromSeconds(10));
                 tokenSource.Cancel();
-
-                msg.Should().Be(message);
             };
+            
+            var hosts = new IHost[hostsCount];
+            for(var i=0;i< hostsCount;i++)
+                hosts[i] = await SetupHost(onMessage);
 
-            hostBuilder.ConfigureServices((ctx, services) =>
-            {
-                services.AddSingleton(onMessage);
-            });
-
-            var host = hostBuilder.Build();
-
-            using var scope = host.Services.CreateScope();
+            using var scope = hosts[0].Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 
-            await host.SetupInfrastructureAsync();
+            var tasks = hosts.Select(host => host.RunAsync(token: tokenSource.Token))
+                .Union(new[]
+                {
+                    bus.PublishAsync(message, tokenSource.Token)
+                });
 
-            await Task.WhenAll(new[]
-            {
-                host.RunAsync(token: tokenSource.Token),
-                bus.PublishAsync(message, tokenSource.Token)
-            });
+            await Task.WhenAll(tasks);
 
-            received.Should().BeTrue();
+            receivedCount.Should().Be(1);
         }
-        
+
+        private async Task<IHost> SetupHost(Action<StartSimpleSaga> onMessage)
+        {
+            var hostBuilder = CreateHostBuilder();
+            hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
+            var host = hostBuilder.Build();
+            
+            await host.SetupInfrastructureAsync();
+            return host;
+        }
+
         protected override void AddSagas(IBusConfigurator cfg)
         {
             AddSaga<SimpleSaga, SimpleSagaState, StartSimpleSaga>(cfg, msg => new SimpleSagaState(msg.CorrelationId));

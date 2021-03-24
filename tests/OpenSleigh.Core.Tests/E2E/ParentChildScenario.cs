@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -13,38 +14,52 @@ namespace OpenSleigh.Core.Tests.E2E
 {
     public abstract class ParentChildScenario : E2ETestsBase
     {
-        [Fact]
-        public async Task run_parent_child_scenario()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(10)]
+        public async Task run_parent_child_scenario(int hostsCount)
         {
-            var hostBuilder = CreateHostBuilder();
-
             var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
 
-            var received = false;
+            var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
 
-            Action<ParentSagaCompleted> onMessage = msg =>
-            {
-                received = true;
+            Action<ParentSagaCompleted> onMessage = async msg =>
+            {   
+                msg.CorrelationId.Should().Be(message.CorrelationId);
+                receivedCount++;
+
+                await Task.Delay(TimeSpan.FromSeconds(10));
                 tokenSource.Cancel();
             };
 
-            hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
+            var hosts = new IHost[hostsCount];
+            for (var i = 0; i < hostsCount; i++)
+                hosts[i] = await SetupHost(onMessage);
 
-            var host = hostBuilder.Build();
-
-            await host.SetupInfrastructureAsync();
-
-            using var scope = host.Services.CreateScope();
+            using var scope = hosts[0].Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 
-            await Task.WhenAll(new[]
-            {
-                host.RunAsync(token: tokenSource.Token),
-                bus.PublishAsync(message, tokenSource.Token)
-            });
+            var tasks = hosts.Select(host => host.RunAsync(token: tokenSource.Token))
+                .Union(new[]
+                {
+                    bus.PublishAsync(message, tokenSource.Token)
+                });
 
-            received.Should().BeTrue();
+            await Task.WhenAll(tasks);
+
+            receivedCount.Should().Be(1);
+        }
+
+        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage)
+        {
+            var hostBuilder = CreateHostBuilder();
+            hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
+            var host = hostBuilder.Build();
+            await host.SetupInfrastructureAsync();
+            return host;
         }
 
         protected override void AddSagas(IBusConfigurator cfg)
