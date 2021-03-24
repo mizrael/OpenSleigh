@@ -106,12 +106,12 @@ namespace OpenSleigh.Transport.Kafka
                                     },
                                     cancellationToken: cancellationToken);
                         }
-                        catch (Exception e)
+                        catch (Exception dlqEx)
                         {
                             _logger.LogWarning(ex, "an exception has occurred while publishing message '{MessageId}' to DLQ '{DeadLetterQueue}': {Exception}",
                                 message.Id,
                                 _queueReferences.DeadLetterTopicName,
-                                ex.Message);
+                                dlqEx.Message);
                         }
                     }
                 }

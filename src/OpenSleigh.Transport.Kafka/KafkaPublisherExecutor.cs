@@ -29,7 +29,7 @@ namespace OpenSleigh.Transport.Kafka
             if (message == null) 
                 throw new ArgumentNullException(nameof(message));
             if (string.IsNullOrWhiteSpace(topic))
-                throw new ArgumentNullException("Value cannot be null or whitespace.", nameof(topic));
+                throw new ArgumentNullException(nameof(topic), "Value cannot be null or whitespace.");
 
             return PublishAsyncCore(message, topic, additionalHeaders, cancellationToken);
         }

@@ -22,7 +22,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var sut = BuildSUT(queueRefs, consumer);
 
-            var tokenSource = new CancellationTokenSource(100);
+            var tokenSource = new CancellationTokenSource(1000);
             await sut.StartAsync(tokenSource.Token);
             
             consumer.Received(1).Subscribe(queueRefs.TopicName);
@@ -36,7 +36,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var sut = BuildSUT(queueRefs, consumer);
 
-            var tokenSource = new CancellationTokenSource(100);
+            var tokenSource = new CancellationTokenSource(1000);
             await sut.StartAsync(tokenSource.Token);
 
             consumer.Received().Consume(Arg.Any<CancellationToken>());

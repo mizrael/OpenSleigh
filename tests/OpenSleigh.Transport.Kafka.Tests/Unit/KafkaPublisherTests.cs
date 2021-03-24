@@ -72,7 +72,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var sut = new KafkaPublisher(executor, factory);
             
-            await Assert.ThrowsAsync<ApplicationException>(async () => await sut.PublishAsync(message));
+            await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.PublishAsync(message));
         }
     }
 }
