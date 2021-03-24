@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Persistence.InMemory.Messaging

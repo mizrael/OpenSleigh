@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-03-23](https://github.com/mizrael/OpenSleigh/pull/31)
+### Added
+- added Kafka transport library
+
 ## [2021-02-24](https://github.com/mizrael/OpenSleigh/pull/27)
 ### Added
 - added support for compensating transactions

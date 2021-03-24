@@ -1,12 +1,18 @@
 ﻿using System;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
 {
-    public record OutboxMessage(Guid Id, byte[] Data, string Type)
+    public class OutboxMessage
     {
+        private OutboxMessage()
+        {
+        }
+
+        public Guid Id { get; init; }
+        public byte[] Data { get; init; }
+        public string Type { get; init; }
         public string PartitionKey { get; init; }
+
         public MessageStatuses Status { get; private set; }
         public Guid? LockId { get; private set; }
         public DateTime? LockTime { get; private set; }
@@ -26,8 +32,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
             this.Status = OutboxMessage.MessageStatuses.Processed;
         }
 
-        public static OutboxMessage New(Guid id, byte[] data, string type, Guid correlationId) => new OutboxMessage(id, data, type)
+        public static OutboxMessage New(Guid id, byte[] data, string type, Guid correlationId) => new OutboxMessage
         {
+            Id = id,
+            Data = data,
+            Type = type,
             Status = MessageStatuses.Pending,
             PartitionKey = correlationId.ToString()
         };
@@ -36,18 +45,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
         {
             Pending,
             Processed
-        }
-    }
-
-    internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfiguration<OutboxMessage>
-    {
-        public void Configure(EntityTypeBuilder<OutboxMessage> builder)
-        {
-            builder.ToContainer("OutboxMessages")
-                .HasNoDiscriminator();
-
-            builder.HasKey(e => e.Id);
-            builder.HasPartitionKey(e => e.PartitionKey);
         }
     }
 }

@@ -33,6 +33,7 @@ namespace OpenSleigh.Core.Tests.E2E
 
                 await Task.Delay(TimeSpan.FromSeconds(10));
                 tokenSource.Cancel();
+                msg.CorrelationId.Should().Be(message.CorrelationId);                
             };
 
             var hosts = new IHost[hostsCount];
