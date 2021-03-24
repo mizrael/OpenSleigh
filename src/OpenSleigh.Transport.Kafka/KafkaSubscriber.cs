@@ -7,10 +7,10 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    public record KafkaSubscriberConfig(TimeSpan ConsumeTimeout, TimeSpan ConsumeDelay)
+    public record KafkaSubscriberConfig(TimeSpan ConsumeDelay)
     {
         public static KafkaSubscriberConfig Default =
-            new KafkaSubscriberConfig(TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(250));
+            new KafkaSubscriberConfig(TimeSpan.FromMilliseconds(250));
     }
 
     public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
@@ -58,7 +58,7 @@ namespace OpenSleigh.Transport.Kafka
             {
                 try
                 {
-                    var result = _consumer.Consume(_config.ConsumeTimeout);
+                    var result = _consumer.Consume(cancellationToken);
                     if (result is null || result.IsPartitionEOF)
                     {
                         await Task.Delay(_config.ConsumeDelay, cancellationToken);
