@@ -43,6 +43,7 @@ namespace OpenSleigh.Transport.Kafka
             busConfigurator.Services.AddTransient<IPublisher, KafkaPublisher>();
 
             busConfigurator.Services.AddTransient<IMessageParser, MessageParser>();
+            busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
 
             busConfigurator.Services.AddSingleton(new ConsumerConfig()
             {
