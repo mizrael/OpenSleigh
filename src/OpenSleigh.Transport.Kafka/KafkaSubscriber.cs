@@ -22,6 +22,7 @@ namespace OpenSleigh.Transport.Kafka
         private readonly KafkaSubscriberConfig _config;
         
         private bool _started = false;
+        private bool _disposed = false;
 
         public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder,
             IQueueReferenceFactory queueReferenceFactory,
@@ -74,6 +75,11 @@ namespace OpenSleigh.Transport.Kafka
                         _queueReferences.TopicName, ex.Message);
                     await Task.Delay(_config.ConsumeDelay, cancellationToken);
                 }
+                catch (ObjectDisposedException ex)
+                {
+                    _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call", _queueReferences.TopicName);
+                    break;
+                }
                 catch (TaskCanceledException ex)
                 {
                     _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
@@ -87,7 +93,9 @@ namespace OpenSleigh.Transport.Kafka
                 }
             }
 
-            _consumer.Unsubscribe();
+            _started = false;
+            if(!_disposed)
+                _consumer?.Unsubscribe();
         }
 
         public Task StopAsync(CancellationToken cancellationToken = default)
@@ -101,6 +109,7 @@ namespace OpenSleigh.Transport.Kafka
             _started = false;
             _consumer?.Dispose();
             _consumer = null;
+            _disposed = true;
         }
     }
 }
