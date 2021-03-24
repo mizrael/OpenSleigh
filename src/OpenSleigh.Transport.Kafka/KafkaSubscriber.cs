@@ -7,23 +7,28 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka
 {
+    public record KafkaSubscriberConfig(TimeSpan ConsumeTimeout, TimeSpan ConsumeDelay)
+    {
+        public static KafkaSubscriberConfig Default =
+            new KafkaSubscriberConfig(TimeSpan.FromMilliseconds(100), TimeSpan.FromMilliseconds(250));
+    }
+
     public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
         where TM : IMessage
     {
         private IConsumer<Guid, byte[]> _consumer;
         private readonly QueueReferences _queueReferences;
-        private IKafkaMessageHandler _messageHandler;
-        private ILogger<KafkaSubscriber<TM>> _logger;
-
-        private static readonly TimeSpan _consumeTimeout = TimeSpan.FromMilliseconds(100);
-        private static readonly TimeSpan _consumeSleepSpan = TimeSpan.FromMilliseconds(250);
-
+        private readonly IKafkaMessageHandler _messageHandler;
+        private readonly ILogger<KafkaSubscriber<TM>> _logger;
+        private readonly KafkaSubscriberConfig _config;
+        
         private bool _started = false;
 
         public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder,
             IQueueReferenceFactory queueReferenceFactory,
             IKafkaMessageHandler messageHandler,
-            ILogger<KafkaSubscriber<TM>> logger)
+            ILogger<KafkaSubscriber<TM>> logger,
+            KafkaSubscriberConfig config = null)
         {
             if (builder is null)
                 throw new ArgumentNullException(nameof(builder));
@@ -35,6 +40,7 @@ namespace OpenSleigh.Transport.Kafka
             _queueReferences = queueReferenceFactory.Create<TM>();
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _config = config ?? KafkaSubscriberConfig.Default;
         }
 
         public Task StartAsync(CancellationToken cancellationToken = default)
@@ -43,7 +49,7 @@ namespace OpenSleigh.Transport.Kafka
 
             _started = true;
 
-            return Task.Run(async () => await ConsumeMessages(cancellationToken));
+            return Task.Run(async () => await ConsumeMessages(cancellationToken), CancellationToken.None);
         }
 
         private async Task ConsumeMessages(CancellationToken cancellationToken)
@@ -52,10 +58,10 @@ namespace OpenSleigh.Transport.Kafka
             {
                 try
                 {
-                    var result = _consumer.Consume(_consumeTimeout);
+                    var result = _consumer.Consume(_config.ConsumeTimeout);
                     if (result is null || result.IsPartitionEOF)
                     {
-                        await Task.Delay(_consumeSleepSpan, cancellationToken);
+                        await Task.Delay(_config.ConsumeDelay, cancellationToken);
                         continue;
                     }
 
@@ -68,7 +74,7 @@ namespace OpenSleigh.Transport.Kafka
 
                     _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
                         _queueReferences.TopicName, ex.Message);
-                    await Task.Delay(_consumeSleepSpan, cancellationToken);
+                    await Task.Delay(_config.ConsumeDelay, cancellationToken);
                 }
                 catch (TaskCanceledException ex)
                 {
