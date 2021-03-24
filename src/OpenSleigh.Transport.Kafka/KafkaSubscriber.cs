@@ -9,8 +9,7 @@ namespace OpenSleigh.Transport.Kafka
 {
     public record KafkaSubscriberConfig(TimeSpan ConsumeDelay)
     {
-        public static KafkaSubscriberConfig Default =
-            new KafkaSubscriberConfig(TimeSpan.FromMilliseconds(250));
+        public static readonly KafkaSubscriberConfig Default = new (TimeSpan.FromMilliseconds(250));
     }
 
     public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
@@ -44,16 +43,15 @@ namespace OpenSleigh.Transport.Kafka
         }
 
         public Task StartAsync(CancellationToken cancellationToken = default)
-        {    
-            _consumer.Subscribe(_queueReferences.TopicName);
-
-            _started = true;
-
-            return Task.Run(async () => await ConsumeMessages(cancellationToken), CancellationToken.None);
+        {
+            return Task.Run(() => ConsumeMessages(cancellationToken), CancellationToken.None);
         }
 
         private async Task ConsumeMessages(CancellationToken cancellationToken)
         {
+            _started = true;
+            _consumer.Subscribe(_queueReferences.TopicName);
+
             while (_started && !cancellationToken.IsCancellationRequested)
             {
                 try
@@ -88,13 +86,13 @@ namespace OpenSleigh.Transport.Kafka
                         _queueReferences.TopicName, ex.Message);
                 }
             }
+
+            _consumer.Unsubscribe();
         }
 
         public Task StopAsync(CancellationToken cancellationToken = default)
         {
             _started = false;
-
-            _consumer.Unsubscribe();
             return Task.CompletedTask;
         }
 

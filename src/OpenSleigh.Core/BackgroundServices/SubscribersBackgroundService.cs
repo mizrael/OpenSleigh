@@ -23,14 +23,12 @@ namespace OpenSleigh.Core.BackgroundServices
         {
             if (!_systemInfo.PublishOnly)
             {
-                await Task.Factory.StartNew(async () =>
-                {
-                    var tasks = _subscribers.Select(s => s.StartAsync(cancellationToken)).ToArray();
-                    await Task.WhenAll(tasks);
-                },
-                cancellationToken,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Current);
+                var tasks = _subscribers.Select(s => s.StartAsync(cancellationToken));
+
+                await Task.Factory.StartNew(() => Task.WhenAll(tasks),
+                                            cancellationToken,
+                                            TaskCreationOptions.LongRunning,
+                                            TaskScheduler.Current);
             }
 
             await base.StartAsync(cancellationToken);

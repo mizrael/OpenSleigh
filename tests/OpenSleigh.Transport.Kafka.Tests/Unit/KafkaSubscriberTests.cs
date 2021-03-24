@@ -59,7 +59,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         }
 
         [Fact]
-        public async Task StopAsync_should_subscribe_to_topic()
+        public async Task StopAsync_should_unsubscribe_from_topic()
         {
             var queueRefs = new QueueReferences("lorem", "ipsum");
             var consumer = NSubstitute.Substitute.For<IConsumer<Guid, byte[]>>();
@@ -67,6 +67,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var sut = BuildSUT(queueRefs, consumer);
 
             var tokenSource = new CancellationTokenSource(1000);
+            await sut.StartAsync(tokenSource.Token);
             await sut.StopAsync(tokenSource.Token);
 
             consumer.Received(1).Unsubscribe();
