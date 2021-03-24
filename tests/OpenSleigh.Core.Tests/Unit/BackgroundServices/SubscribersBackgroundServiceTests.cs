@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using OpenSleigh.Core.BackgroundServices;
+using OpenSleigh.Core.Messaging;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit.BackgroundServices

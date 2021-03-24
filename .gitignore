@@ -4,3 +4,4 @@ obj/
 *.DotSettings.user
 .docker/
 packages/
+TestResults/

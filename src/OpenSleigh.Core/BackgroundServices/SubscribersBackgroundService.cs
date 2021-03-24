@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Hosting;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.BackgroundServices
 {
@@ -21,8 +22,15 @@ namespace OpenSleigh.Core.BackgroundServices
         public override async Task StartAsync(CancellationToken cancellationToken)
         {
             if (!_systemInfo.PublishOnly)
-                await Task.WhenAll(_subscribers.Select(s => s.StartAsync(cancellationToken)));
-            
+            {
+                var tasks = _subscribers.Select(s => s.StartAsync(cancellationToken));
+
+                await Task.Factory.StartNew(() => Task.WhenAll(tasks),
+                                            cancellationToken,
+                                            TaskCreationOptions.LongRunning,
+                                            TaskScheduler.Current);
+            }
+
             await base.StartAsync(cancellationToken);
         }
 

@@ -25,11 +25,12 @@ namespace OpenSleigh.Core.Tests.E2E
 
             Action<StartSimpleSaga> onMessage = msg =>
             {
-                received = true;
-
                 tokenSource.Cancel();
 
-                msg.Should().Be(message);
+                msg.Id.Should().Be(message.Id);
+                msg.CorrelationId.Should().Be(message.CorrelationId);
+
+                received = true;
             };
 
             hostBuilder.ConfigureServices((ctx, services) =>
