@@ -16,6 +16,7 @@ namespace OpenSleigh.Transport.Kafka
         private ILogger<KafkaSubscriber<TM>> _logger;
 
         private static readonly TimeSpan _consumeTimeout = TimeSpan.FromMilliseconds(100);
+        private static readonly TimeSpan _consumeSleepSpan = TimeSpan.FromMilliseconds(250);
 
         private bool _started = false;
 
@@ -53,7 +54,10 @@ namespace OpenSleigh.Transport.Kafka
                 {
                     var result = _consumer.Consume(_consumeTimeout);
                     if (result is null || result.IsPartitionEOF)
+                    {
+                        await Task.Delay(_consumeSleepSpan, cancellationToken);
                         continue;
+                    }
 
                     await _messageHandler.HandleAsync(result, _queueReferences, cancellationToken);
                 }
@@ -64,6 +68,7 @@ namespace OpenSleigh.Transport.Kafka
 
                     _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
                         _queueReferences.TopicName, ex.Message);
+                    await Task.Delay(_consumeSleepSpan, cancellationToken);
                 }
                 catch (TaskCanceledException ex)
                 {
