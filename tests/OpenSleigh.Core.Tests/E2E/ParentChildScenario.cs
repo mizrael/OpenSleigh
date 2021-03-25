@@ -29,18 +29,25 @@ namespace OpenSleigh.Core.Tests.E2E
             var hosts = new IHost[hostsCount];
 
             Action<ParentSagaCompleted> onMessage = async msg =>
-            {   
-                msg.CorrelationId.Should().Be(message.CorrelationId);
-                receivedCount++;
+            {
+                try
+                {
+                    msg.CorrelationId.Should().Be(message.CorrelationId);
+                    receivedCount++;
 
-                await Task.Delay(TimeSpan.FromSeconds(10));
+                    await Task.Delay(TimeSpan.FromSeconds(10));
 
-                foreach (var host in hosts)
-                    await host.StopAsync();
+                    foreach (var host in hosts)
+                        await host.StopAsync();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
             };
 
             for (var i = 0; i < hostsCount; i++)
-                hosts[i] = await SetupHost(onMessage);
+                hosts[i] = await SetupHost(onMessage, i);
 
             using var scope = hosts[0].Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
@@ -56,11 +63,16 @@ namespace OpenSleigh.Core.Tests.E2E
             receivedCount.Should().Be(1);
         }
 
-        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage)
+        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage, int hostId)
         {
             var hostBuilder = CreateHostBuilder();
-            hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
+            hostBuilder.ConfigureServices((ctx, services) =>
+            {
+                services.AddSingleton(onMessage);
+                services.AddSingleton(new HostInfo(hostId));
+            });
             var host = hostBuilder.Build();
+            
             await host.SetupInfrastructureAsync();
             return host;
         }

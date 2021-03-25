@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Tests.E2E;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {
@@ -24,11 +26,14 @@ namespace OpenSleigh.Core.Tests.Sagas
         IHandleMessage<ParentSagaCompleted>
     {
         private readonly Action<ParentSagaCompleted> _onCompleted;
-
+        private readonly HostInfo _hostInfo;
+        private readonly ILogger<ParentSaga> _logger;
         
-        public ParentSaga(Action<ParentSagaCompleted> onCompleted)
+        public ParentSaga(Action<ParentSagaCompleted> onCompleted, ILogger<ParentSaga> logger, HostInfo hostInfo)
         {
             _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
+            _logger = logger;
+            _hostInfo = hostInfo;
         }
 
         public async Task HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
@@ -51,6 +56,8 @@ namespace OpenSleigh.Core.Tests.Sagas
 
         public Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
         {
+            _logger.LogInformation($"[Host {_hostInfo.HostId}]> completing Parent Saga '{context.Message.CorrelationId}'");
+
             this.State.MarkAsCompleted();
 
             _onCompleted?.Invoke(context.Message);
