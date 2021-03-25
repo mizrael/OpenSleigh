@@ -33,12 +33,13 @@ namespace OpenSleigh.Core.Tests.E2E
             {
                 callsCount++;
 
-                if (callsCount >= expectedCount)
-                {
-                    foreach (var host in hosts)
-                        await host.StopAsync();
-                  //  tokenSource.Cancel();
-                }
+                if (callsCount < expectedCount) 
+                    return;
+
+                await Task.Delay(TimeSpan.FromSeconds(10));
+
+                foreach (var host in hosts)
+                    await host.StopAsync();
             };
 
             for (var i = 0; i < hostsCount; i++)

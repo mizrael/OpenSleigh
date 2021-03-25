@@ -26,6 +26,8 @@ namespace OpenSleigh.Core.Tests.E2E
             var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
 
+            var hosts = new IHost[hostsCount];
+
             Action<StartSimpleSaga> onMessage = async msg =>
             {
                 msg.Id.Should().Be(message.Id);
@@ -34,10 +36,11 @@ namespace OpenSleigh.Core.Tests.E2E
                 receivedCount++;
 
                 await Task.Delay(TimeSpan.FromSeconds(10));
-                tokenSource.Cancel();
+                
+                foreach (var host in hosts)
+                    await host.StopAsync();
             };
-            
-            var hosts = new IHost[hostsCount];
+
             for(var i=0;i< hostsCount;i++)
                 hosts[i] = await SetupHost(onMessage);
 
