@@ -6,9 +6,9 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
     public class SagaState
     {
         private SagaState() { }
-        private SagaState(string partitionKey, Guid correlationId, string type)
+        private SagaState(Guid correlationId, string type)
         {
-            PartitionKey = partitionKey;
+            PartitionKey = correlationId.ToString();
             CorrelationId = correlationId;
             Type = type;
         }
@@ -42,6 +42,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
         }
 
         public static SagaState New(Guid correlationId, string type)
-            => new SagaState($"{correlationId}|{type}", correlationId, type);
+            => new SagaState(correlationId, type);
     }
 }
