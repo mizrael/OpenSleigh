@@ -26,7 +26,7 @@ namespace OpenSleigh.Core.BackgroundServices
                 var tasks = _subscribers.Select(s => s.StartAsync(cancellationToken));
 
                 await Task.Factory.StartNew(() => Task.WhenAll(tasks),
-                                            cancellationToken,
+                                            CancellationToken.None,
                                             TaskCreationOptions.LongRunning,
                                             TaskScheduler.Current);
             }

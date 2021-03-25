@@ -21,14 +21,14 @@ namespace OpenSleigh.Core.BackgroundServices
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             await Task.Factory.StartNew(async () => await ProcessMessagesAsync(stoppingToken), 
-                stoppingToken,
+                CancellationToken.None,
                 TaskCreationOptions.LongRunning, 
                 TaskScheduler.Current);
         }
 
         private async Task ProcessMessagesAsync(CancellationToken stoppingToken)
         {
-            while (true)
+            while (!stoppingToken.IsCancellationRequested)
             {
                 using (var scope = _scopeFactory.CreateScope())
                 {
