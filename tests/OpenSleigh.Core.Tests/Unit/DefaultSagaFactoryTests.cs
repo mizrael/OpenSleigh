@@ -51,7 +51,6 @@ namespace OpenSleigh.Core.Tests.Unit
             var saga = sut.Create(state);
             saga.Should().NotBeNull();
             saga.State.Should().Be(state);
-            saga.Bus.Should().Be(bus);
         }
     }
 }

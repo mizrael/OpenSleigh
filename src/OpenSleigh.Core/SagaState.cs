@@ -1,13 +1,18 @@
 ﻿using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Core
 {
     //TODO: get rid of Newtonsoft.JSON dependency
     public abstract class SagaState
     {
+        private readonly List<IMessage> _outbox = new();
+
         [JsonProperty] //TODO: can we use an HashSet here ?
         private readonly Dictionary<Guid, IMessage> _processedMessages = new();
 
@@ -40,5 +45,19 @@ namespace OpenSleigh.Core
         public bool IsCompleted() => _isComplete;
 
         public void MarkAsCompleted() => _isComplete = true;
+
+        internal void AddToOutbox<TM>(TM message) where TM : IMessage
+        {
+            if (message == null) 
+                throw new ArgumentNullException(nameof(message));
+            _outbox.Add(message);
+        }
+
+        internal async Task PersistOutboxAsync(IOutboxRepository outboxRepository, CancellationToken cancellationToken = default)
+        {
+            foreach (var message in _outbox)
+                await outboxRepository.AppendAsync(message, cancellationToken);
+            _outbox.Clear();
+        }
     }
 }

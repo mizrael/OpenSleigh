@@ -23,9 +23,6 @@ namespace OpenSleigh.Core
             var saga = _serviceProvider.GetRequiredService<TS>();
 
             saga.SetState(state);
-
-            var bus = _serviceProvider.GetRequiredService<IMessageBus>();
-            saga.SetBus(bus);
             
             return saga;
         }

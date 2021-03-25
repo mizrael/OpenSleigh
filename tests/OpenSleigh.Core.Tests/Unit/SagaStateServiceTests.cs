@@ -18,12 +18,16 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+            
+            Assert.Throws<ArgumentNullException>(() =>
+                new SagaStateService<DummySaga, DummySagaState>(null, sagaStateRepo, outboxRepository));
 
             Assert.Throws<ArgumentNullException>(() =>
-                new SagaStateService<DummySaga, DummySagaState>(null, sagaStateRepo));
+                new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, null, outboxRepository));
 
             Assert.Throws<ArgumentNullException>(() =>
-                new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, null));
+                new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, null));
         }
         
         [Fact]
@@ -31,8 +35,9 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
-            
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo);
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
 
             var message = StartDummySaga.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
@@ -48,8 +53,9 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
-            
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo);
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
 
             var message = DummySagaStarted.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<DummySagaStarted>>();
@@ -80,7 +86,9 @@ namespace OpenSleigh.Core.Tests.Unit
             sagaStateRepo.LockAsync(message.CorrelationId, expectedState, Arg.Any<CancellationToken>())
                 .Returns(Task.FromResult((expectedState, Guid.NewGuid())));
 
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo);
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
 
             var result = await sut.GetAsync(messageContext, CancellationToken.None);
             result.state.Should().Be(expectedState);
@@ -93,7 +101,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
             
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo);
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
 
             var state = new DummySagaState(Guid.NewGuid());
             var lockId = Guid.NewGuid();
@@ -102,6 +112,29 @@ namespace OpenSleigh.Core.Tests.Unit
 
             await sagaStateRepo.Received(1)
                 .ReleaseLockAsync(state, lockId, CancellationToken.None);
+        }
+
+        [Fact]
+        public async Task SaveAsync_should_persist_outbox()
+        {
+            var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
+
+            var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
+
+            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
+
+            var state = new DummySagaState(Guid.NewGuid());
+
+            var message = StartDummySaga.New();
+            state.AddToOutbox(message);
+            var lockId = Guid.NewGuid();
+
+            await sut.SaveAsync(state, lockId, CancellationToken.None);
+
+            await outboxRepository.Received(1)
+                .AppendAsync(message, Arg.Any<CancellationToken>());
         }
     }
 }

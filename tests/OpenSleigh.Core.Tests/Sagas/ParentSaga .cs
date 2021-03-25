@@ -39,19 +39,19 @@ namespace OpenSleigh.Core.Tests.Sagas
         public async Task HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
         {
             var message = new ProcessParentSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
         {
             var message = new StartChildSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
         {
             var message = new ParentSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
