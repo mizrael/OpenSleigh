@@ -107,7 +107,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             var lockId = await sut.LockAsync(message);
             await sut.ReleaseAsync(message, lockId);
 
-            await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
+            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.LockAsync(message));
         }
 
         [Fact]
@@ -126,8 +126,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 
             await sut.AppendAsync(message);
 
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
-            ex.Message.Should().Contain($"message '{message.Id}' is not locked");
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
+            ex.Message.Should().Contain($"message '{message.Id}' not found");
         }
 
         [Fact]
@@ -141,8 +141,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 
             var lockId = Guid.NewGuid();
 
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(message, lockId));
-            ex.Message.Should().Contain($"invalid lock id '{lockId}' on message '{message.Id}'");
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, lockId));
+            ex.Message.Should().Contain($"message '{message.Id}' not found");
         }
 
         [Fact]
