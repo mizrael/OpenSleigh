@@ -30,20 +30,13 @@ namespace OpenSleigh.Core.Tests.E2E
 
             Action<ParentSagaCompleted> onMessage = async msg =>
             {
-                try
-                {
-                    msg.CorrelationId.Should().Be(message.CorrelationId);
-                    receivedCount++;
+                msg.CorrelationId.Should().Be(message.CorrelationId);
+                receivedCount++;
 
-                    await Task.Delay(TimeSpan.FromSeconds(10));
+                await Task.Delay(TimeSpan.FromSeconds(10));
 
-                    foreach (var host in hosts)
-                        await host.StopAsync();
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                }
+                foreach (var host in hosts)
+                    await host.StopAsync();
             };
 
             for (var i = 0; i < hostsCount; i++)
