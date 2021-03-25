@@ -74,7 +74,10 @@ namespace OpenSleigh.Persistence.SQL
             try
             {
                 var entity = await _dbContext.OutboxMessages
-                    .FirstOrDefaultAsync(e => e.Id == message.Id, cancellationToken)
+                    .FirstOrDefaultAsync(e =>
+                        e.Id == message.Id &&
+                        e.LockId == lockId,
+                        cancellationToken)
                     .ConfigureAwait(false);
                 if (entity is null)
                     throw new ArgumentException($"message '{message.Id}' not found");
@@ -159,7 +162,12 @@ namespace OpenSleigh.Persistence.SQL
             var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
             try
             {
-                var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id,
+                var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
+
+                var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e =>
+                            e.Id == message.Id &&
+                            (e.LockId == null || e.LockTime > expirationDate) &&
+                            e.Status == MessageStatuses.Pending.ToString(),
                         cancellationToken: cancellationToken)
                     .ConfigureAwait(false);
                 if (entity is null)
