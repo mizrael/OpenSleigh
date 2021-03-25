@@ -38,7 +38,7 @@ namespace OpenSleigh.Samples.Sample2.Common.Sagas
             _logger.LogInformation($"starting parent saga '{context.Message.CorrelationId}'...");
             
             var message = new ProcessParentSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
         
         public async Task HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
@@ -46,7 +46,7 @@ namespace OpenSleigh.Samples.Sample2.Common.Sagas
             _logger.LogInformation($"starting child saga from parent saga '{context.Message.CorrelationId}'...");
             
             var message = new StartChildSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
@@ -56,7 +56,7 @@ namespace OpenSleigh.Samples.Sample2.Common.Sagas
             await Task.Delay(TimeSpan.FromSeconds(_random.Next(1, 5)), cancellationToken);
             
             var message = new ParentSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)

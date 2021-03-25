@@ -37,10 +37,10 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
             this.State.OrderId = context.Message.OrderId;
 
             var startCreditCheck = ProcessCreditCheck.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(startCreditCheck, cancellationToken);
+            this.Publish(startCreditCheck);
 
             var startInventoryCheck = CheckInventory.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(startInventoryCheck, cancellationToken);
+            this.Publish(startInventoryCheck);
         }
         
         public async Task HandleAsync(IMessageContext<CrediCheckCompleted> context, CancellationToken cancellationToken = default)
@@ -66,7 +66,7 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
             _logger.LogInformation($"shipping for order '{context.Message.OrderId}' completed!");
 
             var message = OrderSagaCompleted.New(this.State.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
 
             this.State.MarkAsCompleted();
         }
@@ -79,7 +79,7 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
                 return;
 
             var message = ProcessShipping.New(this.State.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
     }

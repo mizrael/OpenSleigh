@@ -32,7 +32,7 @@ namespace OpenSleigh.Samples.Sample6.Console.Sagas
             _logger.LogInformation($"processing saga '{context.Message.CorrelationId}'...");
 
             var message = new MySagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<MySagaCompleted> context, CancellationToken cancellationToken = default)

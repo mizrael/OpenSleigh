@@ -54,9 +54,7 @@ namespace OpenSleigh.Samples.Sample8.Server.Sagas
 
             await SendNotification($"starting saga {context.Message.CorrelationId} with {State.TotalSteps} total steps...");
                 
-            await this.Bus.PublishAsync(
-                new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId),
-                cancellationToken);
+            this.Publish(new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId));
         }
 
         public async Task HandleAsync(IMessageContext<ProcessNextStep> context,
@@ -66,9 +64,7 @@ namespace OpenSleigh.Samples.Sample8.Server.Sagas
 
             if (State.CurrentStep > State.TotalSteps)
             {
-                await this.Bus.PublishAsync(
-                    new SagaCompleted(Guid.NewGuid(), context.Message.CorrelationId),
-                    cancellationToken);
+                this.Publish(new SagaCompleted(Guid.NewGuid(), context.Message.CorrelationId));
                 return;
             }
 
@@ -76,9 +72,7 @@ namespace OpenSleigh.Samples.Sample8.Server.Sagas
 
             await Task.Delay(250, cancellationToken);
 
-            await this.Bus.PublishAsync(
-                new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId),
-                cancellationToken);
+            this.Publish(new ProcessNextStep(Guid.NewGuid(), context.Message.CorrelationId));
         }
 
         public async Task HandleAsync(IMessageContext<SagaCompleted> context, CancellationToken cancellationToken = default)
