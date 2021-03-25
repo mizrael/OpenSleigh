@@ -102,7 +102,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                 .ConfigureAwait(false);
 
             if (null == stateEntity)
-                throw new LockException($"unable to find Saga State '{state.Id}' with type '{stateType.FullName}'");
+                throw new LockException($"unable to release Saga State '{state.Id}' with type '{stateType.FullName}' by lock id {lockId}");
 
             var newStateData = await _serializer.SerializeAsync(state, cancellationToken);
             stateEntity.Release(newStateData);
