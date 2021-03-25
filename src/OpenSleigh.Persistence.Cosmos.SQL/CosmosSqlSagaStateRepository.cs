@@ -40,7 +40,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             try
             {
                 var stateEntity = await _dbContext.SagaStates
-                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.CorrelationId == correlationId && 
                                               e.Type == stateType.FullName, cancellationToken)
                     .ConfigureAwait(false); 
