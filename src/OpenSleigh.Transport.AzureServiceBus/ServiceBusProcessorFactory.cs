@@ -31,13 +31,16 @@ namespace OpenSleigh.Transport.AzureServiceBus
 
         public async ValueTask DisposeAsync()
         {
+#if !DEBUG
+            // calling DisposeAsync() on each processor might take a long time to complete (~60sec) due to 
+            // apparent limitations of the underlying AMQP library.
+            // more details here: https://github.com/Azure/azure-sdk-for-net/issues/19306
+            // Therefore we do it only when in Release mode. Debug mode is used when running the tests suite.
+
             foreach (var sender in _processors.Values)
             {
                 try
-                {
-                    // this call might take a long time to complete (~60sec) due to 
-                    // apparent limitations of the underlying AMQP library.
-                    // more details here: https://github.com/Azure/azure-sdk-for-net/issues/19306
+                {                    
                     await sender.DisposeAsync().ConfigureAwait(false);
                 }
                 catch (Exception e)
@@ -45,7 +48,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
                     Console.WriteLine(e);
                 }
             }
-                
+#endif              
             _processors.Clear();
         }
     }
