@@ -26,16 +26,21 @@ namespace OpenSleigh.Core.Tests.E2E
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
             var callsCount = 0;
             var expectedCount = 2;
-            
-            Action<DummyEvent> onMessage = msg =>
+
+            var hosts = new IHost[hostsCount];
+
+            Action<DummyEvent> onMessage = async msg =>
             {
                 callsCount++;
 
-                if(callsCount >= expectedCount)
-                    tokenSource.Cancel();
+                if (callsCount >= expectedCount)
+                {
+                    foreach (var host in hosts)
+                        await host.StopAsync();
+                  //  tokenSource.Cancel();
+                }
             };
 
-            var hosts = new IHost[hostsCount];
             for (var i = 0; i < hostsCount; i++)
                 hosts[i] = await SetupHost(onMessage);
 
@@ -47,7 +52,7 @@ namespace OpenSleigh.Core.Tests.E2E
                 {
                     bus.PublishAsync(message, tokenSource.Token)
                 });
-
+            
             await Task.WhenAll(tasks);
 
             callsCount.Should().Be(expectedCount);
