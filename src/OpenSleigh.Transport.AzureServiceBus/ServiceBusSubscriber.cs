@@ -7,12 +7,12 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
-    internal sealed class ServiceBusSubscriber<TM> : ISubscriber<TM>, IDisposable
+    internal sealed class ServiceBusSubscriber<TM> : ISubscriber<TM>
         where TM : IMessage
     {
-        private ServiceBusProcessor _processor;
         private readonly IMessageProcessor _messageProcessor;
         private readonly IMessageParser _messageParser;
+        private readonly IServiceBusProcessorFactory _processorFactory;
         private readonly ILogger<ServiceBusSubscriber<TM>> _logger;
         
         public ServiceBusSubscriber(IServiceBusProcessorFactory processorFactory,
@@ -20,15 +20,18 @@ namespace OpenSleigh.Transport.AzureServiceBus
             IMessageProcessor messageProcessor, 
             ILogger<ServiceBusSubscriber<TM>> logger)
         {
-            if (processorFactory == null) 
-                throw new ArgumentNullException(nameof(processorFactory));
+            _processorFactory = processorFactory ?? throw new ArgumentNullException(nameof(processorFactory)); ;
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+        }
 
-            _processor = processorFactory.Create<TM>();
-            _processor.ProcessMessageAsync += MessageHandler;
-            _processor.ProcessErrorAsync += ErrorHandler;
+        private ServiceBusProcessor CreateProcessor()
+        {
+            var processor = _processorFactory.Create<TM>();
+            processor.ProcessMessageAsync += MessageHandler;
+            processor.ProcessErrorAsync += ErrorHandler;
+            return processor;
         }
 
         private Task ErrorHandler(ProcessErrorEventArgs args)
@@ -57,15 +60,14 @@ namespace OpenSleigh.Transport.AzureServiceBus
             }
         }
 
-        public async Task StartAsync(CancellationToken cancellationToken = default) 
-            => await _processor.StartProcessingAsync(cancellationToken).ConfigureAwait(false);
-
-        public async Task StopAsync(CancellationToken cancellationToken = default)
-            => await _processor.StopProcessingAsync(cancellationToken).ConfigureAwait(false);
-
-        public void Dispose()
+        public async Task StartAsync(CancellationToken cancellationToken = default)
         {
-            _processor = null;
+            var processor = CreateProcessor();
+            if(!processor.IsProcessing)
+                await processor.StartProcessingAsync(cancellationToken).ConfigureAwait(false);
         }
+
+        public Task StopAsync(CancellationToken cancellationToken = default)
+            => Task.CompletedTask;
     }
 }

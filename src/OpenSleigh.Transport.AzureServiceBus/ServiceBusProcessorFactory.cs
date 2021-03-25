@@ -32,7 +32,20 @@ namespace OpenSleigh.Transport.AzureServiceBus
         public async ValueTask DisposeAsync()
         {
             foreach (var sender in _processors.Values)
-                await sender.CloseAsync().ConfigureAwait(false);
+            {
+                try
+                {
+                    // this call might take a long time to complete (~60sec) due to 
+                    // apparent limitations of the underlying AMQP library.
+                    // more details here: https://github.com/Azure/azure-sdk-for-net/issues/19306
+                    await sender.DisposeAsync().ConfigureAwait(false);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
+            }
+                
             _processors.Clear();
         }
     }
