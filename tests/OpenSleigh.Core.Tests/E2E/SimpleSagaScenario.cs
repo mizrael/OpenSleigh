@@ -17,31 +17,26 @@ namespace OpenSleigh.Core.Tests.E2E
         [Theory]
         [InlineData(1)]
         [InlineData(2)]
-        [InlineData(3)]
-        [InlineData(10)]
+        [InlineData(5)]
         public async Task run_single_message_scenario(int hostsCount)
         {
             var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
             
             var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            
+            Action<StartSimpleSaga> onMessage = msg =>
+            {
+                receivedCount++;
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+                
+                msg.Id.Should().Be(message.Id);
+                msg.CorrelationId.Should().Be(message.CorrelationId);
+            };
 
             var hosts = new IHost[hostsCount];
 
-            Action<StartSimpleSaga> onMessage = async msg =>
-            {
-                msg.Id.Should().Be(message.Id);
-                msg.CorrelationId.Should().Be(message.CorrelationId);
-
-                receivedCount++;
-
-                await Task.Delay(TimeSpan.FromSeconds(10));
-                
-                foreach (var host in hosts)
-                    await host.StopAsync();
-            };
-
-            for(var i=0;i< hostsCount;i++)
+            for (var i=0;i< hostsCount;i++)
                 hosts[i] = await SetupHost(onMessage);
 
             using var scope = hosts[0].Services.CreateScope();
@@ -52,7 +47,6 @@ namespace OpenSleigh.Core.Tests.E2E
                 {
                     bus.PublishAsync(message, tokenSource.Token)
                 });
-
             await Task.WhenAll(tasks);
 
             receivedCount.Should().Be(1);

@@ -17,8 +17,7 @@ namespace OpenSleigh.Core.Tests.E2E
         [Theory]
         [InlineData(1)]
         [InlineData(2)]
-        [InlineData(3)]
-        [InlineData(10)]
+        [InlineData(5)]
         public async Task run_event_broadcasting_scenario(int hostsCount)
         {
             var message = new DummyEvent(Guid.NewGuid(), Guid.NewGuid());
@@ -27,8 +26,6 @@ namespace OpenSleigh.Core.Tests.E2E
             var callsCount = 0;
             var expectedCount = 2;
 
-            var hosts = new IHost[hostsCount];
-
             Action<DummyEvent> onMessage = async msg =>
             {
                 callsCount++;
@@ -36,12 +33,10 @@ namespace OpenSleigh.Core.Tests.E2E
                 if (callsCount < expectedCount) 
                     return;
 
-                await Task.Delay(TimeSpan.FromSeconds(10));
-
-                foreach (var host in hosts)
-                    await host.StopAsync();
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
             };
 
+            var hosts = new IHost[hostsCount];
             for (var i = 0; i < hostsCount; i++)
                 hosts[i] = await SetupHost(onMessage);
 

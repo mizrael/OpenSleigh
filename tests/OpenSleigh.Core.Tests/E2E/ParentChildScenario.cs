@@ -17,28 +17,23 @@ namespace OpenSleigh.Core.Tests.E2E
         [Theory]
         [InlineData(1)]
         [InlineData(2)]
-        [InlineData(3)]
-        [InlineData(10)]
+        [InlineData(5)]
         public async Task run_parent_child_scenario(int hostsCount)
         {
             var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
 
             var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
-
-            var hosts = new IHost[hostsCount];
-
-            Action<ParentSagaCompleted> onMessage = async msg =>
+            
+            Action<ParentSagaCompleted> onMessage = msg =>
             {
-                msg.CorrelationId.Should().Be(message.CorrelationId);
                 receivedCount++;
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
 
-                await Task.Delay(TimeSpan.FromSeconds(10));
-
-                foreach (var host in hosts)
-                    await host.StopAsync();
+                msg.CorrelationId.Should().Be(message.CorrelationId);
             };
 
+            var hosts = new IHost[hostsCount];
             for (var i = 0; i < hostsCount; i++)
                 hosts[i] = await SetupHost(onMessage, i);
 
