@@ -86,7 +86,7 @@ jobs:
           name: Build and test          
           command: |            
             dotnet build 
-            dotnet test --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
+            dotnet test --no-build --filter "Category!=E2E&Category!=Integration" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
 
       - run:
           name: Stop Sonarcloud 
