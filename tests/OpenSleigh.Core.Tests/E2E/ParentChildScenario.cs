@@ -37,36 +37,19 @@ namespace OpenSleigh.Core.Tests.E2E
             var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
                                 .Select(async i =>
                                 {
-                                    try
-                                    {
-                                        var host = await SetupHost(onMessage);
-                                        await host.StartAsync(tokenSource.Token);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        throw;
-                                    }
-                                   
+                                    var host = await SetupHost(onMessage);
+                                    await host.StartAsync(tokenSource.Token);
                                 });
 
             var producerHostTask = Task.Run(async () =>
             {
-                try
-                {
-                    var host = await SetupHost(onMessage);
+                var host = await SetupHost(onMessage);
 
-                    await host.StartAsync(tokenSource.Token);
+                await host.StartAsync(tokenSource.Token);
 
-                    using var scope = host.Services.CreateScope();
-                    var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-                    await bus.PublishAsync(message, tokenSource.Token);
-                }
-                catch (Exception ex )
-                {
-
-                    throw;
-                }
-            
+                using var scope = host.Services.CreateScope();
+                var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+                await bus.PublishAsync(message, tokenSource.Token);
             });
 
             var tasks = new List<Task>(consumerHostsTasks)
