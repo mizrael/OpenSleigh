@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
+using OpenSleigh.Persistence.Cosmos.Mongo;
 using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport.AzureServiceBus;
 using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
@@ -11,10 +12,10 @@ using System.Security.Authentication;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
+namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
 {
-    public class CosmosMongoEventBroadcastingScenario : EventBroadcastingScenario, 
-        IClassFixture<DbFixture>, 
+    public class CosmosMongoEventBroadcastingScenario : EventBroadcastingScenario,
+        IClassFixture<DbFixture>,
         IClassFixture<ServiceBusFixture>,
         IAsyncLifetime
     {

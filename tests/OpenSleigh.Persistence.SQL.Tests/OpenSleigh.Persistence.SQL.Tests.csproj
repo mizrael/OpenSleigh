@@ -30,8 +30,7 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
+  <ItemGroup>    
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
   </ItemGroup>

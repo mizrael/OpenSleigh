@@ -1,33 +1,32 @@
-﻿using MongoDB.Driver;
-using OpenSleigh.Core.DependencyInjection;
+﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
-using OpenSleigh.Persistence.Mongo;
+using OpenSleigh.Persistence.InMemory;
+using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
-using System.Security.Authentication;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenSleigh.E2ETests.MongoRabbit
+namespace OpenSleigh.E2ETests.SQLRabbit
 {
-    public class MongoRabbitParentChildScenario : ParentChildScenario,
+    public class SqlParentChildScenario : ParentChildScenario, 
+        IClassFixture<DbFixture>,
         IClassFixture<RabbitFixture>,
-        IClassFixture<Persistence.Mongo.Tests.Fixtures.DbFixture>,
         IAsyncLifetime
     {
+        private readonly DbFixture _fixture;
         private readonly RabbitFixture _rabbitFixture;
-        private readonly Persistence.Mongo.Tests.Fixtures.DbFixture _mongoFixture;
         private readonly Dictionary<Type, string> _topics = new();
 
-        public MongoRabbitParentChildScenario(RabbitFixture fixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
+        public SqlParentChildScenario(DbFixture fixture, RabbitFixture rabbitFixture)
         {
-            _rabbitFixture = fixture;
-            _mongoFixture = mongoFixture;
-
+            _fixture = fixture;
+            _rabbitFixture = rabbitFixture;
             AddTopicName<StartParentSaga>();
             AddTopicName<ProcessParentSaga>();
             AddTopicName<ParentSagaCompleted>();
@@ -41,16 +40,13 @@ namespace OpenSleigh.E2ETests.MongoRabbit
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var mongoCfg = new MongoConfiguration(_mongoFixture.ConnectionString,
-                _mongoFixture.DbName,
-                MongoSagaStateRepositoryOptions.Default,
-                MongoOutboxRepositoryOptions.Default);
+            var sqlCfg = new SqlConfiguration(_fixture.ConnectionString);
 
             cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder =>
             {
                 builder.UseMessageNamingPolicy<StartParentSaga>(() =>
-                        new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)],
-                                           _topics[typeof(StartParentSaga)] + ".dead", _topics[typeof(StartParentSaga)] + ".dead"));
+                    new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)],
+                                        _topics[typeof(StartParentSaga)] + ".dead", _topics[typeof(StartParentSaga)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<ProcessParentSaga>(() =>
                     new QueueReferences(_topics[typeof(ProcessParentSaga)], _topics[typeof(ProcessParentSaga)],
@@ -72,7 +68,7 @@ namespace OpenSleigh.E2ETests.MongoRabbit
                     new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)],
                                         _topics[typeof(ChildSagaCompleted)] + ".dead", _topics[typeof(ChildSagaCompleted)] + ".dead"));
             })
-               .UseMongoPersistence(mongoCfg);
+                .UseSqlPersistence(sqlCfg);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
@@ -82,10 +78,7 @@ namespace OpenSleigh.E2ETests.MongoRabbit
 
         public async Task DisposeAsync()
         {
-            var settings = MongoClientSettings.FromUrl(new MongoUrl(_mongoFixture.ConnectionString));
-            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
-            var mongoClient = new MongoClient(settings);
-            await mongoClient.DropDatabaseAsync(_mongoFixture.DbName);
+            //TODO: drop SQL db
 
             var connectionFactory = new ConnectionFactory()
             {
@@ -97,14 +90,15 @@ namespace OpenSleigh.E2ETests.MongoRabbit
             };
             using var connection = connectionFactory.CreateConnection();
             using var channel = connection.CreateModel();
-            foreach(var kv in _topics)
+            foreach (var kv in _topics)
             {
                 channel.ExchangeDelete(kv.Value);
                 channel.QueueDelete(kv.Value);
 
                 channel.ExchangeDelete(kv.Value + ".dead");
                 channel.QueueDelete(kv.Value + ".dead");
-            }            
+            }
         }
     }
+
 }
