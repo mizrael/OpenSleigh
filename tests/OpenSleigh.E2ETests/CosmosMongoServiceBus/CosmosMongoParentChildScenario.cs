@@ -4,6 +4,7 @@ using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport.AzureServiceBus;
+using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,14 +12,17 @@ using Xunit;
 
 namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 {
-    public class CosmosMongoParentChildScenario : ParentChildScenario, IClassFixture<DbFixture>, IAsyncLifetime
+    public class CosmosMongoParentChildScenario : ParentChildScenario, IClassFixture<DbFixture>, 
+        IClassFixture<ServiceBusFixture>,
+        IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _cosmosFixture;
+        private readonly ServiceBusFixture _sbFixture;
         private readonly Dictionary<Type, string> _topics = new();
 
-        public CosmosMongoParentChildScenario(DbFixture fixture)
+        public CosmosMongoParentChildScenario(DbFixture fixture, ServiceBusFixture sbFixture)
         {
-            _fixture = fixture;
+            _cosmosFixture = fixture;
 
             AddTopicName<StartParentSaga>();
             AddTopicName<ProcessParentSaga>();
@@ -26,6 +30,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
             AddTopicName<StartChildSaga>();
             AddTopicName<ProcessChildSaga>();
             AddTopicName<ChildSagaCompleted>();
+            _sbFixture = sbFixture;
         }
 
         private void AddTopicName<T>() =>
@@ -33,12 +38,12 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var cosmosCfg = new CosmosConfiguration(_fixture.ConnectionString,
-                _fixture.DbName,
+            var cosmosCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
+                _cosmosFixture.DbName,
                 CosmosSagaStateRepositoryOptions.Default,
                 CosmosOutboxRepositoryOptions.Default);
 
-            cfg.UseAzureServiceBusTransport(_fixture.AzureServiceBusConfiguration, builder =>
+            cfg.UseAzureServiceBusTransport(_sbFixture.Configuration, builder =>
             {
                 builder.UseMessageNamingPolicy<StartParentSaga>(() =>
                     new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)]));
@@ -63,7 +68,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 
         public async Task DisposeAsync()
         {
-            var adminClient = new ServiceBusAdministrationClient(_fixture.AzureServiceBusConfiguration.ConnectionString);
+            var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
             foreach (var topicName in _topics.Values)
                 await adminClient.DeleteTopicAsync(topicName);
         }

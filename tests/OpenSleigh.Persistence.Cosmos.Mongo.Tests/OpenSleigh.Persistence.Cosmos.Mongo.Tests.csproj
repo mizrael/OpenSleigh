@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.Cosmos.Mongo\OpenSleigh.Persistence.Cosmos.Mongo.csproj" />
-    <ProjectReference Include="..\..\src\OpenSleigh.Transport.AzureServiceBus\OpenSleigh.Transport.AzureServiceBus.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
   </ItemGroup>
 
