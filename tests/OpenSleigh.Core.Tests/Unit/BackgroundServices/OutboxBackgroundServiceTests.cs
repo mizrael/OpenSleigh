@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
@@ -16,8 +17,10 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         {
             var options = OutboxProcessorOptions.Default;
             var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null, options));
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, null));
+            var logger = NSubstitute.Substitute.For<ILogger<OutboxBackgroundService>>();
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null, options, logger));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, options, null));
         }
 
         [Fact]
@@ -34,7 +37,9 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             factory.CreateScope().Returns(scope);
 
-            var sut = new OutboxBackgroundService(factory, OutboxProcessorOptions.Default);
+            var logger = NSubstitute.Substitute.For<ILogger<OutboxBackgroundService>>();
+
+            var sut = new OutboxBackgroundService(factory, OutboxProcessorOptions.Default, logger);
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);

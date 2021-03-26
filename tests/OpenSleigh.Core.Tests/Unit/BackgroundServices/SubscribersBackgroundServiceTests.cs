@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
@@ -18,8 +19,10 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             {
                 NSubstitute.Substitute.For<ISubscriber>(),
             };
-            Assert.Throws<ArgumentNullException>(() => new SubscribersBackgroundService(null, sysInfo));
-            Assert.Throws<ArgumentNullException>(() => new SubscribersBackgroundService(subscribers, null));
+            var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>();
+            Assert.Throws<ArgumentNullException>(() => new SubscribersBackgroundService(null, sysInfo, logger));            
+            Assert.Throws<ArgumentNullException>(() => new SubscribersBackgroundService(subscribers, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new SubscribersBackgroundService(subscribers, sysInfo, null));
         }
 
         [Fact]
@@ -33,7 +36,9 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             };
             var sysInfo = SystemInfo.New();
 
-            var sut = new SubscribersBackgroundService(subscribers, sysInfo);
+            var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>(); 
+            
+            var sut = new SubscribersBackgroundService(subscribers, sysInfo, logger);
             
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);
@@ -54,8 +59,10 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             };
             var sysInfo = SystemInfo.New();
             sysInfo.PublishOnly = true;
-            
-            var sut = new SubscribersBackgroundService(subscribers, sysInfo);
+
+            var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>();
+
+            var sut = new SubscribersBackgroundService(subscribers, sysInfo, logger);
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);

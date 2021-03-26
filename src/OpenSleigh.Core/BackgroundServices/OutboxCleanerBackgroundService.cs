@@ -20,10 +20,7 @@ namespace OpenSleigh.Core.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.Factory.StartNew(async () => await CleanupMessagesAsync(stoppingToken),
-                CancellationToken.None,
-                TaskCreationOptions.LongRunning,
-                TaskScheduler.Current);
+            await CleanupMessagesAsync(stoppingToken);
         }
 
         private async Task CleanupMessagesAsync(CancellationToken stoppingToken)

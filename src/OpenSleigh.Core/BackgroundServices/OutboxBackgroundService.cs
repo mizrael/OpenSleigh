@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.BackgroundServices
@@ -11,19 +12,21 @@ namespace OpenSleigh.Core.BackgroundServices
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly OutboxProcessorOptions _options;
-        
-        public OutboxBackgroundService(IServiceScopeFactory scopeFactory, OutboxProcessorOptions options)
+        private readonly ILogger<OutboxBackgroundService> _logger;
+
+        public OutboxBackgroundService(IServiceScopeFactory scopeFactory, OutboxProcessorOptions options,
+            ILogger<OutboxBackgroundService> logger)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.Factory.StartNew(async () => await ProcessMessagesAsync(stoppingToken), 
-                CancellationToken.None,
-                TaskCreationOptions.LongRunning, 
-                TaskScheduler.Current);
+            _logger.LogInformation("Outbox Background Service is starting...");
+            
+            await ProcessMessagesAsync(stoppingToken);
         }
 
         private async Task ProcessMessagesAsync(CancellationToken stoppingToken)
@@ -40,6 +43,13 @@ namespace OpenSleigh.Core.BackgroundServices
                 await Task.Delay(_options.Interval, stoppingToken)
                     .ConfigureAwait(false);
             }
+        }
+
+        public override async Task StopAsync(CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("Outbox Background Service is stopping.");
+
+            await base.StopAsync(stoppingToken);
         }
     }
 }
