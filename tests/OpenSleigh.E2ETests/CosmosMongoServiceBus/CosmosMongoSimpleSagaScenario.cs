@@ -1,4 +1,5 @@
 ﻿using Azure.Messaging.ServiceBus.Administration;
+using MongoDB.Driver;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
@@ -6,6 +7,7 @@ using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport.AzureServiceBus;
 using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
 using System;
+using System.Security.Authentication;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -52,6 +54,11 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
         {
             var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
             await adminClient.DeleteTopicAsync(_topicName);
+
+            var settings = MongoClientSettings.FromUrl(new MongoUrl(_cosmosFixture.ConnectionString));
+            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
+            var mongoClient = new MongoClient(settings);
+            await mongoClient.DropDatabaseAsync(_cosmosFixture.DbName);
         }
 
         public Task InitializeAsync() => Task.CompletedTask;

@@ -1,4 +1,5 @@
 ﻿using Azure.Messaging.ServiceBus.Administration;
+using MongoDB.Driver;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
@@ -6,6 +7,7 @@ using OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport.AzureServiceBus;
 using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
 using System;
+using System.Security.Authentication;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -16,14 +18,14 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
         IClassFixture<ServiceBusFixture>,
         IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _cosmosFixture;
         private readonly ServiceBusFixture _sbFixture;
         private readonly string _topicName;
         private readonly string _subscriptionName;
 
-        public CosmosMongoEventBroadcastingScenario(DbFixture fixture, ServiceBusFixture sbFixture)
+        public CosmosMongoEventBroadcastingScenario(DbFixture cosmosFixture, ServiceBusFixture sbFixture)
         {
-            _fixture = fixture;
+            _cosmosFixture = cosmosFixture;
             _topicName = $"ServiceBusEventBroadcastingScenario.tests.{Guid.NewGuid()}";
             _subscriptionName = Guid.NewGuid().ToString();
             _sbFixture = sbFixture;
@@ -31,8 +33,8 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var cosmosCfg = new CosmosConfiguration(_fixture.ConnectionString,
-                _fixture.DbName,
+            var cosmosCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
+                _cosmosFixture.DbName,
                 CosmosSagaStateRepositoryOptions.Default,
                 CosmosOutboxRepositoryOptions.Default);
 
@@ -55,6 +57,11 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.E2E
 
             await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptionName);
             await adminClient.DeleteTopicAsync(_topicName);
+
+            var settings = MongoClientSettings.FromUrl(new MongoUrl(_cosmosFixture.ConnectionString));
+            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
+            var mongoClient = new MongoClient(settings);
+            await mongoClient.DropDatabaseAsync(_cosmosFixture.DbName);
         }
     }
 }
