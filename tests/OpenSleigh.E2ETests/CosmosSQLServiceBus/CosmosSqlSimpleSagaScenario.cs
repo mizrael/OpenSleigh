@@ -7,30 +7,37 @@ using OpenSleigh.Core.Tests.Sagas;
 using System;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus.Administration;
+using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
+using OpenSleigh.Persistence.Cosmos.SQL;
 
-namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.E2E
+namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
 {
-    public class CosmosSqlSimpleSagaScenario : SimpleSagaScenario, IClassFixture<DbFixture>, IAsyncLifetime
+    public class CosmosSqlSimpleSagaScenario : SimpleSagaScenario, 
+        IClassFixture<DbFixture>, 
+        IClassFixture<ServiceBusFixture>,
+        IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _cosmosFixture;
+        private readonly ServiceBusFixture _sbFixture;
 
         private readonly string _topicName;
         private readonly string _subscriptionName;
 
-        public CosmosSqlSimpleSagaScenario(DbFixture fixture)
+        public CosmosSqlSimpleSagaScenario(DbFixture cosmosFixture, ServiceBusFixture sbFixture)
         {
-            _fixture = fixture;
+            _cosmosFixture = cosmosFixture;
+            _sbFixture = sbFixture;
 
             var messageName = nameof(StartSimpleSaga).ToLower();
             _topicName = $"{messageName}.tests.{Guid.NewGuid()}";
-            _subscriptionName = $"{messageName}.workers";
+            _subscriptionName = $"{messageName}.workers";            
         }
-    
+
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new CosmosSqlConfiguration(_fixture.ConnectionString, _fixture.DbName);
+            var sqlCfg = new CosmosSqlConfiguration(_cosmosFixture.ConnectionString, _cosmosFixture.DbName);
 
-            cfg.UseAzureServiceBusTransport(_fixture.AzureServiceBusConfiguration, builder =>
+            cfg.UseAzureServiceBusTransport(_sbFixture.Configuration, builder =>
             {
                 builder.UseMessageNamingPolicy<StartSimpleSaga>(() =>
                     new QueueReferences(_topicName, _subscriptionName));
@@ -38,12 +45,12 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.E2E
                 .UseCosmosSqlPersistence(sqlCfg);
         }
 
-        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) => 
+        protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseAzureServiceBusTransport();
 
         public async Task DisposeAsync()
         {
-            var adminClient = new ServiceBusAdministrationClient(_fixture.AzureServiceBusConfiguration.ConnectionString);
+            var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
             await adminClient.DeleteTopicAsync(_topicName);
         }
 

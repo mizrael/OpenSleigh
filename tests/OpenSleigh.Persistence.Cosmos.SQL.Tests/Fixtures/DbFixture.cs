@@ -1,7 +1,6 @@
 ﻿using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
-using OpenSleigh.Transport.AzureServiceBus;
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
 {
@@ -19,12 +18,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
             if (string.IsNullOrWhiteSpace(this.ConnectionString))
                 throw new ArgumentException("invalid connection string");
 
-            var sbConnStr = configuration.GetConnectionString("AzureServiceBus");
-            if (string.IsNullOrWhiteSpace(sbConnStr))
-                throw new ArgumentException("missing Service Bus connection");
-            
-            this.AzureServiceBusConfiguration = new AzureServiceBusConfiguration(sbConnStr);
-
             this.DbName = $"tests_{Guid.NewGuid()}";
             
             _dbContextOptions = new DbContextOptionsBuilder<SagaDbContext>()
@@ -35,8 +28,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
         
         public string ConnectionString { get; }
         public string DbName{ get; }
-
-        public AzureServiceBusConfiguration AzureServiceBusConfiguration { get; }
 
         private readonly DbContextOptions<SagaDbContext> _dbContextOptions;
         public ISagaDbContext CreateDbContext() => new SagaDbContext(_dbContextOptions);

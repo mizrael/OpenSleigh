@@ -1,23 +1,30 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
+using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Persistence.Mongo;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
+using RabbitMQ.Client;
+using System;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.MongoRabbit
 {
     public class MongoRabbitEventBroadcastingScenario : EventBroadcastingScenario,
         IClassFixture<RabbitFixture>,
-        IClassFixture<Persistence.Mongo.Tests.Fixtures.DbFixture>
+        IClassFixture<Persistence.Mongo.Tests.Fixtures.DbFixture>,
+        IAsyncLifetime
     {
-        private readonly RabbitFixture _fixture;
+        private readonly RabbitFixture _rabbitFixture;
         private readonly Persistence.Mongo.Tests.Fixtures.DbFixture _mongoFixture;
+        private readonly string _exchangeName;
 
-        public MongoRabbitEventBroadcastingScenario(RabbitFixture fixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
+        public MongoRabbitEventBroadcastingScenario(RabbitFixture rabbitFixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
         {
-            _fixture = fixture;
+            _rabbitFixture = rabbitFixture;
             _mongoFixture = mongoFixture;
+            _exchangeName = $"test.{nameof(DummyEvent)}.{Guid.NewGuid()}";
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
@@ -27,11 +34,38 @@ namespace OpenSleigh.E2ETests.MongoRabbit
                 MongoSagaStateRepositoryOptions.Default,
                 MongoOutboxRepositoryOptions.Default);
 
-            cfg.UseRabbitMQTransport(_fixture.RabbitConfiguration)
+            cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder => {
+                builder.UseMessageNamingPolicy<DummyEvent>(() =>
+                    new QueueReferences(_exchangeName,
+                                        _exchangeName,
+                                        $"{_exchangeName}.dead",
+                                        $"{_exchangeName}.dead"));
+            })
                .UseMongoPersistence(mongoCfg);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
             cfg.UseRabbitMQTransport();
+
+        public Task InitializeAsync() => Task.CompletedTask;
+
+        public async Task DisposeAsync()
+        {
+            var connectionFactory = new ConnectionFactory()
+            {
+                HostName = _rabbitFixture.RabbitConfiguration.HostName,
+                UserName = _rabbitFixture.RabbitConfiguration.UserName,
+                Password = _rabbitFixture.RabbitConfiguration.Password,
+                Port = AmqpTcpEndpoint.UseDefaultPort,
+                DispatchConsumersAsync = true
+            };
+            using var connection = connectionFactory.CreateConnection();
+            using var channel = connection.CreateModel();
+            channel.ExchangeDelete(_exchangeName);
+            channel.QueueDelete(_exchangeName); 
+            channel.ExchangeDelete($"{_exchangeName}.dead");
+            channel.QueueDelete($"{_exchangeName}.dead");
+
+        }
     }
 }
