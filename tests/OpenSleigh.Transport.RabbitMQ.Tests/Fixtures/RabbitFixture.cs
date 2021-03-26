@@ -1,8 +1,9 @@
 ﻿using Microsoft.Extensions.Configuration;
+using System;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
 {
-    public class RabbitFixture 
+    public class RabbitFixture
     {
         public RabbitFixture()
         {
