@@ -41,10 +41,11 @@ jobs:
           name: Integration tests
           command: |            
             dotnet test --filter "Category=Integration"
-      - run:
-          name: E2E tests
-          command: |            
-            dotnet test --filter "Category=E2E"           
+
+      #- run: # skipping E2E tests for now
+      #    name: E2E tests
+      #    command: |            
+      #      dotnet test --filter "Category=E2E"           
 
   sonarscan:
     docker:
