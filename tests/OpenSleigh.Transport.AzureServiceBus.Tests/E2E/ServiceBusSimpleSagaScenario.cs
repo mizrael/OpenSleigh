@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus.Administration;
-using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;

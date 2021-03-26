@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,20 +37,31 @@ namespace OpenSleigh.Core.Tests.E2E
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
             };
 
-            var hosts = new IHost[hostsCount];
-            for (var i = 0; i < hostsCount; i++)
-                hosts[i] = await SetupHost(onMessage);
+            var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
+                           .Select(async i =>
+                           {
+                               var host = await SetupHost(onMessage);
+                               await host.StartAsync(tokenSource.Token);
+                           });
 
-            using var scope = hosts[0].Services.CreateScope();
-            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+            var producerHostTask = Task.Run(async () =>
+            {
+                var host = await SetupHost(onMessage);
 
-            var tasks = hosts.Select(host => host.RunAsync(token: tokenSource.Token))
-                .Union(new[]
-                {
-                    bus.PublishAsync(message, tokenSource.Token)
-                });
-            
-            await Task.WhenAll(tasks);
+                await host.StartAsync(tokenSource.Token);
+
+                using var scope = host.Services.CreateScope();
+                var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+                await bus.PublishAsync(message, tokenSource.Token);
+            });
+
+            var tasks = new List<Task>(consumerHostsTasks)
+            {
+                producerHostTask
+            };
+
+            while (!tokenSource.IsCancellationRequested)
+                await Task.Delay(100);
 
             callsCount.Should().Be(expectedCount);
         }

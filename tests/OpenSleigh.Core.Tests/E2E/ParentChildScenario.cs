@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -33,31 +34,58 @@ namespace OpenSleigh.Core.Tests.E2E
                 msg.CorrelationId.Should().Be(message.CorrelationId);
             };
 
-            var hosts = new IHost[hostsCount];
-            for (var i = 0; i < hostsCount; i++)
-                hosts[i] = await SetupHost(onMessage, i);
+            var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
+                                .Select(async i =>
+                                {
+                                    try
+                                    {
+                                        var host = await SetupHost(onMessage);
+                                        await host.StartAsync(tokenSource.Token);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        throw;
+                                    }
+                                   
+                                });
 
-            using var scope = hosts[0].Services.CreateScope();
-            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-
-            var tasks = hosts.Select(host => host.RunAsync(token: tokenSource.Token))
-                .Union(new[]
+            var producerHostTask = Task.Run(async () =>
+            {
+                try
                 {
-                    bus.PublishAsync(message, tokenSource.Token)
-                });
+                    var host = await SetupHost(onMessage);
 
-            await Task.WhenAll(tasks);
+                    await host.StartAsync(tokenSource.Token);
+
+                    using var scope = host.Services.CreateScope();
+                    var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+                    await bus.PublishAsync(message, tokenSource.Token);
+                }
+                catch (Exception ex )
+                {
+
+                    throw;
+                }
+            
+            });
+
+            var tasks = new List<Task>(consumerHostsTasks)
+            {
+                producerHostTask
+            };
+
+            while (!tokenSource.IsCancellationRequested)
+                await Task.Delay(10);
 
             receivedCount.Should().Be(1);
         }
 
-        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage, int hostId)
+        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage)
         {
             var hostBuilder = CreateHostBuilder();
             hostBuilder.ConfigureServices((ctx, services) =>
             {
-                services.AddSingleton(onMessage);
-                services.AddSingleton(new HostInfo(hostId));
+                services.AddSingleton(onMessage);                
             });
             var host = hostBuilder.Build();
             

@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Samples.Sample6.Console;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
