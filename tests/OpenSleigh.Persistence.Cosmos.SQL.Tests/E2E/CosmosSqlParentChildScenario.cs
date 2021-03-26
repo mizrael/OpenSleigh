@@ -29,7 +29,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.E2E
         }
 
         private void AddTopicName<T>() =>
-            _topics[typeof(T)] = Guid.NewGuid().ToString(); //$"{typeof(T).Name}.{Guid.NewGuid()}";
+            _topics[typeof(T)] = Guid.NewGuid().ToString(); 
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {

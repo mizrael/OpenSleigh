@@ -2,6 +2,7 @@
 using System.Security.Authentication;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using OpenSleigh.Transport.AzureServiceBus;
 
 namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
 {
@@ -33,10 +34,18 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
             _db = _client.GetDatabase(this.DbName);
 
             DbContext = new DbContext(_db);
+
+            var sbConnStr = configuration.GetConnectionString("AzureServiceBus");
+            if (string.IsNullOrWhiteSpace(sbConnStr))
+                throw new ArgumentException("missing Service Bus connection");
+
+            this.AzureServiceBusConfiguration = new AzureServiceBusConfiguration(sbConnStr);
         }
         
         public string ConnectionString { get; init; }
         public string DbName { get; init; }
+
+        public AzureServiceBusConfiguration AzureServiceBusConfiguration { get; }
 
         public void Dispose()
         {
