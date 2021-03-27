@@ -25,6 +25,13 @@ namespace OpenSleigh.Transport.Kafka
                 return new QueueReferenceFactory(ctx, config.DefaultQueueReferenceCreator);
             });
 
+            busConfigurator.Services.AddSingleton(new AdminClientConfig() { BootstrapServers = config.ConnectionString });
+            busConfigurator.Services.AddSingleton(ctx =>
+            {
+                var config = ctx.GetRequiredService<AdminClientConfig>();
+                return new AdminClientBuilder(config);
+            });
+
             busConfigurator.Services.AddSingleton(new ProducerConfig() { BootstrapServers = config.ConnectionString } );
             busConfigurator.Services.AddSingleton(ctx =>
             {
