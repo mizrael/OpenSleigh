@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2021-03-26](https://github.com/mizrael/OpenSleigh/pull/32)
+### Added
+- major refactoring
+- moved E2E tests to standalone project
+### Fixed
+- addressed minor consistency issue
+- minor bugfixes
+
 ## [2021-03-23](https://github.com/mizrael/OpenSleigh/pull/31)
 ### Added
 - added Kafka transport library
