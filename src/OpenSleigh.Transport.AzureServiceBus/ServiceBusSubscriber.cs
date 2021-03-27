@@ -71,9 +71,9 @@ namespace OpenSleigh.Transport.AzureServiceBus
         public Task StopAsync(CancellationToken cancellationToken = default)
             => Task.CompletedTask;
 
+#if !DEBUG
         public async ValueTask DisposeAsync()
         {
-#if !DEBUG
             // calling DisposeAsync() on each processor might take a long time to complete (~60sec) due to 
             // apparent limitations of the underlying AMQP library.
             // more details here: https://github.com/Azure/azure-sdk-for-net/issues/19306
@@ -82,9 +82,11 @@ namespace OpenSleigh.Transport.AzureServiceBus
             _processor.ProcessMessageAsync -= MessageHandler;
             _processor.ProcessErrorAsync -= ProcessErrorAsync;
             await _processor.DisposeAsync();
-#endif
-
             _processor = null;
         }
+#else
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+#endif
+
     }
 }

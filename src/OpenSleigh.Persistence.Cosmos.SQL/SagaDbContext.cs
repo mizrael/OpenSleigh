@@ -29,8 +29,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
         }
 
-        public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-            => new NullTransaction(); // https://github.com/dotnet/efcore/issues/16836
+        public Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
+            => Task.FromResult(new NullTransaction() as ITransaction); // https://github.com/dotnet/efcore/issues/16836
 
         public DbSet<SagaState> SagaStates { get; set; }
         public DbSet<OutboxMessage> OutboxMessages { get; set; }
