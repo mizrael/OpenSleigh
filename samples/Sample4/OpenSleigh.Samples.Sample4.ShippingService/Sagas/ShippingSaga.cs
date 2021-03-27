@@ -28,7 +28,7 @@ namespace OpenSleigh.Samples.Sample4.ShippingService.Sagas
             _logger.LogInformation($"processing shipping for order '{context.Message.OrderId}'...");
             
             var message = ShippingCompleted.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
 
             this.State.MarkAsCompleted();
         }

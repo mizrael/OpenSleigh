@@ -1,7 +1,6 @@
 ﻿using System;
 using FluentAssertions;
 using NSubstitute;
-using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;

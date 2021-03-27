@@ -28,7 +28,7 @@ namespace OpenSleigh.Samples.Sample4.InventoryService.Sagas
             _logger.LogInformation($"checking inventory for order '{context.Message.OrderId}'...");
             
             var message = InventoryCheckCompleted.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
 
             this.State.MarkAsCompleted();
         }

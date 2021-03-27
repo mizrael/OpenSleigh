@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 
@@ -13,14 +14,16 @@ namespace OpenSleigh.Transport.AzureServiceBus
         private readonly IServiceBusSenderFactory _senderFactory;
         private readonly ISerializer _serializer;
         private readonly ILogger<ServiceBusPublisher> _logger;
+        private readonly SystemInfo _systemInfo;
 
-        public ServiceBusPublisher(IServiceBusSenderFactory senderFactory, 
-            ISerializer serializer, 
-            ILogger<ServiceBusPublisher> logger)
+        public ServiceBusPublisher(IServiceBusSenderFactory senderFactory,
+            ISerializer serializer,
+            ILogger<ServiceBusPublisher> logger, SystemInfo systemInfo)
         {
             _senderFactory = senderFactory ?? throw new ArgumentNullException(nameof(senderFactory));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
 
         public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
@@ -34,8 +37,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
         private async Task PublishAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
             ServiceBusSender sender = _senderFactory.Create((dynamic) message);
-            _logger.LogInformation(
-                $"publishing message '{message.Id}' to {sender.FullyQualifiedNamespace}/{sender.EntityPath}");
+            _logger.LogInformation($"client '{_systemInfo.ClientId}' publishing message '{message.Id}' to {sender.FullyQualifiedNamespace}/{sender.EntityPath}");
 
             var serializedMessage = await _serializer.SerializeAsync(message, cancellationToken);
             var busMessage = new ServiceBusMessage(serializedMessage)

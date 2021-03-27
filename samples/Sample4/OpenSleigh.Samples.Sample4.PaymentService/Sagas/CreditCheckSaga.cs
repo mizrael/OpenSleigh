@@ -28,7 +28,7 @@ namespace OpenSleigh.Samples.Sample4.PaymentService.Sagas
             _logger.LogInformation($"processing credit check for order '{context.Message.OrderId}'...");
             
             var message = CrediCheckCompleted.New(context.Message.OrderId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
 
             this.State.MarkAsCompleted();
         }

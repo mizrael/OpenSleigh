@@ -33,14 +33,13 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
         {
             TD resultState; 
             var stateType = typeof(TD);
-            var lockId = Guid.NewGuid();
+            Guid lockId;
 
             var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
 
             try
             {
                 var stateEntity = await _dbContext.SagaStates
-                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.CorrelationId == correlationId && 
                                               e.Type == stateType.FullName, cancellationToken)
                     .ConfigureAwait(false); 
@@ -50,13 +49,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                     resultState = newState;
 
                     var serializedState = await _serializer.SerializeAsync(newState, cancellationToken);
-                    var newEntity = new Entities.SagaState(Guid.NewGuid().ToString(),
-                                                           correlationId, stateType.FullName)
-                    {
-                        Data = serializedState,
-                        LockId = lockId,
-                        LockTime = DateTime.UtcNow
-                    };
+                    var newEntity = Entities.SagaState.New(correlationId, stateType.FullName);
+
+                    newEntity.Lock(serializedState);
+                    lockId = newEntity.LockId.Value;
+
                     _dbContext.SagaStates.Add(newEntity);
                 }
                 else
@@ -65,10 +62,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                         stateEntity.LockTime.HasValue &&
                         stateEntity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
                         throw new LockException($"saga state '{correlationId}' is already locked");
-                    
-                    stateEntity.LockTime = DateTime.UtcNow;
-                    stateEntity.LockId = lockId;
-                    
+
+                    stateEntity.RefreshLock();
+                    lockId = stateEntity.LockId.Value;
+
                     resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
                 }
 
@@ -91,24 +88,24 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
 
-            return ReleaseLockAsyncCore(state, cancellationToken);
+            return ReleaseLockAsyncCore(state, lockId, cancellationToken);
         }
 
-        private async Task ReleaseLockAsyncCore<TD>(TD state, CancellationToken cancellationToken) where TD : SagaState
+        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken) where TD : SagaState
         {
             var stateType = typeof(TD);
 
             var stateEntity = await _dbContext.SagaStates
-                .FirstOrDefaultAsync(e => e.CorrelationId == state.Id &&
+                .FirstOrDefaultAsync(e => e.LockId == lockId && 
+                                          e.CorrelationId == state.Id &&
                                           e.Type == stateType.FullName, cancellationToken)
                 .ConfigureAwait(false);
 
             if (null == stateEntity)
-                throw new LockException($"unable to find Saga State '{state.Id}'");
+                throw new LockException($"unable to release Saga State '{state.Id}' with type '{stateType.FullName}' by lock id {lockId}");
 
-            stateEntity.LockTime = null;
-            stateEntity.LockId = null;
-            stateEntity.Data = await _serializer.SerializeAsync(state, cancellationToken);
+            var newStateData = await _serializer.SerializeAsync(state, cancellationToken);
+            stateEntity.Release(newStateData);
 
             await _dbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);

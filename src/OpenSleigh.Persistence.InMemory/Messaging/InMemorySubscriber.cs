@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Reflection.Metadata.Ecma335;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
@@ -27,7 +25,7 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
 
         public Task StartAsync(CancellationToken cancellationToken = default)
             => Task.Factory.StartNew(async () => await ConsumeMessagesAsync(cancellationToken),
-                cancellationToken,
+                CancellationToken.None,
                 TaskCreationOptions.LongRunning,
                 TaskScheduler.Current);
 

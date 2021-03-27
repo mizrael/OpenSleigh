@@ -108,7 +108,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             var state = new DummyState(correlationId, "lorem", 42);
 
             var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(state, Guid.NewGuid()));
-            ex.Message.Should().Contain($"unable to find Saga State '{state.Id}'");
+            ex.Message.Should().Contain($"unable to release Saga State");
         }
 
         [Fact]

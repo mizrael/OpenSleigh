@@ -18,7 +18,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
                 .AddEnvironmentVariables()
                 .Build();
 
-           this.ConnectionString = configuration.GetConnectionString("mongo");
+            this.ConnectionString = configuration.GetConnectionString("mongo");
             if (string.IsNullOrWhiteSpace(this.ConnectionString))
                 throw new ArgumentException("invalid connection string");
 
@@ -29,7 +29,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
 
             DbContext = new DbContext(_db);
         }
-        
+
         public string ConnectionString { get; init; }
         public string DbName { get; init; }
 

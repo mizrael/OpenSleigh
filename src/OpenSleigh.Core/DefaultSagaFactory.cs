@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
@@ -23,9 +22,6 @@ namespace OpenSleigh.Core
             var saga = _serviceProvider.GetRequiredService<TS>();
 
             saga.SetState(state);
-
-            var bus = _serviceProvider.GetRequiredService<IMessageBus>();
-            saga.SetBus(bus);
             
             return saga;
         }

@@ -40,7 +40,6 @@ namespace OpenSleigh.Persistence.SQL
             try
             {
                 var stateEntity = await _dbContext.SagaStates
-                    .AsNoTracking()
                     .FirstOrDefaultAsync(e => e.CorrelationId == correlationId && 
                                               e.Type == stateType.FullName, cancellationToken)
                     .ConfigureAwait(false); 
@@ -86,20 +85,21 @@ namespace OpenSleigh.Persistence.SQL
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
 
-            return ReleaseLockAsyncCore(state, cancellationToken);
+            return ReleaseLockAsyncCore(state, lockId, cancellationToken);
         }
 
-        private async Task ReleaseLockAsyncCore<TD>(TD state, CancellationToken cancellationToken) where TD : SagaState
+        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken) where TD : SagaState
         {
             var stateType = typeof(TD);
 
             var stateEntity = await _dbContext.SagaStates
-                .FirstOrDefaultAsync(e => e.CorrelationId == state.Id &&
+                .FirstOrDefaultAsync(e => e.LockId == lockId &&
+                                          e.CorrelationId == state.Id &&
                                           e.Type == stateType.FullName, cancellationToken)
                 .ConfigureAwait(false);
 
             if (null == stateEntity)
-                throw new LockException($"unable to find Saga State '{state.Id}'");
+                throw new LockException($"unable to release Saga State '{state.Id}' with type '{stateType.FullName}' by lock id {lockId}");
 
             stateEntity.LockTime = null;
             stateEntity.LockId = null;

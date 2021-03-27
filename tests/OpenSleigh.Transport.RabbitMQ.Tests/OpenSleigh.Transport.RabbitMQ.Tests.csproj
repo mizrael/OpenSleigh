@@ -35,6 +35,7 @@
     <ProjectReference Include="..\..\src\OpenSleigh.Persistence.InMemory\OpenSleigh.Persistence.InMemory.csproj" />
     <ProjectReference Include="..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj" />
   </ItemGroup>
 
   <ItemGroup>

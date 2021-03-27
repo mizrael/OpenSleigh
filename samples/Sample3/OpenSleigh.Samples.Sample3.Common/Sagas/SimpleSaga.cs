@@ -35,7 +35,7 @@ namespace OpenSleigh.Samples.Sample3.Common.Sagas
             _logger.LogInformation($"starting saga '{context.Message.CorrelationId}'...");
             
             var message = new ProcessSimpleSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
         
         public async Task HandleAsync(IMessageContext<ProcessSimpleSaga> context, CancellationToken cancellationToken = default)
@@ -43,7 +43,7 @@ namespace OpenSleigh.Samples.Sample3.Common.Sagas
             _logger.LogInformation($"processing saga '{context.Message.CorrelationId}'...");
             
             var message = new SimpleSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<SimpleSagaCompleted> context, CancellationToken cancellationToken = default)

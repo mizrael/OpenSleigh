@@ -1,26 +1,28 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    internal class KafkaPublisherExecutor : IKafkaPublisherExecutor
+    public class KafkaPublisherExecutor : IKafkaPublisherExecutor
     {
         private readonly IProducer<Guid, byte[]> _producer;
         private readonly ISerializer _serializer;
+        private readonly ILogger<KafkaPublisherExecutor> _logger;
 
-        public KafkaPublisherExecutor(IProducer<Guid, byte[]> producer, ISerializer serializer)
+        public KafkaPublisherExecutor(IProducer<Guid, byte[]> producer, ISerializer serializer, ILogger<KafkaPublisherExecutor> logger)
         {
             _producer = producer ?? throw new ArgumentNullException(nameof(producer));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        
+
         public Task<DeliveryResult<Guid, byte[]>> PublishAsync(IMessage message, 
             string topic,
             IEnumerable<Header> additionalHeaders = null,
@@ -30,6 +32,9 @@ namespace OpenSleigh.Transport.Kafka
                 throw new ArgumentNullException(nameof(message));
             if (string.IsNullOrWhiteSpace(topic))
                 throw new ArgumentNullException(nameof(topic), "Value cannot be null or whitespace.");
+
+            _logger.LogInformation("pushing message '{MessageId}' to topic '{Topic}' ...",
+                                    message.Id, topic);
 
             return PublishAsyncCore(message, topic, additionalHeaders, cancellationToken);
         }

@@ -35,7 +35,7 @@ namespace OpenSleigh.Core
         public async Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
             where TM : IMessage
         {
-            var (state, lockId) = await GetStateAsync(messageContext, cancellationToken);
+            var (state, lockId) = await _sagaStateService.GetAsync(messageContext, cancellationToken);
 
             if (state.IsCompleted())
             {
@@ -109,23 +109,6 @@ namespace OpenSleigh.Core
                 await compensatingTransaction.RollbackAsync(cancellationToken);
                 throw;
             }
-        }
-
-        private async Task<(TD state, Guid lockId)> GetStateAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken)
-            where TM : IMessage
-        {
-            var policy = Policy.Retry(builder =>
-            {
-                builder.WithDelay(i => TimeSpan.FromSeconds(i))
-                    .Handle<LockException>()
-                    .WithMaxRetries(10)
-                    .OnException(ctx =>
-                    {
-                        _logger.LogWarning(
-                            $"unable to lock state for saga '{messageContext.Message.CorrelationId}': '{ctx.Exception.Message}'. Retrying...");
-                    });
-            });
-            return await policy.WrapAsync(() => _sagaStateService.GetAsync(messageContext, cancellationToken));
         }
     }
 }

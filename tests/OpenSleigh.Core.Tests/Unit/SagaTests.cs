@@ -1,6 +1,5 @@
 ﻿using System;
 using FluentAssertions;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
@@ -25,21 +24,6 @@ namespace OpenSleigh.Core.Tests.Unit
             sut.State.Should().Be(state);
         }
 
-        [Fact]
-        public void SetBus_should_throw_when_input_null()
-        {
-            var sut = new DummySaga();
-            Assert.Throws<ArgumentNullException>(() => sut.SetBus(null));
-        }
-
-        [Fact]
-        public void SetBus_should_set_state()
-        {
-            var sut = new DummySaga();
-
-            var bus = NSubstitute.Substitute.For<IMessageBus>();
-            sut.SetBus(bus);
-            sut.Bus.Should().Be(bus);
-        }
+        //TODO: add tests for Publish
     }
 }

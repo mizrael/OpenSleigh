@@ -32,52 +32,6 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_retry_if_saga_state_locked()
-        {
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
-            var sagaStateService = NSubstitute.Substitute.For<ISagaStateService<DummySaga, DummySagaState>>();
-
-            var state = new DummySagaState(message.CorrelationId);
-
-            var firstCall = true;
-            sagaStateService.When(s => s.GetAsync(messageContext, Arg.Any<CancellationToken>()))
-            .Do(_ =>
-            {
-                if (firstCall)
-                {
-                    firstCall = false;
-                    throw new LockException("lorem");
-                }
-            });
-            sagaStateService.GetAsync(messageContext, Arg.Any<CancellationToken>())
-                .Returns((state, Guid.NewGuid()));
-
-            var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
-            saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
-                .DoNotCallBase();
-
-            var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
-            sagaFactory.Create(state)
-                .Returns(saga);
-
-            var logger = NSubstitute.Substitute.For<ILogger<SagaRunner<DummySaga, DummySagaState>>>();
-
-            var transactionManager = NSubstitute.Substitute.For<ITransactionManager>();
-            var policyFactory = NSubstitute.Substitute.For<ISagaPolicyFactory<DummySaga>>();
-
-            var sut = new SagaRunner<DummySaga, DummySagaState>(sagaFactory, sagaStateService, transactionManager, policyFactory, logger);
-
-            await sut.RunAsync(messageContext, CancellationToken.None);
-            
-            await sagaStateService.Received(2)
-                .GetAsync(messageContext, Arg.Any<CancellationToken>());
-        }
-
-        [Fact]
         public async Task RunAsync_should_not_execute_handler_if_message_already_processed()
         {
             var message = new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
@@ -193,8 +147,7 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
-
+          
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<DummySaga, DummySagaState>>();
             sagaFactory.Create(state)
                 .Returns(saga);
@@ -224,7 +177,6 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -261,7 +213,6 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -300,7 +251,6 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
                 .DoNotCallBase();
 
@@ -341,7 +291,6 @@ namespace OpenSleigh.Core.Tests.Unit
                 .Returns((state, Guid.NewGuid()));
 
             var saga = NSubstitute.Substitute.ForPartsOf<DummySaga>();
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
           
             var expectedException = new ApplicationException("whoops");
             saga.When(s => s.HandleAsync(Arg.Any<IMessageContext<StartDummySaga>>(), Arg.Any<CancellationToken>()))
@@ -396,7 +345,6 @@ namespace OpenSleigh.Core.Tests.Unit
             };
             
             var saga = new CompensatingSaga(onStart, onCompensate);
-            saga.SetBus(NSubstitute.Substitute.For<IMessageBus>());
             
             var sagaFactory = NSubstitute.Substitute.For<ISagaFactory<CompensatingSaga, CompensatingSagaState>>();
             sagaFactory.Create(state)

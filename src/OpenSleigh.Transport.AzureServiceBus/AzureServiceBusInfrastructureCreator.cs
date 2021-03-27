@@ -4,9 +4,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Transport.AzureServiceBus;
+using System;
 
-namespace OpenSleigh.Samples.Sample6.Console
+namespace OpenSleigh.Transport.AzureServiceBus
 {
     internal class AzureServiceBusInfrastructureCreator<TM> : IInfrastructureCreator
         where TM : IMessage
@@ -21,11 +21,29 @@ namespace OpenSleigh.Samples.Sample6.Console
             var azureConfig = scope.ServiceProvider.GetRequiredService<AzureServiceBusConfiguration>();
             var adminClient = new ServiceBusAdministrationClient(azureConfig.ConnectionString);
 
-            if (!(await adminClient.TopicExistsAsync(policy.TopicName)))
-                await adminClient.CreateTopicAsync(policy.TopicName);
+            try
+            {
+                if (!await adminClient.TopicExistsAsync(policy.TopicName))
+                    await adminClient.CreateTopicAsync(new CreateTopicOptions(policy.TopicName)
+                    {
+                        RequiresDuplicateDetection = true
+                    });
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
 
-            if (!(await adminClient.SubscriptionExistsAsync(policy.TopicName, policy.SubscriptionName)))
-                await adminClient.CreateSubscriptionAsync(policy.TopicName, policy.SubscriptionName);
+            try
+            {
+                if (!await adminClient.SubscriptionExistsAsync(policy.TopicName, policy.SubscriptionName))
+                    await adminClient.CreateSubscriptionAsync(policy.TopicName, policy.SubscriptionName);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+           
         }
     }
 }

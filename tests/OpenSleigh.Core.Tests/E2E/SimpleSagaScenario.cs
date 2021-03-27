@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -13,47 +15,83 @@ namespace OpenSleigh.Core.Tests.E2E
 {
     public abstract class SimpleSagaScenario : E2ETestsBase
     {
-        [Fact]
-        public async Task run_single_message_scenario()
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(5)]
+        public async Task run_single_message_scenario(int hostsCount)
         {
-            var hostBuilder = CreateHostBuilder();
-
             var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
-
-            var received = false;
+            
+            var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
-
+            
             Action<StartSimpleSaga> onMessage = msg =>
             {
-                tokenSource.Cancel();
-
+                receivedCount++;
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+                
                 msg.Id.Should().Be(message.Id);
                 msg.CorrelationId.Should().Be(message.CorrelationId);
-
-                received = true;
             };
 
-            hostBuilder.ConfigureServices((ctx, services) =>
+            var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
+                           .Select(async i =>
+                           {
+                               try
+                               {
+                                   var host = await SetupHost(onMessage);
+                                   await host.StartAsync(tokenSource.Token);
+                               }
+                               catch (Exception ex)
+                               {
+
+                                   throw;
+                               }
+                             
+                           });
+
+            var producerHostTask = Task.Run(async () =>
             {
-                services.AddSingleton(onMessage);
+                try
+                {
+                    var host = await SetupHost(onMessage);
+
+                    await host.StartAsync(tokenSource.Token);
+
+                    using var scope = host.Services.CreateScope();
+                    var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+                    await bus.PublishAsync(message, tokenSource.Token);
+                }
+                catch (Exception ex)
+                {
+
+                    throw ;
+                }
+              
             });
 
-            var host = hostBuilder.Build();
-
-            using var scope = host.Services.CreateScope();
-            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-
-            await host.SetupInfrastructureAsync();
-
-            await Task.WhenAll(new[]
+            var tasks = new List<Task>(consumerHostsTasks)
             {
-                host.RunAsync(token: tokenSource.Token),
-                bus.PublishAsync(message, tokenSource.Token)
-            });
+                producerHostTask
+            };
 
-            received.Should().BeTrue();
+            while (!tokenSource.IsCancellationRequested)
+                await Task.Delay(10);
+
+            receivedCount.Should().Be(1);
         }
-        
+
+        private async Task<IHost> SetupHost(Action<StartSimpleSaga> onMessage)
+        {
+            var hostBuilder = CreateHostBuilder();
+            hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });
+            var host = hostBuilder.Build();
+            
+            await host.SetupInfrastructureAsync();
+            return host;
+        }
+
         protected override void AddSagas(IBusConfigurator cfg)
         {
             AddSaga<SimpleSaga, SimpleSagaState, StartSimpleSaga>(cfg, msg => new SimpleSagaState(msg.CorrelationId));

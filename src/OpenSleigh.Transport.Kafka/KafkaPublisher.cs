@@ -9,7 +9,7 @@ namespace OpenSleigh.Transport.Kafka
     public class KafkaPublisher : IPublisher
     {
         private readonly IKafkaPublisherExecutor _executor;
-        private readonly IQueueReferenceFactory _queueReferenceFactory;
+        private readonly IQueueReferenceFactory _queueReferenceFactory;        
 
         public KafkaPublisher(IKafkaPublisherExecutor executor, IQueueReferenceFactory queueReferenceFactory)
         {

@@ -46,7 +46,7 @@ namespace OpenSleigh.Samples.Sample7.Console.Sagas
             this.State.CurrentStep = MySagaState.Steps.Successful;
             
             var message = new MySagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task CompensateAsync(ICompensationContext<StartSaga> context, CancellationToken cancellationToken = default)
@@ -56,7 +56,7 @@ namespace OpenSleigh.Samples.Sample7.Console.Sagas
             this.State.CurrentStep = MySagaState.Steps.Failed;
 
             var message = new MySagaCompleted(Guid.NewGuid(), context.MessageContext.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<MySagaCompleted> context, CancellationToken cancellationToken = default)

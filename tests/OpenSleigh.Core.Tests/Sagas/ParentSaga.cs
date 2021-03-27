@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.Tests.Sagas
@@ -23,34 +24,37 @@ namespace OpenSleigh.Core.Tests.Sagas
         IHandleMessage<ChildSagaCompleted>,
         IHandleMessage<ParentSagaCompleted>
     {
-        private readonly Action<ParentSagaCompleted> _onCompleted;
-
+        private readonly Action<ParentSagaCompleted> _onCompleted;        
+        private readonly ILogger<ParentSaga> _logger;
         
-        public ParentSaga(Action<ParentSagaCompleted> onCompleted)
+        public ParentSaga(Action<ParentSagaCompleted> onCompleted, ILogger<ParentSaga> logger)
         {
             _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
+            _logger = logger;
         }
 
         public async Task HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
         {
             var message = new ProcessParentSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
         {
             var message = new StartChildSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
         {
             var message = new ParentSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            await this.Bus.PublishAsync(message, cancellationToken);
+            this.Publish(message);
         }
 
         public Task HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
         {
+            _logger.LogInformation($"completing Parent Saga '{context.Message.CorrelationId}'");
+
             this.State.MarkAsCompleted();
 
             _onCompleted?.Invoke(context.Message);

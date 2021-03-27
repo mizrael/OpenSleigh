@@ -1,15 +1,11 @@
 ﻿using FluentAssertions;
 using OpenSleigh.Persistence.Cosmos.SQL.Entities;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit.Entities
 {
-	public class OutboxMessageTests
+    public class OutboxMessageTests
 	{
 		[Fact]
 		public void New_should_create_valid_instance()

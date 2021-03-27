@@ -30,10 +30,22 @@ jobs:
     steps:
       - checkout    
       - run:
-          name: Build and test          
+          name: Build      
           command: |            
             dotnet build 
-            dotnet test --no-build 
+      - run:
+          name: Unit tests
+          command: |            
+            dotnet test --filter "Category!=E2E&Category!=Integration"
+      - run:
+          name: Integration tests
+          command: |            
+            dotnet test --filter "Category=Integration"
+
+      #- run: # skipping E2E tests for now
+      #    name: E2E tests
+      #    command: |            
+      #      dotnet test --filter "Category=E2E"           
 
   sonarscan:
     docker:
@@ -86,7 +98,7 @@ jobs:
           name: Build and test          
           command: |            
             dotnet build 
-            dotnet test --no-build /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
+            dotnet test --no-build --filter "Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
 
       - run:
           name: Stop Sonarcloud 
