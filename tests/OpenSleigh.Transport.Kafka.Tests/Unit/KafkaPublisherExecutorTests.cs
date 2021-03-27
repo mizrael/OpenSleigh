@@ -4,6 +4,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Utils;
 using Xunit;
@@ -17,9 +18,11 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             var producer = NSubstitute.Substitute.For<IProducer<Guid, byte[]>>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
-            Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(null, serializer));
-            Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(producer, null));
+            Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(null, serializer, logger));
+            Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(producer, null, logger));
+            Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(producer, serializer, null));
         }
 
         [Fact]
@@ -27,8 +30,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             var producer = NSubstitute.Substitute.For<IProducer<Guid, byte[]>>();
             var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
-            var sut = new KafkaPublisherExecutor(producer, serializer);
+            var sut = new KafkaPublisherExecutor(producer, serializer, logger);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(null, "lorem"));
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(DummyMessage.New(), null));
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(DummyMessage.New(), ""));
@@ -51,8 +55,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
                 .Returns(producerResult);
 
             var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
-            var sut = new KafkaPublisherExecutor(producer, serializer);
+            var sut = new KafkaPublisherExecutor(producer, serializer, logger);
 
             await sut.PublishAsync(message, topicName);
 
@@ -79,8 +84,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
                 .Returns(producerResult);
 
             var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
-            var sut = new KafkaPublisherExecutor(producer, serializer);
+            var sut = new KafkaPublisherExecutor(producer, serializer, logger);
 
             var headers = new[]
             {
