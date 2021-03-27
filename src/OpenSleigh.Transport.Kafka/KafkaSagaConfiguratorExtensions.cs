@@ -1,4 +1,5 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Utils;
@@ -14,8 +15,12 @@ namespace OpenSleigh.Transport.Kafka
         {
             var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
             foreach (var messageType in messageTypes)
+            {
                 sagaConfigurator.Services.AddBusSubscriber(
                     typeof(KafkaSubscriber<>).MakeGenericType(messageType));
+                sagaConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator),
+                    typeof(KafkaInfrastructureCreator<>).MakeGenericType(messageType));
+            }
 
             return sagaConfigurator;
         }

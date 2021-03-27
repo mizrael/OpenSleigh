@@ -119,7 +119,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 return;
             }
 
-            _logger.LogDebug("received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...", 
+            _logger.LogInformation("received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...", 
                 message.Id, _queueReferences.ExchangeName, _queueReferences.QueueName);
 
             try
