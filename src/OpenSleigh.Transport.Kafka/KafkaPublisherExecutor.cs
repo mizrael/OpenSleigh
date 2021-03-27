@@ -11,7 +11,7 @@ using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    internal class KafkaPublisherExecutor : IKafkaPublisherExecutor
+    public class KafkaPublisherExecutor : IKafkaPublisherExecutor
     {
         private readonly IProducer<Guid, byte[]> _producer;
         private readonly ISerializer _serializer;
