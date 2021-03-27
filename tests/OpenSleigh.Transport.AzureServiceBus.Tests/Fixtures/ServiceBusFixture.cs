@@ -1,6 +1,4 @@
 ﻿using System;
-using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus.Administration;
 using Microsoft.Extensions.Configuration;
 
 namespace OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures

@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
 using NSubstitute;
-using NSubstitute.Core;
 using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit

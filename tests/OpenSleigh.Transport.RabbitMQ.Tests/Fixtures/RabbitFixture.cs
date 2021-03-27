@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using System;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
 {

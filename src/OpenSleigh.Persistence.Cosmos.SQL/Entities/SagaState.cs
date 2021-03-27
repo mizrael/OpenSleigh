@@ -1,5 +1,4 @@
 ﻿using System;
-using OpenSleigh.Core.Exceptions;
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
 {

@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Tests.E2E;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {

@@ -1,7 +1,6 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
-using OpenSleigh.Persistence.InMemory;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ;
