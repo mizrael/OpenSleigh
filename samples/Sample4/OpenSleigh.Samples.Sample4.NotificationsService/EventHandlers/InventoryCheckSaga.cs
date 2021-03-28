@@ -6,7 +6,7 @@ using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Samples.Sample4.Common;
 
-namespace OpenSleigh.Samples.Sample4.NotificationsService.Sagas
+namespace OpenSleigh.Samples.Sample4.NotificationsService.EventHandlers
 {
     public class ShippingCompletedHandler : IHandleMessage<ShippingCompleted>
     {
