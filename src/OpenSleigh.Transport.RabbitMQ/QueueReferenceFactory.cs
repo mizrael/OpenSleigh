@@ -26,12 +26,17 @@ namespace OpenSleigh.Transport.RabbitMQ
                 var exchangeName = messageType.Name.ToLower();
                 
                 var isEvent = messageType.IsEvent();
-                if (isEvent)
-                    exchangeName = $"{exchangeName}.{systemInfo.ClientGroup}";
                 
-                var queueName = exchangeName + ".workers";
+                var queueName = isEvent ? 
+                    $"{exchangeName}.{_systemInfo.ClientGroup}.workers" : 
+                    $"{exchangeName}.workers";
+                
                 var dlExchangeName = exchangeName + ".dead";
-                var dlQueueName = dlExchangeName + ".workers";
+                
+                var dlQueueName = isEvent ? 
+                    $"{dlExchangeName}.{_systemInfo.ClientGroup}.workers" : 
+                    $"{dlExchangeName}.workers";
+                
                 return new QueueReferences(exchangeName, queueName, dlExchangeName, dlQueueName);
             });
         }

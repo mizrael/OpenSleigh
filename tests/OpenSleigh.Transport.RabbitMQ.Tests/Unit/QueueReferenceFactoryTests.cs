@@ -94,10 +94,10 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var sut = new QueueReferenceFactory(sp, sysInfo);
             var result = sut.Create<DummyEvent>();
             result.Should().NotBeNull();
-            result.ExchangeName.Should().Be("dummyevent.test");
+            result.ExchangeName.Should().Be("dummyevent");
             result.QueueName.Should().Be("dummyevent.test.workers");
-            result.DeadLetterExchangeName.Should().Be("dummyevent.test.dead");
-            result.DeadLetterQueue.Should().Be("dummyevent.test.dead.workers");
+            result.DeadLetterExchangeName.Should().Be("dummyevent.dead");
+            result.DeadLetterQueue.Should().Be("dummyevent.dead.test.workers");
         }
 
         [Fact]

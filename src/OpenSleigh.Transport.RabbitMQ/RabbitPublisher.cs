@@ -62,7 +62,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             {
                 context.Channel.BasicPublish(
                     exchange: context.QueueReferences.ExchangeName,
-                    routingKey: context.QueueReferences.QueueName,
+                    routingKey: context.QueueReferences.ExchangeName,
                     mandatory: true,
                     basicProperties: properties,
                     body: encodedMessage);
