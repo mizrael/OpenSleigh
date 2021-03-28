@@ -39,7 +39,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton(OutboxCleanerOptions.Default)
                 .AddHostedService<OutboxCleanerBackgroundService>();
 
-            var builder = new BusConfigurator(services, sagaTypeResolver, systemInfo);
+            var builder = new BusConfigurator(services, sagaTypeResolver, typeResolver, systemInfo);
             configure?.Invoke(builder);
             
             return services;

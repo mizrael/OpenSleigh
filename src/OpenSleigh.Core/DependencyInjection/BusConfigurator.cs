@@ -13,14 +13,19 @@ namespace OpenSleigh.Core.DependencyInjection
     [ExcludeFromCodeCoverage]
     internal class BusConfigurator : IBusConfigurator
     {
-        private readonly ISagaTypeResolver _typeResolver;
+        private readonly ISagaTypeResolver _sagaTypeResolver;
+        private readonly ITypeResolver _typeResolver;
         private readonly SystemInfo _systemInfo;
         
         public IServiceCollection Services { get; }
 
-        public BusConfigurator(IServiceCollection services, ISagaTypeResolver typeResolver, SystemInfo systemInfo)
+        public BusConfigurator(IServiceCollection services, 
+            ISagaTypeResolver sagaTypeResolver, 
+            ITypeResolver typeResolver,
+            SystemInfo systemInfo)
         {
             Services = services ?? throw new ArgumentNullException(nameof(services));
+            _sagaTypeResolver = sagaTypeResolver ?? throw new ArgumentNullException(nameof(sagaTypeResolver));
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
@@ -55,7 +60,9 @@ namespace OpenSleigh.Core.DependencyInjection
             where TM : IMessage                  
         {
             if (sourceAssemblies is null)           
-                throw new ArgumentNullException(nameof(sourceAssemblies));       
+                throw new ArgumentNullException(nameof(sourceAssemblies));
+
+            var hasHandlers = false;
             
             foreach(var assembly in sourceAssemblies)
             {
@@ -66,8 +73,13 @@ namespace OpenSleigh.Core.DependencyInjection
                         continue;
 
                     Services.AddTransient(typeof(IHandleMessage<TM>), type);
+                    
+                    hasHandlers = true;
                 }
             }
+
+            if (hasHandlers)
+                _typeResolver.Register(typeof(TM));
 
             return new MessageHandlerConfigurator<TM>(this.Services);
         }
@@ -76,7 +88,7 @@ namespace OpenSleigh.Core.DependencyInjection
            where TD : SagaState
            where TS : Saga<TD>
         {
-            var hasMessages = _typeResolver.Register<TS, TD>();
+            var hasMessages = _sagaTypeResolver.Register<TS, TD>();
 
             if (hasMessages)
             {

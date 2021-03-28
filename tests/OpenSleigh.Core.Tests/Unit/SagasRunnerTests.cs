@@ -37,23 +37,6 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_throw_if_no_message_handler_registered()
-        {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
-
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
-
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
-            var ex = await Assert.ThrowsAsync<SagaException>(() => sut.RunAsync(messageContext));
-            ex.Message.Should().Contain("no Saga registered for message of type");
-        }
-
-        [Fact]
         public async Task RunAsync_should_throw_if_runner_fails()
         {
             var message = StartDummySaga.New();

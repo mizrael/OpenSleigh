@@ -29,8 +29,8 @@ namespace OpenSleigh.Core
                 throw new ArgumentNullException(nameof(messageContext));
             
             var sagaTypes = _stateTypeResolver.Resolve<TM>();
-            if (null == sagaTypes || !sagaTypes.Any())
-                throw new SagaException($"no Saga registered for message of type '{typeof(TM).FullName}'");
+            if (null == sagaTypes)
+                return Task.CompletedTask;
 
            return RunAsyncCore(messageContext, sagaTypes, cancellationToken);
         }
