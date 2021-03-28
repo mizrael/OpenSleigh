@@ -23,6 +23,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.InventoryService", "OpenSleigh.Samples.Sample4.InventoryService\OpenSleigh.Samples.Sample4.InventoryService.csproj", "{78FC631B-514A-48F9-8E04-02204C1DB690}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample4.NotificationsService", "OpenSleigh.Samples.Sample4.NotificationsService\OpenSleigh.Samples.Sample4.NotificationsService.csproj", "{A4AE7648-3038-4D61-8CDA-C50215FE4299}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -65,6 +67,10 @@ Global
 		{78FC631B-514A-48F9-8E04-02204C1DB690}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{78FC631B-514A-48F9-8E04-02204C1DB690}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{78FC631B-514A-48F9-8E04-02204C1DB690}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
