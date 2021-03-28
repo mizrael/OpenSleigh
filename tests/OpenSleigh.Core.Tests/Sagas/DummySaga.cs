@@ -22,7 +22,7 @@ namespace OpenSleigh.Core.Tests.Sagas
         public static StartDummySaga New() => new StartDummySaga(Guid.NewGuid(), Guid.NewGuid());
     }
 
-    public record DummySagaStarted(Guid Id, Guid CorrelationId) : ICommand
+    public record DummySagaStarted(Guid Id, Guid CorrelationId) : IEvent
     {
         public static DummySagaStarted New() => new DummySagaStarted(Guid.NewGuid(), Guid.NewGuid());
     }

@@ -13,7 +13,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             where TS : Saga<TD>
             where TD : SagaState
         {
-            var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
+            var messageTypes = typeof(TS).GetHandledMessageTypes();
             foreach (var messageType in messageTypes)
             {
                 sagaConfigurator.Services.AddBusSubscriber(

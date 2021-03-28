@@ -5,6 +5,10 @@ using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Messaging;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Linq;
+using OpenSleigh.Core.Utils;
 
 [assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
@@ -50,9 +54,32 @@ namespace OpenSleigh.Core.DependencyInjection
             return this;
         }
 
+        public IBusConfigurator AddMessageHandlers(IEnumerable<Assembly> sourceAssemblies)                        
+        {
+            if (sourceAssemblies is null)           
+                throw new ArgumentNullException(nameof(sourceAssemblies));       
+            
+            foreach(var assembly in sourceAssemblies)
+            {
+                var types = assembly.GetTypes();
+                foreach(var type in types)
+                {
+                    if (type.IsSaga())
+                        continue;
+
+                    var messageTypes = type.GetHandledMessageTypes();
+                    foreach (var messageType in messageTypes)
+                        Services.AddTransient(
+                            typeof(IHandleMessage<>).MakeGenericType(messageType), type);
+                }
+            }
+
+            return this;
+        }
+
         public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
-            where TD : SagaState
-            where TS : Saga<TD>
+           where TD : SagaState
+           where TS : Saga<TD>
         {
             var hasMessages = _typeResolver.Register<TS, TD>();
 

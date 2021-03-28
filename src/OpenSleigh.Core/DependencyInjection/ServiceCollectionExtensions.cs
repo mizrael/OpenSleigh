@@ -25,6 +25,8 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<ISerializer, JsonSerializer>()
+                .AddSingleton<IMessageHandlersResolver, DefaultMessageHandlersResolver>()
+                .AddSingleton<IMessageHandlersRunner, DefaultMessageHandlersRunner>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
                 .AddSingleton<IMessageProcessor, MessageProcessor>()
                 .AddHostedService<SubscribersBackgroundService>()

@@ -12,8 +12,8 @@ namespace OpenSleigh.Transport.RabbitMQ
             where TS : Saga<TD>
             where TD : SagaState
         {
-            var messageTypes = SagaUtils<TS, TD>.GetHandledMessageTypes();
-            foreach(var messageType in messageTypes)
+            var messageTypes = typeof(TS).GetHandledMessageTypes();
+            foreach (var messageType in messageTypes)
                 sagaConfigurator.Services.AddBusSubscriber(
                     typeof(RabbitSubscriber<>).MakeGenericType(messageType));
             
