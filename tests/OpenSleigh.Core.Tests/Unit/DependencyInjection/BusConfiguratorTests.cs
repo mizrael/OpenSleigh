@@ -1,6 +1,5 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.DependencyInjection;
 using Xunit;
 using NSubstitute;

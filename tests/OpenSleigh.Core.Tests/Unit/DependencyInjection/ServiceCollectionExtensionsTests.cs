@@ -3,7 +3,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 using Xunit;
