@@ -1,7 +1,7 @@
 version: '3.4'
 
 services:
-  openSleigh.samples.infrastructure.mongodb:
+  openSleigh.sample2.infrastructure.mongodb:
     image: mongo:latest
     container_name: openSleigh.sample2.infrastructure.mongodb    
     restart: always
@@ -17,7 +17,7 @@ services:
     ports:
       - 27017:27017    
   
-  openSleigh.samples.infrastructure.rabbitmq:        
+  openSleigh.sample2.infrastructure.rabbitmq:        
     image: rabbitmq:3-management-alpine
     container_name: openSleigh.sample2.infrastructure.rabbitmq    
     restart: always
