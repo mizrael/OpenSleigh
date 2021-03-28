@@ -6,7 +6,6 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Samples.Sample4.Common;
-using OpenSleigh.Samples.Sample4.NotificationsService.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Sample4.NotificationsService
@@ -41,9 +40,10 @@ namespace OpenSleigh.Samples.Sample4.NotificationsService
 
                         cfg.UseRabbitMQTransport(rabbitCfg)
                             .UseSqlPersistence(sqlConfig);
-
-                        cfg.AddSaga<NotificationsSaga, InventoryCheckSagaState>()
-                            .UseStateFactory<CheckInventory>(msg => new InventoryCheckSagaState(msg.CorrelationId))
+                        
+                        cfg.AddMessageHandlers<ShippingCompleted>(new[] {typeof(Program).Assembly})
+                            .UseRabbitMQTransport();
+                        cfg.AddMessageHandlers<OrderSagaCompleted>(new[] {typeof(Program).Assembly})
                             .UseRabbitMQTransport();
                     });
             });

@@ -9,7 +9,7 @@
     }
   },
   "profiles": {
-    "OpenSleigh.Samples.Sample2.API": {
+    "OpenSleigh.Samples.Sample4.API": {
       "commandName": "Project",
       "dotnetRunMessages": "true",
       "launchBrowser": true,

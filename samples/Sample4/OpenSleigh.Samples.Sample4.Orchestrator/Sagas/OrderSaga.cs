@@ -49,7 +49,11 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
 
             this.State.CreditCheckCompleted = true;
 
-            await CheckStateAsync(cancellationToken);
+            if (CheckCanShipOrder(cancellationToken))
+            {
+                var message = ProcessShipping.New(this.State.OrderId);
+                this.Publish(message);
+            }
         }
 
         public async Task HandleAsync(IMessageContext<InventoryCheckCompleted> context, CancellationToken cancellationToken = default)
@@ -58,12 +62,16 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
 
             this.State.InventoryCheckCompleted = true;
 
-            await CheckStateAsync(cancellationToken);
+            if (CheckCanShipOrder(cancellationToken))
+            {
+                var message = ProcessShipping.New(this.State.OrderId);
+                this.Publish(message);
+            }
         }
 
         public async Task HandleAsync(IMessageContext<ShippingCompleted> context, CancellationToken cancellationToken = default)
         {
-            _logger.LogInformation($"shipping for order '{context.Message.OrderId}' completed!");
+            _logger.LogInformation($"Processing completed for order '{context.Message.OrderId}'");
 
             var message = OrderSagaCompleted.New(this.State.OrderId);
             this.Publish(message);
@@ -71,15 +79,11 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
             this.State.MarkAsCompleted();
         }
         
-        private async Task CheckStateAsync(CancellationToken cancellationToken = default)
+        private bool CheckCanShipOrder(CancellationToken cancellationToken = default)
         {
             var checksFulfilled = this.State.CreditCheckCompleted &&
                                   this.State.InventoryCheckCompleted;
-            if (!checksFulfilled)
-                return;
-
-            var message = ProcessShipping.New(this.State.OrderId);
-            this.Publish(message);
+            return checksFulfilled;
         }
 
     }
