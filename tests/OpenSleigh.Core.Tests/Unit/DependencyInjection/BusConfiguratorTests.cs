@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.DependencyInjection;
 using Xunit;
 using NSubstitute;
@@ -16,8 +18,10 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var sysInfo = new SystemInfo();
             
             var sut = new BusConfigurator(services, sagaTypeResolver, sysInfo);
-            sut.AddMessageHandlers(new[] { typeof(BusConfiguratorTests).Assembly });
+            var result = sut.AddMessageHandlers<DummyMessage>(new[] { typeof(BusConfiguratorTests).Assembly });
 
+            result.Should().NotBeNull();
+            
             services.Received(1).Add(Arg.Any<ServiceDescriptor>());
 
             services.Received(1)

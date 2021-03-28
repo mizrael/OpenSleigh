@@ -41,5 +41,20 @@ namespace OpenSleigh.Core.Tests.Unit.Utils
         {
             typeof(EmptySaga).IsSaga().Should().BeTrue();
         }
+
+        [Fact]
+        public void CanHandleMessage_should_return_false_when_type_cannot_handle_message()
+        {
+            typeof(int).CanHandleMessage<DummyMessage>().Should().BeFalse();
+            typeof(TypeExtensionsTests).CanHandleMessage<DummyMessage>().Should().BeFalse();
+            typeof(EmptySaga).CanHandleMessage<DummyMessage>().Should().BeFalse();
+        }
+        
+        [Fact]
+        public void CanHandleMessage_should_return_true_when_type_can_handle_message()
+        {
+            typeof(DummyMessageHandler).CanHandleMessage<DummyMessage>().Should().BeTrue();
+            typeof(SimpleSaga).CanHandleMessage<StartSimpleSaga>().Should().BeTrue();
+        }
     }
 }

@@ -17,10 +17,12 @@ namespace OpenSleigh.Core.DependencyInjection
         IBusConfigurator WithOutboxCleanerOptions(OutboxCleanerOptions options);
 
         /// <summary>
-        /// registers all the message handlers contained in the input assemblies.
+        /// registers all the message handlers contained in the input assemblies 
+        /// for the specific Message.
         /// Sagas will be skipped, use AddSaga() instead.
         /// </summary>
-        IBusConfigurator AddMessageHandlers(IEnumerable<Assembly> sourceAssemblies);
+        IMessageHandlerConfigurator<TM> AddMessageHandlers<TM>(IEnumerable<Assembly> sourceAssemblies)       
+            where TM : IMessage;                  
         
         ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
             where TS : Saga<TD>

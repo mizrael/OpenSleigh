@@ -1,16 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Messaging;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Linq;
 using OpenSleigh.Core.Utils;
 
-[assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
 {
     [ExcludeFromCodeCoverage]
@@ -54,7 +51,8 @@ namespace OpenSleigh.Core.DependencyInjection
             return this;
         }
 
-        public IBusConfigurator AddMessageHandlers(IEnumerable<Assembly> sourceAssemblies)                        
+        public IMessageHandlerConfigurator<TM> AddMessageHandlers<TM>(IEnumerable<Assembly> sourceAssemblies)       
+            where TM : IMessage                  
         {
             if (sourceAssemblies is null)           
                 throw new ArgumentNullException(nameof(sourceAssemblies));       
@@ -64,17 +62,14 @@ namespace OpenSleigh.Core.DependencyInjection
                 var types = assembly.GetTypes();
                 foreach(var type in types)
                 {
-                    if (type.IsSaga())
+                    if (type.IsSaga() || !type.CanHandleMessage<TM>())
                         continue;
 
-                    var messageTypes = type.GetHandledMessageTypes();
-                    foreach (var messageType in messageTypes)
-                        Services.AddTransient(
-                            typeof(IHandleMessage<>).MakeGenericType(messageType), type);
+                    Services.AddTransient(typeof(IHandleMessage<TM>), type);
                 }
             }
 
-            return this;
+            return new MessageHandlerConfigurator<TM>(this.Services);
         }
 
         public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()

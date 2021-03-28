@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.Utils
 {
@@ -22,6 +23,11 @@ namespace OpenSleigh.Core.Utils
                 var messageType = i.GetGenericArguments().First();
                 yield return messageType;
             }
+        }
+
+        public static bool CanHandleMessage<TM>(this Type type) where TM : IMessage {
+            var messageHandlerType = typeof(IHandleMessage<TM>);
+            return type.IsAssignableTo(messageHandlerType);
         }
 
         public static bool IsSaga(this Type type)
