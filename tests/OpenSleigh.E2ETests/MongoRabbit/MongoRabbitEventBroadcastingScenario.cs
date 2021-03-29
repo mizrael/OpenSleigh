@@ -61,11 +61,10 @@ namespace OpenSleigh.E2ETests.MongoRabbit
             };
             using var connection = connectionFactory.CreateConnection();
             using var channel = connection.CreateModel();
-            channel.ExchangeDelete(_exchangeName);
             channel.QueueDelete(_exchangeName); 
-            channel.ExchangeDelete($"{_exchangeName}.dead");
+            channel.ExchangeDelete(_exchangeName);
             channel.QueueDelete($"{_exchangeName}.dead");
-
+            channel.ExchangeDelete($"{_exchangeName}.dead");
         }
     }
 }

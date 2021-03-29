@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -6,6 +7,9 @@ namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
+        private readonly string _connStrTemplate;
+        private readonly List<SagaDbContext> _dbContexts = new();
+        
         public DbFixture()
         {
             var configuration = new ConfigurationBuilder()
@@ -13,27 +17,38 @@ namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
                 .AddEnvironmentVariables()
                 .Build();
 
-            var connStr = configuration.GetConnectionString("sql");
-            if (string.IsNullOrWhiteSpace(connStr))
+            _connStrTemplate = configuration.GetConnectionString("sql");
+            if (string.IsNullOrWhiteSpace(_connStrTemplate))
                 throw new ArgumentException("invalid connection string");
-
-            this.ConnectionString = string.Format(connStr, Guid.NewGuid());
-            
-            var options = new DbContextOptionsBuilder<SagaDbContext>()
-                .UseSqlServer(this.ConnectionString)
-                .EnableSensitiveDataLogging()
-                .Options;
-            _dbContext = new SagaDbContext(options);
         }
         
-        public string ConnectionString { get; }
-
-        private readonly SagaDbContext _dbContext;
-        public ISagaDbContext DbContext => _dbContext;
+        public (ISagaDbContext db, string connStr) CreateDbContext()
+        {
+            var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
+            
+            var options = new DbContextOptionsBuilder<SagaDbContext>()
+                .UseSqlServer(connectionString)
+                .EnableSensitiveDataLogging()
+                .Options;
+            var dbContext = new SagaDbContext(options);
+            _dbContexts.Add(dbContext);
+            return (dbContext, connectionString);
+        }
 
         public void Dispose()
         {
-            _dbContext?.Database.EnsureDeleted();
+            foreach (var ctx in _dbContexts)
+            {
+                try
+                {
+                    ctx.Database.EnsureDeleted();
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+            }
         }
     }
 }

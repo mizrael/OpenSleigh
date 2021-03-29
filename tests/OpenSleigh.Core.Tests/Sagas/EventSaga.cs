@@ -17,16 +17,16 @@ namespace OpenSleigh.Core.Tests.Sagas
     public class EventSaga1 : Saga<EventSagaState1>, 
         IStartedBy<DummyEvent>
     {
-        private readonly Action<DummyEvent> _onStart;
+        private readonly Action<IMessageContext<DummyEvent>> _onStart;
 
-        public EventSaga1(Action<DummyEvent> onStart)
+        public EventSaga1(Action<IMessageContext<DummyEvent>> onStart)
         {
             _onStart = onStart;
         }
 
         public Task HandleAsync(IMessageContext<DummyEvent> context, CancellationToken cancellationToken = default)
         {
-            _onStart?.Invoke(context.Message);
+            _onStart?.Invoke(context);
             return Task.CompletedTask;
         }
     }
@@ -41,16 +41,16 @@ namespace OpenSleigh.Core.Tests.Sagas
     public class EventSaga2 : Saga<EventSagaState2>,
         IStartedBy<DummyEvent>
     {
-        private readonly Action<DummyEvent> _onStart;
+        private readonly Action<IMessageContext<DummyEvent>> _onStart;
 
-        public EventSaga2(Action<DummyEvent> onStart)
+        public EventSaga2(Action<IMessageContext<DummyEvent>> onStart)
         {
             _onStart = onStart;
         }
 
         public Task HandleAsync(IMessageContext<DummyEvent> context, CancellationToken cancellationToken = default)
         {
-            _onStart?.Invoke(context.Message);
+            _onStart?.Invoke(context);
             return Task.CompletedTask;
         }
     }

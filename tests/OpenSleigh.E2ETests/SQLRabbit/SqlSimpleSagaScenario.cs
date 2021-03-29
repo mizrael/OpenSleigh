@@ -17,20 +17,21 @@ namespace OpenSleigh.E2ETests.SQLRabbit
         IClassFixture<RabbitFixture>,
         IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _dbFixture;
         private readonly RabbitFixture _rabbitFixture;
         private readonly string _exchangeName;
 
-        public SqlSimpleSagaScenario(DbFixture fixture, RabbitFixture rabbitFixture)
+        public SqlSimpleSagaScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
-            _fixture = fixture;
+            _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;
             _exchangeName = $"test.{nameof(StartSimpleSaga)}.{Guid.NewGuid()}";
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new SqlConfiguration(_fixture.ConnectionString);
+            var (_, connStr) = _dbFixture.CreateDbContext();
+            var sqlCfg = new SqlConfiguration(connStr);
 
             cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder => {
                 builder.UseMessageNamingPolicy<StartSimpleSaga>(() =>

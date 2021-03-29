@@ -18,13 +18,13 @@ namespace OpenSleigh.E2ETests.SQLRabbit
         IClassFixture<RabbitFixture>,
         IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture dbFixture;
         private readonly RabbitFixture _rabbitFixture;
         private readonly Dictionary<Type, string> _topics = new();
 
-        public SqlParentChildScenario(DbFixture fixture, RabbitFixture rabbitFixture)
+        public SqlParentChildScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
-            _fixture = fixture;
+            dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;
             AddTopicName<StartParentSaga>();
             AddTopicName<ProcessParentSaga>();
@@ -39,7 +39,8 @@ namespace OpenSleigh.E2ETests.SQLRabbit
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new SqlConfiguration(_fixture.ConnectionString);
+            var (_, connStr) = dbFixture.CreateDbContext();
+            var sqlCfg = new SqlConfiguration(connStr);
 
             cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder =>
             {

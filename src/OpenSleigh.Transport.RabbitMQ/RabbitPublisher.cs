@@ -8,8 +8,7 @@ using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
-{
-    
+{   
     public class RabbitPublisher : IPublisher
     {
         private readonly IPublisherChannelFactory _publisherChannelFactory;
@@ -51,7 +50,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
                 {
                     _logger.LogWarning(ex,
-                        "Could not publish message '{MessageId}' to Exchange '{ExchangeName}', Queue '{QueueName}' after {Timeout}s : {ExceptionMessage}",
+                        "Could not publish message '{MessageId}' to Exchange '{ExchangeName}' after {Timeout}s : {ExceptionMessage}",
                         message.Id,
                         context.QueueReferences.ExchangeName,
                         context.QueueReferences.QueueName,
@@ -67,7 +66,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                     basicProperties: properties,
                     body: encodedMessage);
 
-                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}', Queue '{QueueName}'",
+                _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'",
                     message.Id,
                     context.QueueReferences.ExchangeName,
                     context.QueueReferences.QueueName);

@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;

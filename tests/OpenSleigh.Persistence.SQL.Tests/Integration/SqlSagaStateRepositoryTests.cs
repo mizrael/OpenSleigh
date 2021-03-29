@@ -25,7 +25,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
@@ -39,13 +40,14 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_lock_item()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
             var (_, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
 
-            var lockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e =>
+            var lockedState = await db.SagaStates.FirstOrDefaultAsync(e =>
                                         e.LockId == lockId && e.CorrelationId == newState.Id);
             lockedState.Should().NotBeNull();
         }
@@ -53,7 +55,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_throw_if_item_locked()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
@@ -67,7 +70,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task LockAsync_should_return_state_if_lock_expired()
         {
             var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
-            var sut = CreateSut(options);
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
 
             var newState = DummyState.New();
 
@@ -83,7 +87,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var correlationId = Guid.NewGuid();
 
@@ -102,7 +107,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task ReleaseLockAsync_should_throw_when_state_not_found()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var correlationId = Guid.NewGuid();
             var state = new DummyState(correlationId, "lorem", 42);
@@ -114,7 +120,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task ReleaseLockAsync_should_release_lock_and_update_state()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var correlationId = Guid.NewGuid();
             var newState = new DummyState(correlationId, "lorem", 42);
@@ -123,8 +130,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             
             var updatedState = new DummyState(correlationId, "ipsum", 71);
             await sut.ReleaseLockAsync(updatedState, lockId);
-
-            var unLockedState = await _fixture.DbContext.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
+            
+            var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
             unLockedState.Should().NotBeNull();
             unLockedState.LockId.Should().BeNull();
             unLockedState.LockTime.Should().BeNull();
@@ -137,10 +144,11 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             deserializedState.Foo.Should().Be(updatedState.Foo);
         }
 
-        private SqlSagaStateRepository CreateSut(SqlSagaStateRepositoryOptions options = null)
+        private SqlSagaStateRepository CreateSut(ISagaDbContext db,
+            SqlSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();
-            var sut = new SqlSagaStateRepository(_fixture.DbContext, serializer, options ?? SqlSagaStateRepositoryOptions.Default);
+            var sut = new SqlSagaStateRepository(db, serializer, options ?? SqlSagaStateRepositoryOptions.Default);
             return sut;
         }
     }
