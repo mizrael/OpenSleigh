@@ -6,7 +6,12 @@ using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
+using System.Collections.Generic;
+using System.Security.Authentication;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Driver;
+using OpenSleigh.Core;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.MongoRabbit
@@ -19,7 +24,8 @@ namespace OpenSleigh.E2ETests.MongoRabbit
         private readonly RabbitFixture _rabbitFixture;
         private readonly Persistence.Mongo.Tests.Fixtures.DbFixture _mongoFixture;
         private readonly string _exchangeName;
-
+        private readonly List<string> _dbNames = new();
+        
         public MongoRabbitEventBroadcastingScenario(RabbitFixture rabbitFixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
         {
             _rabbitFixture = rabbitFixture;
@@ -29,18 +35,25 @@ namespace OpenSleigh.E2ETests.MongoRabbit
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
+            var (_, name) = _mongoFixture.CreateDbContext();
+            _dbNames.Add(name);
             var mongoCfg = new MongoConfiguration(_mongoFixture.ConnectionString,
-                _mongoFixture.DbName,
+                name,
                 MongoSagaStateRepositoryOptions.Default,
                 MongoOutboxRepositoryOptions.Default);
 
-            cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder => {
-                builder.UseMessageNamingPolicy<DummyEvent>(() =>
-                    new QueueReferences(_exchangeName,
-                                        _exchangeName,
-                                        $"{_exchangeName}.dead",
-                                        $"{_exchangeName}.dead"));
-            })
+            cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder =>
+                {
+                    builder.UseMessageNamingPolicy<DummyEvent>(() =>
+                    {
+                        var sp = cfg.Services.BuildServiceProvider();
+                        var sysInfo = sp.GetService<SystemInfo>();
+                        return new QueueReferences(_exchangeName,
+                            $"{_exchangeName}.{sysInfo.ClientGroup}",
+                            $"{_exchangeName}.dead",
+                            $"{_exchangeName}.dead");
+                    });
+                })
                .UseMongoPersistence(mongoCfg);
         }
 
@@ -51,6 +64,12 @@ namespace OpenSleigh.E2ETests.MongoRabbit
 
         public async Task DisposeAsync()
         {
+            var settings = MongoClientSettings.FromUrl(new MongoUrl(_mongoFixture.ConnectionString));
+            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
+            var mongoClient = new MongoClient(settings);
+            foreach(var name in _dbNames)
+                await mongoClient.DropDatabaseAsync(name);
+            
             var connectionFactory = new ConnectionFactory()
             {
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
