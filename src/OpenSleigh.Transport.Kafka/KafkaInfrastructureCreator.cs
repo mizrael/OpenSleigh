@@ -29,19 +29,25 @@ namespace OpenSleigh.Transport.Kafka
 
             using var adminClient = builder.Build();
 
-            _logger.LogInformation("Setting up Kafka topic {Topic} ...", queueRef.TopicName);
+            await TryCreateTopicAsync(queueRef.TopicName, adminClient);
+            await TryCreateTopicAsync(queueRef.DeadLetterTopicName, adminClient);
+
+        }
+
+        private async Task TryCreateTopicAsync(string topicName, IAdminClient adminClient)
+        {
+            _logger.LogInformation("Setting up Kafka topic {Topic} ...", topicName);
 
             try
             {
                 await adminClient.CreateTopicsAsync(new[] {
-                    new TopicSpecification { Name = queueRef.TopicName, ReplicationFactor = 1, NumPartitions = 1 },
-                    new TopicSpecification { Name = queueRef.DeadLetterTopicName, ReplicationFactor = 1, NumPartitions = 1 }
+                    new TopicSpecification { Name = topicName, ReplicationFactor = 1, NumPartitions = 1 }
                 });
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "An error occured creating topic {Topic}: {Error}",
-                    queueRef.TopicName, e.Message);
+                    topicName, e.Message);
             }            
         }
     }

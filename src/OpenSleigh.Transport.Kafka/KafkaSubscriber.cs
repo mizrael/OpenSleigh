@@ -24,18 +24,19 @@ namespace OpenSleigh.Transport.Kafka
         private bool _started = false;
         private bool _disposed = false;
 
-        public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder,
+        public KafkaSubscriber(IConsumerBuilderFactory builderFactory,
             IQueueReferenceFactory queueReferenceFactory,
             IKafkaMessageHandler messageHandler,
             ILogger<KafkaSubscriber<TM>> logger,
             KafkaSubscriberConfig config = null)
         {
-            if (builder is null)
-                throw new ArgumentNullException(nameof(builder));
+            if (builderFactory is null)
+                throw new ArgumentNullException(nameof(builderFactory));
 
             if (queueReferenceFactory is null)
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
 
+            var builder = builderFactory.Create<TM, Guid, byte[]>();
             _consumer = builder.Build();
             _queueReferences = queueReferenceFactory.Create<TM>();
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));

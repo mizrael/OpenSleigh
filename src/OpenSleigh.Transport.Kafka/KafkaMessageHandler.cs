@@ -65,6 +65,8 @@ namespace OpenSleigh.Transport.Kafka
         {
             _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
                                message.Id, ex.Message);
+            
+            //TODO: consider adding retry policy, maybe using message headers to store the retry count
 
             if (string.IsNullOrWhiteSpace(queueReferences.DeadLetterTopicName))
                 return;
