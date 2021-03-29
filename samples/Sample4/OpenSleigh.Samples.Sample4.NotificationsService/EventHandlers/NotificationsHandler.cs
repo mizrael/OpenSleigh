@@ -8,11 +8,13 @@ using OpenSleigh.Samples.Sample4.Common;
 
 namespace OpenSleigh.Samples.Sample4.NotificationsService.EventHandlers
 {
-    public class ShippingCompletedHandler : IHandleMessage<ShippingCompleted>
+    public class NotificationsHandler : 
+        IHandleMessage<ShippingCompleted>,
+        IHandleMessage<OrderSagaCompleted>
     {
-        private readonly ILogger<ShippingCompletedHandler> _logger;
+        private readonly ILogger<NotificationsHandler> _logger;
 
-        public ShippingCompletedHandler(ILogger<ShippingCompletedHandler> logger)
+        public NotificationsHandler(ILogger<NotificationsHandler> logger)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -20,6 +22,13 @@ namespace OpenSleigh.Samples.Sample4.NotificationsService.EventHandlers
         public Task HandleAsync(IMessageContext<ShippingCompleted> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"order {context.Message.OrderId} has been shipped.");
+
+            return Task.CompletedTask;
+        }
+        
+        public Task HandleAsync(IMessageContext<OrderSagaCompleted> context, CancellationToken cancellationToken = default)
+        {
+            _logger.LogInformation($"order {context.Message.OrderId} processed successfully!");
 
             return Task.CompletedTask;
         }

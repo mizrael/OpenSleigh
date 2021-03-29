@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
 
@@ -6,10 +7,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
-        private MongoClient _client;
-        private IMongoDatabase _db;
-
-        public IDbContext DbContext { get; }
+        private readonly MongoClient _client;
+        private readonly List<IMongoDatabase> _dbs = new();
 
         public DbFixture()
         {
@@ -23,19 +22,25 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
                 throw new ArgumentException("invalid connection string");
 
             _client = new MongoClient(this.ConnectionString);
-
-            this.DbName = $"openSleigh_{Guid.NewGuid()}";
-            _db = _client.GetDatabase(this.DbName);
-
-            DbContext = new DbContext(_db);
         }
 
-        public string ConnectionString { get; init; }
-        public string DbName { get; init; }
+        public (IDbContext db, string name) CreateDbContext()
+        {
+            var dbName = $"openSleigh_{Guid.NewGuid()}";
+            var db = _client.GetDatabase(dbName);
+            var dbContext = new DbContext(db);
+            _dbs.Add(db);
+            return (dbContext, dbName);
+        }
 
+        public string ConnectionString { get; }
+        
         public void Dispose()
         {
-            _client?.DropDatabase(_db.DatabaseNamespace.DatabaseName);
+            if (_client is null)
+                return;
+            foreach(var db in _dbs)
+                _client.DropDatabase(db.DatabaseNamespace.DatabaseName);
         }
     }
 }

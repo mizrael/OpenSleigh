@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,55 +25,28 @@ namespace OpenSleigh.Core.Tests.E2E
             var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
             
-            Action<StartSimpleSaga> onMessage = msg =>
+            Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
             {
                 receivedCount++;
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
                 
-                msg.Id.Should().Be(message.Id);
-                msg.CorrelationId.Should().Be(message.CorrelationId);
+                ctx.Message.Id.Should().Be(message.Id);
+                ctx.Message.CorrelationId.Should().Be(message.CorrelationId);
             };
-
-            var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
-                           .Select(async i =>
-                           {
-                               try
-                               {
-                                   var host = await SetupHost(onMessage);
-                                   await host.StartAsync(tokenSource.Token);
-                               }
-                               catch (Exception ex)
-                               {
-
-                                   throw;
-                               }
-                             
-                           });
-
-            var producerHostTask = Task.Run(async () =>
-            {
-                try
+            var createHostTasks = Enumerable.Range(1, hostsCount)
+                .Select(async i =>
                 {
                     var host = await SetupHost(onMessage);
-
                     await host.StartAsync(tokenSource.Token);
+                    return host;
+                }).ToArray();
 
-                    using var scope = host.Services.CreateScope();
-                    var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-                    await bus.PublishAsync(message, tokenSource.Token);
-                }
-                catch (Exception ex)
-                {
+            await Task.WhenAll(createHostTasks);
 
-                    throw ;
-                }
-              
-            });
-
-            var tasks = new List<Task>(consumerHostsTasks)
-            {
-                producerHostTask
-            };
+            var producerHost = createHostTasks.First().Result;
+            using var scope = producerHost.Services.CreateScope();
+            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+            await bus.PublishAsync(message, tokenSource.Token);
 
             while (!tokenSource.IsCancellationRequested)
                 await Task.Delay(10);
@@ -82,7 +54,7 @@ namespace OpenSleigh.Core.Tests.E2E
             receivedCount.Should().Be(1);
         }
 
-        private async Task<IHost> SetupHost(Action<StartSimpleSaga> onMessage)
+        private async Task<IHost> SetupHost(Action<IMessageContext<StartSimpleSaga>> onMessage)
         {
             var hostBuilder = CreateHostBuilder();
             hostBuilder.ConfigureServices((ctx, services) => { services.AddSingleton(onMessage); });

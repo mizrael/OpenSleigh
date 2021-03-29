@@ -40,8 +40,11 @@ namespace OpenSleigh.Samples.Sample4.NotificationsService
 
                         cfg.UseRabbitMQTransport(rabbitCfg)
                             .UseSqlPersistence(sqlConfig);
-
-                        cfg.AddMessageHandlers(new[] {typeof(Program).Assembly});
+                        
+                        cfg.AddMessageHandlers<ShippingCompleted>(new[] {typeof(Program).Assembly})
+                            .UseRabbitMQTransport();
+                        cfg.AddMessageHandlers<OrderSagaCompleted>(new[] {typeof(Program).Assembly})
+                            .UseRabbitMQTransport();
                     });
             });
     }

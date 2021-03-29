@@ -43,7 +43,7 @@ namespace OpenSleigh.Core.BackgroundServices
                 return;
             }                
 
-            _logger.LogInformation($"starting subscribers on client '{_systemInfo.ClientId}' ...");
+            _logger.LogInformation($"starting subscribers on client '{_systemInfo.ClientGroup}/{_systemInfo.ClientId}' ...");
 
             var tasks = _subscribers.Select(s => s.StartAsync(stoppingToken));
             await Task.WhenAll(tasks);

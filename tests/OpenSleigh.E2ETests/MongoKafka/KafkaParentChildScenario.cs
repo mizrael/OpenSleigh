@@ -23,8 +23,9 @@ namespace OpenSleigh.E2ETests.MongoKafka
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {            
+            var (_, name) = _mongoFixture.CreateDbContext();
             var mongoCfg = new MongoConfiguration(_mongoFixture.ConnectionString,
-                _mongoFixture.DbName,
+                name,
                 MongoSagaStateRepositoryOptions.Default,
                 MongoOutboxRepositoryOptions.Default);
 

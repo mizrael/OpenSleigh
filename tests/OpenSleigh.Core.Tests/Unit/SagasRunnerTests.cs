@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
@@ -34,23 +33,6 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
 
             await Assert.ThrowsAsync<ArgumentNullException>(() => sut.RunAsync<StartDummySaga>(null));
-        }
-
-        [Fact]
-        public async Task RunAsync_should_throw_if_no_message_handler_registered()
-        {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
-
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
-
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
-            var ex = await Assert.ThrowsAsync<SagaException>(() => sut.RunAsync(messageContext));
-            ex.Message.Should().Contain("no Saga registered for message of type");
         }
 
         [Fact]

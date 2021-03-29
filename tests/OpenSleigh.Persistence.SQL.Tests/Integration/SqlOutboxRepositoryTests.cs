@@ -27,7 +27,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task LockAsync_should_throw_if_message_not_found()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await Assert.ThrowsAsync<ArgumentException>(async () => await sut.LockAsync(message));
         }
 
@@ -35,10 +36,11 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task AppendAsync_should_append_message()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await sut.AppendAsync(message);
             
-            var appendedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            var appendedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
             appendedMessage.Should().NotBeNull();
             appendedMessage.LockId.Should().BeNull();
             appendedMessage.LockTime.Should().BeNull();
@@ -49,7 +51,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task AppendAsync_should_fail_if_message_already_appended()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await sut.AppendAsync(message);
 
             await Assert.ThrowsAsync<InvalidOperationException> (async () => await sut.AppendAsync(message));
@@ -59,7 +62,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task ReadMessagesToProcess_should_return_available_messages()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await sut.AppendAsync(message);
 
             var messages = await sut.ReadMessagesToProcess();
@@ -70,12 +74,13 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task LockAsync_should_lock_existing_message()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await sut.AppendAsync(message);
 
             var lockId = await sut.LockAsync(message);
 
-            var lockedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
             lockedMessage.Should().NotBeNull();
             lockedMessage.LockId.Should().Be(lockId);
             lockedMessage.LockTime.Should().NotBeNull();
@@ -85,7 +90,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task LockAsync_should_throw_if_message_already_locked()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await sut.AppendAsync(message);
 
             await sut.LockAsync(message);
@@ -97,7 +103,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task LockAsync_should_throw_if_message_already_processed()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             await sut.AppendAsync(message);
             var lockId = await sut.LockAsync(message);
@@ -110,7 +117,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task ReleaseAsync_should_throw_if_message_not_appended()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
             await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
         }
 
@@ -118,7 +126,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task ReleaseAsync_should_throw_if_message_not_locked()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             await sut.AppendAsync(message);
 
@@ -130,7 +139,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task ReleaseAsync_should_throw_if_message_already_locked()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             await sut.AppendAsync(message);
             await sut.LockAsync(message);
@@ -145,13 +155,14 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         public async Task ReleaseAsync_should_update_message_status()
         {
             var message = StartDummySaga.New();
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             await sut.AppendAsync(message);
             var lockId = await sut.LockAsync(message);
             await sut.ReleaseAsync(message, lockId);
 
-            var lockedMessage = await _fixture.DbContext.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
+            var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.Id == message.Id);
             lockedMessage.Status.Should().Be("Processed");
             lockedMessage.LockId.Should().BeNull();
             lockedMessage.LockTime.Should().BeNull();
@@ -160,7 +171,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
         [Fact]
         public async Task CleanProcessedAsync_should_clear_processed_messages()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var messages = new[]
             {
@@ -177,18 +189,18 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             var lockId = await sut.LockAsync(processedMessage);
             await sut.ReleaseAsync(processedMessage, lockId);
             
-            var count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+            var count = await db.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
             count.Should().Be(1);
 
             await sut.CleanProcessedAsync();
 
-            count = await _fixture.DbContext.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
+            count = await db.OutboxMessages.CountAsync(e => e.Id == processedMessage.Id);
             count.Should().Be(0);
         }
 
-        private SqlOutboxRepository CreateSut()
+        private SqlOutboxRepository CreateSut(ISagaDbContext db)
         {
-            var sut = new SqlOutboxRepository(_fixture.DbContext, new JsonSerializer(), SqlOutboxRepositoryOptions.Default);
+            var sut = new SqlOutboxRepository(db, new JsonSerializer(), SqlOutboxRepositoryOptions.Default);
             return sut;
         }
     }
