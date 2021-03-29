@@ -24,10 +24,10 @@ namespace OpenSleigh.Core.Tests.Sagas
         IHandleMessage<ChildSagaCompleted>,
         IHandleMessage<ParentSagaCompleted>
     {
-        private readonly Action<ParentSagaCompleted> _onCompleted;        
+        private readonly Action<IMessageContext<ParentSagaCompleted>> _onCompleted;        
         private readonly ILogger<ParentSaga> _logger;
         
-        public ParentSaga(Action<ParentSagaCompleted> onCompleted, ILogger<ParentSaga> logger)
+        public ParentSaga(Action<IMessageContext<ParentSagaCompleted>> onCompleted, ILogger<ParentSaga> logger)
         {
             _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
             _logger = logger;
@@ -57,7 +57,7 @@ namespace OpenSleigh.Core.Tests.Sagas
 
             this.State.MarkAsCompleted();
 
-            _onCompleted?.Invoke(context.Message);
+            _onCompleted?.Invoke(context);
 
             return Task.CompletedTask;
         }
