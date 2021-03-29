@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -37,8 +38,10 @@ namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
 
         public void Dispose()
         {
-            foreach (var ctx in _dbContexts)
+            var queue = new Queue<SagaDbContext>(_dbContexts);
+            while (queue.Any())
             {
+                var ctx = queue.Dequeue();
                 try
                 {
                     ctx.Database.EnsureDeleted();
@@ -46,7 +49,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
                 catch (Exception e)
                 {
                     Console.WriteLine(e);
-                    throw;
+                    queue.Enqueue(ctx);
                 }
             }
         }

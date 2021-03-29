@@ -28,7 +28,7 @@ namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
             _cosmosFixture = cosmosFixture;
             _sbFixture = sbFixture; 
             
-            _topicName =  $"{nameof(DummyEvent)}.{DateTime.UtcNow.Ticks}";
+            _topicName =  $"CosmosSqlEventBroadcastingScenario.tests.{Guid.NewGuid()}";
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)

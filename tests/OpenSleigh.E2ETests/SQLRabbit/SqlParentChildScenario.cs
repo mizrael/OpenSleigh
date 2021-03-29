@@ -78,8 +78,6 @@ namespace OpenSleigh.E2ETests.SQLRabbit
 
         public async Task DisposeAsync()
         {
-            //TODO: drop SQL db
-
             var connectionFactory = new ConnectionFactory()
             {
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,

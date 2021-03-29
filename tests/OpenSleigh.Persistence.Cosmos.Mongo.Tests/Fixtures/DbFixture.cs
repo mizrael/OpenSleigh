@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Security.Authentication;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
@@ -10,6 +11,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
     {
         private readonly MongoClient _client;
         private readonly List<string> _dbNames = new();
+        
         public DbFixture()
         {
             var configuration = new ConfigurationBuilder()
@@ -40,14 +42,27 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
             return (dbContext, dbName);
         }
         
-        public string ConnectionString { get; init; }
+        public string ConnectionString { get; }
 
         public void Dispose()
         {
             if (_client is null)
                 return;
-            foreach(var dbName in _dbNames)
-                _client.DropDatabase(dbName);
+
+            var queue = new Queue<string>(_dbNames);
+            while (queue.Any())
+            {
+                var dbName = queue.Dequeue();
+                try
+                {
+                    _client.DropDatabase(dbName);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    queue.Enqueue(dbName);
+                }
+            }
         }
     }
 }
