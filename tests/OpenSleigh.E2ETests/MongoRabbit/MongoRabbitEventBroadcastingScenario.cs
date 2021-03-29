@@ -64,12 +64,6 @@ namespace OpenSleigh.E2ETests.MongoRabbit
 
         public async Task DisposeAsync()
         {
-            var settings = MongoClientSettings.FromUrl(new MongoUrl(_mongoFixture.ConnectionString));
-            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
-            var mongoClient = new MongoClient(settings);
-            foreach(var name in _dbNames)
-                await mongoClient.DropDatabaseAsync(name);
-            
             var connectionFactory = new ConnectionFactory()
             {
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
