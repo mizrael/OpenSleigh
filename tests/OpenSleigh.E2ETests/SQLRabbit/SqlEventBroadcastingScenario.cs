@@ -26,7 +26,7 @@ namespace OpenSleigh.E2ETests.SQLRabbit
         public SqlEventBroadcastingScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
             _dbFixture = dbFixture;
-            _exchangeName = $"test.{nameof(DummyEvent)}.{Guid.NewGuid()}";
+            _exchangeName = $"{nameof(DummyEvent)}.{Guid.NewGuid()}";
             _rabbitFixture = rabbitFixture;
         }
 

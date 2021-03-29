@@ -25,7 +25,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var newState = DummyState.New();
 
@@ -39,13 +40,13 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_lock_item()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var newState = DummyState.New();
 
             var (_, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
                         
-            var dbContext = _fixture.CreateDbContext();
             var lockedState = await dbContext.SagaStates.FirstOrDefaultAsync(e =>
                                         e.LockId == lockId && e.CorrelationId == newState.Id);
             lockedState.Should().NotBeNull();
@@ -54,7 +55,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_throw_if_item_locked()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var newState = DummyState.New();
 
@@ -68,7 +70,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         public async Task LockAsync_should_return_state_if_lock_expired()
         {
             var options = new CosmosSqlSagaStateRepositoryOptions(TimeSpan.Zero);
-            var sut = CreateSut(options);
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext, options);
 
             var newState = DummyState.New();
 
@@ -84,7 +87,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var correlationId = Guid.NewGuid();
 
@@ -103,7 +107,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task ReleaseLockAsync_should_throw_when_state_not_found()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var correlationId = Guid.NewGuid();
             var state = new DummyState(correlationId, "lorem", 42);
@@ -115,7 +120,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
         [Fact]
         public async Task ReleaseLockAsync_should_release_lock_and_update_state()
         {
-            var sut = CreateSut();
+            var (dbContext, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(dbContext);
 
             var correlationId = Guid.NewGuid();
             var newState = new DummyState(correlationId, "lorem", 42);
@@ -124,8 +130,6 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             
             var updatedState = new DummyState(correlationId, "ipsum", 71);
             await sut.ReleaseLockAsync(updatedState, lockId);
-
-            var dbContext = _fixture.CreateDbContext();
 
             var unLockedState = await dbContext.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
             unLockedState.Should().NotBeNull();
@@ -140,10 +144,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             deserializedState.Foo.Should().Be(updatedState.Foo);
         }
 
-        private CosmosSqlSagaStateRepository CreateSut(CosmosSqlSagaStateRepositoryOptions options = null)
+        private CosmosSqlSagaStateRepository CreateSut(ISagaDbContext dbContext,
+            CosmosSqlSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();
-            var dbContext = _fixture.CreateDbContext();
+            
             var sut = new CosmosSqlSagaStateRepository(dbContext, serializer, options ?? CosmosSqlSagaStateRepositoryOptions.Default);
             return sut;
         }

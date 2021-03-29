@@ -35,7 +35,8 @@ namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new CosmosSqlConfiguration(_cosmosFixture.ConnectionString, _cosmosFixture.DbName);
+            var (_, dbName) = _cosmosFixture.CreateDbContext();
+            var sqlCfg = new CosmosSqlConfiguration(_cosmosFixture.ConnectionString, dbName);
 
             cfg.UseAzureServiceBusTransport(_sbFixture.Configuration, builder =>
             {
