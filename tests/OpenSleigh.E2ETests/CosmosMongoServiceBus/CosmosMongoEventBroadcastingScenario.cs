@@ -34,8 +34,9 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
+            var (_, dbName) = _cosmosFixture.CreateDbContext();
             var cosmosCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
-                _cosmosFixture.DbName,
+                dbName,
                 CosmosSagaStateRepositoryOptions.Default,
                 CosmosOutboxRepositoryOptions.Default);
 
@@ -58,11 +59,6 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
 
             await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptionName);
             await adminClient.DeleteTopicAsync(_topicName);
-
-            var settings = MongoClientSettings.FromUrl(new MongoUrl(_cosmosFixture.ConnectionString));
-            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
-            var mongoClient = new MongoClient(settings);
-            await mongoClient.DropDatabaseAsync(_cosmosFixture.DbName);
         }
     }
 }
