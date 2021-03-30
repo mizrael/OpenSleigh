@@ -21,9 +21,9 @@ namespace OpenSleigh.Transport.Kafka
         private readonly ILogger<KafkaSubscriber<TM>> _logger;
         private readonly KafkaSubscriberConfig _config;
         
-        private bool _started = false;
-        private bool _disposed = false;
-
+        private CancellationTokenSource _stoppingCts;
+        private Task _consumerTask;
+        
         public KafkaSubscriber(IConsumerBuilderFactory builderFactory,
             IQueueReferenceFactory queueReferenceFactory,
             IKafkaMessageHandler messageHandler,
@@ -46,26 +46,27 @@ namespace OpenSleigh.Transport.Kafka
 
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
-            return Task.Run(() => ConsumeMessages(cancellationToken), CancellationToken.None);
+            _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _consumerTask = ConsumeMessages(_stoppingCts.Token);
+            return Task.CompletedTask;
         }
 
-        private async Task ConsumeMessages(CancellationToken cancellationToken)
+        private async Task ConsumeMessages(CancellationToken stoppingToken)
         {
-            _started = true;
             _consumer.Subscribe(_queueReferences.TopicName);
 
-            while (_started && !cancellationToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
-                    var result = _consumer.Consume(cancellationToken);
+                    var result = _consumer.Consume(stoppingToken);
                     if (result is null || result.IsPartitionEOF)
                     {
-                        await Task.Delay(_config.ConsumeDelay, cancellationToken);
+                        await Task.Delay(_config.ConsumeDelay, stoppingToken);
                         continue;
                     }
 
-                    await _messageHandler.HandleAsync(result, _queueReferences, cancellationToken);
+                    await _messageHandler.HandleAsync(result, _queueReferences, stoppingToken);
                 }
                 catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
                 {
@@ -74,7 +75,7 @@ namespace OpenSleigh.Transport.Kafka
 
                     _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
                         _queueReferences.TopicName, ex.Message);
-                    await Task.Delay(_config.ConsumeDelay, cancellationToken);
+                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
                 }
                 catch (ObjectDisposedException ex)
                 {
@@ -93,24 +94,28 @@ namespace OpenSleigh.Transport.Kafka
                         _queueReferences.TopicName, ex.Message);
                 }
             }
-
-            _started = false;
-            if(!_disposed)
-                _consumer?.Unsubscribe();
         }
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
+        public async Task StopAsync(CancellationToken cancellationToken = default)
         {
-            _started = false;
-            return Task.CompletedTask;
+            if (_consumerTask == null)
+                return;
+
+            try
+            {
+                _stoppingCts.Cancel();
+            }
+            finally
+            {
+                await Task.WhenAny(_consumerTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            }
         }
 
         public void Dispose()
         {
-            _started = false;
+            _stoppingCts?.Cancel();
             _consumer?.Dispose();
             _consumer = null;
-            _disposed = true;
         }
     }
 }
