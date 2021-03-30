@@ -21,21 +21,22 @@ namespace OpenSleigh.Transport.Kafka
         private readonly ILogger<KafkaSubscriber<TM>> _logger;
         private readonly KafkaSubscriberConfig _config;
         
-        private bool _started = false;
-        private bool _disposed = false;
-
-        public KafkaSubscriber(ConsumerBuilder<Guid, byte[]> builder,
+        private CancellationTokenSource _stoppingCts;
+        private Task _consumerTask;
+        
+        public KafkaSubscriber(IConsumerBuilderFactory builderFactory,
             IQueueReferenceFactory queueReferenceFactory,
             IKafkaMessageHandler messageHandler,
             ILogger<KafkaSubscriber<TM>> logger,
             KafkaSubscriberConfig config = null)
         {
-            if (builder is null)
-                throw new ArgumentNullException(nameof(builder));
+            if (builderFactory is null)
+                throw new ArgumentNullException(nameof(builderFactory));
 
             if (queueReferenceFactory is null)
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
 
+            var builder = builderFactory.Create<TM, Guid, byte[]>();
             _consumer = builder.Build();
             _queueReferences = queueReferenceFactory.Create<TM>();
             _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
@@ -43,73 +44,107 @@ namespace OpenSleigh.Transport.Kafka
             _config = config ?? KafkaSubscriberConfig.Default;
         }
 
+
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
-            return Task.Run(() => ConsumeMessages(cancellationToken), CancellationToken.None);
+            _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            _consumerTask = ConsumeMessages(_stoppingCts.Token);
+            return Task.CompletedTask;
         }
 
-        private async Task ConsumeMessages(CancellationToken cancellationToken)
+        private async Task ConsumeMessages(CancellationToken stoppingToken)
         {
-            _started = true;
             _consumer.Subscribe(_queueReferences.TopicName);
 
-            while (_started && !cancellationToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested)
             {
-                try
-                {
-                    var result = _consumer.Consume(cancellationToken);
-                    if (result is null || result.IsPartitionEOF)
-                    {
-                        await Task.Delay(_config.ConsumeDelay, cancellationToken);
-                        continue;
-                    }
-
-                    await _messageHandler.HandleAsync(result, _queueReferences, cancellationToken);
-                }
-                catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
-                {
-                    // noop. seems to be a known issue in the c# Kafka driver
-                    // occurring when consumers are started before producers.
-
-                    _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
-                        _queueReferences.TopicName, ex.Message);
-                    await Task.Delay(_config.ConsumeDelay, cancellationToken);
-                }
-                catch (ObjectDisposedException ex)
-                {
-                    _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call", _queueReferences.TopicName);
+                var canContinue = await ConsumeMessageAsync(stoppingToken);
+                if (!canContinue)
                     break;
-                }
-                catch (TaskCanceledException ex)
-                {
-                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
-                        _queueReferences.TopicName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
-                        _queueReferences.TopicName, ex.Message);
-                }
             }
-
-            _started = false;
-            if(!_disposed)
-                _consumer?.Unsubscribe();
         }
 
-        public Task StopAsync(CancellationToken cancellationToken = default)
+        /// <summary>
+        /// consumes a single message 
+        /// </summary>
+        /// <returns>false if consumer loop should be stopped</returns>
+        private async Task<bool> ConsumeMessageAsync(CancellationToken stoppingToken)
         {
-            _started = false;
-            return Task.CompletedTask;
+            try
+            {
+                var result = _consumer.Consume(stoppingToken);
+
+                // task might have been canceled during the call to Consume()
+                if (stoppingToken.IsCancellationRequested)
+                    return false;
+
+                var canProcess = (result is not null && !result.IsPartitionEOF);
+                if(canProcess)
+                    await _messageHandler.HandleAsync(result, _queueReferences, stoppingToken);
+                else
+                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
+                
+                return true;
+            }
+            catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
+            {
+                // noop. seems to be a known issue in the c# Kafka driver
+                // occurring when consumers are started before producers.
+
+                _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
+                    _queueReferences.TopicName, ex.Message);
+                await Task.Delay(_config.ConsumeDelay, stoppingToken);
+                return true;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (OperationCanceledException ex)
+            {
+                _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
+                    _queueReferences.TopicName, ex.Message);
+            }
+
+            return false;
+        }
+
+        public async Task StopAsync(CancellationToken cancellationToken = default)
+        {
+            if (_consumerTask == null)
+                return;
+
+            try
+            {
+                _consumer.Close();
+                
+                _stoppingCts.Cancel();
+            }
+            finally
+            {
+                await Task.WhenAny(_consumerTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            }
         }
 
         public void Dispose()
         {
-            _started = false;
+            _stoppingCts?.Cancel();
             _consumer?.Dispose();
             _consumer = null;
-            _disposed = true;
         }
     }
 }

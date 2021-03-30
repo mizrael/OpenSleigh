@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -10,17 +12,31 @@ namespace OpenSleigh.Transport.RabbitMQ
         private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesCache = new();
         private readonly Func<Type, QueueReferences> _defaultCreator;
         private readonly IServiceProvider _sp;
+        private readonly SystemInfo _systemInfo;
         
-        public QueueReferenceFactory(IServiceProvider sp, Func<Type, QueueReferences> defaultCreator = null)
+        public QueueReferenceFactory(IServiceProvider sp, 
+                                    SystemInfo systemInfo, 
+                                    Func<Type, QueueReferences> defaultCreator = null)
         {
             _sp = sp ?? throw new ArgumentNullException(nameof(sp));
+            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
 
             _defaultCreator = defaultCreator ?? (messageType =>
             {
                 var exchangeName = messageType.Name.ToLower();
-                var queueName = exchangeName + ".workers";
+                
+                var isEvent = messageType.IsEvent();
+                
+                var queueName = isEvent ? 
+                    $"{exchangeName}.{_systemInfo.ClientGroup}.workers" : 
+                    $"{exchangeName}.workers";
+                
                 var dlExchangeName = exchangeName + ".dead";
-                var dlQueueName = dlExchangeName + ".workers";
+                
+                var dlQueueName = isEvent ? 
+                    $"{dlExchangeName}.{_systemInfo.ClientGroup}.workers" : 
+                    $"{dlExchangeName}.workers";
+                
                 return new QueueReferences(exchangeName, queueName, dlExchangeName, dlQueueName);
             });
         }

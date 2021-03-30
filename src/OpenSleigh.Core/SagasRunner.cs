@@ -1,4 +1,3 @@
-using OpenSleigh.Core.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -29,8 +28,8 @@ namespace OpenSleigh.Core
                 throw new ArgumentNullException(nameof(messageContext));
             
             var sagaTypes = _stateTypeResolver.Resolve<TM>();
-            if (null == sagaTypes || !sagaTypes.Any())
-                throw new SagaException($"no Saga registered for message of type '{typeof(TM).FullName}'");
+            if (null == sagaTypes)
+                return Task.CompletedTask;
 
            return RunAsyncCore(messageContext, sagaTypes, cancellationToken);
         }
@@ -58,8 +57,7 @@ namespace OpenSleigh.Core
             }
 
             if (exceptions.Any())
-                throw new AggregateException($"an error has occurred while processing '{typeof(TM).FullName}' message '{messageContext.Message.Id}'",
-                    exceptions);
+                throw new AggregateException(exceptions);
         }
     }
 }

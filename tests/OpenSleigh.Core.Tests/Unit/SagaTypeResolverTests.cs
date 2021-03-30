@@ -2,6 +2,7 @@
 using System.Linq;
 using FluentAssertions;
 using OpenSleigh.Core.Tests.Sagas;
+using OpenSleigh.Core.Tests.Unit.Utils;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit
@@ -13,7 +14,7 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new SagaTypeResolver(typeResolver);
-            var result = sut.Register<EmptySaga, DummySagaState>();
+            var result = sut.Register<EmptySaga, SagaState>();
             result.Should().BeFalse();
         }
 

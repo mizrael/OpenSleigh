@@ -10,6 +10,8 @@ using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
 using System;
 using System.Security.Authentication;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
@@ -22,26 +24,32 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
         private readonly DbFixture _cosmosFixture;
         private readonly ServiceBusFixture _sbFixture;
         private readonly string _topicName;
-        private readonly string _subscriptionName;
-
+        
         public CosmosMongoEventBroadcastingScenario(DbFixture cosmosFixture, ServiceBusFixture sbFixture)
         {
             _cosmosFixture = cosmosFixture;
             _topicName = $"ServiceBusEventBroadcastingScenario.tests.{Guid.NewGuid()}";
-            _subscriptionName = Guid.NewGuid().ToString();
             _sbFixture = sbFixture;
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
+            var (_, dbName) = _cosmosFixture.CreateDbContext();
             var cosmosCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
-                _cosmosFixture.DbName,
+                dbName,
                 CosmosSagaStateRepositoryOptions.Default,
                 CosmosOutboxRepositoryOptions.Default);
 
             cfg.UseAzureServiceBusTransport(_sbFixture.Configuration, builder =>
             {
-                QueueReferencesPolicy<DummyEvent> policy = () => new QueueReferences(_topicName, _subscriptionName);
+                QueueReferencesPolicy<DummyEvent> policy = () =>
+                {
+                    var sp = cfg.Services.BuildServiceProvider();
+                    var sysInfo = sp.GetService<SystemInfo>();
+                    var subscriptionName = sysInfo.ClientGroup;
+                    return new QueueReferences(_topicName, subscriptionName);
+                };
+                
                 builder.UseMessageNamingPolicy(policy);
             })
                 .UseCosmosPersistence(cosmosCfg);
@@ -56,13 +64,11 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
         {
             var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
 
-            await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptionName);
+            await foreach (var subscription in adminClient.GetSubscriptionsAsync(_topicName))
+            {
+                await adminClient.DeleteSubscriptionAsync(_topicName, subscription.SubscriptionName);    
+            }
             await adminClient.DeleteTopicAsync(_topicName);
-
-            var settings = MongoClientSettings.FromUrl(new MongoUrl(_cosmosFixture.ConnectionString));
-            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
-            var mongoClient = new MongoClient(settings);
-            await mongoClient.DropDatabaseAsync(_cosmosFixture.DbName);
         }
     }
 }

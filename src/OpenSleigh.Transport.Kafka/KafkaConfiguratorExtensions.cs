@@ -1,14 +1,16 @@
 using System;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Confluent.Kafka;
 using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Transport.Kafka
 {
     [ExcludeFromCodeCoverage]
-    public record KafkaConfiguration(string ConnectionString, string ConsumerGroup, Func<Type, QueueReferences> DefaultQueueReferenceCreator = null);
+    public record KafkaConfiguration(string ConnectionString, Func<Type, QueueReferences> DefaultQueueReferenceCreator = null);
 
     [ExcludeFromCodeCoverage]
     public static class KafkaConfiguratorExtensions
@@ -20,19 +22,26 @@ namespace OpenSleigh.Transport.Kafka
             KafkaConfiguration config,
             Action<IKafkaBusConfigurationBuilder> builderFunc)
         {
-            busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(ctx =>
-            {
-                return new QueueReferenceFactory(ctx, config.DefaultQueueReferenceCreator);
-            });
+            busConfigurator.Services.AddSingleton(config);
+            
+            busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(ctx => new QueueReferenceFactory(ctx, config.DefaultQueueReferenceCreator));
 
-            busConfigurator.Services.AddSingleton(new AdminClientConfig() { BootstrapServers = config.ConnectionString });
             busConfigurator.Services.AddSingleton(ctx =>
             {
-                var config = ctx.GetRequiredService<AdminClientConfig>();
-                return new AdminClientBuilder(config);
+                var kafkaConfig = ctx.GetRequiredService<KafkaConfiguration>();
+                return new AdminClientConfig() {BootstrapServers = kafkaConfig.ConnectionString};
+            });
+            busConfigurator.Services.AddSingleton(ctx =>
+            {
+                var adminClientConfig = ctx.GetRequiredService<AdminClientConfig>();
+                return new AdminClientBuilder(adminClientConfig);
             });
 
-            busConfigurator.Services.AddSingleton(new ProducerConfig() { BootstrapServers = config.ConnectionString } );
+            busConfigurator.Services.AddSingleton(ctx =>
+            {
+                var kafkaConfig = ctx.GetRequiredService<KafkaConfiguration>();
+                return new ProducerConfig() {BootstrapServers = kafkaConfig.ConnectionString};
+            });
             busConfigurator.Services.AddSingleton(ctx =>
             {
                 var config = ctx.GetRequiredService<ProducerConfig>();
@@ -52,21 +61,8 @@ namespace OpenSleigh.Transport.Kafka
             busConfigurator.Services.AddTransient<IMessageParser, MessageParser>();
             busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
 
-            busConfigurator.Services.AddSingleton(new ConsumerConfig()
-            {
-                GroupId = config.ConsumerGroup,
-                BootstrapServers = config.ConnectionString,
-                AutoOffsetReset = AutoOffsetReset.Earliest,               
-                EnablePartitionEof = true
-            });
-            busConfigurator.Services.AddSingleton(ctx =>
-            {
-                var config = ctx.GetRequiredService<ConsumerConfig>();
-                var builder = new ConsumerBuilder<Guid, byte[]>(config);
-                builder.SetKeyDeserializer(new GuidDeserializer());
-
-                return builder;
-            });
+            busConfigurator.Services.AddSingleton<IGroupIdFactory, DefaultGroupIdFactory>();
+            busConfigurator.Services.AddSingleton<IConsumerBuilderFactory, ConsumerBuilderFactory>();
 
             builderFunc?.Invoke(new DefaultKafkaBusConfigurationBuilder(busConfigurator));
             

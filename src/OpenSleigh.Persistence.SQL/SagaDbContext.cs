@@ -1,4 +1,5 @@
-﻿using System.Threading;
+﻿using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Persistence;
@@ -15,6 +16,7 @@ namespace OpenSleigh.Persistence.SQL
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 
+    [ExcludeFromCodeCoverage]
     public class SagaDbContext : DbContext, ISagaDbContext
     {
         public SagaDbContext(DbContextOptions<SagaDbContext> options)

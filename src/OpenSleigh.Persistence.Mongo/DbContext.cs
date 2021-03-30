@@ -12,6 +12,11 @@ namespace OpenSleigh.Persistence.Mongo
         private static readonly IBsonSerializer<Guid> guidSerializer = new GuidSerializer(GuidRepresentation.Standard);
         private static readonly IBsonSerializer nullableGuidSerializer = new NullableSerializer<Guid>(guidSerializer);
 
+        static DbContext()
+        {
+            ConfigureMappings();
+        }
+        
         public DbContext(IMongoDatabase db)
         {
             if (db == null) 
@@ -52,24 +57,31 @@ namespace OpenSleigh.Persistence.Mongo
             SagaStates.Indexes.CreateOne(index);
         }
 
-        static DbContext()
+        private static void ConfigureMappings()
         {
             BsonDefaults.GuidRepresentationMode = GuidRepresentationMode.V3;
-
-            if (!BsonClassMap.IsClassMapRegistered(typeof(Entities.SagaState)))
+            try
+            {
                 BsonClassMap.RegisterClassMap<Entities.SagaState>(mapper =>
                 {
                     mapper.MapIdProperty(c => c._id);
                     mapper.MapProperty(c => c.CorrelationId).SetSerializer(guidSerializer);
-                    mapper.MapProperty(c => c.Type); 
+                    mapper.MapProperty(c => c.Type);
                     mapper.MapProperty(c => c.Data);
                     mapper.MapProperty(c => c.LockId).SetSerializer(nullableGuidSerializer)
-                                                     .SetDefaultValue(() => null);
+                        .SetDefaultValue(() => null);
                     mapper.MapProperty(c => c.LockTime).SetDefaultValue(() => null);
-                    mapper.MapCreator(s => new Entities.SagaState(s._id, s.CorrelationId, s.Type, s.Data, s.LockId, s.LockTime));
+                    mapper.MapCreator(s =>
+                        new Entities.SagaState(s._id, s.CorrelationId, s.Type, s.Data, s.LockId, s.LockTime));
                 });
+            }
+            catch
+            {
+                // swallowing exception, in case another concurrent thread has already registered the mapping
+            }
 
-            if (!BsonClassMap.IsClassMapRegistered(typeof(Entities.OutboxMessage)))
+            try
+            {
                 BsonClassMap.RegisterClassMap<Entities.OutboxMessage>(mapper =>
                 {
                     mapper.MapIdProperty(c => c.Id).SetSerializer(guidSerializer);
@@ -80,8 +92,15 @@ namespace OpenSleigh.Persistence.Mongo
                     mapper.MapProperty(c => c.LockId).SetSerializer(nullableGuidSerializer)
                         .SetDefaultValue(() => null);
                     mapper.MapProperty(c => c.LockTime).SetDefaultValue(() => null);
-                    mapper.MapCreator(s => new Entities.OutboxMessage(s.Id, s.Data, s.Type, s.Status, s.PublishingDate, s.LockId, s.LockTime));
+                    mapper.MapCreator(s =>
+                        new Entities.OutboxMessage(s.Id, s.Data, s.Type, s.Status, s.PublishingDate, s.LockId,
+                            s.LockTime));
                 });
+            }
+            catch
+            {
+                // swallowing exception, in case another concurrent thread has already registered the mapping
+            }
         }
 
         public IMongoCollection<Entities.SagaState> SagaStates { get; }

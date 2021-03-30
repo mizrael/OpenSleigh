@@ -1,25 +1,31 @@
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Diagnostics.CodeAnalysis;
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.Core.ExceptionPolicies;
 using OpenSleigh.Core.Messaging;
+using System.Collections.Generic;
+using System.Reflection;
+using OpenSleigh.Core.Utils;
 
-[assembly: InternalsVisibleTo("UnitTests")]
 namespace OpenSleigh.Core.DependencyInjection
 {
     [ExcludeFromCodeCoverage]
     internal class BusConfigurator : IBusConfigurator
     {
-        private readonly ISagaTypeResolver _typeResolver;
+        private readonly ISagaTypeResolver _sagaTypeResolver;
+        private readonly ITypeResolver _typeResolver;
         private readonly SystemInfo _systemInfo;
         
         public IServiceCollection Services { get; }
 
-        public BusConfigurator(IServiceCollection services, ISagaTypeResolver typeResolver, SystemInfo systemInfo)
+        public BusConfigurator(IServiceCollection services, 
+            ISagaTypeResolver sagaTypeResolver, 
+            ITypeResolver typeResolver,
+            SystemInfo systemInfo)
         {
             Services = services ?? throw new ArgumentNullException(nameof(services));
+            _sagaTypeResolver = sagaTypeResolver ?? throw new ArgumentNullException(nameof(sagaTypeResolver));
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
@@ -50,11 +56,39 @@ namespace OpenSleigh.Core.DependencyInjection
             return this;
         }
 
-        public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
-            where TD : SagaState
-            where TS : Saga<TD>
+        public IMessageHandlerConfigurator<TM> AddMessageHandlers<TM>(IEnumerable<Assembly> sourceAssemblies)       
+            where TM : IMessage                  
         {
-            var hasMessages = _typeResolver.Register<TS, TD>();
+            if (sourceAssemblies is null)           
+                throw new ArgumentNullException(nameof(sourceAssemblies));
+
+            var hasHandlers = false;
+            
+            foreach(var assembly in sourceAssemblies)
+            {
+                var types = assembly.GetTypes();
+                foreach(var type in types)
+                {
+                    if (type.IsSaga() || !type.CanHandleMessage<TM>())
+                        continue;
+
+                    Services.AddTransient(typeof(IHandleMessage<TM>), type);
+                    
+                    hasHandlers = true;
+                }
+            }
+
+            if (hasHandlers)
+                _typeResolver.Register(typeof(TM));
+
+            return new MessageHandlerConfigurator<TM>(this.Services);
+        }
+
+        public ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
+           where TD : SagaState
+           where TS : Saga<TD>
+        {
+            var hasMessages = _sagaTypeResolver.Register<TS, TD>();
 
             if (hasMessages)
             {

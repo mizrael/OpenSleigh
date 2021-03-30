@@ -8,6 +8,8 @@ using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.SQLRabbit
@@ -17,28 +19,34 @@ namespace OpenSleigh.E2ETests.SQLRabbit
         IClassFixture<DbFixture>,
         IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _dbFixture;
         private readonly RabbitFixture _rabbitFixture;
         private readonly string _exchangeName;
 
-        public SqlEventBroadcastingScenario(DbFixture fixture, RabbitFixture rabbitFixture)
+        public SqlEventBroadcastingScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
-            _fixture = fixture;
-            _exchangeName = $"test.{nameof(DummyEvent)}.{Guid.NewGuid()}";
+            _dbFixture = dbFixture;
+            _exchangeName = $"{nameof(DummyEvent)}.{Guid.NewGuid()}";
             _rabbitFixture = rabbitFixture;
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new SqlConfiguration(_fixture.ConnectionString);
+            var (_, connStr) = _dbFixture.CreateDbContext();
+            var sqlCfg = new SqlConfiguration(connStr);
 
-            cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder => {
-                builder.UseMessageNamingPolicy<DummyEvent>(() =>
-                    new QueueReferences(_exchangeName,
-                                        _exchangeName,
-                                        $"{_exchangeName}.dead",
-                                        $"{_exchangeName}.dead"));
-            })
+            cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder =>
+                {
+                    builder.UseMessageNamingPolicy<DummyEvent>(() =>
+                    {
+                        var sp = cfg.Services.BuildServiceProvider();
+                        var sysInfo = sp.GetService<SystemInfo>();
+                        return new QueueReferences(_exchangeName,
+                            $"{_exchangeName}.{sysInfo.ClientGroup}",
+                            $"{_exchangeName}.dead",
+                            $"{_exchangeName}.dead");
+                    });
+                })
                 .UseSqlPersistence(sqlCfg);
         }
 
@@ -59,10 +67,12 @@ namespace OpenSleigh.E2ETests.SQLRabbit
             };
             using var connection = connectionFactory.CreateConnection();
             using var channel = connection.CreateModel();
-            channel.ExchangeDelete(_exchangeName);
+            
             channel.QueueDelete(_exchangeName);
-            channel.ExchangeDelete($"{_exchangeName}.dead");
+            channel.ExchangeDelete(_exchangeName);
             channel.QueueDelete($"{_exchangeName}.dead");
+            channel.ExchangeDelete($"{_exchangeName}.dead");
+            
         }
     }
 }

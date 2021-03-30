@@ -8,6 +8,8 @@ using OpenSleigh.Transport.AzureServiceBus;
 using OpenSleigh.Transport.AzureServiceBus.Tests.Fixtures;
 using System;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
@@ -17,27 +19,32 @@ namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
         IClassFixture<ServiceBusFixture>,
         IAsyncLifetime
     {
-        private readonly DbFixture _fixture;
+        private readonly DbFixture _cosmosFixture;
         private readonly ServiceBusFixture _sbFixture;
         private readonly string _topicName;
-        private readonly string _subscriptionName;
 
-        public CosmosSqlEventBroadcastingScenario(DbFixture fixture, ServiceBusFixture sbFixture)
+        public CosmosSqlEventBroadcastingScenario(DbFixture cosmosFixture, ServiceBusFixture sbFixture)
         {
-            _fixture = fixture;
+            _cosmosFixture = cosmosFixture;
             _sbFixture = sbFixture; 
             
-            _topicName = $"ServiceBusEventBroadcastingScenario.tests.{Guid.NewGuid()}";
-            _subscriptionName = Guid.NewGuid().ToString();            
+            _topicName =  $"CosmosSqlEventBroadcastingScenario.tests.{Guid.NewGuid()}";
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var sqlCfg = new CosmosSqlConfiguration(_fixture.ConnectionString, _fixture.DbName);
+            var (_, dbName) = _cosmosFixture.CreateDbContext();
+            var sqlCfg = new CosmosSqlConfiguration(_cosmosFixture.ConnectionString, dbName);
 
             cfg.UseAzureServiceBusTransport(_sbFixture.Configuration, builder =>
             {
-                QueueReferencesPolicy<DummyEvent> policy = () => new QueueReferences(_topicName, _subscriptionName);
+                QueueReferencesPolicy<DummyEvent> policy = () =>
+                {
+                    var sp = cfg.Services.BuildServiceProvider();
+                    var sysInfo = sp.GetService<SystemInfo>();
+                    var subscriptionName = sysInfo.ClientGroup;
+                    return new QueueReferences(_topicName, subscriptionName);
+                };
                 builder.UseMessageNamingPolicy(policy);
             })
                 .UseCosmosSqlPersistence(sqlCfg);
@@ -52,7 +59,11 @@ namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
         {
             var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
 
-            await adminClient.DeleteSubscriptionAsync(_topicName, _subscriptionName);
+            await foreach (var subscription in adminClient.GetSubscriptionsAsync(_topicName))
+            {
+                await adminClient.DeleteSubscriptionAsync(_topicName, subscription.SubscriptionName);    
+            }
+            
             await adminClient.DeleteTopicAsync(_topicName);
         }
     }

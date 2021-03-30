@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Authentication;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
@@ -7,11 +9,9 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
-        private MongoClient _client;
-        private IMongoDatabase _db;
-
-        public IDbContext DbContext { get; }
-
+        private readonly MongoClient _client;
+        private readonly List<string> _dbNames = new();
+        
         public DbFixture()
         {
             var configuration = new ConfigurationBuilder()
@@ -28,19 +28,41 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
             settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
 
             _client = new MongoClient(settings);
+        }
 
-            this.DbName = $"openSleigh_{Guid.NewGuid()}";
-            _db = _client.GetDatabase(this.DbName);
+        public (IDbContext dbContext, string dbName) CreateDbContext()
+        {
+            var dbName = $"openSleigh_{Guid.NewGuid()}";
+            var db = _client.GetDatabase(dbName);
 
-            DbContext = new DbContext(_db);
+            var dbContext = new DbContext(db);
+            
+            _dbNames.Add(dbName);
+            
+            return (dbContext, dbName);
         }
         
-        public string ConnectionString { get; init; }
-        public string DbName { get; init; }
+        public string ConnectionString { get; }
 
         public void Dispose()
         {
-            _client?.DropDatabase(_db.DatabaseNamespace.DatabaseName);
+            if (_client is null)
+                return;
+
+            var queue = new Queue<string>(_dbNames);
+            while (queue.Any())
+            {
+                var dbName = queue.Dequeue();
+                try
+                {
+                    _client.DropDatabase(dbName);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    queue.Enqueue(dbName);
+                }
+            }
         }
     }
 }

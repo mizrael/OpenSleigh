@@ -22,20 +22,21 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             _fixture = fixture;
         }
 
-        private MongoSagaStateRepository CreateSut(MongoSagaStateRepositoryOptions options = null)
+        private MongoSagaStateRepository CreateSut(IDbContext dbContext, MongoSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();
 
             options ??= MongoSagaStateRepositoryOptions.Default;
 
-            var sut = new MongoSagaStateRepository(_fixture.DbContext, serializer, options);
+            var sut = new MongoSagaStateRepository(dbContext, serializer, options);
             return sut;
         }
 
         [Fact]
         public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
@@ -49,14 +50,15 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         [Fact]
         public async Task LockAsync_should_lock_item()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
             var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
 
             var filter = Builders<Entities.SagaState>.Filter.Eq(e => e.LockId, lockId);
-            var cursor = await _fixture.DbContext.SagaStates.FindAsync(filter);
+            var cursor = await db.SagaStates.FindAsync(filter);
             var lockedState = await cursor.FirstOrDefaultAsync();
             lockedState.Should().NotBeNull();
         }
@@ -64,7 +66,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         [Fact]
         public async Task LockAsync_should_throw_if_item_locked()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var newState = DummyState.New();
 
@@ -77,8 +80,9 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         [Fact]
         public async Task LockAsync_should_return_state_if_lock_expired()
         {
+            var (db,_) = _fixture.CreateDbContext();
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
-            var sut = CreateSut(options);
+            var sut = CreateSut(db, options);
 
             var newState = DummyState.New();
 
@@ -94,7 +98,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         [Fact]
         public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
         {
-            var sut = CreateSut();
+            var (db,_) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
             var correlationId = Guid.NewGuid();
 

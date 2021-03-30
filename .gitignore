@@ -5,3 +5,5 @@ obj/
 .docker/
 packages/
 TestResults/
+.DS_Store
+.idea/

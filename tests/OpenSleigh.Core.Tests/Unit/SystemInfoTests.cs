@@ -1,4 +1,5 @@
-﻿using FluentAssertions;
+﻿using System;
+using FluentAssertions;
 using Xunit;
 
 namespace OpenSleigh.Core.Tests.Unit
@@ -14,5 +15,14 @@ namespace OpenSleigh.Core.Tests.Unit
             sut.PublishOnly.Should().BeFalse();
             sut.ClientGroup.Should().Be(System.AppDomain.CurrentDomain.FriendlyName);
         }
+
+        [Fact]
+        public void ctor_should_throw_when_input_invalid()
+        {
+            Assert.Throws<ArgumentException>(() => new SystemInfo(Guid.NewGuid(), null));
+            Assert.Throws<ArgumentException>(() => new SystemInfo(Guid.NewGuid(), ""));
+            Assert.Throws<ArgumentException>(() => new SystemInfo(Guid.NewGuid(), "   "));
+        }
     }
 }
+

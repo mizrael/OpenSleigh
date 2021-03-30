@@ -41,8 +41,9 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
-            var cosmosCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
-                _cosmosFixture.DbName,
+            var (_, dbName) = _cosmosFixture.CreateDbContext();
+            var mongoCfg = new CosmosConfiguration(_cosmosFixture.ConnectionString,
+                dbName,
                 CosmosSagaStateRepositoryOptions.Default,
                 CosmosOutboxRepositoryOptions.Default);
 
@@ -61,7 +62,7 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
                 builder.UseMessageNamingPolicy<ChildSagaCompleted>(() =>
                     new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)]));
             })
-                .UseCosmosPersistence(cosmosCfg);
+                .UseCosmosPersistence(mongoCfg);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
@@ -74,11 +75,6 @@ namespace OpenSleigh.E2ETests.CosmosMongoServiceBus
             var adminClient = new ServiceBusAdministrationClient(_sbFixture.Configuration.ConnectionString);
             foreach (var topicName in _topics.Values)
                 await adminClient.DeleteTopicAsync(topicName);
-
-            var settings = MongoClientSettings.FromUrl(new MongoUrl(_cosmosFixture.ConnectionString));
-            settings.SslSettings = new SslSettings() { EnabledSslProtocols = SslProtocols.Tls12 };
-            var mongoClient = new MongoClient(settings);
-            await mongoClient.DropDatabaseAsync(_cosmosFixture.DbName);
         }
     }
 

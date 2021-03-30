@@ -4,6 +4,7 @@ using OpenSleigh.Persistence.Mongo;
 using OpenSleigh.Transport.Kafka;
 using OpenSleigh.Transport.Kafka.Tests.Fixtures;
 using System.Threading.Tasks;
+using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.MongoKafka
@@ -13,23 +14,25 @@ namespace OpenSleigh.E2ETests.MongoKafka
         IClassFixture<Persistence.Mongo.Tests.Fixtures.DbFixture>,
         IAsyncLifetime
     {
-        private readonly KafkaFixture _fixture;
+        private readonly KafkaFixture _kafkaFixture;
         private readonly Persistence.Mongo.Tests.Fixtures.DbFixture _mongoFixture;
 
-        public KafkaSimpleSagaScenario(KafkaFixture fixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
+        public KafkaSimpleSagaScenario(KafkaFixture kafkaFixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
         {
-            _fixture = fixture;
+            _kafkaFixture = kafkaFixture;
             _mongoFixture = mongoFixture;
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
         {
+            var (_, name) = _mongoFixture.CreateDbContext();
             var mongoCfg = new MongoConfiguration(_mongoFixture.ConnectionString,
-                _mongoFixture.DbName,
+                name,
                 MongoSagaStateRepositoryOptions.Default,
                 MongoOutboxRepositoryOptions.Default);
 
-            cfg.UseKafkaTransport(_fixture.KafkaConfiguration)
+            var kafkaConfig = _kafkaFixture.BuildKafkaConfiguration("KafkaSimpleSagaScenario");
+            cfg.UseKafkaTransport(kafkaConfig)
                 .UseMongoPersistence(mongoCfg);
         }
 

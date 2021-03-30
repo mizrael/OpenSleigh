@@ -21,16 +21,16 @@ namespace OpenSleigh.Core.Tests.Sagas
 
     public class SimpleSaga : Saga<SimpleSagaState>, IStartedBy<StartSimpleSaga>
     {
-        private readonly Action<StartSimpleSaga> _onStart;
+        private readonly Action<IMessageContext<StartSimpleSaga>> _onStart;
 
-        public SimpleSaga(Action<StartSimpleSaga> onStart)
+        public SimpleSaga(Action<IMessageContext<StartSimpleSaga>> onStart)
         {
             _onStart = onStart;
         }
 
         public Task HandleAsync(IMessageContext<StartSimpleSaga> context, CancellationToken cancellationToken = default)
         {
-            _onStart?.Invoke(context.Message);
+            _onStart?.Invoke(context);
             return Task.CompletedTask;
         }
     }

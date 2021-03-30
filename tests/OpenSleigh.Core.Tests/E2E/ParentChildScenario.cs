@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,44 +25,45 @@ namespace OpenSleigh.Core.Tests.E2E
             var receivedCount = 0;
             var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             
-            Action<ParentSagaCompleted> onMessage = msg =>
+            Action<IMessageContext<ParentSagaCompleted>> onMessage = ctx =>
             {
                 receivedCount++;
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
 
-                msg.CorrelationId.Should().Be(message.CorrelationId);
+                ctx.Message.CorrelationId.Should().Be(message.CorrelationId);
             };
 
-            var consumerHostsTasks = Enumerable.Range(1, hostsCount - 1)
-                                .Select(async i =>
-                                {
-                                    var host = await SetupHost(onMessage);
-                                    await host.StartAsync(tokenSource.Token);
-                                });
+            var createHostTasks = Enumerable.Range(1, hostsCount)
+                .Select(async i =>
+                {
+                    var host = await SetupHost(onMessage);
+                    await host.StartAsync(tokenSource.Token);
+                    return host;
+                }).ToArray();
 
-            var producerHostTask = Task.Run(async () =>
-            {
-                var host = await SetupHost(onMessage);
+            await Task.WhenAll(createHostTasks);
 
-                await host.StartAsync(tokenSource.Token);
-
-                using var scope = host.Services.CreateScope();
-                var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
-                await bus.PublishAsync(message, tokenSource.Token);
-            });
-
-            var tasks = new List<Task>(consumerHostsTasks)
-            {
-                producerHostTask
-            };
-
+            var producerHost = createHostTasks.First().Result;
+            using var scope = producerHost.Services.CreateScope();
+            var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+            await bus.PublishAsync(message, tokenSource.Token);
+            
             while (!tokenSource.IsCancellationRequested)
                 await Task.Delay(10);
+            
+            foreach (var t in createHostTasks)
+            {
+                try
+                {
+                    t.Result.Dispose();
+                }
+                catch{}
+            }
 
             receivedCount.Should().Be(1);
         }
 
-        private async Task<IHost> SetupHost(Action<ParentSagaCompleted> onMessage)
+        private async Task<IHost> SetupHost(Action<IMessageContext<ParentSagaCompleted>> onMessage)
         {
             var hostBuilder = CreateHostBuilder();
             hostBuilder.ConfigureServices((ctx, services) =>

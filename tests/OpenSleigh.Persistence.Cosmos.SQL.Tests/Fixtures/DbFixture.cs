@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -6,6 +7,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
+        private readonly List<SagaDbContext> _dbContexts = new();
+        
         public DbFixture()
         {
             var configuration = new ConfigurationBuilder()
@@ -17,25 +20,26 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
             this.ConnectionString = configuration.GetConnectionString("cosmosSQL");
             if (string.IsNullOrWhiteSpace(this.ConnectionString))
                 throw new ArgumentException("invalid connection string");
-
-            this.DbName = $"tests_{Guid.NewGuid()}";
-            
-            _dbContextOptions = new DbContextOptionsBuilder<SagaDbContext>()
-                .UseCosmos(this.ConnectionString, this.DbName)
-                .EnableSensitiveDataLogging()
-                .Options;
         }
         
         public string ConnectionString { get; }
-        public string DbName{ get; }
 
-        private readonly DbContextOptions<SagaDbContext> _dbContextOptions;
-        public ISagaDbContext CreateDbContext() => new SagaDbContext(_dbContextOptions);
+        public (ISagaDbContext dbContext, string dbName) CreateDbContext()
+        {
+            var dbName = $"tests_{Guid.NewGuid()}";
+            var dbContextOptions = new DbContextOptionsBuilder<SagaDbContext>()
+                .UseCosmos(this.ConnectionString, dbName)
+                .EnableSensitiveDataLogging()
+                .Options;
+            var ctx = new SagaDbContext(dbContextOptions);
+            _dbContexts.Add(ctx);
+            return (ctx, dbName);
+        }
 
         public void Dispose()
         {
-            var dbContext = new SagaDbContext(_dbContextOptions);
-            dbContext.Database.EnsureDeleted();
+            foreach(var ctx in _dbContexts)
+                ctx.Database.EnsureDeleted();
         }
     }
 }
