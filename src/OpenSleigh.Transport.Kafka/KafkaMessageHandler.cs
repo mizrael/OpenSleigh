@@ -23,7 +23,6 @@ namespace OpenSleigh.Transport.Kafka
                                     ILogger<KafkaMessageHandler> logger, 
                                     SystemInfo systemInfo)
         {
-            if (systemInfo == null) throw new ArgumentNullException(nameof(systemInfo));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
             _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
