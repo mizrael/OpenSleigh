@@ -5,6 +5,7 @@ using System;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenSleigh.Core;
 
 namespace OpenSleigh.Transport.Kafka
 {
@@ -14,16 +15,20 @@ namespace OpenSleigh.Transport.Kafka
         private readonly IMessageProcessor _messageProcessor;
         private readonly IKafkaPublisherExecutor _publisher;
         private readonly ILogger<KafkaMessageHandler> _logger;
+        private readonly SystemInfo _systemInfo;
 
         public KafkaMessageHandler(IMessageParser messageParser,
                                     IMessageProcessor messageProcessor,
                                     IKafkaPublisherExecutor publisher,
-                                    ILogger<KafkaMessageHandler> logger)
+                                    ILogger<KafkaMessageHandler> logger, 
+                                    SystemInfo systemInfo)
         {
-            _messageParser = messageParser;
-            _messageProcessor = messageProcessor;
-            _publisher = publisher;
-            _logger = logger;
+            if (systemInfo == null) throw new ArgumentNullException(nameof(systemInfo));
+            _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
+            _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+            _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }
 
         public async Task HandleAsync(ConsumeResult<Guid, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
@@ -48,8 +53,9 @@ namespace OpenSleigh.Transport.Kafka
         
         private async Task Process(IMessage message, QueueReferences queueReferences, CancellationToken cancellationToken)
         {
-            _logger.LogDebug("received message '{MessageId}' from Topic '{Topic}'. Processing...", 
-                             message.Id, queueReferences.TopicName);
+            _logger.LogInformation("client {ClientGroup}/{ClientId} received message '{MessageId}' from Topic '{Topic}'. Processing...", 
+                _systemInfo.ClientGroup, _systemInfo.ClientId, 
+                message.Id, queueReferences.TopicName);
             try
             {
                 await _messageProcessor.ProcessAsync((dynamic)message, cancellationToken);
@@ -68,13 +74,39 @@ namespace OpenSleigh.Transport.Kafka
             
             //TODO: consider adding retry policy, maybe using message headers to store the retry count
 
+            //await RePublishAsync(message, queueReferences, cancellationToken);
+            await PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
+        }
+        
+        private async Task RePublishAsync(IMessage message, QueueReferences queueReferences, CancellationToken cancellationToken)
+        {
+            try
+            {
+                _logger.LogWarning("republishing message '{MessageId}' to topic '{Topic}' ...",
+                    message.Id, queueReferences.TopicName);
+
+                await _publisher.PublishAsync(message, queueReferences.TopicName, cancellationToken: cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex,
+                    "an exception has occurred while publishing message '{MessageId}' to topic '{Topic}': {Exception}",
+                    message.Id,
+                    queueReferences.TopicName,
+                    ex.Message);
+            }
+        }
+
+        private async Task PublishToDLQAsync(IMessage message, QueueReferences queueReferences, Exception ex,
+            CancellationToken cancellationToken)
+        {
             if (string.IsNullOrWhiteSpace(queueReferences.DeadLetterTopicName))
                 return;
 
             try
             {
                 _logger.LogWarning("pushing message '{MessageId}' to DLQ '{DeadLetterQueue}' ...",
-                                    message.Id, queueReferences.DeadLetterTopicName);
+                    message.Id, queueReferences.DeadLetterTopicName);
 
                 await _publisher.PublishAsync(message, queueReferences.DeadLetterTopicName,
                     additionalHeaders: new[]
@@ -85,7 +117,8 @@ namespace OpenSleigh.Transport.Kafka
             }
             catch (Exception dlqEx)
             {
-                _logger.LogWarning(dlqEx, "an exception has occurred while publishing message '{MessageId}' to DLQ '{DeadLetterQueue}': {Exception}",
+                _logger.LogWarning(dlqEx,
+                    "an exception has occurred while publishing message '{MessageId}' to DLQ '{DeadLetterQueue}': {Exception}",
                     message.Id,
                     queueReferences.DeadLetterTopicName,
                     dlqEx.Message);
