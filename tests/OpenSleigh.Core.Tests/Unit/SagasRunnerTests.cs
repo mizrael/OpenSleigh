@@ -34,6 +34,20 @@ namespace OpenSleigh.Core.Tests.Unit
 
             await Assert.ThrowsAsync<ArgumentNullException>(() => sut.RunAsync<StartDummySaga>(null));
         }
+        
+        [Fact]
+        public async Task RunAsync_should_do_nothing_when_no_runners_available()
+        {
+            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
+            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
+            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+
+            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+            
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+            var result = sut.RunAsync<StartDummySaga>(messageContext);
+            result.Should().Be(Task.CompletedTask);
+        }
 
         [Fact]
         public async Task RunAsync_should_throw_if_runner_fails()
