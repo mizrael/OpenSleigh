@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net5.0</TargetFramework>
-    <PackageVersion>1.1.0</PackageVersion>
+    <PackageVersion>1.2.0</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Persistence.InMemory</Product>
