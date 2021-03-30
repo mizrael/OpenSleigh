@@ -44,6 +44,7 @@ namespace OpenSleigh.Transport.Kafka
             _config = config ?? KafkaSubscriberConfig.Default;
         }
 
+
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -60,6 +61,11 @@ namespace OpenSleigh.Transport.Kafka
                 try
                 {
                     var result = _consumer.Consume(stoppingToken);
+                    
+                    // task might have been canceled during the call to Consume()
+                    if (stoppingToken.IsCancellationRequested)
+                        break;
+                    
                     if (result is null || result.IsPartitionEOF)
                     {
                         await Task.Delay(_config.ConsumeDelay, stoppingToken);
