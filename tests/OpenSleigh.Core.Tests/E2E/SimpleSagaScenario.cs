@@ -50,6 +50,15 @@ namespace OpenSleigh.Core.Tests.E2E
 
             while (!tokenSource.IsCancellationRequested)
                 await Task.Delay(10);
+            
+            foreach (var t in createHostTasks)
+            {
+                try
+                {
+                    t.Result.Dispose();
+                }
+                catch{}
+            }
 
             receivedCount.Should().Be(1);
         }

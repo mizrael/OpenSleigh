@@ -23,7 +23,7 @@ namespace OpenSleigh.Core.Tests.E2E
         {
             var message = new DummyEvent(Guid.NewGuid(), Guid.NewGuid());
             
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(20));
             
             var expectedHosts = Enumerable.Range(1, hostsCount)
                 .Select(i => $"host_{i}")
@@ -37,36 +37,42 @@ namespace OpenSleigh.Core.Tests.E2E
                     if (expectedHosts[ctx.SystemInfo.ClientGroup] < 1)
                         expectedHosts.Remove(ctx.SystemInfo.ClientGroup);
                 }
-                
-                if(!expectedHosts.Any())
-                    tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+
+                if (!expectedHosts.Any())
+                    tokenSource.Cancel();
             };
 
             var createHostTasks = Enumerable.Range(1, hostsCount)
                            .Select(async i =>
                            {
-                               var host = await SetupHost(onMessage, i);
+                               var host = await SetupHostAsync(onMessage, i);
                                await host.StartAsync(tokenSource.Token);
                                return host;
                            }).ToArray();
-
+            
             await Task.WhenAll(createHostTasks);
-
+            
             var producerHost = createHostTasks.First().Result;
             using var scope = producerHost.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
             await bus.PublishAsync(message, tokenSource.Token);
-
+            
             while (!tokenSource.IsCancellationRequested)
                 await Task.Delay(100);
-            
-            foreach(var t in createHostTasks)
-                t.Result.Dispose();
+
+            foreach (var t in createHostTasks)
+            {
+                try
+                {
+                    t.Result.Dispose();
+                }
+                catch{}
+            }
 
             expectedHosts.Should().BeEmpty();
         }
 
-        private async Task<IHost> SetupHost(Action<IMessageContext<DummyEvent>> onMessage, int hostId)
+        private async Task<IHost> SetupHostAsync(Action<IMessageContext<DummyEvent>> onMessage, int hostId)
         {
             var hostBuilder = CreateHostBuilder();
             hostBuilder.ConfigureServices((ctx, services) =>

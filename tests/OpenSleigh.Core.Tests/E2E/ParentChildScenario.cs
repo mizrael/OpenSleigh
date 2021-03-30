@@ -47,8 +47,18 @@ namespace OpenSleigh.Core.Tests.E2E
             using var scope = producerHost.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
             await bus.PublishAsync(message, tokenSource.Token);
+            
             while (!tokenSource.IsCancellationRequested)
                 await Task.Delay(10);
+            
+            foreach (var t in createHostTasks)
+            {
+                try
+                {
+                    t.Result.Dispose();
+                }
+                catch{}
+            }
 
             receivedCount.Should().Be(1);
         }

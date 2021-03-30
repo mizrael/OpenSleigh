@@ -1,39 +1,40 @@
 ﻿using System;
+using System.Threading.Tasks;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
-using OpenSleigh.Persistence.Mongo;
+using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Transport.Kafka;
 using OpenSleigh.Transport.Kafka.Tests.Fixtures;
-using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenSleigh.E2ETests.MongoKafka
+namespace OpenSleigh.E2ETests.SQLKafka
 {
-    public class KafkaParentChildScenario : ParentChildScenario, IClassFixture<KafkaFixture>,
-        IClassFixture<Persistence.Mongo.Tests.Fixtures.DbFixture>,
+    public class SQLKafkaParentChildScenario : ParentChildScenario, IClassFixture<KafkaFixture>,
+        IClassFixture<Persistence.SQL.Tests.Fixtures.DbFixture>,
         IAsyncLifetime
     {
         private readonly KafkaFixture _kafkaFixture;
-        private readonly Persistence.Mongo.Tests.Fixtures.DbFixture _mongoFixture;
+        private readonly Persistence.SQL.Tests.Fixtures.DbFixture _dbFixture;
+        
         private readonly string _topicName = $"KafkaParentChildScenario.{Guid.NewGuid()}";
 
-        public KafkaParentChildScenario(KafkaFixture kafkaFixture, Persistence.Mongo.Tests.Fixtures.DbFixture mongoFixture)
+        private readonly SqlConfiguration _sqlConfig;
+
+        public SQLKafkaParentChildScenario(KafkaFixture kafkaFixture, Persistence.SQL.Tests.Fixtures.DbFixture dbFixture)
         {
             _kafkaFixture = kafkaFixture;
-            _mongoFixture = mongoFixture;
+            _dbFixture = dbFixture;
+            _topicName = $"SQLKafkaSimpleSagaScenario.{Guid.NewGuid()}";
+            
+            var (_, connStr) = _dbFixture.CreateDbContext();
+            _sqlConfig = new SqlConfiguration(connStr);
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
-        {            
-            var (_, name) = _mongoFixture.CreateDbContext();
-            var mongoCfg = new MongoConfiguration(_mongoFixture.ConnectionString,
-                name,
-                MongoSagaStateRepositoryOptions.Default,
-                MongoOutboxRepositoryOptions.Default);
-
+        {
             var kafkaConfig = _kafkaFixture.BuildKafkaConfiguration(_topicName);
             cfg.UseKafkaTransport(kafkaConfig)
-                .UseMongoPersistence(mongoCfg);
+                .UseSqlPersistence(_sqlConfig);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
