@@ -7,6 +7,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 using Xunit;
 
@@ -22,12 +23,13 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
-
+            var sysInfo = SystemInfo.New();
+            
             var queueRefs = new QueueReferences("lorem", "ipsum");
             
             var consumeResult = new ConsumeResult<Guid, byte[]>();
 
-            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
             await sut.HandleAsync(consumeResult, queueRefs);
 
@@ -48,8 +50,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
-
-            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+            var sysInfo = SystemInfo.New();
+            
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
             await sut.HandleAsync(consumeResult, queueRefs);
 
@@ -75,8 +78,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
+            
+            var sysInfo = SystemInfo.New();
 
-            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
             await sut.HandleAsync(consumeResult, queueRefs);
 
@@ -102,8 +107,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
+            
+            var sysInfo = SystemInfo.New();
 
-            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
             await sut.HandleAsync(consumeResult, queueRefs);
 
@@ -127,8 +134,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
+            
+            var sysInfo = SystemInfo.New();
 
-            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger);
+            var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
             await sut.HandleAsync(consumeResult, queueRefs);
 

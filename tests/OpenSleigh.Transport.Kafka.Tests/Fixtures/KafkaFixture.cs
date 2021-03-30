@@ -3,8 +3,9 @@ using System;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Fixtures
 {
-    public class KafkaFixture 
+    public class KafkaFixture
     {
+        private readonly string _connStr;
         public KafkaFixture()
         {
             var configuration = new ConfigurationBuilder()
@@ -12,16 +13,16 @@ namespace OpenSleigh.Transport.Kafka.Tests.Fixtures
                 .AddEnvironmentVariables()
                 .Build();
 
-            var executionId = Guid.NewGuid();
-
-            var connStr = configuration.GetConnectionString("kafka");
-            var kafkaSection = configuration.GetSection("Kafka");
-            var consumerGroup = $"{kafkaSection["ConsumerGroup"]}.{executionId}";
-
-            this.KafkaConfiguration = new KafkaConfiguration(connStr, consumerGroup, 
-                t => new QueueReferences($"{executionId}.{t.FullName}", $"{executionId}.{t.FullName}.dead"));
+            _connStr = configuration.GetConnectionString("kafka");
         }
 
-        public KafkaConfiguration KafkaConfiguration { get; init; }
+        public KafkaConfiguration BuildKafkaConfiguration(string topicPrefix)
+        {
+            if(string.IsNullOrWhiteSpace(topicPrefix))
+                topicPrefix = Guid.NewGuid().ToString();
+            
+            return new KafkaConfiguration(_connStr, 
+                t => new QueueReferences($"{topicPrefix}.{t.FullName}", $"{topicPrefix}.{t.FullName}.dead"));
+        }
     }
 }

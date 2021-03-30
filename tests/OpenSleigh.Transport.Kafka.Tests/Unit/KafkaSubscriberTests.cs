@@ -85,6 +85,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             builder.When(b => b.Build()).DoNotCallBase();
             builder.Build().Returns(consumer);
 
+            var builderFactory = NSubstitute.Substitute.For<IConsumerBuilderFactory>();
+            builderFactory.Create<IMessage, Guid, byte[]>().Returns(builder);
+
             messageHandler ??= NSubstitute.Substitute.For<IKafkaMessageHandler>();
 
             var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
@@ -92,7 +95,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var logger = NSubstitute.Substitute.For<ILogger<KafkaSubscriber<IMessage>>>();
 
-            return new KafkaSubscriber<IMessage>(builder, queueReferenceFactory, messageHandler, logger);
+            return new KafkaSubscriber<IMessage>(builderFactory, queueReferenceFactory, messageHandler, logger);
         }
     }
 }
