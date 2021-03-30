@@ -32,6 +32,7 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var messageHandlersRunner = NSubstitute.Substitute.For<IMessageHandlersRunner>();
 
             var ctx = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+            ctx.SystemInfo.Returns(SystemInfo.New());
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
@@ -48,17 +49,18 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
         public async Task ProcessAsync_should_run_message_handlers()
         {
             var message = StartDummySaga.New();
-            var sagasRnner = NSubstitute.Substitute.For<ISagasRunner>();
+            var sagasRunner = NSubstitute.Substitute.For<ISagasRunner>();
             var messageHandlersRunner = NSubstitute.Substitute.For<IMessageHandlersRunner>();
 
             var ctx = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+            ctx.SystemInfo.Returns(SystemInfo.New());
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
             
             var logger = NSubstitute.Substitute.For<ILogger<MessageProcessor>>();
 
-            var sut = new MessageProcessor(sagasRnner, messageHandlersRunner, factory, logger);
+            var sut = new MessageProcessor(sagasRunner, messageHandlersRunner, factory, logger);
             await sut.ProcessAsync<StartDummySaga>(message);
 
             await messageHandlersRunner.Received(1).RunAsync(ctx, Arg.Any<CancellationToken>());

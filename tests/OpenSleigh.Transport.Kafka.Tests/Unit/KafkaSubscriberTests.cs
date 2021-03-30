@@ -58,7 +58,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         }
 
         [Fact]
-        public async Task StopAsync_should_unsubscribe_from_topic()
+        public async Task StopAsync_should_close_consumer()
         {
             var queueRefs = new QueueReferences("lorem", "ipsum");
             var consumer = NSubstitute.Substitute.For<IConsumer<Guid, byte[]>>();
@@ -69,7 +69,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             await sut.StartAsync(tokenSource.Token);
             await sut.StopAsync(tokenSource.Token);
 
-            consumer.Received(1).Unsubscribe();
+            consumer.Received(1).Close();
         }
 
         private static KafkaSubscriber<IMessage> BuildSUT(
