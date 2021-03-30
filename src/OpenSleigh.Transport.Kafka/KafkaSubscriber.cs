@@ -88,6 +88,12 @@ namespace OpenSleigh.Transport.Kafka
                         _queueReferences.TopicName);
                     break;
                 }
+                catch (OperationCanceledException ex)
+                {
+                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                        _queueReferences.TopicName);
+                    break;
+                }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
@@ -103,6 +109,8 @@ namespace OpenSleigh.Transport.Kafka
 
             try
             {
+                _consumer.Close();
+                
                 _stoppingCts.Cancel();
             }
             finally
