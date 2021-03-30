@@ -31,7 +31,6 @@ namespace OpenSleigh.Transport.Kafka
 
             await TryCreateTopicAsync(queueRef.TopicName, adminClient);
             await TryCreateTopicAsync(queueRef.DeadLetterTopicName, adminClient);
-
         }
 
         private async Task TryCreateTopicAsync(string topicName, IAdminClient adminClient)
@@ -40,14 +39,23 @@ namespace OpenSleigh.Transport.Kafka
 
             try
             {
-                await adminClient.CreateTopicsAsync(new[] {
-                    new TopicSpecification { Name = topicName, ReplicationFactor = 1, NumPartitions = 1 }
+                await adminClient.CreateTopicsAsync(new[]
+                {
+                    new TopicSpecification
+                    {
+                        Name = topicName,
+                        ReplicationFactor = 1,
+                        NumPartitions = 1
+                    }
                 });
             }
-            catch (Exception e)
+            catch (CreateTopicsException ex) when(ex.Error?.Code == ErrorCode.Local_Partial)
             {
-                _logger.LogError(e, "An error occured creating topic {Topic}: {Error}",
-                    topicName, e.Message);
+                _logger.LogWarning(ex, "An error occured creating topic {Topic}: {Error}", topicName, ex.Message);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occured creating topic {Topic}: {Error}", topicName, ex.Message);
             }            
         }
     }
