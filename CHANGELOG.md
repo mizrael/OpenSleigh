@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [2021-03-28]()
 ### Added
 - added support for stateless message handlers
+- improved resiliency of subscribers
+- minor refactorings
 
 ## [2021-03-26](https://github.com/mizrael/OpenSleigh/pull/32)
 ### Added
