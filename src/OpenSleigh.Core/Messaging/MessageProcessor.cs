@@ -50,6 +50,9 @@ namespace OpenSleigh.Core.Messaging
                     message.Id, typeof(TM).FullName, messageContext.SystemInfo.ClientGroup, messageContext.SystemInfo.ClientId, ex.Message);
                 throw;
             }
+            
+            _logger.LogInformation("message {MessageId} with type {MessageType} processed on client {ClientGroup}/{ClientId}",
+                message.Id, typeof(TM).FullName, messageContext.SystemInfo.ClientGroup, messageContext.SystemInfo.ClientId);
         }
     }
 }
