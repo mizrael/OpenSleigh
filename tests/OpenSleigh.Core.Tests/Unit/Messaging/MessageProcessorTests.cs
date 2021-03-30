@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
@@ -16,8 +17,9 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var runner = NSubstitute.Substitute.For<ISagasRunner>();
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             var messageHandlersRunner = NSubstitute.Substitute.For<IMessageHandlersRunner>();
-
-            var sut = new MessageProcessor(runner, messageHandlersRunner, factory);
+            var logger = NSubstitute.Substitute.For<ILogger<MessageProcessor>>();
+            
+            var sut = new MessageProcessor(runner, messageHandlersRunner, factory, logger);
 
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ProcessAsync<StartDummySaga>(null));
         }
@@ -33,8 +35,10 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
+            
+            var logger = NSubstitute.Substitute.For<ILogger<MessageProcessor>>();
 
-            var sut = new MessageProcessor(runner, messageHandlersRunner, factory);
+            var sut = new MessageProcessor(runner, messageHandlersRunner, factory, logger);
             await sut.ProcessAsync<StartDummySaga>(message);
 
             await runner.Received(1).RunAsync(ctx, Arg.Any<CancellationToken>());
@@ -51,8 +55,10 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
+            
+            var logger = NSubstitute.Substitute.For<ILogger<MessageProcessor>>();
 
-            var sut = new MessageProcessor(sagasRnner, messageHandlersRunner, factory);
+            var sut = new MessageProcessor(sagasRnner, messageHandlersRunner, factory, logger);
             await sut.ProcessAsync<StartDummySaga>(message);
 
             await messageHandlersRunner.Received(1).RunAsync(ctx, Arg.Any<CancellationToken>());
