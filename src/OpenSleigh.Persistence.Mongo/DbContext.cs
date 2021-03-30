@@ -77,6 +77,7 @@ namespace OpenSleigh.Persistence.Mongo
             }
             catch
             {
+                // swallowing exception, in case another concurrent thread has already registered the mapping
             }
 
             try
@@ -98,6 +99,7 @@ namespace OpenSleigh.Persistence.Mongo
             }
             catch
             {
+                // swallowing exception, in case another concurrent thread has already registered the mapping
             }
         }
 

@@ -58,54 +58,69 @@ namespace OpenSleigh.Transport.Kafka
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                try
-                {
-                    var result = _consumer.Consume(stoppingToken);
-                    
-                    // task might have been canceled during the call to Consume()
-                    if (stoppingToken.IsCancellationRequested)
-                        break;
-                    
-                    if (result is null || result.IsPartitionEOF)
-                    {
-                        await Task.Delay(_config.ConsumeDelay, stoppingToken);
-                        continue;
-                    }
-
-                    await _messageHandler.HandleAsync(result, _queueReferences, stoppingToken);
-                }
-                catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
-                {
-                    // noop. seems to be a known issue in the c# Kafka driver
-                    // occurring when consumers are started before producers.
-
-                    _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
-                        _queueReferences.TopicName, ex.Message);
-                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
-                }
-                catch (ObjectDisposedException ex)
-                {
-                    _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call", _queueReferences.TopicName);
+                var canContinue = await ConsumeMessageAsync(stoppingToken);
+                if (!canContinue)
                     break;
-                }
-                catch (TaskCanceledException ex)
-                {
-                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
-                        _queueReferences.TopicName);
-                    break;
-                }
-                catch (OperationCanceledException ex)
-                {
-                    _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
-                        _queueReferences.TopicName);
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
-                        _queueReferences.TopicName, ex.Message);
-                }
             }
+        }
+
+        /// <summary>
+        /// consumes a single message 
+        /// </summary>
+        /// <returns>false if consumer loop should be stopped</returns>
+        private async Task<bool> ConsumeMessageAsync(CancellationToken stoppingToken)
+        {
+            try
+            {
+                var result = _consumer.Consume(stoppingToken);
+
+                // task might have been canceled during the call to Consume()
+                if (stoppingToken.IsCancellationRequested)
+                    return false;
+
+                var canProcess = (result is not null && !result.IsPartitionEOF);
+                if(canProcess)
+                    await _messageHandler.HandleAsync(result, _queueReferences, stoppingToken);
+                else
+                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
+                
+                return true;
+            }
+            catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
+            {
+                // noop. seems to be a known issue in the c# Kafka driver
+                // occurring when consumers are started before producers.
+
+                _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
+                    _queueReferences.TopicName, ex.Message);
+                await Task.Delay(_config.ConsumeDelay, stoppingToken);
+                return true;
+            }
+            catch (ObjectDisposedException ex)
+            {
+                _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (TaskCanceledException ex)
+            {
+                _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (OperationCanceledException ex)
+            {
+                _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                    _queueReferences.TopicName);
+                return false;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
+                    _queueReferences.TopicName, ex.Message);
+            }
+
+            return false;
         }
 
         public async Task StopAsync(CancellationToken cancellationToken = default)
