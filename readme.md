@@ -10,3 +10,9 @@ OpenSleigh is a distributed saga management library, written in C# with .NET Cor
 It is intended to be reliable, fast, easy to use, configurable and extensible.
 
 For more details, samples and documentation, please refer to the [official website](https://www.opensleigh.net/).
+
+---
+
+Sponsored by 
+
+<a href="https://www.jetbrains.com/opensource/" target="_blank"><img src="./jetbrains.png" title="Jetbrains" width="120px" /></a>
