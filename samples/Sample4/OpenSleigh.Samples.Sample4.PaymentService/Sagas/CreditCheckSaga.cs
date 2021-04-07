@@ -30,6 +30,8 @@ namespace OpenSleigh.Samples.Sample4.PaymentService.Sagas
             var message = CrediCheckCompleted.New(context.Message.OrderId);
             this.Publish(message);
 
+            _logger.LogInformation($"credit check for order '{context.Message.OrderId}' processed!");
+
             this.State.MarkAsCompleted();
         }
     }

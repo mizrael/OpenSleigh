@@ -30,6 +30,8 @@ namespace OpenSleigh.Samples.Sample4.ShippingService.Sagas
             var message = ShippingCompleted.New(context.Message.OrderId);
             this.Publish(message);
 
+            _logger.LogInformation($"order '{context.Message.OrderId}' shipped!");
+
             this.State.MarkAsCompleted();
         }
     }

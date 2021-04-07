@@ -30,6 +30,8 @@ namespace OpenSleigh.Samples.Sample4.InventoryService.Sagas
             var message = InventoryCheckCompleted.New(context.Message.OrderId);
             this.Publish(message);
 
+            _logger.LogInformation($"inventory check for order '{context.Message.OrderId}' completed!");
+
             this.State.MarkAsCompleted();
         }
     }
