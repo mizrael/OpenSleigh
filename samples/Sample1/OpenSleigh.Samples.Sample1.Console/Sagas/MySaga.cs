@@ -30,26 +30,32 @@ namespace OpenSleigh.Samples.Sample1.Console.Sagas
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
         
-        public async Task HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
+        public Task HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"starting saga '{context.Message.CorrelationId}'...");
             
             var message = new ProcessMySaga(Guid.NewGuid(), context.Message.CorrelationId);
             this.Publish(message);
+
+            return Task.CompletedTask;
         }
         
-        public async Task HandleAsync(IMessageContext<ProcessMySaga> context, CancellationToken cancellationToken = default)
+        public Task HandleAsync(IMessageContext<ProcessMySaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"processing saga '{context.Message.CorrelationId}'...");
             
             var message = new MySagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
             this.Publish(message);
+
+            return Task.CompletedTask;
         }
 
         public Task HandleAsync(IMessageContext<MySagaCompleted> context, CancellationToken cancellationToken = default)
         {
             this.State.MarkAsCompleted(); 
+
             _logger.LogInformation($"saga '{context.Message.CorrelationId}' completed!");
+
             return Task.CompletedTask;
         }
     }
