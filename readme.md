@@ -1,5 +1,5 @@
 # OpenSleigh
-![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Core?style=plastic)
+[![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Core?style=plastic)](https://www.nuget.org/packages/OpenSleigh.Core/)
 [![OpenSleigh](https://circleci.com/gh/mizrael/OpenSleigh.svg?style=shield&circle-token=b7635df8feb7c79524db993c3cf962863ad28aa1)](https://app.circleci.com/pipelines/github/mizrael/OpenSleigh)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=mizrael_OpenSleigh&metric=coverage)](https://sonarcloud.io/dashboard?id=mizrael_OpenSleigh)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mizrael_OpenSleigh&metric=security_rating)](https://sonarcloud.io/dashboard?id=mizrael_OpenSleigh)
@@ -10,6 +10,8 @@ OpenSleigh is a distributed saga management library, written in C# with .NET Cor
 It is intended to be reliable, fast, easy to use, configurable and extensible.
 
 For more details, samples and documentation, please refer to the [official website](https://www.opensleigh.net/).
+
+Do you like this project? Then consider clicking here! [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate?business=9F94U4GWN7YS6&currency_code=CAD)
 
 ---
 
