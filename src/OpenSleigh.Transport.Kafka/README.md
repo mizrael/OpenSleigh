@@ -14,8 +14,7 @@ The first thing to do is build an instance of `KafkaConfiguration` with the conn
 ```
 services.AddOpenSleigh(cfg =>{     
     var connectionString = Configuration.GetConnectionString("kafka");
-    var consumerGroup = Configuration["consumerGroup"];
-    var kafkaConfig = new KafkaConfiguration(connectionString, consumerGroup);
+    var kafkaConfig = new KafkaConfiguration(connectionString);
 
     cfg.UseKafkaTransport(kafkaConfig);
 
