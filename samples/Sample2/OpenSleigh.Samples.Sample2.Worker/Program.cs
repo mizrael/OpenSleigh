@@ -4,7 +4,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.Mongo;
-using OpenSleigh.Samples.Sample2.Common.Sagas;
+using OpenSleigh.Samples.Sample2.Common.Messages;
+using OpenSleigh.Samples.Sample2.Worker.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Sample2.Worker

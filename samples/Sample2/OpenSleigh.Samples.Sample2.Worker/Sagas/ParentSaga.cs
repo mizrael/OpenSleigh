@@ -4,14 +4,13 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Samples.Sample2.Common.Messages;
 
-namespace OpenSleigh.Samples.Sample2.Common.Sagas
+namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 {
     public class ParentSagaState : SagaState{
         public ParentSagaState(Guid id) : base(id){}
     }
-
-    public record StartParentSaga(Guid Id, Guid CorrelationId) : ICommand { }
 
     public record ProcessParentSaga(Guid Id, Guid CorrelationId) : ICommand { }
 

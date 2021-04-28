@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Samples.Sample2.Common.Sagas
+namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 {
     public class ChildSagaState : SagaState{
         public ChildSagaState(Guid id) : base(id){}
