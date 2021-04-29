@@ -2,7 +2,7 @@ version: '3.4'
 
 services:
   openSleigh.sample9.infrastructure.mongodb:
-    image: mongo:latest
+    image: mongo:4.4.3
     container_name: openSleigh.sample9.infrastructure.mongodb    
     restart: always
     environment:
