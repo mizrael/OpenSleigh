@@ -43,3 +43,9 @@ services:
       - ALLOW_PLAINTEXT_LISTENER=yes
     depends_on:
       - openSleigh.sample9.infrastructure.zookeeper
+
+volumes:
+  zookeeper_data:
+    driver: local
+  kafka_data:
+    driver: local
