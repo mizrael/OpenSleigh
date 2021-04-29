@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using OpenSleigh.Core.Messaging;
-using OpenSleigh.Samples.Sample3.Common.Sagas;
+using OpenSleigh.Samples.Sample3.Common.Messages;
 
 namespace OpenSleigh.Samples.Sample3.API.Controllers
 {

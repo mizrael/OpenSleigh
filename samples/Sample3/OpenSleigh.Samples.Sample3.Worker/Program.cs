@@ -5,7 +5,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Samples.Sample3.Common.Sagas;
+using OpenSleigh.Samples.Sample3.Common.Messages;
+using OpenSleigh.Samples.Sample3.Worker.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Sample3.Worker
@@ -44,9 +45,9 @@ namespace OpenSleigh.Samples.Sample3.Worker
                                 // this allows us to have a single exchange bound to multiple queues.
                                 // messages will be routed using the queue name.
                                 builder.UseMessageNamingPolicy<StartChildSaga>(() =>
-                                    new QueueReferences("child", "child.start", "child.dead", "child.dead.start"));
+                                    new QueueReferences("child", "child.start", "child.start", "child.dead", "child.dead.start"));
                                 builder.UseMessageNamingPolicy<ProcessChildSaga>(() =>
-                                    new QueueReferences("child", "child.process", "child.dead", "child.dead.process"));
+                                    new QueueReferences("child", "child.process", "child.process", "child.dead", "child.dead.process"));
                             })
                             .UseSqlPersistence(sqlConfig);
 

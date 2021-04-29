@@ -5,10 +5,11 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Samples.Sample3.Common.Sagas
+namespace OpenSleigh.Samples.Sample3.Worker.Sagas
 {
-    public class ChildSagaState : SagaState{
-        public ChildSagaState(Guid id) : base(id){}
+    public class ChildSagaState : SagaState
+    {
+        public ChildSagaState(Guid id) : base(id) { }
     }
 
     public record StartChildSaga(Guid Id, Guid CorrelationId) : ICommand { }
@@ -30,7 +31,7 @@ namespace OpenSleigh.Samples.Sample3.Common.Sagas
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        
+
         public async Task HandleAsync(IMessageContext<StartChildSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"starting child saga '{context.Message.CorrelationId}'...");
@@ -38,7 +39,7 @@ namespace OpenSleigh.Samples.Sample3.Common.Sagas
             await Task.Delay(TimeSpan.FromSeconds(_random.Next(1, 5)), cancellationToken);
 
             var message = new ProcessChildSaga(Guid.NewGuid(), context.Message.CorrelationId);
-            this.Publish(message);
+            Publish(message);
         }
 
         public async Task HandleAsync(IMessageContext<ProcessChildSaga> context,
@@ -51,7 +52,7 @@ namespace OpenSleigh.Samples.Sample3.Common.Sagas
             _logger.LogInformation($"child saga '{context.Message.CorrelationId}' completed!");
 
             var completedEvent = new ChildSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
-            this.Publish(completedEvent);
+            Publish(completedEvent);
         }
     }
 }
