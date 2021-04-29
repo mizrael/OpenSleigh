@@ -39,7 +39,7 @@ services:
       - KAFKA_ADVERTISED_LISTENERS=LISTENER_BOB://openSleigh.sample9.infrastructure.kafka:29092,LISTENER_FRED://localhost:9092
       - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=LISTENER_BOB:PLAINTEXT,LISTENER_FRED:PLAINTEXT
       - KAFKA_INTER_BROKER_LISTENER_NAME=LISTENER_BOB
-      - KAFKA_CFG_ZOOKEEPER_CONNECT=openSleigh.tests.infrastructure.zookeeper:2181
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=openSleigh.sample9.infrastructure.zookeeper:2181
       - ALLOW_PLAINTEXT_LISTENER=yes
     depends_on:
       - openSleigh.sample9.infrastructure.zookeeper
