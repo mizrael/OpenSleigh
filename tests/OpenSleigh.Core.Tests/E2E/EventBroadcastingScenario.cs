@@ -23,7 +23,7 @@ namespace OpenSleigh.Core.Tests.E2E
         {
             var message = new DummyEvent(Guid.NewGuid(), Guid.NewGuid());
             
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(20));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
             
             var expectedHosts = Enumerable.Range(1, hostsCount)
                 .Select(i => $"host_{i}")

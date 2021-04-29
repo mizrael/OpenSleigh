@@ -33,7 +33,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             
             var sut = new PublisherChannelContextPool(connection);
 
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet", "sic");
             var result = sut.Get(references);
 
             result.Should().NotBeNull();
@@ -48,7 +48,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         public void Return_should_return_channel_to_the_pool()
         {
             var channel = NSubstitute.Substitute.For<IModel>();
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet", "sic");
             
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             connection.CreateChannel()
@@ -75,7 +75,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var channel = NSubstitute.Substitute.For<IModel>();
             channel.IsClosed.Returns(true);
             
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet", "sic");
 
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             connection.CreateChannel()
@@ -111,7 +111,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var openChannel = NSubstitute.Substitute.For<IModel>();
             openChannel.IsOpen.Returns(true);
 
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet", "sic");
 
             var connection = NSubstitute.Substitute.For<IBusConnection>();
             
@@ -131,7 +131,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var openChannel = NSubstitute.Substitute.For<IModel>();
             
-            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet");
+            var references = new QueueReferences("lorem", "ipsum", "dolor", "amet", "sic");
 
             var connection = NSubstitute.Substitute.For<IBusConnection>();
 

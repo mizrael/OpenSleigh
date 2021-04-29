@@ -50,6 +50,7 @@ namespace OpenSleigh.E2ETests.MongoRabbit
                         var sysInfo = sp.GetService<SystemInfo>();
                         return new QueueReferences(_exchangeName,
                             $"{_exchangeName}.{sysInfo.ClientGroup}",
+                            _exchangeName,
                             $"{_exchangeName}.dead",
                             $"{_exchangeName}.dead");
                     });

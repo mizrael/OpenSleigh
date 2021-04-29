@@ -43,6 +43,7 @@ namespace OpenSleigh.E2ETests.SQLRabbit
                         var sysInfo = sp.GetService<SystemInfo>();
                         return new QueueReferences(_exchangeName,
                             $"{_exchangeName}.{sysInfo.ClientGroup}",
+                            _exchangeName,
                             $"{_exchangeName}.dead",
                             $"{_exchangeName}.dead");
                     });

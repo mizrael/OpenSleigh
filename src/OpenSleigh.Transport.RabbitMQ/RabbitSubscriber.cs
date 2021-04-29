@@ -63,7 +63,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 });
             _channel.QueueBind(queue: _queueReferences.QueueName,
                 exchange: _queueReferences.ExchangeName, 
-                routingKey: _queueReferences.ExchangeName, 
+                routingKey: _queueReferences.RoutingKey, 
                 arguments: null);
 
             _channel.CallbackException += OnChannelException;

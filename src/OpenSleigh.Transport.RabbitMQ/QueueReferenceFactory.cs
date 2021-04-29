@@ -36,8 +36,14 @@ namespace OpenSleigh.Transport.RabbitMQ
                 var dlQueueName = isEvent ? 
                     $"{dlExchangeName}.{_systemInfo.ClientGroup}.workers" : 
                     $"{dlExchangeName}.workers";
+
+                // if it's an Event, we use the exchange name as routing key,
+                // this way all the bond queues will receive it.
+                // otherwise we are expecting a single queue to be connected
+                // to the exchange, so we use the queue name to prevent duplicate handling
+                var routingKey = isEvent ? exchangeName : queueName;
                 
-                return new QueueReferences(exchangeName, queueName, dlExchangeName, dlQueueName);
+                return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
             });
         }
 

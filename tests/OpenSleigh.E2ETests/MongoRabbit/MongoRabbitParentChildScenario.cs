@@ -52,27 +52,27 @@ namespace OpenSleigh.E2ETests.MongoRabbit
             cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder =>
             {
                 builder.UseMessageNamingPolicy<StartParentSaga>(() =>
-                        new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)],
+                        new QueueReferences(_topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)], _topics[typeof(StartParentSaga)],
                                            _topics[typeof(StartParentSaga)] + ".dead", _topics[typeof(StartParentSaga)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<ProcessParentSaga>(() =>
-                    new QueueReferences(_topics[typeof(ProcessParentSaga)], _topics[typeof(ProcessParentSaga)],
+                    new QueueReferences(_topics[typeof(ProcessParentSaga)], _topics[typeof(ProcessParentSaga)], _topics[typeof(ProcessParentSaga)],
                                         _topics[typeof(ProcessParentSaga)] + ".dead", _topics[typeof(ProcessParentSaga)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<ParentSagaCompleted>(() =>
-                    new QueueReferences(_topics[typeof(ParentSagaCompleted)], _topics[typeof(ParentSagaCompleted)],
+                    new QueueReferences(_topics[typeof(ParentSagaCompleted)], _topics[typeof(ParentSagaCompleted)], nameof(ParentSagaCompleted),
                                         _topics[typeof(ParentSagaCompleted)] + ".dead", _topics[typeof(ParentSagaCompleted)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<StartChildSaga>(() =>
-                    new QueueReferences(_topics[typeof(StartChildSaga)], _topics[typeof(StartChildSaga)],
+                    new QueueReferences(_topics[typeof(StartChildSaga)], _topics[typeof(StartChildSaga)], _topics[typeof(StartChildSaga)],
                                         _topics[typeof(StartChildSaga)] + ".dead", _topics[typeof(StartChildSaga)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<ProcessChildSaga>(() =>
-                    new QueueReferences(_topics[typeof(ProcessChildSaga)], _topics[typeof(ProcessChildSaga)],
+                    new QueueReferences(_topics[typeof(ProcessChildSaga)], _topics[typeof(ProcessChildSaga)], _topics[typeof(ProcessChildSaga)],
                                         _topics[typeof(ProcessChildSaga)] + ".dead", _topics[typeof(ProcessChildSaga)] + ".dead"));
 
                 builder.UseMessageNamingPolicy<ChildSagaCompleted>(() =>
-                    new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)],
+                    new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)], nameof(ChildSagaCompleted),
                                         _topics[typeof(ChildSagaCompleted)] + ".dead", _topics[typeof(ChildSagaCompleted)] + ".dead"));
             })
                .UseMongoPersistence(mongoCfg);

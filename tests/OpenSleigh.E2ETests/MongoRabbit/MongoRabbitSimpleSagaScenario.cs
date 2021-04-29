@@ -45,7 +45,8 @@ namespace OpenSleigh.E2ETests.MongoRabbit
             cfg.UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration, builder => {
                 builder.UseMessageNamingPolicy<StartSimpleSaga>(() =>
                 new QueueReferences(_exchangeName,
-                                    _exchangeName,
+                                    _exchangeName + ".workers",
+                                    nameof(StartSimpleSaga),
                                     $"{_exchangeName}.dead",
                                     $"{_exchangeName}.dead"));
             })

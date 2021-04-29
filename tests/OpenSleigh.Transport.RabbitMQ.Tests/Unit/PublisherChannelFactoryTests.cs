@@ -33,7 +33,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         public void Create_should_return_valid_context()
         {
             var channel = NSubstitute.Substitute.For<IModel>();
-            var references = new QueueReferences("exchange", "queue", "deadletterExch", "deadLetterQ"); 
+            var references = new QueueReferences("exchange", "queue", "routingKey", "deadletterExch", "deadLetterQ"); 
             
             var pool = NSubstitute.Substitute.For<IPublisherChannelContextPool>();
 

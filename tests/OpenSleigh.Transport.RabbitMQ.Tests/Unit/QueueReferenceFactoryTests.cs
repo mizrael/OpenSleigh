@@ -18,9 +18,10 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             {
                 var exchangeName = messageType.Name.ToLower();
                 var queueName = exchangeName + ".a";
+                var routingKey = queueName;
                 var dlExchangeName = exchangeName + ".b";
                 var dlQueueName = dlExchangeName + ".c";
-                return new QueueReferences(exchangeName, queueName, dlExchangeName, dlQueueName);
+                return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
             });
             
             var message = DummyMessage.New();
@@ -28,6 +29,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("dummymessage");
             result.QueueName.Should().Be("dummymessage.a");
+            result.RoutingKey.Should().Be("dummymessage.a");
             result.DeadLetterExchangeName.Should().Be("dummymessage.b");
             result.DeadLetterQueue.Should().Be("dummymessage.b.c");
         }
@@ -41,9 +43,10 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             {
                 var exchangeName = "dummy";
                 var queueName = exchangeName + ".a";
+                var routingKey = exchangeName + ".r";
                 var dlExchangeName = exchangeName + ".b";
                 var dlQueueName = dlExchangeName + ".c";
-                return new QueueReferences(exchangeName, queueName, dlExchangeName, dlQueueName);
+                return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
             });
             sp.GetService(typeof(QueueReferencesPolicy<DummyMessage>))
                 .Returns(policy);
@@ -53,6 +56,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("dummy");
             result.QueueName.Should().Be("dummy.a");
+            result.RoutingKey.Should().Be("dummy.r");
             result.DeadLetterExchangeName.Should().Be("dummy.b");
             result.DeadLetterQueue.Should().Be("dummy.b.c");
         }
@@ -68,6 +72,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("dummymessage");
             result.QueueName.Should().Be("dummymessage.workers");
+            result.RoutingKey.Should().Be("dummymessage.workers");
             result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
             result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
         }
@@ -82,6 +87,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("dummymessage");
             result.QueueName.Should().Be("dummymessage.workers");
+            result.RoutingKey.Should().Be("dummymessage.workers");
             result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
             result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
         }
@@ -96,6 +102,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("dummyevent");
             result.QueueName.Should().Be("dummyevent.test.workers");
+            result.RoutingKey.Should().Be("dummyevent");
             result.DeadLetterExchangeName.Should().Be("dummyevent.dead");
             result.DeadLetterQueue.Should().Be("dummyevent.dead.test.workers");
         }

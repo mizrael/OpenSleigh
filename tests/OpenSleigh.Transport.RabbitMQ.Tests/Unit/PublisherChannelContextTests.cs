@@ -12,7 +12,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var pool = NSubstitute.Substitute.For<IPublisherChannelContextPool>();
             var channel = NSubstitute.Substitute.For<IModel>();
-            var references = new QueueReferences("exchange", "queue", "deadletterExch", "deadLetterQ");
+            var references = new QueueReferences("exchange", "queue", "routingKey", "deadletterExch", "deadLetterQ");
 
             Assert.Throws<ArgumentNullException>(() => new PublisherChannelContext(null, references, pool));
             Assert.Throws<ArgumentNullException>(() => new PublisherChannelContext(channel, null, pool));
@@ -24,7 +24,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var pool = NSubstitute.Substitute.For<IPublisherChannelContextPool>();
             var channel = NSubstitute.Substitute.For<IModel>();
-            var references = new QueueReferences("exchange", "queue", "deadletterExch", "deadLetterQ");
+            var references = new QueueReferences("exchange", "queue", "routingKey", "deadletterExch", "deadLetterQ");
 
             var sut = new PublisherChannelContext(channel, references, pool);
             sut.Dispose();
