@@ -41,6 +41,7 @@ namespace OpenSleigh.Samples.Sample3.Worker
                         
                         cfg.UseRabbitMQTransport(rabbitCfg, builder =>
                             {
+                                // OPTIONAL
                                 // using a custom naming policy allows us to define the names for exchanges and queues.
                                 // this allows us to have a single exchange bound to multiple queues.
                                 // messages will be routed using the queue name.
