@@ -18,13 +18,13 @@ namespace OpenSleigh.Core.Tests.Unit
             var serialized = await sut.SerializeAsync(state);
             serialized.Should().NotBeNull();
 
-            var jsonString = Encoding.UTF8.GetString(serialized);
+            var jsonString = Encoding.UTF8.GetString(serialized.Span);
             jsonString.Should()
                 .Be(
                     "{\"$type\":\"OpenSleigh.Core.Tests.Sagas.DummyState, OpenSleigh.Core.Tests\",\"_processedMessages\":{\"$type\":\"System.Collections.Generic.Dictionary`2[[System.Guid, System.Private.CoreLib],[OpenSleigh.Core.Messaging.IMessage, OpenSleigh.Core]], System.Private.CoreLib\"},\"_isComplete\":false,\"Foo\":\"foo\",\"Bar\":42,\"Id\":\"e846ad99-ddb5-4ed1-b92e-3da6e2bf78fa\"}");
 
 
-            var deserializedState = System.Text.Json.JsonSerializer.Deserialize<DummyState>(serialized);
+            var deserializedState = System.Text.Json.JsonSerializer.Deserialize<DummyState>(serialized.Span);
             deserializedState.Should().NotBeNull();
             deserializedState.Id.Should().Be(state.Id);
             deserializedState.Bar.Should().Be(state.Bar);

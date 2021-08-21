@@ -22,10 +22,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
     public class CosmosSqlOutboxRepository : IOutboxRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly CosmosSqlOutboxRepositoryOptions _options;
 
-        public CosmosSqlOutboxRepository(ISagaDbContext dbContext, ISerializer serializer, CosmosSqlOutboxRepositoryOptions options)
+        public CosmosSqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, CosmosSqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -48,7 +48,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data.Span, cancellationToken);
                 messages.Add(message);
             }
 

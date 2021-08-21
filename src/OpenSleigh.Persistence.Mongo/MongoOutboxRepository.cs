@@ -19,7 +19,7 @@ namespace OpenSleigh.Persistence.Mongo
     public class MongoOutboxRepository : IOutboxRepository
     {
         private readonly IDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly MongoOutboxRepositoryOptions _options;
         
         private enum MessageStatuses
@@ -28,7 +28,7 @@ namespace OpenSleigh.Persistence.Mongo
             Processed
         }
 
-        public MongoOutboxRepository(IDbContext dbContext, ISerializer serializer, 
+        public MongoOutboxRepository(IDbContext dbContext, IPersistenceSerializer serializer, 
             MongoOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -51,7 +51,7 @@ namespace OpenSleigh.Persistence.Mongo
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data.Span, cancellationToken);
                 messages.Add(message);
             }
 

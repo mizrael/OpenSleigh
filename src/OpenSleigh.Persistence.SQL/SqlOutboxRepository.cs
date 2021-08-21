@@ -21,7 +21,7 @@ namespace OpenSleigh.Persistence.SQL
     public class SqlOutboxRepository : IOutboxRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly SqlOutboxRepositoryOptions _options;
 
         private enum MessageStatuses
@@ -30,7 +30,7 @@ namespace OpenSleigh.Persistence.SQL
             Processed
         }
 
-        public SqlOutboxRepository(ISagaDbContext dbContext, ISerializer serializer, SqlOutboxRepositoryOptions options)
+        public SqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -53,7 +53,7 @@ namespace OpenSleigh.Persistence.SQL
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data.Span, cancellationToken);
                 messages.Add(message);
             }
 

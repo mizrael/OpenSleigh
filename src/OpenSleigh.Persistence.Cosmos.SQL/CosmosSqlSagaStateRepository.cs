@@ -19,10 +19,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
     public class CosmosSqlSagaStateRepository : ISagaStateRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly CosmosSqlSagaStateRepositoryOptions _options;
 
-        public CosmosSqlSagaStateRepository(ISagaDbContext dbContext, ISerializer serializer, CosmosSqlSagaStateRepositoryOptions options)
+        public CosmosSqlSagaStateRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, CosmosSqlSagaStateRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -66,7 +66,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                     stateEntity.RefreshLock();
                     lockId = stateEntity.LockId.Value;
 
-                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
+                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data.Span, cancellationToken);
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken)

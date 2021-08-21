@@ -17,7 +17,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public void ctor_should_throw_when_input_invalid()
         {
             var producer = NSubstitute.Substitute.For<IProducer<Guid, byte[]>>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<ITransportSerializer>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
             Assert.Throws<ArgumentNullException>(() => new KafkaPublisherExecutor(null, serializer, logger));
@@ -29,7 +29,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public async Task PublishAsync_should_throw_when_input_invalid()
         {
             var producer = NSubstitute.Substitute.For<IProducer<Guid, byte[]>>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<ITransportSerializer>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
             var sut = new KafkaPublisherExecutor(producer, serializer, logger);
@@ -54,7 +54,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             producer.ProduceAsync(topicName, Arg.Any<Message<Guid, byte[]>>(), Arg.Any<CancellationToken>())
                 .Returns(producerResult);
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<ITransportSerializer>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
             var sut = new KafkaPublisherExecutor(producer, serializer, logger);
@@ -83,7 +83,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             producer.ProduceAsync(topicName, Arg.Any<Message<Guid, byte[]>>(), Arg.Any<CancellationToken>())
                 .Returns(producerResult);
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<ITransportSerializer>();
             var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisherExecutor>>();
 
             var sut = new KafkaPublisherExecutor(producer, serializer, logger);

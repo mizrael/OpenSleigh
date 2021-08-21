@@ -13,10 +13,10 @@ namespace OpenSleigh.Transport.Kafka
     public class KafkaPublisherExecutor : IKafkaPublisherExecutor
     {
         private readonly IProducer<Guid, byte[]> _producer;
-        private readonly ISerializer _serializer;
+        private readonly ITransportSerializer _serializer;
         private readonly ILogger<KafkaPublisherExecutor> _logger;
 
-        public KafkaPublisherExecutor(IProducer<Guid, byte[]> producer, ISerializer serializer, ILogger<KafkaPublisherExecutor> logger)
+        public KafkaPublisherExecutor(IProducer<Guid, byte[]> producer, ITransportSerializer serializer, ILogger<KafkaPublisherExecutor> logger)
         {
             _producer = producer ?? throw new ArgumentNullException(nameof(producer));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
@@ -56,11 +56,11 @@ namespace OpenSleigh.Transport.Kafka
             if(additionalHeaders is not null)
                 foreach(var header in additionalHeaders)
                     headers.Add(header);
-
+            
             var kafkaMessage = new Message<Guid, byte[]>()
             {
                 Key = message.Id,
-                Value = serialized,
+                Value = serialized.ToArray(),
                 Headers = headers
             };
             

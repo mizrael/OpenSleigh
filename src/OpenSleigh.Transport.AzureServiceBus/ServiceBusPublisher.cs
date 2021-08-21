@@ -12,12 +12,12 @@ namespace OpenSleigh.Transport.AzureServiceBus
     internal class ServiceBusPublisher : IPublisher
     {
         private readonly IServiceBusSenderFactory _senderFactory;
-        private readonly ISerializer _serializer;
+        private readonly ITransportSerializer _serializer;
         private readonly ILogger<ServiceBusPublisher> _logger;
         private readonly SystemInfo _systemInfo;
 
         public ServiceBusPublisher(IServiceBusSenderFactory senderFactory,
-            ISerializer serializer,
+            ITransportSerializer serializer,
             ILogger<ServiceBusPublisher> logger, SystemInfo systemInfo)
         {
             _senderFactory = senderFactory ?? throw new ArgumentNullException(nameof(senderFactory));

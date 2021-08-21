@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,14 +13,14 @@ namespace OpenSleigh.Transport.AzureServiceBus
         where TM : IMessage
     {
         private readonly IMessageProcessor _messageProcessor;
-        private readonly IMessageParser _messageParser;        
+        private readonly ITransportSerializer _messageParser;        
         private readonly ILogger<ServiceBusSubscriber<TM>> _logger;
         private readonly SystemInfo _systemInfo;
         private ServiceBusProcessor _processor;
 
         public ServiceBusSubscriber(IQueueReferenceFactory queueReferenceFactory,
             ServiceBusClient serviceBusClient,
-            IMessageParser messageParser,
+            ITransportSerializer messageParser,
             IMessageProcessor messageProcessor,
             ILogger<ServiceBusSubscriber<TM>> logger, SystemInfo systemInfo)
         {            
@@ -46,7 +47,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             {
                 _logger.LogInformation($"client '{_systemInfo.ClientId}' received message '{args.Message.MessageId}'. Processing...");
 
-                var message = _messageParser.Resolve<TM>(args.Message.Body);
+                var message = await _messageParser.DeserializeAsync<TM>(args.Message.Body);
 
                 await _messageProcessor.ProcessAsync((dynamic)message, args.CancellationToken);
 

@@ -28,7 +28,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(coll);
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
             var sut = new MongoSagaStateRepository(dbContext, serializer, options);
 
@@ -40,7 +40,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         public async Task ReleaseLockAsync_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseLockAsync<DummyState>(null, Guid.NewGuid()));
         }
@@ -69,7 +69,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             dbContext.SagaStates.Returns(repo);
             dbContext.Transaction.Returns(mongoTransaction);
             
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
             await sut.ReleaseLockAsync<DummyState>(state, lockId);
@@ -102,7 +102,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             dbContext.SagaStates.Returns(repo);
             dbContext.Transaction.ReturnsNull();
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
             await sut.ReleaseLockAsync<DummyState>(state, lockId);
@@ -133,7 +133,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<IDbContext>();
             dbContext.SagaStates.Returns(repo);
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new MongoSagaStateRepository(dbContext, serializer, MongoSagaStateRepositoryOptions.Default);
 
             await Assert.ThrowsAsync<LockException>(async () =>

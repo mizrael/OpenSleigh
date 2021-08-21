@@ -19,10 +19,10 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
     public class CosmosSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly CosmosSagaStateRepositoryOptions _options;
         
-        public CosmosSagaStateRepository(IDbContext dbContext, ISerializer serializer, CosmosSagaStateRepositoryOptions options)
+        public CosmosSagaStateRepository(IDbContext dbContext, IPersistenceSerializer serializer, CosmosSagaStateRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
