@@ -66,7 +66,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                     stateEntity.RefreshLock();
                     lockId = stateEntity.LockId.Value;
 
-                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data.Span, cancellationToken);
+                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken)

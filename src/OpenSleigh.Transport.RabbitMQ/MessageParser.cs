@@ -36,7 +36,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             if(dataType is null)
                 throw new ArgumentException("unable to detect message type from headers");
 
-            var decodedObj = _decoder.Deserialize(body.Span, dataType);
+            var decodedObj = _decoder.Deserialize(body, dataType);
             if (decodedObj is not IMessage message)
                 throw new ArgumentException($"message has the wrong type: '{messageTypeName}'");
             return message;

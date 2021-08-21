@@ -48,7 +48,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data.Span, cancellationToken);
+                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
                 messages.Add(message);
             }
 

@@ -24,16 +24,16 @@ namespace OpenSleigh.Core.Utils
             return ValueTask.FromResult(mem);
         }
 
-        public ValueTask<T> DeserializeAsync<T>(ReadOnlySpan<byte> data, CancellationToken cancellationToken = default)
+        public ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {            
-            var json = Encoding.UTF8.GetString(data);
+            var json = Encoding.UTF8.GetString(data.Span);
             var serialized = Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json, Settings);
             return ValueTask.FromResult(serialized);
         }
 
-        public object Deserialize(ReadOnlySpan<byte> data, Type type)
+        public object Deserialize(ReadOnlyMemory<byte> data, Type type)
         {
-            var json = System.Text.Encoding.UTF8.GetString(data);
+            var json = System.Text.Encoding.UTF8.GetString(data.Span);
             return Newtonsoft.Json.JsonConvert.DeserializeObject(json, type, Settings);
         }            
     }

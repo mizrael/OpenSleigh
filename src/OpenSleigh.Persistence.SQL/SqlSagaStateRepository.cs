@@ -63,7 +63,7 @@ namespace OpenSleigh.Persistence.SQL
                     stateEntity.LockTime = DateTime.UtcNow;
                     stateEntity.LockId = lockId;
                     
-                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data.Span, cancellationToken);
+                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken)
