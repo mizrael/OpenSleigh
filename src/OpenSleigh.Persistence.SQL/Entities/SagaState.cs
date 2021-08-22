@@ -8,7 +8,7 @@ namespace OpenSleigh.Persistence.SQL.Entities
     {
         private SagaState() { }
 
-        public SagaState(Guid correlationId, string type, ReadOnlyMemory<byte> data, Guid? lockId = null, DateTime? lockTime = null)
+        public SagaState(Guid correlationId, string type, byte[] data, Guid? lockId = null, DateTime? lockTime = null)
         {
             CorrelationId = correlationId;
             Type = type;
@@ -19,7 +19,7 @@ namespace OpenSleigh.Persistence.SQL.Entities
 
         public Guid CorrelationId { get; }
         public string Type { get; }
-        public ReadOnlyMemory<byte> Data { get; set; }
+        public byte[] Data { get; set; }
         public Guid? LockId { get; set; }
         public DateTime? LockTime { get; set; }
     }

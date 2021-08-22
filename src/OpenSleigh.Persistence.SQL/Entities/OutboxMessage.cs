@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace OpenSleigh.Persistence.SQL.Entities
 {
-    public record OutboxMessage(Guid Id, ReadOnlyMemory<byte> Data, string Type)
+    public record OutboxMessage(Guid Id, byte[] Data, string Type)
     {
         public string Status { get; set; }
         public Guid? LockId { get; set; }
