@@ -138,7 +138,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
             unLockedState.Data.Should().NotBeNull();
 
             var serializer = new JsonSerializer();
-            var deserializedState = await serializer.DeserializeAsync<DummyState>(unLockedState.Data);
+            var deserializedState = await serializer.DeserializeAsync<DummyState>(unLockedState.Data.Span);
             deserializedState.Id.Should().Be(updatedState.Id);
             deserializedState.Bar.Should().Be(updatedState.Bar);
             deserializedState.Foo.Should().Be(updatedState.Foo);
