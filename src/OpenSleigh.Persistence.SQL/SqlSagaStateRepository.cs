@@ -49,7 +49,7 @@ namespace OpenSleigh.Persistence.SQL
                     resultState = newState;
 
                     var serializedState = await _serializer.SerializeAsync(newState, cancellationToken);
-                    var newEntity = new Entities.SagaState(correlationId, stateType.FullName, serializedState.ToArray(),
+                    var newEntity = new Entities.SagaState(correlationId, stateType.FullName, serializedState,
                                                             lockId, DateTime.UtcNow);
                     _dbContext.SagaStates.Add(newEntity);
                 }
@@ -103,7 +103,7 @@ namespace OpenSleigh.Persistence.SQL
 
             stateEntity.LockTime = null;
             stateEntity.LockId = null;
-            stateEntity.Data = (await _serializer.SerializeAsync(state, cancellationToken)).ToArray();
+            stateEntity.Data = await _serializer.SerializeAsync(state, cancellationToken);
 
             await _dbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);

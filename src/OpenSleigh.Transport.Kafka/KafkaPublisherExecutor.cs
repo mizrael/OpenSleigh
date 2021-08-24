@@ -60,7 +60,7 @@ namespace OpenSleigh.Transport.Kafka
             var kafkaMessage = new Message<Guid, byte[]>()
             {
                 Key = message.Id,
-                Value = serialized.ToArray(),
+                Value = serialized,
                 Headers = headers
             };
             

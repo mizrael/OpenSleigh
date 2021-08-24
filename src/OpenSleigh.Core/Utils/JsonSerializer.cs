@@ -16,16 +16,15 @@ namespace OpenSleigh.Core.Utils
             TypeNameHandling = TypeNameHandling.All
         };
 
-        public ValueTask<ReadOnlyMemory<byte>> SerializeAsync<T>(T state, CancellationToken cancellationToken = default)
+        public ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default)
         {
             var json = Newtonsoft.Json.JsonConvert.SerializeObject(state, Settings);
-            var bytes = Encoding.UTF8.GetBytes(json);
-            var mem = new ReadOnlyMemory<byte>(bytes);
-            return ValueTask.FromResult(mem);
+            var bytes = Encoding.UTF8.GetBytes(json);            
+            return ValueTask.FromResult(bytes);
         }
 
         public ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
-        {            
+        {
             var json = Encoding.UTF8.GetString(data.Span);
             var serialized = Newtonsoft.Json.JsonConvert.DeserializeObject<T>(json, Settings);
             return ValueTask.FromResult(serialized);
