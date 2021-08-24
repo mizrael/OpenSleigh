@@ -85,7 +85,7 @@ namespace OpenSleigh.Persistence.Mongo
                 BsonClassMap.RegisterClassMap<Entities.OutboxMessage>(mapper =>
                 {
                     mapper.MapIdProperty(c => c.Id).SetSerializer(guidSerializer);
-                    mapper.MapProperty(c => c.Data);
+                  //  mapper.MapProperty(c => c.Data);
                     mapper.MapProperty(c => c.Type);
                     mapper.MapProperty(c => c.Status);
                     mapper.MapProperty(c => c.PublishingDate).SetDefaultValue(() => null);
