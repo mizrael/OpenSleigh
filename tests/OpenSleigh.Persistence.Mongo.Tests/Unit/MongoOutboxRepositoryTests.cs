@@ -11,7 +11,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         [Fact]
         public void ctor_should_throw_when_DbContext_null()
         {
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(null, serializer, MongoOutboxRepositoryOptions.Default));
         }
 
@@ -26,7 +26,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         public void ctor_should_throw_when_options_null()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, serializer, null));
         }
 
@@ -66,7 +66,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         private static MongoOutboxRepository CreateSut()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new MongoOutboxRepository(dbCtx, serializer, MongoOutboxRepositoryOptions.Default);
             return sut;
         }

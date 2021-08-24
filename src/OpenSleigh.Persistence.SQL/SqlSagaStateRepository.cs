@@ -19,10 +19,10 @@ namespace OpenSleigh.Persistence.SQL
     public class SqlSagaStateRepository : ISagaStateRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly SqlSagaStateRepositoryOptions _options;
 
-        public SqlSagaStateRepository(ISagaDbContext dbContext, ISerializer serializer, SqlSagaStateRepositoryOptions options)
+        public SqlSagaStateRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlSagaStateRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));

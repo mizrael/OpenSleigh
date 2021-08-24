@@ -16,7 +16,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         public void ctor_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var options = CosmosSqlOutboxRepositoryOptions.Default;
             Assert.Throws<ArgumentNullException>(() => new CosmosSqlOutboxRepository(null, serializer, options));
             Assert.Throws<ArgumentNullException>(() => new CosmosSqlOutboxRepository(dbContext, null, options));
@@ -27,7 +27,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         public async Task LockAsync_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new CosmosSqlOutboxRepository(dbContext, serializer, CosmosSqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.LockAsync(null));
         }
@@ -36,7 +36,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         public async Task AppendAsync_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new CosmosSqlOutboxRepository(dbContext, serializer, CosmosSqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
@@ -45,7 +45,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         public async Task ReleaseAsync_should_throw_if_message_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var sut = new CosmosSqlOutboxRepository(dbContext, serializer, CosmosSqlOutboxRepositoryOptions.Default);
 
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
@@ -63,7 +63,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
             var expectedException = new Exception("whoops");
             dbContext.OutboxMessages.ThrowsForAnyArgs(expectedException);
 
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             
             var sut = new CosmosSqlOutboxRepository(dbContext, serializer, CosmosSqlOutboxRepositoryOptions.Default);
             var ex = await Assert.ThrowsAsync<Exception>(async () => await sut.CleanProcessedAsync());

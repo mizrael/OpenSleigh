@@ -13,10 +13,10 @@ namespace OpenSleigh.Transport.RabbitMQ
     {
         private readonly IPublisherChannelFactory _publisherChannelFactory;
         private readonly ILogger<RabbitPublisher> _logger;
-        private readonly ISerializer _encoder;
+        private readonly ITransportSerializer _encoder;
         
         public RabbitPublisher(
-            ISerializer encoder,
+            ITransportSerializer encoder,
             ILogger<RabbitPublisher> logger, 
             IPublisherChannelFactory publisherChannelFactory)
         {

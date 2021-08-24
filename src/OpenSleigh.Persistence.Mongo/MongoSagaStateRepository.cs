@@ -19,10 +19,10 @@ namespace OpenSleigh.Persistence.Mongo
     public class MongoSagaStateRepository : ISagaStateRepository
     {
         private readonly IDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly MongoSagaStateRepositoryOptions _options;
         
-        public MongoSagaStateRepository(IDbContext dbContext, ISerializer serializer, MongoSagaStateRepositoryOptions options)
+        public MongoSagaStateRepository(IDbContext dbContext, IPersistenceSerializer serializer, MongoSagaStateRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));

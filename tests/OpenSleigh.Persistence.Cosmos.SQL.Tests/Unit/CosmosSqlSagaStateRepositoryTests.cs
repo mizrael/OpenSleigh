@@ -11,7 +11,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         [Fact]
         public void ctor_should_throw_when_input_null()
         {
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var options = CosmosSqlSagaStateRepositoryOptions.Default;
             Assert.Throws<ArgumentNullException>(() => new CosmosSqlSagaStateRepository(null, null, options));
@@ -22,7 +22,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit
         [Fact]
         public async Task ReleaseLockAsync_should_throw_when_input_null()
         {
-            var serializer = NSubstitute.Substitute.For<ISerializer>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var options = CosmosSqlSagaStateRepositoryOptions.Default;
             var sut = new CosmosSqlSagaStateRepository(dbContext, serializer, options);

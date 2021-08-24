@@ -19,7 +19,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
     public class CosmosOutboxRepository : IOutboxRepository
     {
         private readonly IDbContext _dbContext;
-        private readonly ISerializer _serializer;
+        private readonly IPersistenceSerializer _serializer;
         private readonly CosmosOutboxRepositoryOptions _options;
         
         private enum MessageStatuses
@@ -28,7 +28,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
             Processed
         }
 
-        public CosmosOutboxRepository(IDbContext dbContext, ISerializer serializer, 
+        public CosmosOutboxRepository(IDbContext dbContext, IPersistenceSerializer serializer, 
             CosmosOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));

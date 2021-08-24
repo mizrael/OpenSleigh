@@ -14,7 +14,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_input_null()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(resolver, decoder);
 
@@ -24,7 +24,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_headers_null()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(resolver, decoder);
 
@@ -38,7 +38,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_headers_do_not_contain_message_type()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(resolver, decoder);
 
@@ -57,7 +57,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_message_type_header_does_not_match()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(resolver, decoder);
 
@@ -84,7 +84,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var encodedMessage = Newtonsoft.Json.JsonConvert.SerializeObject(message);
             var messageBytes = Encoding.UTF8.GetBytes(encodedMessage);
             
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             decoder.Deserialize(messageBytes, messageType).Returns(message); 
             
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();

@@ -16,7 +16,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_null()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -26,7 +26,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_headers_null()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
             
@@ -41,7 +41,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_basicProperties_headers_do_not_contain_message_type()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -54,7 +54,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_message_type_header_does_not_match()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 
@@ -69,13 +69,13 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             basicProperties.Headers.Returns(headers);
             
             var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, null));
-            ex.Message.Should().Contain("message has the wrong type");
+            ex.Message.Should().Contain("unable to detect message type from headers");
         }
 
         [Fact]
         public void Resolve_should_return_message()
         {
-            var decoder = NSubstitute.Substitute.For<ISerializer>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new MessageParser(decoder, resolver);
 

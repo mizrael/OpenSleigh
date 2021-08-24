@@ -11,9 +11,9 @@ namespace OpenSleigh.Transport.Kafka
     public class MessageParser : IMessageParser
     {
         private readonly ITypeResolver _typeResolver;
-        private readonly ISerializer _serializer;
+        private readonly ITransportSerializer _serializer;
 
-        public MessageParser(ITypeResolver typeResolver, ISerializer serializer)
+        public MessageParser(ITypeResolver typeResolver, ITransportSerializer serializer)
         {
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
