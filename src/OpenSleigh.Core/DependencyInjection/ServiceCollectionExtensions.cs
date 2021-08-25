@@ -29,6 +29,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<IMessageHandlersResolver, DefaultMessageHandlersResolver>()
                 .AddSingleton<IMessageHandlersRunner, DefaultMessageHandlersRunner>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()
+               
                 .AddSingleton<IMessageProcessor, MessageProcessor>()
                 .AddHostedService<SubscribersBackgroundService>()
 
@@ -38,7 +39,8 @@ namespace OpenSleigh.Core.DependencyInjection
                 
                 .AddTransient<IOutboxCleaner, OutboxCleaner>()
                 .AddSingleton(OutboxCleanerOptions.Default)
-                .AddHostedService<OutboxCleanerBackgroundService>();
+                .AddHostedService<OutboxCleanerBackgroundService>()
+                ;
 
             var builder = new BusConfigurator(services, sagaTypeResolver, typeResolver, systemInfo);
             configure?.Invoke(builder);

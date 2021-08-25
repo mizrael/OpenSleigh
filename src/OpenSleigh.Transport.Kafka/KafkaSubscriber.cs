@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka
 {
-    public record KafkaSubscriberConfig(TimeSpan ConsumeDelay)
+    public record KafkaSubscriberConfig(TimeSpan ConsumeDelay, TimeSpan ConsumeTimeout)
     {
-        public static readonly KafkaSubscriberConfig Default = new (TimeSpan.FromMilliseconds(250));
+        public static readonly KafkaSubscriberConfig Default = new (TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     }
 
     public sealed class KafkaSubscriber<TM> : ISubscriber<TM>, IDisposable
@@ -48,7 +48,9 @@ namespace OpenSleigh.Transport.Kafka
         public Task StartAsync(CancellationToken cancellationToken = default)
         {
             _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            _consumerTask = ConsumeMessages(_stoppingCts.Token);
+
+            _consumerTask = Task.Run(async () => await ConsumeMessages(_stoppingCts.Token));
+
             return Task.CompletedTask;
         }
 
@@ -61,6 +63,9 @@ namespace OpenSleigh.Transport.Kafka
                 var canContinue = await ConsumeMessageAsync(stoppingToken);
                 if (!canContinue)
                     break;
+
+                // TODO: check if it's possible to get rid of this
+                await Task.Delay(_config.ConsumeDelay, stoppingToken);
             }
         }
 
@@ -72,7 +77,7 @@ namespace OpenSleigh.Transport.Kafka
         {
             try
             {
-                var result = _consumer.Consume(stoppingToken);
+                var result = _consumer.Consume((int)_config.ConsumeTimeout.TotalMilliseconds);
 
                 // task might have been canceled during the call to Consume()
                 if (stoppingToken.IsCancellationRequested)
@@ -81,9 +86,7 @@ namespace OpenSleigh.Transport.Kafka
                 var canProcess = (result is not null && !result.IsPartitionEOF);
                 if(canProcess)
                     await _messageHandler.HandleAsync(result, _queueReferences, stoppingToken);
-                else
-                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
-                
+                                
                 return true;
             }
             catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
