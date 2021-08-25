@@ -2,6 +2,7 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace OpenSleigh.Transport.Kafka
 {
@@ -30,6 +31,16 @@ namespace OpenSleigh.Transport.Kafka
         {
             var creator = _sp.GetService<QueueReferencesPolicy<TM>>();
             return (creator is null) ? _defaultCreator(typeof(TM)) : creator();
+        }
+
+        public Type GetQueueType(string topic)
+        {
+            if (string.IsNullOrWhiteSpace(topic))
+                throw new ArgumentNullException(topic);
+
+            var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
+            
+            return queueRef.Key;
         }
     }
 }

@@ -14,33 +14,19 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_input_null()
         {
-            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new MessageParser(resolver, decoder);
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();            
+            var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             Assert.Throws<ArgumentNullException>(() => sut.Parse(null));
         }
 
         [Fact]
-        public void Resolve_should_throw_when_headers_null()
-        {
-            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new MessageParser(resolver, decoder);
-
-            var consumeResult = new ConsumeResult<Guid, byte[]>();
-            
-            var ex = Assert.Throws<ArgumentNullException>(() => sut.Parse(consumeResult));
-            ex.Message.Should().Contain("message headers are missing");
-        }
-
-
-        [Fact]
         public void Resolve_should_throw_when_headers_do_not_contain_message_type()
         {
             var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new MessageParser(resolver, decoder);
+            var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {
@@ -57,49 +43,45 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_message_type_header_does_not_match()
         {
-            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new MessageParser(resolver, decoder);
+            Type messageType = null;
+            var messageTopic = "lorem";
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();            
+            var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+            queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {
+                Topic= messageTopic,
                 Message = new Message<Guid, byte[]>()
-                {
-                    Headers = new Headers()
-                    {
-                        { HeaderNames.MessageType, Encoding.UTF8.GetBytes("lorem")}
-                    }
-                }
             };
             
             var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-            ex.Message.Should().Contain("message has the wrong type");
+            ex.Message.Should().Contain("invalid message type");
         }
 
         [Fact]
         public void Resolve_should_return_message()
         {
             var messageType = typeof(DummyMessage);
-            var message = DummyMessage.New();
+            var messageTopic = "DummyMessage";
+;            var message = DummyMessage.New();
             var encodedMessage = Newtonsoft.Json.JsonConvert.SerializeObject(message);
             var messageBytes = Encoding.UTF8.GetBytes(encodedMessage);
             
             var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             decoder.Deserialize(messageBytes, messageType).Returns(message); 
             
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            resolver.Resolve(messageType.FullName).Returns(messageType); 
+            var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+            queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
             
-            var sut = new MessageParser(resolver, decoder);
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {
+                Topic = messageTopic,
                 Message = new Message<Guid, byte[]>()
                 {
-                    Headers = new Headers()
-                    {
-                        {HeaderNames.MessageType, Encoding.UTF8.GetBytes(messageType.FullName)}
-                    },
                     Value = messageBytes
                 }
             };
