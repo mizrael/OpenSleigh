@@ -28,7 +28,7 @@ namespace OpenSleigh.Core.Tests.E2E
             Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
             {
                 receivedCount++;
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
                 
                 ctx.Message.Id.Should().Be(message.Id);
                 ctx.Message.CorrelationId.Should().Be(message.CorrelationId);
@@ -42,6 +42,9 @@ namespace OpenSleigh.Core.Tests.E2E
                 }).ToArray();
 
             await Task.WhenAll(createHostTasks);
+
+            if (tokenSource.IsCancellationRequested)
+                throw new Exception("a timeout occurred during hosts initialization.");
 
             var producerHost = createHostTasks.First().Result;
             using var scope = producerHost.Services.CreateScope();
