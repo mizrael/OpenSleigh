@@ -15,12 +15,15 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         [Fact]
         public void ctor_should_throw_if_input_null()
         {
+            var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             var options = OutboxProcessorOptions.Default;
-            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            var sysInfo = SystemInfo.New();
             var logger = NSubstitute.Substitute.For<ILogger<OutboxBackgroundService>>();
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null, options, logger));
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, null, logger));
-            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(scopeFactory, options, null));
+
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(null, options, logger, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(factory, null, logger, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(factory, options, null, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxBackgroundService(factory, options, logger, null));
         }
 
         [Fact]
@@ -38,8 +41,9 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             factory.CreateScope().Returns(scope);
 
             var logger = NSubstitute.Substitute.For<ILogger<OutboxBackgroundService>>();
+            var sysInfo = SystemInfo.New();
 
-            var sut = new OutboxBackgroundService(factory, OutboxProcessorOptions.Default, logger);
+            var sut = new OutboxBackgroundService(factory, OutboxProcessorOptions.Default, logger, sysInfo);
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);
