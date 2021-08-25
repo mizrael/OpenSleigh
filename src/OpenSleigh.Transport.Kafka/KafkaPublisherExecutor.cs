@@ -39,7 +39,7 @@ namespace OpenSleigh.Transport.Kafka
             return PublishAsyncCore(message, topic, additionalHeaders, cancellationToken);
         }
 
-        private async Task<DeliveryResult<Guid, byte[]>> PublishAsyncCore(IMessage message,
+        private async Task<DeliveryResult<Guid, byte[]>> PublishAsyncCore(IMessage message, 
             string topic,
             IEnumerable<Header> additionalHeaders,
             CancellationToken cancellationToken)

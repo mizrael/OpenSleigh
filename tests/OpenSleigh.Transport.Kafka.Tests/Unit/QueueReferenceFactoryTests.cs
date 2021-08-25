@@ -69,5 +69,39 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             Assert.Throws<ArgumentNullException>(() => new QueueReferenceFactory(null));
         }
+
+        [Fact]
+        public void GetQueueType_should_throw_when_input_invalid()
+        {
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sut = new QueueReferenceFactory(sp);
+
+            Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(null));
+            Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(""));
+            Assert.Throws<ArgumentNullException>(() => sut.GetQueueType("   "));
+        }
+
+        [Fact]
+        public void GetQueueType_should_return_null_when_type_not_found()
+        {
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sut = new QueueReferenceFactory(sp);
+
+            var result = sut.GetQueueType("invalid topic name");
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public void GetQueueType_should_return_type_when_input_valid()
+        {
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var sut = new QueueReferenceFactory(sp);
+
+            var queueRef = sut.Create<DummyMessage>();
+            queueRef.Should().NotBeNull();
+            
+            var result = sut.GetQueueType(queueRef.TopicName);
+            result.Should().Be(typeof(DummyMessage));
+        }
     }
 }

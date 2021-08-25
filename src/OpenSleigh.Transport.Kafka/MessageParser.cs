@@ -10,13 +10,11 @@ namespace OpenSleigh.Transport.Kafka
 {
     public class MessageParser : IMessageParser
     {
-        private readonly ITypeResolver _typeResolver;
         private readonly ITransportSerializer _serializer;
         private readonly IQueueReferenceFactory _queueReferenceFactory;
 
-        public MessageParser(ITypeResolver typeResolver, ITransportSerializer serializer, IQueueReferenceFactory queueReferenceFactory)
-        {
-            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        public MessageParser(ITransportSerializer serializer, IQueueReferenceFactory queueReferenceFactory)
+        {     
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         }

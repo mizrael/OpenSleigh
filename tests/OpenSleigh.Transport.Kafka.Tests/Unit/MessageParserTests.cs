@@ -14,10 +14,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Resolve_should_throw_when_input_null()
         {
-            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();            
             var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            var sut = new MessageParser(resolver, decoder, queueReferenceFactory);
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             Assert.Throws<ArgumentNullException>(() => sut.Parse(null));
         }
@@ -26,9 +25,8 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public void Resolve_should_throw_when_headers_do_not_contain_message_type()
         {
             var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
             var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            var sut = new MessageParser(resolver, decoder, queueReferenceFactory);
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {
@@ -47,11 +45,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             Type messageType = null;
             var messageTopic = "lorem";
-            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();            
             var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
             queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
-            var sut = new MessageParser(resolver, decoder, queueReferenceFactory);
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {
@@ -75,13 +72,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
             decoder.Deserialize(messageBytes, messageType).Returns(message); 
             
-            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
-            resolver.Resolve(messageType.FullName).Returns(messageType); 
-            
             var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
             queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
             
-            var sut = new MessageParser(resolver, decoder, queueReferenceFactory);
+            var sut = new MessageParser(decoder, queueReferenceFactory);
 
             var consumeResult = new ConsumeResult<Guid, byte[]>()
             {

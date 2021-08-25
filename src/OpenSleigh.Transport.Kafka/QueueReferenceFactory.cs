@@ -33,8 +33,14 @@ namespace OpenSleigh.Transport.Kafka
             return (creator is null) ? _defaultCreator(typeof(TM)) : creator();
         }
 
-        public Type GetQueueType(string topic) =>
-            _queueReferencesCache.SingleOrDefault(pair => pair.Value.TopicName.Equals(topic)).Key;
+        public Type GetQueueType(string topic)
+        {
+            if (string.IsNullOrWhiteSpace(topic))
+                throw new ArgumentNullException(topic);
 
+            var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
+            
+            return queueRef.Key;
+        }
     }
 }
