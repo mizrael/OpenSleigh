@@ -24,8 +24,10 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
+
                 .AddSingleton<ITransportSerializer, JsonSerializer>()
                 .AddSingleton<IPersistenceSerializer, JsonSerializer>()
+
                 .AddSingleton<IMessageHandlersResolver, DefaultMessageHandlersResolver>()
                 .AddSingleton<IMessageHandlersRunner, DefaultMessageHandlersRunner>()
                 .AddSingleton<IMessageContextFactory, DefaultMessageContextFactory>()

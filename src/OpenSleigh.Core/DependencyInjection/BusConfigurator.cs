@@ -56,6 +56,26 @@ namespace OpenSleigh.Core.DependencyInjection
             return this;
         }
 
+        public IBusConfigurator WithTransportSerializer<T>(T serializer = null) where T : class, ITransportSerializer
+        {
+            if(serializer is null)
+                this.Services.Replace(ServiceDescriptor.Singleton<ITransportSerializer, T>());
+            else
+                this.Services.Replace(ServiceDescriptor.Singleton<ITransportSerializer, T>(_ => serializer));
+
+            return this;
+        }
+
+        public IBusConfigurator WithPersistenceSerializer<T>(T serializer = null) where T : class, IPersistenceSerializer
+        {
+            if (serializer is null)
+                this.Services.Replace(ServiceDescriptor.Singleton<IPersistenceSerializer, T>());
+            else
+                this.Services.Replace(ServiceDescriptor.Singleton<IPersistenceSerializer, T>(_ => serializer));
+
+            return this;
+        }
+
         public IMessageHandlerConfigurator<TM> AddMessageHandlers<TM>(IEnumerable<Assembly> sourceAssemblies)       
             where TM : IMessage                  
         {

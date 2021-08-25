@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
@@ -27,6 +28,20 @@ namespace OpenSleigh.Core.DependencyInjection
         ISagaConfigurator<TS, TD> AddSaga<TS, TD>()
             where TS : Saga<TD>
             where TD : SagaState;
+
+        /// <summary>
+        /// replaces the current registered Transport Serializer.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="serializer">instance of the serializer that will be used. If null, its type will be used to perform the registration.</param>        
+        IBusConfigurator WithTransportSerializer<T>(T serializer = null) where T : class, ITransportSerializer;
+
+        /// <summary>
+        /// replaces the current registered Persistence Serializer.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="serializer">instance of the serializer that will be used. If null, its type will be used to perform the registration.</param>        
+        IBusConfigurator WithPersistenceSerializer<T>(T serializer = null) where T : class, IPersistenceSerializer;
 
         IServiceCollection Services { get; }
     }
