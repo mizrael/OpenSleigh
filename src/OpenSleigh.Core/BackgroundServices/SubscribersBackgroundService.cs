@@ -35,18 +35,19 @@ namespace OpenSleigh.Core.BackgroundServices
             await base.StopAsync(cancellationToken);
         }
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
             if (_systemInfo.PublishOnly)
             {
                 _logger.LogInformation($"no subscribers on client '{_systemInfo.ClientId}'");
-                return;
+                return Task.CompletedTask;
             }                
 
             _logger.LogInformation($"starting subscribers on client '{_systemInfo.ClientGroup}/{_systemInfo.ClientId}' ...");
-
+            
             var tasks = _subscribers.Select(s => s.StartAsync(stoppingToken));
-            await Task.WhenAll(tasks);
+            var combinedTask = Task.WhenAll(tasks);
+            return combinedTask;            
         }            
     }
 }

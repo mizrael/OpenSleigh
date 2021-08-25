@@ -2,6 +2,7 @@
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Core.BackgroundServices;
 using OpenSleigh.Core.Messaging;
@@ -16,8 +17,13 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         {
             var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             var options = OutboxCleanerOptions.Default;
-            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(factory, null));
-            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(null, options));
+            var sysInfo = SystemInfo.New();
+            var logger = NSubstitute.Substitute.For<ILogger<OutboxCleanerBackgroundService>>();
+
+            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(null, options, logger, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(factory, null, logger, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(factory, options, null, sysInfo));
+            Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(factory, options, logger, null));
         }
 
         [Fact]
@@ -34,7 +40,10 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             factory.CreateScope().Returns(scope);
 
-            var sut = new OutboxCleanerBackgroundService(factory, OutboxCleanerOptions.Default);
+            var logger = NSubstitute.Substitute.For<ILogger<OutboxCleanerBackgroundService>>();
+            var sysInfo = SystemInfo.New();
+
+            var sut = new OutboxCleanerBackgroundService(factory, OutboxCleanerOptions.Default, logger, sysInfo);
 
             var tokenSource = new CancellationTokenSource();
             await sut.StartAsync(tokenSource.Token);

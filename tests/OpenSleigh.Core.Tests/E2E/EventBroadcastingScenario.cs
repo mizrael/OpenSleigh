@@ -51,7 +51,10 @@ namespace OpenSleigh.Core.Tests.E2E
                            }).ToArray();
             
             await Task.WhenAll(createHostTasks);
-            
+
+            if (tokenSource.IsCancellationRequested)
+                throw new Exception("a timeout occurred during hosts initialization.");
+
             var producerHost = createHostTasks.First().Result;
             using var scope = producerHost.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
