@@ -2,13 +2,13 @@
 
     <PropertyGroup>
         <TargetFramework>net5.0</TargetFramework>
-        <PackageVersion>1.2.1</PackageVersion>
+        <PackageVersion>0.0.1</PackageVersion>
         <IsPackable>true</IsPackable>
         <Authors>davidguida</Authors>
-        <Product>OpenSleigh.Persistence.SQL</Product>
+        <Product>OpenSleigh.Persistence.PostgreSQL</Product>
         <NeutralLanguage>en-US</NeutralLanguage>
-        <Title>OpenSleigh.Persistence.SQL.PostgreSQL</Title>
-        <PackageDescription>SQL persistence for OpenSleigh.</PackageDescription>
+        <Title>OpenSleigh.Persistence.PostgreSQL</Title>
+        <PackageDescription>PostgreSQL persistence for OpenSleigh.</PackageDescription>
         <Copyright>Copyright 2021</Copyright>
         <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
