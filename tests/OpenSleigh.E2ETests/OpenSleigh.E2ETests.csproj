@@ -23,11 +23,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQL.PostgreSQL\OpenSleigh.Persistence.SQL.PostgreSQL.csproj" />
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Cosmos.Mongo.Tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Cosmos.SQL.Tests\OpenSleigh.Persistence.Cosmos.SQL.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.PostgreSQL.Tests\OpenSleigh.Persistence.SQL.PostgreSQL.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.SQLServer.Tests\OpenSleigh.Persistence.SQL.SQLServer.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.AzureServiceBus.Tests\OpenSleigh.Transport.AzureServiceBus.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.Kafka.Tests\OpenSleigh.Transport.Kafka.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj" />

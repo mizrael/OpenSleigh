@@ -1,0 +1,21 @@
+version: '3.4'
+
+services:
+  openSleigh.Sample10.infrastructure.sql:
+    container_name: openSleigh.Sample10.infrastructure.sql    
+    image: "postgres:13.4"
+    environment:
+      POSTGRES_PASSWORD: "Sup3r_p4ssword123"
+    ports:
+      - 5432:5432     
+  
+  openSleigh.Sample10.infrastructure.rabbitmq:        
+    image: rabbitmq:3-management-alpine
+    container_name: openSleigh.Sample10.infrastructure.rabbitmq    
+    restart: always
+    environment:
+     RABBITMQ_DEFAULT_VHOST: "/"
+    ports:     
+      - "15671:15671"
+      - "15672:15672"   
+      - "5672:5672"

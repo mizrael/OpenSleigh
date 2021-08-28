@@ -25,7 +25,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.Rabbit
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL", "src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj", "{5B2D9A6B-4ECA-4F73-B654-AEF16485935F}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL.Tests", "tests\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj", "{0799A41D-483D-412C-BD10-E2BB3FB907E4}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL.SQLServer.Tests", "tests\OpenSleigh.Persistence.SQL.SQLServer.Tests\OpenSleigh.Persistence.SQL.SQLServer.Tests.csproj", "{0799A41D-483D-412C-BD10-E2BB3FB907E4}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.AzureServiceBus", "src\OpenSleigh.Transport.AzureServiceBus\OpenSleigh.Transport.AzureServiceBus.csproj", "{CA4B0C5D-200A-4D3D-8C5A-D0910E11585D}"
 EndProject
@@ -44,6 +44,12 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.Kafka.Tests", "tests\OpenSleigh.Transport.Kafka.Tests\OpenSleigh.Transport.Kafka.Tests.csproj", "{5B363808-664B-42F4-8C38-EEFB9F05C500}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.E2ETests", "tests\OpenSleigh.E2ETests\OpenSleigh.E2ETests.csproj", "{A14A1452-A758-4CF3-83CC-E1C6897D83ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.SQL.PostgreSQL", "src\OpenSleigh.Persistence.SQL.PostgreSQL\OpenSleigh.Persistence.SQL.PostgreSQL.csproj", "{9FF5B478-7A91-442C-B299-3B5AEAED7DC4}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.SQL.SQLServer", "src\OpenSleigh.Persistence.SQL.SQLServer\OpenSleigh.Persistence.SQL.SQLServer.csproj", "{6530E518-CE8F-47A7-B9E5-92FD90084FB1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.SQL.PostgreSQL.Tests", "tests\OpenSleigh.Persistence.SQL.PostgreSQL.Tests\OpenSleigh.Persistence.SQL.PostgreSQL.Tests.csproj", "{3723A8D7-BF8F-4C84-89EA-3948737BC900}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -127,6 +133,18 @@ Global
 		{A14A1452-A758-4CF3-83CC-E1C6897D83ED}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A14A1452-A758-4CF3-83CC-E1C6897D83ED}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A14A1452-A758-4CF3-83CC-E1C6897D83ED}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9FF5B478-7A91-442C-B299-3B5AEAED7DC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9FF5B478-7A91-442C-B299-3B5AEAED7DC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9FF5B478-7A91-442C-B299-3B5AEAED7DC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9FF5B478-7A91-442C-B299-3B5AEAED7DC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6530E518-CE8F-47A7-B9E5-92FD90084FB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6530E518-CE8F-47A7-B9E5-92FD90084FB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6530E518-CE8F-47A7-B9E5-92FD90084FB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6530E518-CE8F-47A7-B9E5-92FD90084FB1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3723A8D7-BF8F-4C84-89EA-3948737BC900}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3723A8D7-BF8F-4C84-89EA-3948737BC900}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3723A8D7-BF8F-4C84-89EA-3948737BC900}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3723A8D7-BF8F-4C84-89EA-3948737BC900}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -148,6 +166,9 @@ Global
 		{08E996DB-3D0C-4A63-8166-BF61732D3B21} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 		{887358C5-9EFF-4498-A04B-E12B199EC259} = {86CDC8FD-5E6F-4F45-A073-9F2749192582}
 		{5B363808-664B-42F4-8C38-EEFB9F05C500} = {86CDC8FD-5E6F-4F45-A073-9F2749192582}
+		{9FF5B478-7A91-442C-B299-3B5AEAED7DC4} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{6530E518-CE8F-47A7-B9E5-92FD90084FB1} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
+		{3723A8D7-BF8F-4C84-89EA-3948737BC900} = {5594CC89-F905-46B2-B938-27B8050D9CA3}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {D5297242-16B4-43D7-B329-362EBCE2A5A5}
