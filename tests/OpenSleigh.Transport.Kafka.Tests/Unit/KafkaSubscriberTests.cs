@@ -21,6 +21,8 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var tokenSource = new CancellationTokenSource(1000);
             await sut.StartAsync(tokenSource.Token);
+
+            await Task.Delay(200);
             
             consumer.Received(1).Subscribe(queueRefs.TopicName);
         }
