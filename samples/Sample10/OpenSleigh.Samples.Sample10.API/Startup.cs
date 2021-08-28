@@ -6,7 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.PostgreSQL;
+using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Sample10.API

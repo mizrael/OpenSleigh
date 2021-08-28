@@ -23,7 +23,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.InventoryService", "OpenSleigh.Samples.Sample4.InventoryService\OpenSleigh.Samples.Sample4.InventoryService.csproj", "{78FC631B-514A-48F9-8E04-02204C1DB690}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample4.NotificationsService", "OpenSleigh.Samples.Sample4.NotificationsService\OpenSleigh.Samples.Sample4.NotificationsService.csproj", "{A4AE7648-3038-4D61-8CDA-C50215FE4299}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample4.NotificationsService", "OpenSleigh.Samples.Sample4.NotificationsService\OpenSleigh.Samples.Sample4.NotificationsService.csproj", "{A4AE7648-3038-4D61-8CDA-C50215FE4299}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQLServer", "..\..\src\OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj", "{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,6 +73,10 @@ Global
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -79,6 +85,7 @@ Global
 		{CE375B34-1590-4544-9B33-70EF4C25D54C} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 		{31E2559D-4E5C-4110-AA42-99F46DDCE7B3} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 		{5242977B-11A8-48F3-BE45-63892666C81E} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
+		{C7E1EDA2-6644-48D2-BE5B-FD430DBB2C8E} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BC78DE5A-D1CC-46D6-ADDA-3A8F41324E03}

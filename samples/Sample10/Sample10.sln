@@ -23,9 +23,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample10
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample10.InventoryService", "OpenSleigh.Samples.Sample10.InventoryService\OpenSleigh.Samples.Sample10.InventoryService.csproj", "{78FC631B-514A-48F9-8E04-02204C1DB690}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.Sample10.NotificationsService", "OpenSleigh.Samples.Sample10.NotificationsService\OpenSleigh.Samples.Sample10.NotificationsService.csproj", "{A4AE7648-3038-4D61-8CDA-C50215FE4299}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample10.NotificationsService", "OpenSleigh.Samples.Sample10.NotificationsService\OpenSleigh.Samples.Sample10.NotificationsService.csproj", "{A4AE7648-3038-4D61-8CDA-C50215FE4299}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.SQL.PostgreSQL", "..\..\src\OpenSleigh.Persistence.SQL.PostgreSQL\OpenSleigh.Persistence.SQL.PostgreSQL.csproj", "{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.PostgreSQL", "..\..\src\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj", "{F6C1979B-8EBC-43C3-8D85-1E72D1254103}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -73,10 +73,10 @@ Global
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A4AE7648-3038-4D61-8CDA-C50215FE4299}.Release|Any CPU.Build.0 = Release|Any CPU
-		{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F6C1979B-8EBC-43C3-8D85-1E72D1254103}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F6C1979B-8EBC-43C3-8D85-1E72D1254103}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F6C1979B-8EBC-43C3-8D85-1E72D1254103}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F6C1979B-8EBC-43C3-8D85-1E72D1254103}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -85,7 +85,7 @@ Global
 		{CE375B34-1590-4544-9B33-70EF4C25D54C} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 		{31E2559D-4E5C-4110-AA42-99F46DDCE7B3} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 		{5242977B-11A8-48F3-BE45-63892666C81E} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
-		{4B0DFBE0-6B43-4BB0-9148-B501B74CFCE1} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
+		{F6C1979B-8EBC-43C3-8D85-1E72D1254103} = {179EFC5F-B0C8-4649-BF7C-24E9EBDFBBA8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {BC78DE5A-D1CC-46D6-ADDA-3A8F41324E03}

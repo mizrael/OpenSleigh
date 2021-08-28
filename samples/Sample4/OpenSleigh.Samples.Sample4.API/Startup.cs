@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.OpenApi.Models;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Transport.RabbitMQ;
 
 namespace OpenSleigh.Samples.Sample4.API
@@ -41,7 +42,7 @@ namespace OpenSleigh.Samples.Sample4.API
                 
                 cfg.SetPublishOnly()
                     .UseRabbitMQTransport(rabbitCfg)
-                    .UseSqlPersistence(sqlConfig);
+                    .UseSqlServerPersistence(sqlConfig);
             });
         }
 

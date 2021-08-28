@@ -1,13 +1,14 @@
-﻿using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Samples.Sample4.Common;
 using OpenSleigh.Samples.Sample4.Orchestrator.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Samples.Sample4.Orchestrator
 {
@@ -40,7 +41,7 @@ namespace OpenSleigh.Samples.Sample4.Orchestrator
                         var sqlConfig = new SqlConfiguration(sqlConnStr);
                         
                         cfg.UseRabbitMQTransport(rabbitCfg)
-                            .UseSqlPersistence(sqlConfig);
+                            .UseSqlServerPersistence(sqlConfig);
 
                         cfg.AddSaga<OrderSaga, OrderSagaState>()
                             .UseStateFactory<SaveOrder>(msg => new OrderSagaState(msg.CorrelationId))

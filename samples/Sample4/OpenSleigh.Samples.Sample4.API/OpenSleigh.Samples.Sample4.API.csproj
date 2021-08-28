@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
+    <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj" />
     <ProjectReference Include="..\..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
     <ProjectReference Include="..\OpenSleigh.Samples.Sample4.Common\OpenSleigh.Samples.Sample4.Common.csproj" />
   </ItemGroup>

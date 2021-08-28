@@ -1,12 +1,13 @@
-﻿using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Samples.Sample4.Common;
 using OpenSleigh.Transport.RabbitMQ;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Samples.Sample4.NotificationsService
 {
@@ -39,7 +40,7 @@ namespace OpenSleigh.Samples.Sample4.NotificationsService
                         var sqlConfig = new SqlConfiguration(sqlConnStr);
 
                         cfg.UseRabbitMQTransport(rabbitCfg)
-                            .UseSqlPersistence(sqlConfig);
+                            .UseSqlServerPersistence(sqlConfig);
                         
                         cfg.AddMessageHandlers<ShippingCompleted>(new[] {typeof(Program).Assembly})
                             .UseRabbitMQTransport();

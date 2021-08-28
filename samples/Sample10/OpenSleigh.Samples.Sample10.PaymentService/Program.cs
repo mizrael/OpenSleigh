@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.PostgreSQL;
+using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Samples.Sample10.Common;
 using OpenSleigh.Samples.Sample10.PaymentService.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
