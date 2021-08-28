@@ -1,8 +1,8 @@
 version: '3.4'
 
 services:
-  openSleigh.Sample10.infrastructure.sql:
-    container_name: openSleigh.Sample10.infrastructure.sql    
+  openSleigh.Sample10.infrastructure.postgresql:
+    container_name: openSleigh.Sample10.infrastructure.postgresql    
     image: "postgres:13.4"
     environment:
       POSTGRES_PASSWORD: "Sup3r_p4ssword123"
