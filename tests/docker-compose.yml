@@ -26,6 +26,14 @@ services:
       start_period: 30s
     ports:
       - 27017:27017    
+
+  openSleigh.tests.infrastructure.postgresql:
+    container_name: openSleigh.tests.infrastructure.postgresql    
+    image: "postgres:13.4"
+    environment:
+      POSTGRES_PASSWORD: "Sup3r_p4ssword123"
+    ports:
+      - 5432:5432    
   
   openSleigh.tests.infrastructure.rabbitmq:        
     image: rabbitmq:3-management-alpine

@@ -22,12 +22,13 @@
     </PackageReference>
   </ItemGroup>
 
-  <ItemGroup>
+  <ItemGroup>    
     <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Cosmos.Mongo.Tests\OpenSleigh.Persistence.Cosmos.Mongo.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Cosmos.SQL.Tests\OpenSleigh.Persistence.Cosmos.SQL.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.PostgreSQL.Tests\OpenSleigh.Persistence.PostgreSQL.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.SQLServer.Tests\OpenSleigh.Persistence.SQLServer.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.AzureServiceBus.Tests\OpenSleigh.Transport.AzureServiceBus.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.Kafka.Tests\OpenSleigh.Transport.Kafka.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj" />

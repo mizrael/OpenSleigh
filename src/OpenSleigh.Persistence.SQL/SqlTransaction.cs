@@ -1,11 +1,13 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Storage;
 using OpenSleigh.Core.Persistence;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.Tests")]
 namespace OpenSleigh.Persistence.SQL
-{
+{    
     internal sealed class SqlTransaction : ITransaction, IDisposable
     {
         private IDbContextTransaction _transaction;
