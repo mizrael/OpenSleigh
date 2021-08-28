@@ -11,7 +11,7 @@ using System;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenSleigh.E2ETests.SQLRabbit
+namespace OpenSleigh.E2ETests.SQLServerRabbit
 {
     public class SqlServerSimpleSagaScenario : SimpleSagaScenario, 
         IClassFixture<DbFixture>,

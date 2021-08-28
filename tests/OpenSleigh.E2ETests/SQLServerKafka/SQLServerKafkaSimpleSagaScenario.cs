@@ -8,7 +8,7 @@ using System;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace OpenSleigh.E2ETests.SQLKafka
+namespace OpenSleigh.E2ETests.SQLServerKafka
 {
     public class SQLServerKafkaSimpleSagaScenario : SimpleSagaScenario, 
         IClassFixture<KafkaFixture>,
