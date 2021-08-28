@@ -5,7 +5,7 @@ using NSubstitute;
 using OpenSleigh.Core.Persistence;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Unit
+namespace OpenSleigh.Persistence.SQL.Tests.Unit
 {
     public class SqlTransactionManagerTests
     {

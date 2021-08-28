@@ -1,15 +1,15 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
-using OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures;
+using OpenSleigh.Persistence.PostgreSQL;
+using OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures;
+using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.SQLServer;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.PostgreSQLRabbit
@@ -69,7 +69,7 @@ namespace OpenSleigh.E2ETests.PostgreSQLRabbit
                     new QueueReferences(_topics[typeof(ChildSagaCompleted)], _topics[typeof(ChildSagaCompleted)], nameof(ChildSagaCompleted),
                                         _topics[typeof(ChildSagaCompleted)] + ".dead", _topics[typeof(ChildSagaCompleted)] + ".dead"));
             })
-                .UseSqlServerPersistence(sqlCfg);
+                .UsePostgreSqlPersistence(sqlCfg);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>

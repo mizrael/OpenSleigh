@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using OpenSleigh.Persistence.SQL;
 
-namespace OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Fixtures
+namespace OpenSleigh.Persistence.SQLServer.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
@@ -28,7 +29,7 @@ namespace OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Fixtures
             var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
             
             var options = new DbContextOptionsBuilder<SagaDbContext>()
-                .UseNpgsql(connectionString)
+                .UseSqlServer(connectionString)
                 .EnableSensitiveDataLogging()
                 .Options;
             var dbContext = new SagaDbContext(options);

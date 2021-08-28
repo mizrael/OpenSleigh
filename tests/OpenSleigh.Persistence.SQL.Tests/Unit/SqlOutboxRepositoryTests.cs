@@ -8,7 +8,7 @@ using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Unit
+namespace OpenSleigh.Persistence.SQL.Tests.Unit
 {
     public class SqlOutboxRepositoryTests
     {

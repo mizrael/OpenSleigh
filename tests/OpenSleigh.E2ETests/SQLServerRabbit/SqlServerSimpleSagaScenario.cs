@@ -2,13 +2,13 @@
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures;
+using OpenSleigh.Persistence.SQLServer;
+using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.SQL.SQLServer;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.SQLRabbit

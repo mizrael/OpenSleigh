@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using OpenSleigh.Persistence.SQL;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures
+namespace OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures
 {
     public class DbFixture : IDisposable
     {
@@ -18,7 +19,7 @@ namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures
                 .AddEnvironmentVariables()
                 .Build();
 
-            _connStrTemplate = configuration.GetConnectionString("sql");
+            _connStrTemplate = configuration.GetConnectionString("postgre");
             if (string.IsNullOrWhiteSpace(_connStrTemplate))
                 throw new ArgumentException("invalid connection string");
         }
@@ -28,7 +29,7 @@ namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures
             var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
             
             var options = new DbContextOptionsBuilder<SagaDbContext>()
-                .UseSqlServer(connectionString)
+                .UseNpgsql(connectionString)
                 .EnableSensitiveDataLogging()
                 .Options;
             var dbContext = new SagaDbContext(options);

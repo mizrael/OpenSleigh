@@ -1,7 +1,7 @@
 ﻿using System;
 using OpenSleigh.Core;
 
-namespace OpenSleigh.Persistence.SQL.PostgreSQL.Tests
+namespace OpenSleigh.Persistence.PostgreSQL.Tests
 {
     public class DummyState : SagaState
     {

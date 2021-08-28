@@ -1,16 +1,11 @@
 ﻿using System;
-using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using OpenSleigh.Core.Persistence;
 
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.SQLServer")]
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.PostgreSQL")]
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.SQLServer.Tests")]
-[assembly: InternalsVisibleTo("OpenSleigh.Persistence.SQL.PostgreSQL.Tests")]
 namespace OpenSleigh.Persistence.SQL
 {
-    internal class SqlTransactionManager : ITransactionManager
+    public class SqlTransactionManager : ITransactionManager
     {
         private readonly ISagaDbContext _dbContext;
 

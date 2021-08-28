@@ -6,10 +6,11 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Fixtures;
+using OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures;
+using OpenSleigh.Persistence.SQL;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Integration
+namespace OpenSleigh.Persistence.PostgreSQL.Tests.Integration
 {
     [Category("Integration")]
     [Trait("Category", "Integration")]

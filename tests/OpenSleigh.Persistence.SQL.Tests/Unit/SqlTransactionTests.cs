@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using NSubstitute;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Unit
+namespace OpenSleigh.Persistence.SQL.Tests.Unit
 {
     public class SqlTransactionTests
     {

@@ -1,16 +1,16 @@
-﻿using System;
-using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
+using OpenSleigh.Persistence.PostgreSQL;
+using OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.PostgreSQL;
-using OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
+using System;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.PostgreSQLRabbit

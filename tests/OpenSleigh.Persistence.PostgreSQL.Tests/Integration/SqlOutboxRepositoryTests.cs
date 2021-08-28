@@ -6,10 +6,11 @@ using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures;
+using OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures;
+using OpenSleigh.Persistence.SQL;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Integration
+namespace OpenSleigh.Persistence.PostgreSQL.Tests.Integration
 {
 
     [Category("Integration")]

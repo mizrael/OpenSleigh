@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using OpenSleigh.Core.Utils;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Unit
+namespace OpenSleigh.Persistence.SQL.Tests.Unit
 {
     public class SqlSagaStateRepositoryTests
     {

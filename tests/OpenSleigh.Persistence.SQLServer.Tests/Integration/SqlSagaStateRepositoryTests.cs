@@ -6,10 +6,11 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Utils;
-using OpenSleigh.Persistence.SQL.SQLServer.Tests.Fixtures;
+using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
 using Xunit;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer.Tests.Integration
+namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
 {
     [Category("Integration")]
     [Trait("Category", "Integration")]

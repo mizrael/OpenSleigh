@@ -3,8 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Persistence;
+using OpenSleigh.Persistence.SQL;
 
-namespace OpenSleigh.Persistence.SQL.SQLServer
+namespace OpenSleigh.Persistence.SQLServer
 {
     [ExcludeFromCodeCoverage]
     public static class SqlBusConfiguratorExtensions

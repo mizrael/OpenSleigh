@@ -33,8 +33,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQL.PostgreSQL\OpenSleigh.Persistence.SQL.PostgreSQL.csproj"/>
-        <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj"/>
+        <ProjectReference Include="..\..\src\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj"/>        
         <ProjectReference Include="..\OpenSleigh.Core.Tests\OpenSleigh.Core.Tests.csproj"/>
     </ItemGroup>
 

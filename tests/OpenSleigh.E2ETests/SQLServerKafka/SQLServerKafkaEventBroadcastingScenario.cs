@@ -1,25 +1,25 @@
-﻿using System;
-using System.Threading.Tasks;
-using OpenSleigh.Core.DependencyInjection;
+﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.SQLServer;
+using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Transport.Kafka;
 using OpenSleigh.Transport.Kafka.Tests.Fixtures;
+using System;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.SQLServerKafka
 {
     public class SQLServerKafkaEventBroadcastingScenario : EventBroadcastingScenario,
         IClassFixture<KafkaFixture>,
-        IClassFixture<Persistence.SQL.SQLServer.Tests.Fixtures.DbFixture>,
+        IClassFixture<Persistence.SQLServer.Tests.Fixtures.DbFixture>,
         IAsyncLifetime
     {
         private readonly KafkaFixture _kafkaFixture;
-        private readonly Persistence.SQL.SQLServer.Tests.Fixtures.DbFixture _dbFixture;
+        private readonly Persistence.SQLServer.Tests.Fixtures.DbFixture _dbFixture;
         private readonly string _topicPrefix = $"KafkaEventBroadcastingScenario.{Guid.NewGuid()}";
         
-        public SQLServerKafkaEventBroadcastingScenario(KafkaFixture kafkaFixture, Persistence.SQL.SQLServer.Tests.Fixtures.DbFixture dbFixture)
+        public SQLServerKafkaEventBroadcastingScenario(KafkaFixture kafkaFixture, Persistence.SQLServer.Tests.Fixtures.DbFixture dbFixture)
         {
             _kafkaFixture = kafkaFixture;
             _dbFixture = dbFixture;

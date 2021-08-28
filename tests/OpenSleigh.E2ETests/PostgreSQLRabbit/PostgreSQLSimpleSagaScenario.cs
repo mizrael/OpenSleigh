@@ -1,14 +1,14 @@
 ﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
+using OpenSleigh.Persistence.PostgreSQL;
+using OpenSleigh.Persistence.PostgreSQL.Tests.Fixtures;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Threading.Tasks;
-using OpenSleigh.Persistence.SQL.PostgreSQL.Tests.Fixtures;
-using OpenSleigh.Persistence.SQL.SQLServer;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.PostgreSQLRabbit
@@ -42,7 +42,7 @@ namespace OpenSleigh.E2ETests.PostgreSQLRabbit
                                     $"{_exchangeName}.dead",
                                     $"{_exchangeName}.dead"));
             })
-                .UseSqlServerPersistence(sqlCfg);
+                .UsePostgreSqlPersistence(sqlCfg);
         }
 
         protected override void ConfigureSagaTransport<TS, TD>(ISagaConfigurator<TS, TD> cfg) =>
