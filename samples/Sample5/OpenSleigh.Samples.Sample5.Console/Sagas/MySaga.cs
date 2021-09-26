@@ -23,7 +23,7 @@ namespace OpenSleigh.Samples.Sample5.Console.Sagas
         private readonly ILogger<MySaga> _logger;
         private static int _maxFailuresCount = 3;
         
-        public MySaga(ILogger<MySaga> logger)
+        public MySaga(ILogger<MySaga> logger, MySagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
