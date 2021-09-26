@@ -16,7 +16,7 @@ namespace OpenSleigh.Core
         [JsonProperty] //TODO: can we use an HashSet here ?
         private readonly Dictionary<Guid, IMessage> _processedMessages = new();
 
-        [JsonProperty] private bool _isComplete;
+        [JsonProperty] private bool _isCompleted;
         
         protected SagaState(Guid id)
         {
@@ -24,6 +24,8 @@ namespace OpenSleigh.Core
         }
 
         public Guid Id { get; }
+
+        public IReadOnlyCollection<IMessage> Outbox => _outbox;
 
         public void SetAsProcessed<TM>(TM message) where TM : IMessage
         {
@@ -42,9 +44,9 @@ namespace OpenSleigh.Core
             return _processedMessages.ContainsKey(message.Id);
         }
 
-        public bool IsCompleted() => _isComplete;
+        public bool IsCompleted() => _isCompleted;
 
-        public void MarkAsCompleted() => _isComplete = true;
+        public void MarkAsCompleted() => _isCompleted = true;
 
         internal void AddToOutbox<TM>(TM message) where TM : IMessage
         {
