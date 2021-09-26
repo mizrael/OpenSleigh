@@ -32,7 +32,7 @@ namespace OpenSleigh.Samples.Sample8.Server.Sagas
         private readonly IHubContext<SagaHub> _hubContext;
         private readonly ILogger<StepsSaga> _logger;
 
-        public StepsSaga(ILogger<StepsSaga> logger, IHubContext<SagaHub> hubContext)
+        public StepsSaga(ILogger<StepsSaga> logger, IHubContext<SagaHub> hubContext, StepsSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _hubContext = hubContext ?? throw new ArgumentNullException(nameof(hubContext));
