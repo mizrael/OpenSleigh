@@ -18,7 +18,7 @@ namespace OpenSleigh.Samples.Sample10.InventoryService.Sagas
     {
         private readonly ILogger<InventoryCheckSaga> _logger;
 
-        public InventoryCheckSaga(ILogger<InventoryCheckSaga> logger)
+        public InventoryCheckSaga(ILogger<InventoryCheckSaga> logger, InventoryCheckSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
