@@ -24,7 +24,7 @@ namespace OpenSleigh.Samples.Sample3.Worker.Sagas
     {
         private readonly ILogger<SimpleSaga> _logger;
         
-        public SimpleSaga(ILogger<SimpleSaga> logger)
+        public SimpleSaga(ILogger<SimpleSaga> logger, SimpleSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }

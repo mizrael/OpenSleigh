@@ -27,7 +27,7 @@ namespace OpenSleigh.Samples.Sample3.Worker.Sagas
 
         private readonly Random _random = new Random();
 
-        public ChildSaga(ILogger<ChildSaga> logger, IMessageBus bus)
+        public ChildSaga(ILogger<ChildSaga> logger, ChildSagaState state) : base(state) 
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
