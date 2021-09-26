@@ -32,6 +32,10 @@ namespace OpenSleigh.Core.Tests.Sagas
         IStartedBy<StartDummySaga>,
         IHandleMessage<DummySagaStarted>
     {
+        public DummySaga(DummySagaState state) : base(state)
+        {
+        }
+
         public virtual Task HandleAsync(IMessageContext<StartDummySaga> context, CancellationToken cancellationToken = default)
         {
             return Task.CompletedTask;

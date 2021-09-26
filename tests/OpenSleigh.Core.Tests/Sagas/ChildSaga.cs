@@ -21,6 +21,9 @@ namespace OpenSleigh.Core.Tests.Sagas
         IStartedBy<StartChildSaga>,
         IHandleMessage<ProcessChildSaga>
     {
+        public ChildSaga(ChildSagaState state) : base(state)
+        {
+        }
 
         public async Task HandleAsync(IMessageContext<StartChildSaga> context, CancellationToken cancellationToken = default)
         {

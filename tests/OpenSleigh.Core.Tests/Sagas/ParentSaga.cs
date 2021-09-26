@@ -27,7 +27,7 @@ namespace OpenSleigh.Core.Tests.Sagas
         private readonly Action<IMessageContext<ParentSagaCompleted>> _onCompleted;        
         private readonly ILogger<ParentSaga> _logger;
         
-        public ParentSaga(Action<IMessageContext<ParentSagaCompleted>> onCompleted, ILogger<ParentSaga> logger)
+        public ParentSaga(Action<IMessageContext<ParentSagaCompleted>> onCompleted, ILogger<ParentSaga> logger, ParentSagaState state) : base(state)
         {
             _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
             _logger = logger;

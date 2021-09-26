@@ -8,11 +8,11 @@ namespace OpenSleigh.Core
     public abstract class Saga<TD> : ISaga
         where TD : SagaState
     {
-        public TD State { get; private set; }
-        
-        internal void SetState(TD state)
+        public TD State { get; }
+
+        protected Saga(TD state)
         {
-            this.State = state ?? throw new ArgumentNullException(nameof(state));
+            State = state ?? throw new ArgumentNullException(nameof(state));
         }
 
         protected void Publish<TM>(TM message) where TM : IMessage

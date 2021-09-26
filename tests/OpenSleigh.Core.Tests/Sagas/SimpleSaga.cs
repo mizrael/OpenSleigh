@@ -23,7 +23,7 @@ namespace OpenSleigh.Core.Tests.Sagas
     {
         private readonly Action<IMessageContext<StartSimpleSaga>> _onStart;
 
-        public SimpleSaga(Action<IMessageContext<StartSimpleSaga>> onStart)
+        public SimpleSaga(Action<IMessageContext<StartSimpleSaga>> onStart, SimpleSagaState state) :  base(state)
         {
             _onStart = onStart;
         }

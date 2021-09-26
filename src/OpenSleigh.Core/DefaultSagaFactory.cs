@@ -18,10 +18,8 @@ namespace OpenSleigh.Core
         {
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
-            
-            var saga = _serviceProvider.GetRequiredService<TS>();
 
-            saga.SetState(state);
+            var saga = ActivatorUtilities.CreateInstance<TS>(_serviceProvider, state);
             
             return saga;
         }

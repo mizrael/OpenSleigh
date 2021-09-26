@@ -28,7 +28,7 @@ namespace OpenSleigh.Core.Tests.Unit
         public void Create_should_create_valid_instance()
         {
             var state = new DummySagaState(Guid.NewGuid());
-            var expectedSaga = new DummySaga();
+            var expectedSaga = new DummySaga(state);
             
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
             sp.GetService(typeof(DummySaga))
