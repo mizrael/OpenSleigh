@@ -22,7 +22,7 @@ namespace OpenSleigh.Samples.Sample6.Console.Sagas
     {
         private readonly ILogger<MySaga> _logger;
         
-        public MySaga(ILogger<MySaga> logger)
+        public MySaga(ILogger<MySaga> logger, MySagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }

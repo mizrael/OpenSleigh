@@ -18,7 +18,7 @@ namespace OpenSleigh.Samples.Sample4.PaymentService.Sagas
     {
         private readonly ILogger<CreditCheckSaga> _logger;
 
-        public CreditCheckSaga(ILogger<CreditCheckSaga> logger)
+        public CreditCheckSaga(ILogger<CreditCheckSaga> logger, CreditCheckSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }

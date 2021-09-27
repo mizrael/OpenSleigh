@@ -51,11 +51,13 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
         [Fact]
         public void Resolve_should_not_return_sagas()
         {
+            var state = new DummySagaState(Guid.NewGuid());
+
             var expectedHandler = NSubstitute.Substitute.For<IHandleMessage<StartDummySaga>>();
             var messageHandlers = new[]
             {
                 expectedHandler,
-                NSubstitute.Substitute.For<DummySaga>(),
+                NSubstitute.Substitute.ForPartsOf<DummySaga>(state),
             };
 
             var sp = NSubstitute.Substitute.For<IServiceProvider>();

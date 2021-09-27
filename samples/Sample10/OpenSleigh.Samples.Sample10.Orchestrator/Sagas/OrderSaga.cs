@@ -25,7 +25,7 @@ namespace OpenSleigh.Samples.Sample10.Orchestrator.Sagas
     {
         private readonly ILogger<OrderSaga> _logger;
 
-        public OrderSaga(ILogger<OrderSaga> logger)
+        public OrderSaga(ILogger<OrderSaga> logger, OrderSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }

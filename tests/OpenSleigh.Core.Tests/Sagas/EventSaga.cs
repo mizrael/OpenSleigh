@@ -19,7 +19,7 @@ namespace OpenSleigh.Core.Tests.Sagas
     {
         private readonly Action<IMessageContext<DummyEvent>> _onStart;
 
-        public EventSaga1(Action<IMessageContext<DummyEvent>> onStart)
+        public EventSaga1(Action<IMessageContext<DummyEvent>> onStart, EventSagaState1 state) : base(state)
         {
             _onStart = onStart;
         }
@@ -43,7 +43,7 @@ namespace OpenSleigh.Core.Tests.Sagas
     {
         private readonly Action<IMessageContext<DummyEvent>> _onStart;
 
-        public EventSaga2(Action<IMessageContext<DummyEvent>> onStart)
+        public EventSaga2(Action<IMessageContext<DummyEvent>> onStart, EventSagaState2 state) : base(state)    
         {
             _onStart = onStart;
         }

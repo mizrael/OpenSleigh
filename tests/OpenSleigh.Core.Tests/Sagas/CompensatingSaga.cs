@@ -19,7 +19,7 @@ namespace OpenSleigh.Core.Tests.Sagas
         public Guid Baz => this.CorrelationId;
     }
 
-    public class CompensatingSaga : 
+    public class CompensatingSaga :
         Saga<CompensatingSagaState>
         , IStartedBy<StartCompensatingSaga>
         , ICompensateMessage<StartCompensatingSaga>
@@ -28,7 +28,8 @@ namespace OpenSleigh.Core.Tests.Sagas
         private readonly Action<ICompensationContext<StartCompensatingSaga>> _onCompensate;
 
         public CompensatingSaga(Action<IMessageContext<StartCompensatingSaga>> onStart,
-                                Action<ICompensationContext<StartCompensatingSaga>> onCompensate)
+                                Action<ICompensationContext<StartCompensatingSaga>> onCompensate,
+                                CompensatingSagaState state): base(state)
         {
             _onStart = onStart;
             _onCompensate = onCompensate;

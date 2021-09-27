@@ -112,7 +112,8 @@ namespace OpenSleigh.Core.DependencyInjection
 
             if (hasMessages)
             {
-                Services.AddTransient<TS>()
+                Services.AddTransient<TD>(_ => default) // this will allow DI container validation at startup
+                        .AddTransient<TS>()
                         .AddTransient<ISagaPolicyFactory<TS>, DefaultSagaPolicyFactory<TS>>()
                         .AddTransient<ISagaFactory<TS, TD>, DefaultSagaFactory<TS, TD>>()
                         .AddTransient<ISagaStateService<TS, TD>, SagaStateService<TS, TD>>()

@@ -8,19 +8,17 @@ namespace OpenSleigh.Core.Tests.Unit
     public class SagaTests
     {
         [Fact]
-        public void SetState_should_throw_when_input_null()
+        public void ctor_should_throw_when_state_null()
         {
-            var sut = new DummySaga();
-            Assert.Throws<ArgumentNullException>(() => sut.SetState(null));
+            var ex = Assert.Throws<ArgumentNullException>(() => new DummySaga(null));
+            ex.ParamName.Should().Be("state");
         }
 
         [Fact]
         public void SetState_should_set_state()
         {
-            var sut = new DummySaga();
-
             var state = new DummySagaState(Guid.NewGuid());
-            sut.SetState(state);
+            var sut = new DummySaga(state);
             sut.State.Should().Be(state);
         }
 

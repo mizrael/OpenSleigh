@@ -12,7 +12,6 @@ namespace OpenSleigh.Core.Messaging
         }
 
         public TM Message { get; }
-        public SystemInfo SystemInfo { get; }
-        
+        public SystemInfo SystemInfo { get; }        
     }
 }

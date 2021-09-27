@@ -18,7 +18,7 @@ namespace OpenSleigh.Samples.Sample4.ShippingService.Sagas
     {
         private readonly ILogger<ShippingSaga> _logger;
 
-        public ShippingSaga(ILogger<ShippingSaga> logger)
+        public ShippingSaga(ILogger<ShippingSaga> logger, ShippingSagaState state) : base(state)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
