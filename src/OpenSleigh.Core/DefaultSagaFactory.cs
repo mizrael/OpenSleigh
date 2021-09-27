@@ -19,6 +19,7 @@ namespace OpenSleigh.Core
             if (state == null)
                 throw new ArgumentNullException(nameof(state));
 
+            //TODO: benchmark
             var saga = ActivatorUtilities.CreateInstance<TS>(_serviceProvider, state);
             
             return saga;
