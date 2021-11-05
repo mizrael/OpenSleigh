@@ -27,7 +27,7 @@ namespace OpenSleigh.Samples.Sample3.API
             services.AddControllers();
             services.AddSwaggerGen(c =>
             {
-                c.SwaggerDoc("v1", new OpenApiInfo { Title = "OpenSleigh.Samples.Sample2.API", Version = "v1" });
+                c.SwaggerDoc("v1", new OpenApiInfo { Title = "OpenSleigh.Samples.Sample3.API", Version = "v1" });
             });
             
             services.AddOpenSleigh(cfg =>

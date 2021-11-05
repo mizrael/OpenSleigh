@@ -74,11 +74,18 @@ namespace OpenSleigh.Core
             catch(Exception ex)
             {
                 await transaction.RollbackAsync(cancellationToken);
-                
-                if (saga is not ICompensateMessage<TM> compensatingHandler)
-                    throw;
 
-                await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, state, lockId, cancellationToken);
+                if (saga is ICompensateMessage<TM> compensatingHandler)
+                {
+                    await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, state, lockId, cancellationToken);
+                    return;
+                }
+
+                // if it's not a compensating handler, we save the state and release the lock
+                // so that the message can be potentially picked up by another consumer.
+                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+
+                throw;
             }
         }
 
