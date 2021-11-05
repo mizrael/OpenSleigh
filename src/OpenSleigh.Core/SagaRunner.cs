@@ -75,10 +75,12 @@ namespace OpenSleigh.Core
             {
                 await transaction.RollbackAsync(cancellationToken);
                 
-                if (saga is not ICompensateMessage<TM> compensatingHandler)
-                    throw;
+                if (saga is ICompensateMessage<TM> compensatingHandler)
+                    await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, state, lockId, cancellationToken);
+                else
+                    await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
 
-                await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, state, lockId, cancellationToken);
+                throw;
             }
         }
 
