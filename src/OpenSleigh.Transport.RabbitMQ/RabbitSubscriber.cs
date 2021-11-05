@@ -39,7 +39,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             _channel = _connection.CreateChannel();
             
-            _logger.LogInformation($"initializing queue '{_queueReferences.DeadLetterQueue}' on exchange '{_queueReferences.DeadLetterExchangeName}'...");
+            _logger.LogInformation($"initializing dead-letter queue '{_queueReferences.DeadLetterQueue}' on exchange '{_queueReferences.DeadLetterExchangeName}'...");
 
             _channel.ExchangeDeclare(exchange: _queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.DeadLetterQueue,
@@ -47,7 +47,10 @@ namespace OpenSleigh.Transport.RabbitMQ
                 exclusive: false,
                 autoDelete: false,
                 arguments: null);
-            _channel.QueueBind(_queueReferences.DeadLetterQueue, _queueReferences.DeadLetterExchangeName, routingKey: string.Empty, arguments: null);
+            _channel.QueueBind(_queueReferences.DeadLetterQueue, 
+                              _queueReferences.DeadLetterExchangeName, 
+                              routingKey: _queueReferences.DeadLetterQueue, 
+                              arguments: null);
 
             _logger.LogInformation($"initializing queue '{_queueReferences.QueueName}' on exchange '{_queueReferences.ExchangeName}'...");
             
@@ -59,7 +62,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 arguments: new Dictionary<string, object>()
                 {
                     {Headers.XDeadLetterExchange, _queueReferences.DeadLetterExchangeName},
-                    {Headers.XDeadLetterRoutingKey, _queueReferences.ExchangeName}
+                    {Headers.XDeadLetterRoutingKey, _queueReferences.DeadLetterQueue}
                 });
             _channel.QueueBind(queue: _queueReferences.QueueName,
                 exchange: _queueReferences.ExchangeName, 
