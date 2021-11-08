@@ -56,9 +56,9 @@ namespace OpenSleigh.Transport.RabbitMQ
             
             _channel.ExchangeDeclare(exchange: _queueReferences.ExchangeName, type: ExchangeType.Topic);
             _channel.QueueDeclare(queue: _queueReferences.QueueName,
-                durable: false,
+                durable: true,
                 exclusive: false,
-                autoDelete: true,
+                autoDelete: false,
                 arguments: new Dictionary<string, object>()
                 {
                     {Headers.XDeadLetterExchange, _queueReferences.DeadLetterExchangeName},
