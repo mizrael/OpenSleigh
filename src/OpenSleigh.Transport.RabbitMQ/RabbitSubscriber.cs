@@ -139,10 +139,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
                 _logger.LogWarning(ex, errorMsg, message.Id, _queueReferences.ExchangeName, ex.Message);
 
-                if (eventArgs.Redelivered)
-                    channel.BasicReject(eventArgs.DeliveryTag, requeue: false);
-                else
-                    channel.BasicNack(eventArgs.DeliveryTag, multiple: false, requeue: true);
+                channel.BasicReject(eventArgs.DeliveryTag, requeue: false);
             }
         }
 
