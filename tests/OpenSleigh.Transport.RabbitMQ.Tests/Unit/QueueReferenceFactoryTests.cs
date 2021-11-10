@@ -32,6 +32,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.RoutingKey.Should().Be("dummymessage.a");
             result.DeadLetterExchangeName.Should().Be("dummymessage.b");
             result.DeadLetterQueue.Should().Be("dummymessage.b.c");
+            result.RetryExchangeName.Should().Be("dummymessage.retry");
+            result.RetryQueueName.Should().Be("dummymessage.a.retry");
         }
 
         [Fact]
@@ -59,6 +61,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.RoutingKey.Should().Be("dummy.r");
             result.DeadLetterExchangeName.Should().Be("dummy.b");
             result.DeadLetterQueue.Should().Be("dummy.b.c");
+            result.RetryExchangeName.Should().Be("dummy.retry");
+            result.RetryQueueName.Should().Be("dummy.a.retry");
         }
 
         [Fact]
@@ -75,6 +79,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.RoutingKey.Should().Be("dummymessage.workers");
             result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
             result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
+            result.RetryExchangeName.Should().Be("dummymessage.retry");
+            result.RetryQueueName.Should().Be("dummymessage.workers.retry");
         }
 
         [Fact]
@@ -90,6 +96,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.RoutingKey.Should().Be("dummymessage.workers");
             result.DeadLetterExchangeName.Should().Be("dummymessage.dead");
             result.DeadLetterQueue.Should().Be("dummymessage.dead.workers");
+            result.RetryExchangeName.Should().Be("dummymessage.retry");
+            result.RetryQueueName.Should().Be("dummymessage.workers.retry");
         }
         
         [Fact]
@@ -105,6 +113,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             result.RoutingKey.Should().Be("dummyevent");
             result.DeadLetterExchangeName.Should().Be("dummyevent.dead");
             result.DeadLetterQueue.Should().Be("dummyevent.dead.test.workers");
+            result.RetryExchangeName.Should().Be("dummyevent.retry");
+            result.RetryQueueName.Should().Be("dummyevent.test.workers.retry");
         }
 
         [Fact]

@@ -1,7 +1,7 @@
 using System;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
+namespace OpenSleigh.Transport.RabbitMQ.Tests
 {
     public record DummyMessage(Guid Id, Guid CorrelationId) : ICommand
     {
