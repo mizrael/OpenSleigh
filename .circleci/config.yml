@@ -104,7 +104,7 @@ jobs:
           name: Build and test          
           command: |            
             dotnet build 
-            dotnet test --no-build --filter "Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
+            dotnet test --no-build --filter "FullyQualifiedName\!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
 
       - run:
           name: Stop Sonarcloud 
