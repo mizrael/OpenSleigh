@@ -43,7 +43,7 @@ jobs:
       - run:
           name: Integration tests
           command: |            
-            dotnet test --filter "Category=Integration"
+            dotnet test --filter "FullyQualifiedName\!~Cosmos&Category=Integration"
 
       #- run: # skipping E2E tests for now
       #    name: E2E tests
