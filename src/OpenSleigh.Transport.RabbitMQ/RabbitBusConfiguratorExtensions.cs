@@ -8,7 +8,30 @@ using RabbitMQ.Client;
 namespace OpenSleigh.Transport.RabbitMQ
 {
     [ExcludeFromCodeCoverage]
-    public record RabbitConfiguration(string HostName, string UserName, string Password);
+    public record RabbitConfiguration
+    {
+        public RabbitConfiguration(string hostName, string userName, string password)
+            : this(hostName, userName, password, TimeSpan.FromSeconds(30))
+        {
+        }
+
+        public RabbitConfiguration(string hostName, string userName, string password, TimeSpan retryDelay)
+        {
+            HostName = hostName;
+            UserName = userName;
+            Password = password;
+            RetryDelay = retryDelay;
+        }
+
+        public string HostName { get; }
+        public string UserName { get; }
+        public string Password { get; }
+
+        /// <summary>
+        /// gets the delay for message re-enqueuing.
+        /// </summary>
+        public TimeSpan RetryDelay { get; }
+    }
 
     [ExcludeFromCodeCoverage]
     public static class RabbitBusConfiguratorExtensions

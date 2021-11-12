@@ -11,5 +11,8 @@
         public QueueReferences(string ExchangeName, string QueueName,
                                 string DeadLetterExchangeName, string DeadLetterQueue) : this(ExchangeName, QueueName: QueueName, RoutingKey: QueueName,
                                                                                               DeadLetterExchangeName, DeadLetterQueue){}
+
+        public string RetryExchangeName => this.ExchangeName + ".retry";
+        public string RetryQueueName => this.QueueName + ".retry";
     }
 }
