@@ -41,26 +41,10 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             return connectionFactory.CreateConnection();
         }
 
-        public PublisherChannelContext CreatePublisherContext(IModel channel)
+        public QueueReferences CreateQueueReference(string queueName)
         {
-            var id = System.Guid.NewGuid().ToString();
-            _queues.Add(id);
-
-            var pool = Substitute.For<IPublisherChannelContextPool>();
-            var queueRef = new QueueReferences(id, id, $"{id}.dead", $"{id}.dead");
-
-            channel.ExchangeDeclare(queueRef.ExchangeName, ExchangeType.Topic, false, true);
-            channel.QueueDeclare(queue: queueRef.QueueName,
-                durable: false,
-                exclusive: false,
-                autoDelete: true,
-                arguments: null);
-            channel.QueueBind(queueRef.QueueName,
-                              queueRef.ExchangeName,
-                              routingKey: queueRef.RoutingKey,
-                              arguments: null);
-
-            return new PublisherChannelContext(channel, queueRef, pool);
+            _queues.Add(queueName);
+            return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
         }
 
         public Task InitializeAsync() => Task.CompletedTask;

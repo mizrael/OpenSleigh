@@ -65,7 +65,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                 autoDelete: false,
                 arguments: new Dictionary<string, object>()
                 {
-                    {Headers.XMessageTTL, _rabbitCfg.RetryDelay.TotalMilliseconds },
+                    {Headers.XMessageTTL, (int)_rabbitCfg.RetryDelay.TotalMilliseconds },
                     {Headers.XDeadLetterExchange, _queueReferences.ExchangeName},
                     {Headers.XDeadLetterRoutingKey, _queueReferences.QueueName}
                 });

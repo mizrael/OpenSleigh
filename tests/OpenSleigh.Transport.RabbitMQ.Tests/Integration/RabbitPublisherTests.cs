@@ -1,16 +1,16 @@
-﻿using Microsoft.Extensions.Logging;
-using OpenSleigh.Core.Utils;
-using System.ComponentModel;
-using System.Threading.Tasks;
-using System.Text;
-using Xunit;
+﻿using FluentAssertions;
+using Microsoft.Extensions.Logging;
 using NSubstitute;
+using OpenSleigh.Core.Utils;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using FluentAssertions;
-using System.Threading;
 using System;
+using System.ComponentModel;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 {
@@ -36,7 +36,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             using var connection = _fixture.Connect();
             using var channel = connection.CreateModel();
 
-            var channelContext = _fixture.CreatePublisherContext(channel);
+            var channelContext = CreatePublisherContext(channel);
             bool received = false;
             var consumer = new AsyncEventingBasicConsumer(channel);
             consumer.Received += async (_, evt) =>
@@ -67,5 +67,28 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 
             received.Should().BeTrue(); 
         }
+
+        private PublisherChannelContext CreatePublisherContext(IModel channel)
+        {
+            var queueName = System.Guid.NewGuid().ToString();         
+
+            var pool = Substitute.For<IPublisherChannelContextPool>();
+            var queueRef = _fixture.CreateQueueReference(queueName);
+
+            channel.ExchangeDeclare(queueRef.ExchangeName, ExchangeType.Topic, false, true);
+            channel.QueueDeclare(queue: queueRef.QueueName,
+                durable: false,
+                exclusive: false,
+                autoDelete: true,
+                arguments: null);
+            channel.QueueBind(queueRef.QueueName,
+                              queueRef.ExchangeName,
+                              routingKey: queueRef.RoutingKey,
+                              arguments: null);
+
+            return new PublisherChannelContext(channel, queueRef, pool);
+        }
+
+
     }
 }
