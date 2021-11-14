@@ -64,6 +64,8 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             busConfigurator.Services.AddSingleton<IBusConnection, RabbitPersistentConnection>();
 
+            busConfigurator.Services.AddSingleton(config);
+
             builderFunc?.Invoke(new DefaultRabbitBusConfigurationBuilder(busConfigurator));
             
             return busConfigurator;
