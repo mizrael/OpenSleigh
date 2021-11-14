@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:5.0.101-focal-amd64
+      - image: mcr.microsoft.com/dotnet/sdk:6.0
       - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
@@ -52,7 +52,7 @@ jobs:
 
   sonarscan:
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:5.0.101-focal-amd64
+      - image: mcr.microsoft.com/dotnet/sdk:6.0
       - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
