@@ -9,7 +9,7 @@ using OpenSleigh.Samples.Sample8.Server.Hubs;
 
 namespace OpenSleigh.Samples.Sample8.Server.Sagas
 {
-    public class StepsSagaState : SagaState
+    public record StepsSagaState : SagaState
     {
         public StepsSagaState(Guid id) : base(id)
         {
