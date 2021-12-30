@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <PackageVersion>0.3.0</PackageVersion>
+    <PackageVersion>1.0.0</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Persistence.Cosmos.SQL</Product>
