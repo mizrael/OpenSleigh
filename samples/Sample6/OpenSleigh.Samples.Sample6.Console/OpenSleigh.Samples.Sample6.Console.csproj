@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net5.0</TargetFramework>
+   <TargetFramework>net6.0</TargetFramework>
     <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     <UserSecretsId>74ac361d-8109-4107-bffc-5bfe2229bb81</UserSecretsId>
   </PropertyGroup>
