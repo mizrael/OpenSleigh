@@ -1,6 +1,7 @@
 name: NuGet Generation
 
 on:
+  workflow_dispatch:
   release:
     types: 
       - prereleased
