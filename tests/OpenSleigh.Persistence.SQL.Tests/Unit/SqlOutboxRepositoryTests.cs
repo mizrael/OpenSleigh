@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Utils;
 using Xunit;
@@ -18,9 +19,11 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
             var options = SqlOutboxRepositoryOptions.Default;
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, serializer, options));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null, options));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, null));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, serializer, options, typeResolver));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null, options, typeResolver));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, null, typeResolver));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, options, null));
         }
 
         [Fact]
@@ -28,7 +31,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.LockAsync(null));
         }
 
@@ -37,7 +41,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
 
@@ -46,7 +51,8 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
 
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
         }
@@ -64,8 +70,10 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
             dbContext.OutboxMessages.ThrowsForAnyArgs(expectedException);
 
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default);
+
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+
+            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
             var ex = await Assert.ThrowsAsync<Exception>(async () => await sut.CleanProcessedAsync());
             ex.Should().Be(expectedException);
 

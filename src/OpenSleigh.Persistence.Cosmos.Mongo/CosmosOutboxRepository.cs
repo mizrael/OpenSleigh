@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using MongoDB.Driver;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
@@ -21,19 +22,24 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
         private readonly IDbContext _dbContext;
         private readonly IPersistenceSerializer _serializer;
         private readonly CosmosOutboxRepositoryOptions _options;
-        
+        private readonly ITypeResolver _typeResolver;
+
         private enum MessageStatuses
         {
             Pending,
             Processed
         }
 
-        public CosmosOutboxRepository(IDbContext dbContext, IPersistenceSerializer serializer, 
-            CosmosOutboxRepositoryOptions options)
+        public CosmosOutboxRepository(
+            IDbContext dbContext, 
+            IPersistenceSerializer serializer, 
+            CosmosOutboxRepositoryOptions options, 
+            ITypeResolver typeResolver)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
         public async Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default)
@@ -51,7 +57,8 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var messageType = _typeResolver.Resolve(entity.Type);
+                var message = _serializer.Deserialize(entity.Data, messageType) as IMessage;
                 messages.Add(message);
             }
 

@@ -3,7 +3,7 @@ using System;
 
 namespace OpenSleigh.Persistence.InMemory.Tests.Unit
 {
-    public class DummyState : SagaState
+    public record DummyState : SagaState
     {
         public DummyState(Guid id, string foo, int bar) : base(id)
         {
@@ -17,7 +17,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
         public static DummyState New() => new DummyState(Guid.NewGuid(), "lorem ipsum", 42);
     }
 
-    public class DummyState2 : SagaState
+    public record DummyState2 : SagaState
     {
         public DummyState2(Guid id) : base(id) { }
 

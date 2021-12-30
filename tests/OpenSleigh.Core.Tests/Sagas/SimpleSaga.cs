@@ -5,7 +5,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {
-    public class SimpleSagaState : SagaState
+    public record SimpleSagaState : SagaState
     {
         public SimpleSagaState(Guid id) : base(id)
         {

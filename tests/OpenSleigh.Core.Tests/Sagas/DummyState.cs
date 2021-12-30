@@ -2,7 +2,7 @@ using System;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {
-    public class DummyState : SagaState
+    public record DummyState : SagaState
     {
         public DummyState(Guid id, string foo, int bar) : base(id)
         {

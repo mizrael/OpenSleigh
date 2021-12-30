@@ -2,14 +2,14 @@
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
 {
-    public class OutboxMessage
+    public record OutboxMessage
     {
         private OutboxMessage()
         {
         }
 
         public Guid Id { get; init; }
-        public ReadOnlyMemory<byte> Data { get; init; }
+        public byte[] Data { get; init; }
         public string Type { get; init; }
         public string PartitionKey { get; init; }
 
@@ -32,7 +32,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
             this.Status = OutboxMessage.MessageStatuses.Processed;
         }
 
-        public static OutboxMessage New(Guid id, ReadOnlyMemory<byte> data, string type, Guid correlationId) => new OutboxMessage
+        public static OutboxMessage New(Guid id, byte[] data, string type, Guid correlationId) => new OutboxMessage
         {
             Id = id,
             Data = data,

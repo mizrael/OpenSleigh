@@ -37,7 +37,7 @@ namespace OpenSleigh.Core
         {
             var (state, lockId) = await _sagaStateService.GetAsync(messageContext, cancellationToken);
 
-            if (state.IsCompleted())
+            if (state.IsCompleted)
             {
                 _logger.LogWarning($"Stopped processing message '{messageContext.Message.Id}', Saga '{state.Id}' was already marked as completed");
                 return;

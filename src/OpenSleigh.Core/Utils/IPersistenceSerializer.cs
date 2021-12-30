@@ -7,6 +7,7 @@ namespace OpenSleigh.Core.Utils
     public interface IPersistenceSerializer
     {        
         ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default);
-        ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);       
+        ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);
+        object Deserialize(ReadOnlyMemory<byte> data, Type type);
     }
 }

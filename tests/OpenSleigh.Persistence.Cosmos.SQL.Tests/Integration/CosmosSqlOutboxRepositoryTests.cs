@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
@@ -200,7 +201,10 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Integration
 
         private CosmosSqlOutboxRepository CreateSut(ISagaDbContext sagaDbContext)
         {
-            var sut = new CosmosSqlOutboxRepository(sagaDbContext, new JsonSerializer(), CosmosSqlOutboxRepositoryOptions.Default);
+            var typeResolver = new TypeResolver();
+            typeResolver.Register(typeof(StartDummySaga));
+
+            var sut = new CosmosSqlOutboxRepository(sagaDbContext, new JsonSerializer(), CosmosSqlOutboxRepositoryOptions.Default, typeResolver);
             return sut;
         }
     }

@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using FluentAssertions;
 using MongoDB.Driver;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
@@ -207,7 +208,10 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
 
             options ??= CosmosOutboxRepositoryOptions.Default;
 
-            var sut = new CosmosOutboxRepository(dbContext, serializer, options);
+            var typeResolver = new TypeResolver();
+            typeResolver.Register(typeof(StartDummySaga));
+
+            var sut = new CosmosOutboxRepository(dbContext, serializer, options, typeResolver);
             return sut;
         }
 

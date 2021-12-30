@@ -7,6 +7,11 @@ namespace OpenSleigh.Core.Tests.Unit
 {
     public class FakePersistenceSerializer : IPersistenceSerializer
     {
+        public object Deserialize(ReadOnlyMemory<byte> data, Type type)
+        {
+            throw new NotImplementedException();
+        }
+
         public ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
         {
             throw new NotImplementedException();

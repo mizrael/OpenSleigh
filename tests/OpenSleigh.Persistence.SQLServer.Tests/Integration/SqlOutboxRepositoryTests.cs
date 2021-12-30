@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
@@ -201,7 +202,10 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
 
         private SqlOutboxRepository CreateSut(ISagaDbContext db)
         {
-            var sut = new SqlOutboxRepository(db, new JsonSerializer(), SqlOutboxRepositoryOptions.Default);
+            var typeResolver = new TypeResolver();
+            typeResolver.Register(typeof(StartDummySaga));
+
+            var sut = new SqlOutboxRepository(db, new JsonSerializer(), SqlOutboxRepositoryOptions.Default, typeResolver);
             return sut;
         }
     }

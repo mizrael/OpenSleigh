@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
@@ -23,6 +24,7 @@ namespace OpenSleigh.Persistence.SQL
         private readonly ISagaDbContext _dbContext;
         private readonly IPersistenceSerializer _serializer;
         private readonly SqlOutboxRepositoryOptions _options;
+        private readonly ITypeResolver _typeResolver;
 
         private enum MessageStatuses
         {
@@ -30,11 +32,12 @@ namespace OpenSleigh.Persistence.SQL
             Processed
         }
 
-        public SqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlOutboxRepositoryOptions options)
+        public SqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlOutboxRepositoryOptions options, ITypeResolver typeResolver)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(options));
         }
 
         public async Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default)
@@ -53,7 +56,8 @@ namespace OpenSleigh.Persistence.SQL
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var messageType = _typeResolver.Resolve(entity.Type);
+                var message = _serializer.Deserialize(entity.Data, messageType) as IMessage;
                 messages.Add(message);
             }
 

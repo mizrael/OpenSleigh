@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using FluentAssertions;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Utils;
 using Xunit;
 
@@ -12,14 +13,16 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         public void ctor_should_throw_when_DbContext_null()
         {
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(null, serializer, MongoOutboxRepositoryOptions.Default));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(null, serializer, MongoOutboxRepositoryOptions.Default, typeResolver));
         }
 
         [Fact]
         public void ctor_should_throw_when_Serializer_null()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
-            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, null, MongoOutboxRepositoryOptions.Default));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, null, MongoOutboxRepositoryOptions.Default, typeResolver));
         }
 
         [Fact]
@@ -27,7 +30,16 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, serializer, null));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, serializer, null, typeResolver));
+        }
+
+        [Fact]
+        public void ctor_should_throw_when_type_resolver_null()
+        {
+            var dbCtx = NSubstitute.Substitute.For<IDbContext>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
+            Assert.Throws<ArgumentNullException>(() => new MongoOutboxRepository(dbCtx, serializer, MongoOutboxRepositoryOptions.Default, null));
         }
 
         [Fact]
@@ -67,7 +79,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Unit
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var sut = new MongoOutboxRepository(dbCtx, serializer, MongoOutboxRepositoryOptions.Default);
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new MongoOutboxRepository(dbCtx, serializer, MongoOutboxRepositoryOptions.Default, typeResolver);
             return sut;
         }
     }
