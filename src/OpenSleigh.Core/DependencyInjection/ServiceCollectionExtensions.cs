@@ -61,6 +61,8 @@ namespace OpenSleigh.Core.DependencyInjection
         /// <param name="typeResolver"></param>
         private static void RegisterAllMessages(ITypeResolver typeResolver)
         {
+            Console.WriteLine("preloading all message types...");
+
             var messageType = typeof(IMessage);
 
             // Assemblies are lazy loaded so using AppDomain.GetAssemblies is not reliable.            
@@ -88,6 +90,8 @@ namespace OpenSleigh.Core.DependencyInjection
                     queue.Enqueue(Assembly.Load(reference));
                 }
             }
+
+            Console.WriteLine("preloading all message types completed!");
         }
         
         public static IServiceCollection AddBusSubscriber(this IServiceCollection services, Type subscriberType)
