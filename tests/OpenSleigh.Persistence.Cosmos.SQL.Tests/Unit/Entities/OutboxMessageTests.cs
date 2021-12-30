@@ -12,7 +12,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Unit.Entities
 		{
 			var expectedId = Guid.NewGuid();
 			var expectedType = "lorem";
-			ReadOnlyMemory<byte> expectedData = new byte[] { 1, 2, 3, 4 };
+			var expectedData = new byte[] { 1, 2, 3, 4 };
 			var expectedCorrelationId = Guid.NewGuid();
 			var sut = OutboxMessage.New(expectedId, expectedData, expectedType, expectedCorrelationId);
 			sut.Id.Should().Be(expectedId);

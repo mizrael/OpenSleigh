@@ -139,7 +139,7 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
             unLockedState.Data.Should().NotBeNull();
 
             var serializer = new JsonSerializer();
-            var deserializedState = await serializer.DeserializeAsync<DummyState>(unLockedState.Data);
+            var deserializedState = serializer.Deserialize<DummyState>(unLockedState.Data);
             deserializedState.Id.Should().Be(updatedState.Id);
             deserializedState.Bar.Should().Be(updatedState.Bar);
             deserializedState.Foo.Should().Be(updatedState.Foo);

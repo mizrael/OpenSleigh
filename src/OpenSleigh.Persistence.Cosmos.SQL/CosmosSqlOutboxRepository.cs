@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
@@ -24,12 +25,14 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
         private readonly ISagaDbContext _dbContext;
         private readonly IPersistenceSerializer _serializer;
         private readonly CosmosSqlOutboxRepositoryOptions _options;
+        private readonly ITypeResolver _typeResolver;
 
-        public CosmosSqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, CosmosSqlOutboxRepositoryOptions options)
+        public CosmosSqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, CosmosSqlOutboxRepositoryOptions options, ITypeResolver typeResolver)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
         public async Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default)
@@ -48,7 +51,8 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             var messages = new List<IMessage>();
             foreach (var entity in entities)
             {
-                var message = await _serializer.DeserializeAsync<IMessage>(entity.Data, cancellationToken);
+                var messageType = _typeResolver.Resolve(entity.Type);
+                var message = _serializer.Deserialize(entity.Data, messageType) as IMessage;
                 messages.Add(message);
             }
 
@@ -105,7 +109,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
 
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
-            var serialized = await _serializer.SerializeAsync(message, cancellationToken);
+            var serialized = _serializer.Serialize(message);
             var entity = OutboxMessage.New(message.Id, serialized, message.GetType().FullName, message.CorrelationId);
             _dbContext.OutboxMessages.Add(entity);
             await _dbContext.SaveChangesAsync(cancellationToken)

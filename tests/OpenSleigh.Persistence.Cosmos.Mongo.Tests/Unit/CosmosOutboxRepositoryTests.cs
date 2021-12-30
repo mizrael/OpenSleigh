@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using FluentAssertions;
+using OpenSleigh.Core;
 using OpenSleigh.Core.Utils;
 using Xunit;
 
@@ -12,14 +13,16 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
         public void ctor_should_throw_when_DbContext_null()
         {
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(null, serializer, CosmosOutboxRepositoryOptions.Default));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(null, serializer, CosmosOutboxRepositoryOptions.Default, typeResolver));
         }
 
         [Fact]
         public void ctor_should_throw_when_Serializer_null()
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
-            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(dbCtx, null, CosmosOutboxRepositoryOptions.Default));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(dbCtx, null, CosmosOutboxRepositoryOptions.Default, typeResolver));
         }
 
         [Fact]
@@ -27,7 +30,16 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(dbCtx, serializer, null));
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(dbCtx, serializer, null, typeResolver));
+        }
+
+        [Fact]
+        public void ctor_should_throw_when_type_resolver_null()
+        {
+            var dbCtx = NSubstitute.Substitute.For<IDbContext>();
+            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
+            Assert.Throws<ArgumentNullException>(() => new CosmosOutboxRepository(dbCtx, serializer, CosmosOutboxRepositoryOptions.Default, null));
         }
 
         [Fact]
@@ -67,7 +79,8 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Unit
         {
             var dbCtx = NSubstitute.Substitute.For<IDbContext>();
             var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var sut = new CosmosOutboxRepository(dbCtx, serializer, CosmosOutboxRepositoryOptions.Default);
+            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new CosmosOutboxRepository(dbCtx, serializer, CosmosOutboxRepositoryOptions.Default, typeResolver);
             return sut;
         }
     }

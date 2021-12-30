@@ -8,7 +8,7 @@ using OpenSleigh.Samples.Sample10.Common;
 
 namespace OpenSleigh.Samples.Sample10.InventoryService.Sagas
 {
-    public class InventoryCheckSagaState : SagaState{
+    public record InventoryCheckSagaState : SagaState{
         public InventoryCheckSagaState(Guid id) : base(id){}
     }
     

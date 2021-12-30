@@ -5,7 +5,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.Tests.Sagas
 {
-    public class CompensatingSagaState : SagaState
+    public record CompensatingSagaState : SagaState
     {
         public CompensatingSagaState(Guid id) : base(id)
         {

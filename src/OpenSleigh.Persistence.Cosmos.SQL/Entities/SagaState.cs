@@ -2,7 +2,7 @@
 
 namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
 {
-    public class SagaState
+    public record SagaState
     {
         private SagaState() { }
         private SagaState(Guid correlationId, string type)
@@ -16,11 +16,11 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
         public Guid CorrelationId { get; }
         public string Type { get; }
 
-        public ReadOnlyMemory<byte> Data { get; private set; }
+        public byte[] Data { get; private set; }
         public Guid? LockId { get; private set; }
         public DateTime? LockTime { get; private set; }
 
-        public void Lock(ReadOnlyMemory<byte> data)
+        public void Lock(byte[] data)
         {
             this.Data = data;
             this.LockId = Guid.NewGuid();
@@ -33,7 +33,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Entities
             this.LockTime = DateTime.UtcNow;
         }
 
-        public void Release(ReadOnlyMemory<byte> data)
+        public void Release(byte[] data)
         {
             this.LockTime = null;
             this.LockId = null;

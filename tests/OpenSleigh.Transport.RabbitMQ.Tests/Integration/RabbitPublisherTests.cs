@@ -50,7 +50,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             channel.BasicConsume(queue: channelContext.QueueReferences.QueueName, autoAck: false, consumer: consumer);
 
             var encoder = Substitute.For<ITransportSerializer>();
-            encoder.SerializeAsync(message)
+            encoder.Serialize(message)
                 .Returns(encodedMessage);
 
             var logger = Substitute.For<ILogger<RabbitPublisher>>();

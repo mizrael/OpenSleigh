@@ -8,7 +8,7 @@ using OpenSleigh.Samples.Sample4.Common;
 
 namespace OpenSleigh.Samples.Sample4.ShippingService.Sagas
 {
-    public class ShippingSagaState : SagaState{
+    public record ShippingSagaState : SagaState{
         public ShippingSagaState(Guid id) : base(id){}
     }
     

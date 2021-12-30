@@ -17,7 +17,7 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public void SetAsProcessed_should_throw_ArgumentException_if_message_correlation_id_invalid()
+        public void SetAsProcessed_should_throw_ArgumentException_if_message_correlation_id_does_not_match_state_id()
         {
             var sut = new DummySagaState(Guid.NewGuid());
             var message = StartDummySaga.New();
@@ -55,7 +55,7 @@ namespace OpenSleigh.Core.Tests.Unit
         public void IsCompleted_should_return_false_when_state_is_initialized_first_time()
         {
             var state = new DummySagaState(Guid.NewGuid());
-            state.IsCompleted().Should().BeFalse();
+            state.IsCompleted.Should().BeFalse();
         }
 
         [Fact]
@@ -63,7 +63,7 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var state = new DummySagaState(Guid.NewGuid());
             state.MarkAsCompleted();
-            state.IsCompleted().Should().BeTrue();
+            state.IsCompleted.Should().BeTrue();
         }
     }
 }

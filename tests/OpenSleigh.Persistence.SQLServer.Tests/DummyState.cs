@@ -3,7 +3,7 @@ using OpenSleigh.Core;
 
 namespace OpenSleigh.Persistence.SQLServer.Tests
 {
-    public class DummyState : SagaState
+    public record DummyState : SagaState
     {
         public DummyState(Guid id, string foo, int bar) : base(id)
         {
@@ -18,7 +18,7 @@ namespace OpenSleigh.Persistence.SQLServer.Tests
     }
 
 
-    public class DummyState2 : SagaState
+    public record DummyState2 : SagaState
     {
         public DummyState2(Guid id) : base(id) { }
         

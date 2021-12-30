@@ -8,7 +8,7 @@ using OpenSleigh.Samples.Sample2.Common.Messages;
 
 namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 {
-    public class SimpleSagaState : SagaState{
+    public record SimpleSagaState : SagaState{
         public SimpleSagaState(Guid id) : base(id){}
     }
 

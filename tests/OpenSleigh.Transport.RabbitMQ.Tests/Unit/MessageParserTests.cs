@@ -33,7 +33,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var basicProperties = NSubstitute.Substitute.For<IBasicProperties>();
             basicProperties.Headers.ReturnsNull();
             
-            var ex = Assert.Throws<ArgumentNullException>(() => sut.Resolve(basicProperties, null));
+            var ex = Assert.Throws<ArgumentNullException>(() => sut.Resolve(basicProperties, new byte[] { }));
             ex.Message.Should().Contain("message headers are missing");
         }
 
@@ -47,8 +47,20 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 
             var basicProperties = NSubstitute.Substitute.For<IBasicProperties>();
             
-            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, null));
+            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, new byte[] {}));
             ex.Message.Should().Contain("invalid message type");
+        }
+
+        [Fact]
+        public void Resolve_should_throw_when_body_null()
+        {
+            var decoder = NSubstitute.Substitute.For<ITransportSerializer>();
+            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+            var sut = new MessageParser(decoder, resolver);
+
+            var basicProperties = NSubstitute.Substitute.For<IBasicProperties>();
+
+            Assert.Throws<ArgumentNullException>(() => sut.Resolve(basicProperties, null));
         }
 
         [Fact]
@@ -68,7 +80,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             };
             basicProperties.Headers.Returns(headers);
             
-            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, null));
+            var ex = Assert.Throws<ArgumentException>(() => sut.Resolve(basicProperties, invalidTypeBytes));
             ex.Message.Should().Contain("unable to detect message type from headers");
         }
 

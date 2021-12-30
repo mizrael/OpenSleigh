@@ -7,7 +7,7 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Samples.Sample3.Worker.Sagas
 {
-    public class ChildSagaState : SagaState
+    public record ChildSagaState : SagaState
     {
         public ChildSagaState(Guid id) : base(id) { }
     }

@@ -37,7 +37,7 @@ namespace OpenSleigh.Transport.RabbitMQ
         {
             using var context = _publisherChannelFactory.Create(message);
 
-            var encodedMessage = await _encoder.SerializeAsync(message, cancellationToken);
+            var encodedMessage = _encoder.Serialize(message);
 
             var properties = context.Channel.CreateBasicProperties();
             properties.Persistent = true;

@@ -1,9 +1,9 @@
 ﻿using OpenSleigh.Core;
+using OpenSleigh.Core.Messaging;
+using OpenSleigh.Core.Utils;
 using RabbitMQ.Client;
 using System;
 using System.Text;
-using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -18,10 +18,13 @@ namespace OpenSleigh.Transport.RabbitMQ
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
-        public IMessage Resolve(IBasicProperties basicProperties, ReadOnlyMemory<byte> body)
+        public IMessage Resolve(IBasicProperties basicProperties, byte[] body)
         {
             if (basicProperties is null)
                 throw new ArgumentNullException(nameof(basicProperties));
+            if (body is null)            
+                throw new ArgumentNullException(nameof(body));            
+
             if (basicProperties.Headers is null)
                 throw new ArgumentNullException(nameof(basicProperties), "message headers are missing");
 

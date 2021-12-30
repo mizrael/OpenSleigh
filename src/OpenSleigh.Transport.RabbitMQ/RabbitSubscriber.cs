@@ -134,7 +134,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             IMessage message;
             try
             {
-                message = _messageParser.Resolve(eventArgs.BasicProperties, eventArgs.Body);
+                message = _messageParser.Resolve(eventArgs.BasicProperties, eventArgs.Body.ToArray());
             }
             catch (Exception ex)
             {

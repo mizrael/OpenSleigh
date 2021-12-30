@@ -1,12 +1,11 @@
 ﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.Utils
 {
     public interface IPersistenceSerializer
-    {        
-        ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default);
-        ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);       
+    {
+        byte[] Serialize<T>(T data);
+        T Deserialize<T>(byte[] data);
+        object Deserialize(byte[] data, Type type);
     }
 }

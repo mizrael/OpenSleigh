@@ -8,7 +8,7 @@ using OpenSleigh.Samples.Sample4.Common;
 
 namespace OpenSleigh.Samples.Sample4.Orchestrator.Sagas
 {
-    public class OrderSagaState : SagaState{
+    public record OrderSagaState : SagaState{
         public OrderSagaState(Guid id) : base(id){}
 
         public Guid OrderId { get; set; }

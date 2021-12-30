@@ -7,7 +7,7 @@ namespace OpenSleigh.Core.Tests.Sagas
 {
     public record DummyEvent(Guid Id, Guid CorrelationId) : IEvent;
     
-    public class EventSagaState1 : SagaState
+    public record EventSagaState1 : SagaState
     {
         public EventSagaState1(Guid id) : base(id)
         {
@@ -31,7 +31,7 @@ namespace OpenSleigh.Core.Tests.Sagas
         }
     }
 
-    public class EventSagaState2 : SagaState
+    public record EventSagaState2 : SagaState
     {
         public EventSagaState2(Guid id) : base(id)
         {

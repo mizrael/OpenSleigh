@@ -9,7 +9,7 @@ using OpenSleigh.Samples.Sample3.Worker.Sagas;
 
 namespace OpenSleigh.Samples.Sample3.Worker.Sagas
 {
-    public class ParentSagaState : SagaState{
+    public record ParentSagaState : SagaState{
         public ParentSagaState(Guid id) : base(id){}
     }
 
