@@ -29,6 +29,6 @@ namespace OpenSleigh.Core.Messaging
 
         private Task PublishAsyncCore<TM>(TM message, CancellationToken cancellationToken) 
             where TM : IMessage
-        => _outboxRepository.AppendAsync(message, cancellationToken);
+            => _outboxRepository.AppendAsync(message, cancellationToken);
     }
 }
