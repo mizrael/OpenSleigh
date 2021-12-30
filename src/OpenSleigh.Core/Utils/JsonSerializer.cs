@@ -16,23 +16,19 @@ namespace OpenSleigh.Core.Utils
             PropertyNameCaseInsensitive = true            
         };
 
-        public async ValueTask<byte[]> SerializeAsync<T>(T data, CancellationToken cancellationToken = default)
+        public byte[] Serialize<T>(T data)
         {
             var type = data.GetType();
-            using var ms = new MemoryStream();
-            await System.Text.Json.JsonSerializer.SerializeAsync(ms, data, type, Settings, cancellationToken);
-            ms.Position = 0;
-            var bytes = ms.ToArray();
-            return bytes;
+            return System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(data, type, Settings);            
         }
 
-        public ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
-        {
-            var result = System.Text.Json.JsonSerializer.Deserialize<T>(data.Span, options: Settings);
-            return ValueTask.FromResult(result);
-        }
+        public ValueTask<T> DeserializeAsync<T>(Stream data, CancellationToken cancellationToken = default)
+            => System.Text.Json.JsonSerializer.DeserializeAsync<T>(data, options: Settings);
 
-        public object Deserialize(ReadOnlyMemory<byte> data, Type type)
-            => System.Text.Json.JsonSerializer.Deserialize(data.Span, type, options: Settings);
+        public T Deserialize<T>(byte[] data)
+            => System.Text.Json.JsonSerializer.Deserialize<T>(data, options: Settings);
+
+        public object Deserialize(byte[] data, Type type)
+            => System.Text.Json.JsonSerializer.Deserialize(data, type, options: Settings);
     }
 }

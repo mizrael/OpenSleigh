@@ -47,7 +47,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 
             bool received = false;
             var messageParser = Substitute.For<IMessageParser>();
-            messageParser.When(p => p.Resolve(Arg.Any<IBasicProperties>(), Arg.Any<ReadOnlyMemory<byte>>()))
+            messageParser.When(p => p.Resolve(Arg.Any<IBasicProperties>(), Arg.Any<byte[]>()))
                 .Do(p =>
                 {
                     received = true;    

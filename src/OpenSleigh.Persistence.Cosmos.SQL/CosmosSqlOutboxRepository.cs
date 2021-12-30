@@ -109,7 +109,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
 
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
-            var serialized = await _serializer.SerializeAsync(message, cancellationToken);
+            var serialized = _serializer.Serialize(message);
             var entity = OutboxMessage.New(message.Id, serialized, message.GetType().FullName, message.CorrelationId);
             _dbContext.OutboxMessages.Add(entity);
             await _dbContext.SaveChangesAsync(cancellationToken)

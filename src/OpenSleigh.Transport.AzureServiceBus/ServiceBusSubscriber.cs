@@ -47,7 +47,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             {
                 _logger.LogInformation($"client '{_systemInfo.ClientId}' received message '{args.Message.MessageId}'. Processing...");
 
-                var message = await _messageParser.DeserializeAsync<TM>(args.Message.Body);
+                var message = await _messageParser.DeserializeAsync<TM>(args.Message.Body.ToStream());
 
                 await _messageProcessor.ProcessAsync((dynamic)message, args.CancellationToken);
 

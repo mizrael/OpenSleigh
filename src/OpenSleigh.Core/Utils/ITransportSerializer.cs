@@ -1,13 +1,14 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.Utils
 {
     public interface ITransportSerializer
-    {        
-        ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default);
-        ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default);
-        object Deserialize(ReadOnlyMemory<byte> data, Type type); //TODO: not super happy of this one.
+    {
+        byte[] Serialize<T>(T data);
+        ValueTask<T> DeserializeAsync<T>(Stream data, CancellationToken cancellationToken = default);
+        object Deserialize(byte[] data, Type type); 
     }
 }

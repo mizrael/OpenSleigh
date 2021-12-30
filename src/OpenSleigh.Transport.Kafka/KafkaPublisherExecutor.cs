@@ -46,7 +46,7 @@ namespace OpenSleigh.Transport.Kafka
         {
             var messageType = message.GetType();
 
-            var serialized = await _serializer.SerializeAsync(message, cancellationToken);
+            var serialized = _serializer.Serialize(message);
 
             var headers = new Headers
             {

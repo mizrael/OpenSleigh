@@ -116,8 +116,8 @@ namespace OpenSleigh.Persistence.SQL
 
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
-            var serialized = await _serializer.SerializeAsync(message, cancellationToken);
-            var entity = new Entities.OutboxMessage(message.Id, serialized.ToArray(), message.GetType().FullName)
+            var serialized = _serializer.Serialize(message);
+            var entity = new Entities.OutboxMessage(message.Id, serialized, message.GetType().FullName)
             {
                 Status = MessageStatuses.Pending.ToString()
             };

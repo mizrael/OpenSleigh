@@ -1,23 +1,21 @@
 ﻿using OpenSleigh.Core.Utils;
 using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenSleigh.Core.Tests.Unit
 {
     public class FakePersistenceSerializer : IPersistenceSerializer
     {
-        public object Deserialize(ReadOnlyMemory<byte> data, Type type)
+        public T Deserialize<T>(byte[] data)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<T> DeserializeAsync<T>(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
+        public object Deserialize(byte[] data, Type type)
         {
             throw new NotImplementedException();
         }
 
-        public ValueTask<byte[]> SerializeAsync<T>(T state, CancellationToken cancellationToken = default)
+        public byte[] Serialize<T>(T data)
         {
             throw new NotImplementedException();
         }

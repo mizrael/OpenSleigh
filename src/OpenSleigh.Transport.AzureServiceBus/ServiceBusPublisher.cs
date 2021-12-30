@@ -39,7 +39,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             ServiceBusSender sender = _senderFactory.Create((dynamic) message);
             _logger.LogInformation($"client '{_systemInfo.ClientId}' publishing message '{message.Id}' to {sender.FullyQualifiedNamespace}/{sender.EntityPath}");
 
-            var serializedMessage = await _serializer.SerializeAsync(message, cancellationToken);
+            var serializedMessage = _serializer.Serialize(message);
             var busMessage = new ServiceBusMessage(serializedMessage)
             {
                 CorrelationId = message.CorrelationId.ToString(),

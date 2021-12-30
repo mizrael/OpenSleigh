@@ -48,7 +48,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                 {
                     resultState = newState;
 
-                    var serializedState = await _serializer.SerializeAsync(newState, cancellationToken);
+                    var serializedState = _serializer.Serialize(newState);
                     var newEntity = Entities.SagaState.New(correlationId, stateType.FullName);
 
                     newEntity.Lock(serializedState);
@@ -66,7 +66,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
                     stateEntity.RefreshLock();
                     lockId = stateEntity.LockId.Value;
 
-                    resultState = await _serializer.DeserializeAsync<TD>(stateEntity.Data, cancellationToken);
+                    resultState = _serializer.Deserialize<TD>(stateEntity.Data);
                 }
 
                 await _dbContext.SaveChangesAsync(cancellationToken)
@@ -104,7 +104,7 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             if (null == stateEntity)
                 throw new LockException($"unable to release Saga State '{state.Id}' with type '{stateType.FullName}' by lock id {lockId}");
 
-            var newStateData = await _serializer.SerializeAsync(state, cancellationToken);
+            var newStateData = _serializer.Serialize(state);
             stateEntity.Release(newStateData);
 
             await _dbContext.SaveChangesAsync(cancellationToken)

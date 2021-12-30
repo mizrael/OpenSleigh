@@ -109,9 +109,9 @@ namespace OpenSleigh.Persistence.Mongo
 
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
-            var data = await _serializer.SerializeAsync(message, cancellationToken);
+            var data = _serializer.Serialize(message);
             var entity =
-                new Entities.OutboxMessage(message.Id, data.ToArray(), message.GetType().FullName, MessageStatuses.Pending.ToString());
+                new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
            
             if (_dbContext.Transaction?.Session != null)
                 await _dbContext.Outbox.InsertOneAsync(_dbContext.Transaction.Session, entity, null, cancellationToken)

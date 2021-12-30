@@ -109,7 +109,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
 
         private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
         {
-            var data = await _serializer.SerializeAsync(message, cancellationToken);
+            var data = _serializer.Serialize(message);
             var entity =
                 new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
            
