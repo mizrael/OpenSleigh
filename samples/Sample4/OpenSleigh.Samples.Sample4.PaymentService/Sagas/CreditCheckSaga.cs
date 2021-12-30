@@ -8,7 +8,7 @@ using OpenSleigh.Samples.Sample4.Common;
 
 namespace OpenSleigh.Samples.Sample4.PaymentService.Sagas
 {
-    public class CreditCheckSagaState : SagaState{
+    public record CreditCheckSagaState : SagaState{
         public CreditCheckSagaState(Guid id) : base(id){}
     }
     
