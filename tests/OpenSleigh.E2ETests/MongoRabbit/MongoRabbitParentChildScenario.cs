@@ -1,5 +1,4 @@
-﻿using MongoDB.Driver;
-using OpenSleigh.Core.DependencyInjection;
+﻿using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Tests.E2E;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Persistence.Mongo;
@@ -8,7 +7,6 @@ using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
-using System.Security.Authentication;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -89,6 +87,7 @@ namespace OpenSleigh.E2ETests.MongoRabbit
             {
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
                 UserName = _rabbitFixture.RabbitConfiguration.UserName,
+                VirtualHost = _rabbitFixture.RabbitConfiguration.VirtualHost,
                 Password = _rabbitFixture.RabbitConfiguration.Password,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 DispatchConsumersAsync = true

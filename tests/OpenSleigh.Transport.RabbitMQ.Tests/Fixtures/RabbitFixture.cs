@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Configuration;
-using NSubstitute;
 using RabbitMQ.Client;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,9 +19,12 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
                 .Build();
 
             var rabbitSection = configuration.GetSection("Rabbit");
-            this.RabbitConfiguration = new RabbitConfiguration(rabbitSection["HostName"],
+            this.RabbitConfiguration = new RabbitConfiguration(
+                rabbitSection["HostName"],
+                rabbitSection["VirtualHost"],
                 rabbitSection["UserName"],
-                rabbitSection["Password"]);
+                rabbitSection["Password"],
+                System.TimeSpan.FromSeconds(10));
         }
 
         /// <summary>
@@ -35,6 +37,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
                 HostName = RabbitConfiguration.HostName,
                 UserName = RabbitConfiguration.UserName,
                 Password = RabbitConfiguration.Password,
+                VirtualHost = RabbitConfiguration.VirtualHost,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 DispatchConsumersAsync = true
             };

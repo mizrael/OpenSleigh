@@ -64,7 +64,7 @@ namespace OpenSleigh.Core.DependencyInjection
             Console.WriteLine("preloading all message types...");
 
             var messageType = typeof(IMessage);
-
+            
             // Assemblies are lazy loaded so using AppDomain.GetAssemblies is not reliable.            
             var currAssembly = Assembly.GetEntryAssembly();
             var visited = new HashSet<string>();            

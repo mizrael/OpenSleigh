@@ -56,6 +56,7 @@ namespace OpenSleigh.E2ETests.SQLServerRabbit
             {
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
                 UserName = _rabbitFixture.RabbitConfiguration.UserName,
+                VirtualHost = _rabbitFixture.RabbitConfiguration.VirtualHost,
                 Password = _rabbitFixture.RabbitConfiguration.Password,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 DispatchConsumersAsync = true

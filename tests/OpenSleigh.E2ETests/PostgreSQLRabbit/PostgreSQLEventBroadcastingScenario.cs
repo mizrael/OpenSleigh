@@ -64,6 +64,7 @@ namespace OpenSleigh.E2ETests.PostgreSQLRabbit
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
                 UserName = _rabbitFixture.RabbitConfiguration.UserName,
                 Password = _rabbitFixture.RabbitConfiguration.Password,
+                VirtualHost = _rabbitFixture.RabbitConfiguration.VirtualHost,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 DispatchConsumersAsync = true
             };
