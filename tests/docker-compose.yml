@@ -40,7 +40,7 @@ services:
     container_name: openSleigh.tests.infrastructure.rabbitmq    
     restart: always
     environment:
-      RABBITMQ_DEFAULT_VHOST: "/"
+      RABBITMQ_DEFAULT_VHOST: "/opensleigh"
     ports:     
       - "15671:15671"
       - "15672:15672"   

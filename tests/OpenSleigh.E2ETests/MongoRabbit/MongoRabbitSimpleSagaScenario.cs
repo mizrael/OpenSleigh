@@ -7,11 +7,7 @@ using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
-using System.Security.Authentication;
 using System.Threading.Tasks;
-using FluentAssertions;
-using Microsoft.Extensions.Azure;
-using MongoDB.Driver;
 using Xunit;
 
 namespace OpenSleigh.E2ETests.MongoRabbit
@@ -65,6 +61,7 @@ namespace OpenSleigh.E2ETests.MongoRabbit
                 HostName = _rabbitFixture.RabbitConfiguration.HostName,
                 UserName = _rabbitFixture.RabbitConfiguration.UserName,
                 Password = _rabbitFixture.RabbitConfiguration.Password,
+                VirtualHost = _rabbitFixture.RabbitConfiguration.VirtualHost,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 DispatchConsumersAsync = true
             };
