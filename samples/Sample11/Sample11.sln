@@ -1,0 +1,57 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.32014.148
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample11", "OpenSleigh.Samples.Sample11\OpenSleigh.Samples.Sample11.csproj", "{D124326E-D9AA-420A-99F1-6210678827B4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "dependencies", "dependencies", "{B71A67B1-782C-4CF9-86EE-3C061ED2AB1E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Core", "..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj", "{5089EE26-4D49-4D05-AD4B-9D396D76B801}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.Kafka", "..\..\src\OpenSleigh.Transport.Kafka\OpenSleigh.Transport.Kafka.csproj", "{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.PostgreSQL", "..\..\src\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj", "{3A1B49F6-3818-47DE-9917-B773A20E1D64}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL", "..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj", "{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D124326E-D9AA-420A-99F1-6210678827B4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D124326E-D9AA-420A-99F1-6210678827B4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D124326E-D9AA-420A-99F1-6210678827B4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D124326E-D9AA-420A-99F1-6210678827B4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{5089EE26-4D49-4D05-AD4B-9D396D76B801}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{5089EE26-4D49-4D05-AD4B-9D396D76B801}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{5089EE26-4D49-4D05-AD4B-9D396D76B801}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{5089EE26-4D49-4D05-AD4B-9D396D76B801}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3A1B49F6-3818-47DE-9917-B773A20E1D64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3A1B49F6-3818-47DE-9917-B773A20E1D64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3A1B49F6-3818-47DE-9917-B773A20E1D64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3A1B49F6-3818-47DE-9917-B773A20E1D64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{5089EE26-4D49-4D05-AD4B-9D396D76B801} = {B71A67B1-782C-4CF9-86EE-3C061ED2AB1E}
+		{2C37E14C-6FC6-4EE0-8A6C-64A501FF92FD} = {B71A67B1-782C-4CF9-86EE-3C061ED2AB1E}
+		{3A1B49F6-3818-47DE-9917-B773A20E1D64} = {B71A67B1-782C-4CF9-86EE-3C061ED2AB1E}
+		{94247D55-FC6F-4C5D-ACC1-AA6CB29C95FD} = {B71A67B1-782C-4CF9-86EE-3C061ED2AB1E}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {5746FC5C-31E4-4410-9670-C44AC4178953}
+	EndGlobalSection
+EndGlobal
