@@ -10,7 +10,7 @@ jobs:
           MONGO_INITDB_ROOT_PASSWORD: password
       - image: 'rabbitmq:3-management-alpine'
         environment:
-          RABBITMQ_DEFAULT_VHOST: "/"
+          RABBITMQ_DEFAULT_VHOST: "/opensleigh"
       - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
         environment:
           SA_PASSWORD: "Sup3r_p4ssword123"
@@ -43,7 +43,7 @@ jobs:
       - run:
           name: Integration tests
           command: |            
-            dotnet test --filter "FullyQualifiedName\!~Cosmos&Category=Integration"
+            dotnet test --filter "FullyQualifiedName!~Cosmos&Category=Integration"
 
       #- run: # skipping E2E tests for now
       #    name: E2E tests
@@ -59,7 +59,7 @@ jobs:
           MONGO_INITDB_ROOT_PASSWORD: password
       - image: 'rabbitmq:3-management-alpine'
         environment:
-          RABBITMQ_DEFAULT_VHOST: "/"
+          RABBITMQ_DEFAULT_VHOST: "/opensleigh"
       - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
         environment:
           SA_PASSWORD: "Sup3r_p4ssword123"
