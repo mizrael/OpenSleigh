@@ -2,7 +2,9 @@
 ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Transport.AzureServiceBus?style=plastic)
 
 ## Description
-Azure Service Bus Transport library for OpenSleigh
+Azure Service Bus Transport library for OpenSleigh. 
+
+**This library is making use of Topics**, therefore, to work properly it requires at least _Standard Tier_. For more information on Azure Service Bus prices, check the <a href='https://azure.microsoft.com/en-ca/pricing/details/service-bus/' target='_blank'>official documentation</a>.
 
 ## Installation
 This library can be installed from Nuget: https://www.nuget.org/packages/OpenSleigh.Transport.AzureServiceBus/
