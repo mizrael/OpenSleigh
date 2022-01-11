@@ -51,7 +51,10 @@ namespace OpenSleigh.Core
         public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
         {
             await _sagaStateRepository.ReleaseLockAsync(state, lockId, cancellationToken);
-            await state.PersistOutboxAsync(_outboxRepository, cancellationToken);
+
+            foreach (var message in state.Outbox)
+                await _outboxRepository.AppendAsync(message, cancellationToken);
+            state.ClearOutbox();
         }
     }
 }

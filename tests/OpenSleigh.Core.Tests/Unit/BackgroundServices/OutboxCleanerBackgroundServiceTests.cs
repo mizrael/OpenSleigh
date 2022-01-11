@@ -17,7 +17,7 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         {
             var factory = NSubstitute.Substitute.For<IServiceScopeFactory>();
             var options = OutboxCleanerOptions.Default;
-            var sysInfo = SystemInfo.New();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             var logger = NSubstitute.Substitute.For<ILogger<OutboxCleanerBackgroundService>>();
 
             Assert.Throws<ArgumentNullException>(() => new OutboxCleanerBackgroundService(null, options, logger, sysInfo));
@@ -41,7 +41,7 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
             factory.CreateScope().Returns(scope);
 
             var logger = NSubstitute.Substitute.For<ILogger<OutboxCleanerBackgroundService>>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
             var sut = new OutboxCleanerBackgroundService(factory, OutboxCleanerOptions.Default, logger, sysInfo);
 

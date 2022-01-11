@@ -13,12 +13,12 @@ namespace OpenSleigh.Core.BackgroundServices
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly OutboxProcessorOptions _options;
         private readonly ILogger<OutboxBackgroundService> _logger;
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
 
         public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
             OutboxProcessorOptions options,
             ILogger<OutboxBackgroundService> logger, 
-            SystemInfo systemInfo)
+            ISystemInfo systemInfo)
         {
             _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
             _options = options ?? throw new ArgumentNullException(nameof(options));

@@ -15,14 +15,15 @@ namespace OpenSleigh.Transport.AzureServiceBus
         private readonly IMessageProcessor _messageProcessor;
         private readonly ITransportSerializer _messageParser;        
         private readonly ILogger<ServiceBusSubscriber<TM>> _logger;
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
         private ServiceBusProcessor _processor;
 
         public ServiceBusSubscriber(IQueueReferenceFactory queueReferenceFactory,
             ServiceBusClient serviceBusClient,
             ITransportSerializer messageParser,
             IMessageProcessor messageProcessor,
-            ILogger<ServiceBusSubscriber<TM>> logger, SystemInfo systemInfo)
+            ILogger<ServiceBusSubscriber<TM>> logger, 
+            ISystemInfo systemInfo)
         {            
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));

@@ -15,13 +15,13 @@ namespace OpenSleigh.Transport.Kafka
         private readonly IMessageProcessor _messageProcessor;
         private readonly IKafkaPublisherExecutor _publisher;
         private readonly ILogger<KafkaMessageHandler> _logger;
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
 
         public KafkaMessageHandler(IMessageParser messageParser,
                                     IMessageProcessor messageProcessor,
                                     IKafkaPublisherExecutor publisher,
                                     ILogger<KafkaMessageHandler> logger, 
-                                    SystemInfo systemInfo)
+                                    ISystemInfo systemInfo)
         {
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));

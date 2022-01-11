@@ -1,8 +1,6 @@
-﻿using System;
-using System.Runtime.CompilerServices;
-using OpenSleigh.Core.Messaging;
+﻿using OpenSleigh.Core.Messaging;
+using System;
 
-[assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
 namespace OpenSleigh.Core
 {
     public abstract class Saga<TD> : ISaga

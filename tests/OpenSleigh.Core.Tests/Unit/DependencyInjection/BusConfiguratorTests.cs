@@ -5,6 +5,7 @@ using Xunit;
 using NSubstitute;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Utils;
+using System;
 
 namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
 {
@@ -16,7 +17,7 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var services = NSubstitute.Substitute.For<IServiceCollection>();
             var sagaTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
             
             var sut = new BusConfigurator(services, sagaTypeResolver, typeResolver, sysInfo);
             var result = sut.AddMessageHandlers<DummyMessage>(new[] { typeof(BusConfiguratorTests).Assembly });
@@ -40,7 +41,7 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var services = new ServiceCollection();
             var sagaTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
 
             var sut = new BusConfigurator(services, sagaTypeResolver, typeResolver, sysInfo);
 
@@ -58,7 +59,7 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var services = new ServiceCollection();
             var sagaTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
 
             var sut = new BusConfigurator(services, sagaTypeResolver, typeResolver, sysInfo);
 
@@ -76,7 +77,7 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var services = new ServiceCollection();
             var sagaTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
 
             var sut = new BusConfigurator(services, sagaTypeResolver, typeResolver, sysInfo);
 
@@ -94,7 +95,7 @@ namespace OpenSleigh.Core.Tests.Unit.DependencyInjection
             var services = new ServiceCollection();
             var sagaTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sysInfo = SystemInfo.New();
+            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
 
             var sut = new BusConfigurator(services, sagaTypeResolver, typeResolver, sysInfo);
 

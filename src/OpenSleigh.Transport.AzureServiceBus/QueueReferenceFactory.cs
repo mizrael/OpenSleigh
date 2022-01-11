@@ -12,9 +12,9 @@ namespace OpenSleigh.Transport.AzureServiceBus
         private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesCache = new();
         private readonly Func<Type, QueueReferences> _defaultCreator;
         private readonly IServiceProvider _sp;
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
         
-        public QueueReferenceFactory(IServiceProvider sp, SystemInfo systemInfo, Func<Type, QueueReferences> defaultCreator = null)
+        public QueueReferenceFactory(IServiceProvider sp, ISystemInfo systemInfo, Func<Type, QueueReferences> defaultCreator = null)
         {
             _sp = sp ?? throw new ArgumentNullException(nameof(sp));
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));

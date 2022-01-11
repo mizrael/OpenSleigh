@@ -1,11 +1,11 @@
-﻿using System;
+﻿using OpenSleigh.Core.Messaging;
+using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
-using System.Threading;
-using System.Threading.Tasks;
-using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Persistence;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Core")]
+[assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
 namespace OpenSleigh.Core
 {
     public abstract record SagaState
@@ -62,11 +62,7 @@ namespace OpenSleigh.Core
             _outbox.Add(message);
         }
 
-        internal async Task PersistOutboxAsync(IOutboxRepository outboxRepository, CancellationToken cancellationToken = default)
-        {
-            foreach (var message in _outbox)
-                await outboxRepository.AppendAsync(message, cancellationToken);
-            _outbox.Clear();
-        }
+        internal void ClearOutbox()
+            => _outbox.Clear();
     }
 }
