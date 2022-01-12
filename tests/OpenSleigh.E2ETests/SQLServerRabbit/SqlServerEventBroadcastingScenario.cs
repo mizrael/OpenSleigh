@@ -41,7 +41,7 @@ namespace OpenSleigh.E2ETests.SQLServerRabbit
                     builder.UseMessageNamingPolicy<DummyEvent>(() =>
                     {
                         var sp = cfg.Services.BuildServiceProvider();
-                        var sysInfo = sp.GetService<SystemInfo>();
+                        var sysInfo = sp.GetService<ISystemInfo>();
                         return new QueueReferences(_exchangeName,
                             $"{_exchangeName}.{sysInfo.ClientGroup}",
                             _exchangeName,

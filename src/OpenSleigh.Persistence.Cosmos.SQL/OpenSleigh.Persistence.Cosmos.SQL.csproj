@@ -7,9 +7,9 @@
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Persistence.Cosmos.SQL</Product>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <Title>OpenSleigh.Persistence.SQL</Title>
+    <Title>OpenSleigh.Persistence.Cosmos.SQL</Title>
     <PackageDescription>CosmosDB persistence for OpenSleigh using the SQL API.</PackageDescription>
-    <Copyright>Copyright 2021</Copyright>
+    <Copyright>Copyright 2022</Copyright>
     <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport cosmosdb entityframework sql</PackageTags>

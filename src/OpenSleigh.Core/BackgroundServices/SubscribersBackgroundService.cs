@@ -12,11 +12,11 @@ namespace OpenSleigh.Core.BackgroundServices
     public class SubscribersBackgroundService : BackgroundService
     {
         private readonly IEnumerable<ISubscriber> _subscribers;
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
         private readonly ILogger<SubscribersBackgroundService> _logger;
 
         public SubscribersBackgroundService(IEnumerable<ISubscriber> subscribers, 
-            SystemInfo systemInfo, 
+            ISystemInfo systemInfo, 
             ILogger<SubscribersBackgroundService> logger)
         {
             _subscribers = subscribers ?? throw new ArgumentNullException(nameof(subscribers));

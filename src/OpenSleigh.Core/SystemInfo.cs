@@ -1,8 +1,10 @@
 ﻿using System;
+using System.Runtime.CompilerServices;
 
+[assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
 namespace OpenSleigh.Core
-{
-    public class SystemInfo
+{ 
+    internal record SystemInfo : ISystemInfo
     {
         public SystemInfo(Guid clientId, string clientGroup)
         {
@@ -11,16 +13,12 @@ namespace OpenSleigh.Core
             this.ClientId = clientId;
             this.ClientGroup = clientGroup;
         }
-        
+
         public Guid ClientId { get; }
         public string ClientGroup { get; }
-        public bool PublishOnly { get; internal set; }
+        public bool PublishOnly { get; internal set; } = false;
 
-        public static SystemInfo New()
-        {
-            var systemInfo = new SystemInfo(Guid.NewGuid(), System.AppDomain.CurrentDomain.FriendlyName);
-            
-            return systemInfo;
-        }
+        internal static SystemInfo New()
+            => new SystemInfo(Guid.NewGuid(), AppDomain.CurrentDomain.FriendlyName);
     }
 }

@@ -12,9 +12,9 @@ namespace OpenSleigh.Transport.Kafka
 
     internal class DefaultGroupIdFactory : IGroupIdFactory
     {
-        private readonly SystemInfo _systemInfo;
+        private readonly ISystemInfo _systemInfo;
 
-        public DefaultGroupIdFactory(SystemInfo systemInfo)
+        public DefaultGroupIdFactory(ISystemInfo systemInfo)
         {
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         }

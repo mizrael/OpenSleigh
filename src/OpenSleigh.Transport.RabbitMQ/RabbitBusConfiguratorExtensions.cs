@@ -22,7 +22,8 @@ namespace OpenSleigh.Transport.RabbitMQ
             UserName = userName;
             Password = password;
             RetryDelay = retryDelay;
-            VirtualHost = vhost;
+
+            VirtualHost = string.IsNullOrWhiteSpace(vhost) ? "/" : vhost;
         }
 
         public string HostName { get; }

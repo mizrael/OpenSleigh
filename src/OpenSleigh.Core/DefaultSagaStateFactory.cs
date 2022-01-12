@@ -1,21 +1,9 @@
-using System;
+﻿using System;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
-    public interface ISagaStateFactory<in TM, out TD> : ISagaStateFactory<TD>
-        where TM : IMessage
-        where TD : SagaState
-    {
-        TD Create(TM message);
-    }
-
-    public interface ISagaStateFactory<out TD> where TD : SagaState
-    {
-        TD Create(IMessage message);
-    }
-
     internal class DefaultSagaStateFactory<TD> : ISagaStateFactory<TD> 
         where TD : SagaState
     {

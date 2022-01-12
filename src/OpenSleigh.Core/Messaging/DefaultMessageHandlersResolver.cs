@@ -6,11 +6,6 @@ using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Core.Messaging
 {
-    public interface IMessageHandlersResolver
-    {
-        IEnumerable<IHandleMessage<TM>> Resolve<TM>() where TM : IMessage;
-    }
-
     internal class DefaultMessageHandlersResolver : IMessageHandlersResolver
     {
         private readonly IServiceProvider _serviceProvider;

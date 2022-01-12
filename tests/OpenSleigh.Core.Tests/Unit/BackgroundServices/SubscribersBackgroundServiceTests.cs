@@ -14,7 +14,7 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
         [Fact]
         public void ctor_should_throw_if_input_null()
         {
-            var sysInfo = SystemInfo.New();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             var subscribers = new[]
             {
                 NSubstitute.Substitute.For<ISubscriber>(),
@@ -34,7 +34,7 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
                 NSubstitute.Substitute.For<ISubscriber>(),
                 NSubstitute.Substitute.For<ISubscriber>()
             };
-            var sysInfo = SystemInfo.New();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
             var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>(); 
             
@@ -57,8 +57,8 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
                 NSubstitute.Substitute.For<ISubscriber>(),
                 NSubstitute.Substitute.For<ISubscriber>()
             };
-            var sysInfo = SystemInfo.New();
-            sysInfo.PublishOnly = true;
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.PublishOnly.Returns(true);
 
             var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>();
 

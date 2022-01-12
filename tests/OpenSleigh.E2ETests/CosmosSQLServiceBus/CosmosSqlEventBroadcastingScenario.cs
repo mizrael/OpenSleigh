@@ -41,7 +41,7 @@ namespace OpenSleigh.E2ETests.CosmosSQLServiceBus
                 QueueReferencesPolicy<DummyEvent> policy = () =>
                 {
                     var sp = cfg.Services.BuildServiceProvider();
-                    var sysInfo = sp.GetService<SystemInfo>();
+                    var sysInfo = sp.GetService<ISystemInfo>();
                     var subscriptionName = sysInfo.ClientGroup;
                     return new QueueReferences(_topicName, subscriptionName);
                 };

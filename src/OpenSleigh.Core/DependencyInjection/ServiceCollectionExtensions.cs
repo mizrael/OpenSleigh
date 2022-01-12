@@ -25,6 +25,7 @@ namespace OpenSleigh.Core.DependencyInjection
 
             services.AddTransient<IMessageBus, DefaultMessageBus>()
                 .AddSingleton(systemInfo)
+                .AddSingleton<ISystemInfo>(systemInfo)
                 .AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
                 .AddSingleton<ISagasRunner, SagasRunner>()
                 .AddSingleton<ITypesCache, TypesCache>()

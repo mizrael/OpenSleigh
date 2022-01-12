@@ -36,6 +36,8 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             {
                 try
                 {
+                    //TODO: process these in parallel
+
                     await _messageProcessor.ProcessAsync(message, cancellationToken)
                         .ConfigureAwait(false);
                 }

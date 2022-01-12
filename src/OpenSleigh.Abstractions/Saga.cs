@@ -1,8 +1,7 @@
-﻿using System;
-using System.Runtime.CompilerServices;
-using OpenSleigh.Core.Messaging;
+﻿using OpenSleigh.Core.Messaging;
+using System;
 
-[assembly: InternalsVisibleTo("OpenSleigh.Core.Tests")]
+//TODO: rename the namespace and the Core assembly to 'OpenSleigh"
 namespace OpenSleigh.Core
 {
     public abstract class Saga<TD> : ISaga

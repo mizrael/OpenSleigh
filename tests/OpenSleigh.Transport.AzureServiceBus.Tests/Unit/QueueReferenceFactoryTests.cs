@@ -13,8 +13,8 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_should_use_default_creator_when_none_defined()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
-            
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+
             var sut = new QueueReferenceFactory(sp, sysInfo, messageType =>
             {
                 var TopicName = messageType.Name.ToLower();
@@ -32,7 +32,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_should_use_registered_creator()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             
             var policy = new QueueReferencesPolicy<DummyMessage>(() =>
             {
@@ -54,7 +54,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_should_return_valid_references()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             var sut = new QueueReferenceFactory(sp, sysInfo);
             
             var result = sut.Create<DummyMessage>();
@@ -67,7 +67,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_generic_should_return_valid_references()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             var sut = new QueueReferenceFactory(sp, sysInfo);
             var result = sut.Create<DummyMessage>();
             result.Should().NotBeNull();
@@ -79,7 +79,9 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_generic_should_return_valid_references_for_event()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.ClientGroup.Returns("test");
+
             var sut = new QueueReferenceFactory(sp, sysInfo);
             var result = sut.Create<DummyEvent>();
             result.Should().NotBeNull();
@@ -91,7 +93,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void ctor_should_throw_if_service_provider_null()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sysInfo = new SystemInfo(Guid.NewGuid(), "test");
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             Assert.Throws<ArgumentNullException>(() => new QueueReferenceFactory(null, sysInfo));
             Assert.Throws<ArgumentNullException>(() => new QueueReferenceFactory(sp, null));
         }

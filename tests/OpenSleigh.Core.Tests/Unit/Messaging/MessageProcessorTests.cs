@@ -30,9 +30,10 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var message = StartDummySaga.New();
             var runner = NSubstitute.Substitute.For<ISagasRunner>();
             var messageHandlersRunner = NSubstitute.Substitute.For<IMessageHandlersRunner>();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
             var ctx = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            ctx.SystemInfo.Returns(SystemInfo.New());
+            ctx.SystemInfo.Returns(sysInfo);
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
@@ -51,9 +52,10 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var message = StartDummySaga.New();
             var sagasRunner = NSubstitute.Substitute.For<ISagasRunner>();
             var messageHandlersRunner = NSubstitute.Substitute.For<IMessageHandlersRunner>();
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
             var ctx = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            ctx.SystemInfo.Returns(SystemInfo.New());
+            ctx.SystemInfo.Returns(sysInfo);
             var factory = NSubstitute.Substitute.For<IMessageContextFactory>();
             factory.Create(message)
                 .Returns(ctx);
