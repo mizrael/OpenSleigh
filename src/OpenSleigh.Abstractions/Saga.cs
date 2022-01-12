@@ -1,6 +1,7 @@
 ﻿using OpenSleigh.Core.Messaging;
 using System;
 
+//TODO: rename the namespace and the Core assembly to 'OpenSleigh"
 namespace OpenSleigh.Core
 {
     public abstract class Saga<TD> : ISaga
