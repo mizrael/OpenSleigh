@@ -2,12 +2,14 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Authentication;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
+using Xunit;
 
 namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
 {
-    public class DbFixture : IDisposable
+    public class DbFixture : IAsyncLifetime
     {
         private readonly MongoClient _client;
         private readonly List<string> _dbNames = new();
@@ -44,7 +46,10 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
         
         public string ConnectionString { get; }
 
-        public void Dispose()
+        public Task InitializeAsync()
+            => Task.CompletedTask;
+      
+        public async Task DisposeAsync()
         {
             if (_client is null)
                 return;
@@ -55,7 +60,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
                 var dbName = queue.Dequeue();
                 try
                 {
-                    _client.DropDatabase(dbName);
+                    await _client.DropDatabaseAsync(dbName);
                 }
                 catch (Exception e)
                 {
@@ -63,6 +68,11 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Fixtures
                     queue.Enqueue(dbName);
                 }
             }
+
+            //uncomment this if too may dbs remain hanging.
+            //var dbs = await _client.ListDatabaseNamesAsync();
+            //foreach (var dbName in dbs.ToList())
+            //    await _client.DropDatabaseAsync(dbName);
         }
     }
 }
