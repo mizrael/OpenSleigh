@@ -22,7 +22,8 @@ namespace OpenSleigh.Transport.AzureServiceBus
             ServiceBusClient serviceBusClient,
             ITransportSerializer messageParser,
             IMessageProcessor messageProcessor,
-            ILogger<ServiceBusSubscriber<TM>> logger, 
+            ILogger<ServiceBusSubscriber<TM>> logger,
+            AzureServiceBusConfiguration sbConfig,
             ISystemInfo systemInfo)
         {            
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -31,7 +32,13 @@ namespace OpenSleigh.Transport.AzureServiceBus
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
 
             var references = queueReferenceFactory.Create<TM>();
-            _processor = serviceBusClient.CreateProcessor(references.TopicName, references.SubscriptionName);
+            _processor = serviceBusClient.CreateProcessor(
+                topicName: references.TopicName,
+                subscriptionName: references.SubscriptionName, new ServiceBusProcessorOptions()
+                {
+                    AutoCompleteMessages = false,
+                    MaxConcurrentCalls = sbConfig.MaxConcurrentCalls
+                });
             _processor.ProcessMessageAsync += MessageHandler;
             _processor.ProcessErrorAsync += ProcessErrorAsync;
         }

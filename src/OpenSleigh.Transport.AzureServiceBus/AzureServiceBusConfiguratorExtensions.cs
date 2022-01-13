@@ -8,8 +8,8 @@ using Azure.Messaging.ServiceBus;
 namespace OpenSleigh.Transport.AzureServiceBus
 {
     [ExcludeFromCodeCoverage]
-    public record AzureServiceBusConfiguration(string ConnectionString);
-
+    public record AzureServiceBusConfiguration(string ConnectionString, int MaxConcurrentCalls = 1);
+    
     [ExcludeFromCodeCoverage]
     public static class AzureServiceBusConfiguratorExtensions
     {
