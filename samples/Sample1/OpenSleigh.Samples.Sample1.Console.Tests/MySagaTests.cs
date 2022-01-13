@@ -40,6 +40,6 @@ namespace OpenSleigh.Samples.Sample1.Console.Tests
 
         public TM Message { get; }
 
-        public SystemInfo SystemInfo => throw new NotImplementedException();
+        public ISystemInfo SystemInfo => throw new NotImplementedException();
     }
 }
