@@ -18,8 +18,9 @@
     <PackageProjectUrl>https://www.opensleigh.net/</PackageProjectUrl>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <IncludeSymbols>true</IncludeSymbols>
-    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>	  
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <ItemGroup>

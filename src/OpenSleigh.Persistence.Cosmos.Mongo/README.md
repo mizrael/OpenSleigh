@@ -25,3 +25,7 @@ Of course it can be used in conjunction with any other Transport library as well
 
 ### Notes
 - as of today, Cosmos has no support for multi-document transactions across collections.
+
+---
+
+Do you like this project? Then consider giving a donation! [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate?business=9F94U4GWN7YS6&currency_code=CAD&item_name=OpenSleigh)
