@@ -53,7 +53,12 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Post
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL.Tests", "tests\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj", "{54D55A70-20E1-4480-BECB-16E3937D97D7}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Abstractions", "src\OpenSleigh.Abstractions\OpenSleigh.Abstractions.csproj", "{5D55ADA4-06CD-4311-99D7-A8221251B031}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Abstractions", "src\OpenSleigh.Abstractions\OpenSleigh.Abstractions.csproj", "{5D55ADA4-06CD-4311-99D7-A8221251B031}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E078E04F-0DB2-4595-8D37-085FFCEC508D}"
+	ProjectSection(SolutionItems) = preProject
+		test.runsettings = test.runsettings
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
