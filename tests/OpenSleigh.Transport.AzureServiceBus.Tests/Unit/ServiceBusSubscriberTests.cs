@@ -39,7 +39,14 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
             var queueReferenceFactory = Substitute.For<IQueueReferenceFactory>();
             queueReferenceFactory.Create<DummyMessage>().Returns(queueRefs);
 
+            var processor = Substitute.For<ServiceBusProcessor>();
+
             var serviceBusClient = Substitute.For<ServiceBusClient>();
+            serviceBusClient.CreateProcessor(queueRefs.TopicName,
+                                     queueRefs.SubscriptionName,
+                                     Arg.Any<ServiceBusProcessorOptions>())
+                .ReturnsForAnyArgs(processor);
+
             var messageParser = Substitute.For<ITransportSerializer>();
             var messageProcessor = Substitute.For<IMessageProcessor>();
             var logger = Substitute.For<ILogger<ServiceBusSubscriber<DummyMessage>>>();
