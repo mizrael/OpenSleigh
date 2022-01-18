@@ -1,6 +1,5 @@
 ﻿using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
 using NSubstitute;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Utils;

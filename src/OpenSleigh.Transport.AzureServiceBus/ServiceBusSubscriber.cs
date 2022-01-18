@@ -25,7 +25,14 @@ namespace OpenSleigh.Transport.AzureServiceBus
             ILogger<ServiceBusSubscriber<TM>> logger,
             AzureServiceBusConfiguration sbConfig,
             ISystemInfo systemInfo)
-        {            
+        {
+            if (queueReferenceFactory is null)            
+                throw new ArgumentNullException(nameof(queueReferenceFactory));
+            if (serviceBusClient is null)            
+                throw new ArgumentNullException(nameof(serviceBusClient));            
+            if (sbConfig is null)            
+                throw new ArgumentNullException(nameof(sbConfig));           
+
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
