@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -49,8 +50,14 @@ namespace OpenSleigh.Persistence.Cosmos.SQL.Tests.Fixtures
 
         public async Task DisposeAsync()
         {
-            foreach (var ctx in _dbContexts)                
-                await ctx.Database.EnsureDeletedAsync();
+            var contexts = new Queue<SagaDbContext>(_dbContexts);
+            while (contexts.Any())
+            {
+                var ctx = contexts.Dequeue();
+                bool deleted = await ctx.Database.EnsureDeletedAsync(); 
+                if(!deleted)
+                    contexts.Enqueue(ctx);
+            }                
 
             //uncomment this if too may dbs remain hanging.
             //using var client = new Microsoft.Azure.Cosmos.CosmosClient (ConnectionString);
