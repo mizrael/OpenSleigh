@@ -71,5 +71,53 @@ namespace OpenSleigh.Core.Tests.Unit.BackgroundServices
                 await subscriber.DidNotReceiveWithAnyArgs()
                     .StartAsync(Arg.Any<CancellationToken>());
         }
+
+        [Fact]
+        public async Task StopAsync_should_stop_subscribers_when_not_publish_only()
+        {
+            var subscribers = new[]
+            {
+                NSubstitute.Substitute.For<ISubscriber>(),
+                NSubstitute.Substitute.For<ISubscriber>(),
+                NSubstitute.Substitute.For<ISubscriber>()
+            };
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.PublishOnly.Returns(false);
+
+            var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>();
+
+            var sut = new SubscribersBackgroundService(subscribers, sysInfo, logger);
+
+            var tokenSource = new CancellationTokenSource();
+            await sut.StopAsync(tokenSource.Token);
+
+            foreach (var subscriber in subscribers)
+                await subscriber.Received(1)
+                    .StopAsync(Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task StopAsync_should_not_stop_subscribers_when_publish_only()
+        {
+            var subscribers = new[]
+            {
+                NSubstitute.Substitute.For<ISubscriber>(),
+                NSubstitute.Substitute.For<ISubscriber>(),
+                NSubstitute.Substitute.For<ISubscriber>()
+            };
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.PublishOnly.Returns(true);
+
+            var logger = NSubstitute.Substitute.For<ILogger<SubscribersBackgroundService>>();
+
+            var sut = new SubscribersBackgroundService(subscribers, sysInfo, logger);
+
+            var tokenSource = new CancellationTokenSource();
+            await sut.StopAsync(tokenSource.Token);
+
+            foreach (var subscriber in subscribers)
+                await subscriber.DidNotReceive()
+                    .StopAsync(Arg.Any<CancellationToken>());
+        }
     }
 }

@@ -45,5 +45,8 @@ namespace OpenSleigh.Core.Tests.Sagas
         {
             return Task.CompletedTask;
         }
+
+        public void PublishTestWrapper<TM>(TM message) where TM : IMessage
+            => base.Publish(message);
     }
 }

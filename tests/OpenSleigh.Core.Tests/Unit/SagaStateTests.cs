@@ -65,5 +65,12 @@ namespace OpenSleigh.Core.Tests.Unit
             state.MarkAsCompleted();
             state.IsCompleted.Should().BeTrue();
         }
+
+        [Fact]
+        public void AddToOutbox_should_throw_if_message_null()
+        {
+            var sut = new DummySagaState(Guid.NewGuid());
+            Assert.Throws<ArgumentNullException>(() => sut.AddToOutbox<DummyMessage>(null));
+        }
     }
 }

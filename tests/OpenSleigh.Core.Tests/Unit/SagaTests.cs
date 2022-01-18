@@ -22,6 +22,16 @@ namespace OpenSleigh.Core.Tests.Unit
             sut.State.Should().Be(state);
         }
 
-        //TODO: add tests for Publish
+        [Fact]
+        public void Publish_should_add_message_to_outbox()
+        {
+            var message = DummyMessage.New();
+
+            var state = new DummySagaState(Guid.NewGuid());
+            var sut = new DummySaga(state);
+            sut.PublishTestWrapper(message);
+
+            state.Outbox.Should().Contain(message);
+        }
     }
 }
