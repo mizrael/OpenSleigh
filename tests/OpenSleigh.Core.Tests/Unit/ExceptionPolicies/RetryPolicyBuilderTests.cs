@@ -51,6 +51,14 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         }
 
         [Fact]
+        public void OnException_should_set_OnExceptionHandler()
+        {
+            var sut = new RetryPolicyBuilder();
+            sut.OnException(ctx => { });
+            sut.OnExceptionHandler.Should().NotBeNull();
+        }
+
+        [Fact]
         public void WithDelay_should_throw_when_input_null()
         {
             var sut = new RetryPolicyBuilder();

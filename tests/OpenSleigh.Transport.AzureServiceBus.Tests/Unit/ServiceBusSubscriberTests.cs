@@ -6,6 +6,8 @@ using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
 using System;
 using System.ComponentModel.DataAnnotations;
+using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
@@ -59,6 +61,33 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
                     .CreateProcessor(queueRefs.TopicName,
                                      queueRefs.SubscriptionName,
                                      Arg.Is<ServiceBusProcessorOptions>(opts => !opts.AutoCompleteMessages && opts.MaxConcurrentCalls == sbConfig.MaxConcurrentCalls));
+        }
+
+        [Fact]
+        public async Task StartAsync_should_start_processing_messages()
+        {
+            var queueRefs = new QueueReferences("test topic", "test subscription");
+            var queueReferenceFactory = Substitute.For<IQueueReferenceFactory>();
+            queueReferenceFactory.Create<DummyMessage>().Returns(queueRefs);
+
+            var processor = Substitute.For<ServiceBusProcessor>();
+
+            var serviceBusClient = Substitute.For<ServiceBusClient>();
+            serviceBusClient.CreateProcessor(queueRefs.TopicName,
+                                     queueRefs.SubscriptionName,
+                                     Arg.Any<ServiceBusProcessorOptions>())
+                .ReturnsForAnyArgs(processor);
+
+            var messageParser = Substitute.For<ITransportSerializer>();
+            var messageProcessor = Substitute.For<IMessageProcessor>();
+            var logger = Substitute.For<ILogger<ServiceBusSubscriber<DummyMessage>>>();
+            var sbConfig = new AzureServiceBusConfiguration("lorem", 42);
+            var systemInfo = Substitute.For<ISystemInfo>();
+
+            var sut = new ServiceBusSubscriber<DummyMessage>(queueReferenceFactory, serviceBusClient, messageParser, messageProcessor, logger, sbConfig, systemInfo);
+            await sut.StartAsync();
+
+            await processor.Received(1).StartProcessingAsync(Arg.Any<CancellationToken>());
         }
     }
 }

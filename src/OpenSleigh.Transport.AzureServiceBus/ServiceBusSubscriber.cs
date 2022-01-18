@@ -94,7 +94,7 @@ namespace OpenSleigh.Transport.AzureServiceBus
             // apparent limitations of the underlying AMQP library.
             // more details here: https://github.com/Azure/azure-sdk-for-net/issues/19306
             // Therefore we do it only when in Release mode. Debug mode is used when running the tests suite.
-            await _processor.StartProcessingAsync();            
+            await _processor.StopProcessingAsync();            
             _processor.ProcessMessageAsync -= MessageHandler;
             _processor.ProcessErrorAsync -= ProcessErrorAsync;
             await _processor.DisposeAsync();
