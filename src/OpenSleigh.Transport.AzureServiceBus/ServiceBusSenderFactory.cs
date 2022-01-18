@@ -6,6 +6,7 @@ using Azure.Messaging.ServiceBus;
 using OpenSleigh.Core.Messaging;
 
 [assembly: InternalsVisibleTo("OpenSleigh.Transport.AzureServiceBus.Tests")]
+[assembly: InternalsVisibleTo("DynamicProxyGenAssembly2")]
 namespace OpenSleigh.Transport.AzureServiceBus
 {
     internal class ServiceBusSenderFactory : IAsyncDisposable, IServiceBusSenderFactory

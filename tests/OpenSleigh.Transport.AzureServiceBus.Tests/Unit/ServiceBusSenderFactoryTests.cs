@@ -26,12 +26,12 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
             serviceBusClient.WhenForAnyArgs(c => c.CreateSender(Arg.Any<string>()))
                 .DoNotCallBase();
             serviceBusClient.CreateSender(Arg.Any<string>()).ReturnsForAnyArgs(sender);
-                
+
             var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
             var references = new QueueReferences("lorem", "ipsum");
             factory.Create<DummyMessage>()
                 .Returns(references);
-            
+
             var sut = new ServiceBusSenderFactory(factory, serviceBusClient);
             var result = sut.Create<DummyMessage>();
             result.Should().Be(sender);
@@ -44,7 +44,7 @@ namespace OpenSleigh.Transport.AzureServiceBus.Tests.Unit
         public void Create_should_recreate_sender_when_null()
         {
             var serviceBusClient = NSubstitute.Substitute.ForPartsOf<ServiceBusClient>();
-            
+
             serviceBusClient.WhenForAnyArgs(c => c.CreateSender(Arg.Any<string>()))
                 .DoNotCallBase();
             serviceBusClient.CreateSender(Arg.Any<string>()).ReturnsNullForAnyArgs();

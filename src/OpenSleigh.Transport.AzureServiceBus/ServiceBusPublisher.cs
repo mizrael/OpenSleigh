@@ -1,11 +1,11 @@
-﻿using System;
-using System.Threading;
-using System.Threading.Tasks;
-using Azure.Messaging.ServiceBus;
+﻿using Azure.Messaging.ServiceBus;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Core;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Utils;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.AzureServiceBus
 {
