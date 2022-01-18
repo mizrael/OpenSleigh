@@ -11,6 +11,12 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
     public class DefaultMessageHandlersResolverTests
     {
         [Fact]
+        public void ctor_should_throw_when_input_null()
+        {
+            Assert.Throws<ArgumentNullException>(() => new DefaultMessageHandlersResolver(null));
+        }
+
+        [Fact]
         public void Resolve_should_return_empty_collection_when_no_handlers_registered_for_message()
         {
             var sp = NSubstitute.Substitute.For<IServiceProvider>();

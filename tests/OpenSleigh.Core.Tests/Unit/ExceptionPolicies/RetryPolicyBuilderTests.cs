@@ -51,6 +51,13 @@ namespace OpenSleigh.Core.Tests.Unit.ExceptionPolicies
         }
 
         [Fact]
+        public void WithDelay_should_throw_when_input_null()
+        {
+            var sut = new RetryPolicyBuilder();
+            Assert.Throws<ArgumentNullException>(() => sut.WithDelay(null));
+        }
+
+        [Fact]
         public void WithDelayFactory_should_add_handler()
         {
             var sut = new RetryPolicyBuilder();
