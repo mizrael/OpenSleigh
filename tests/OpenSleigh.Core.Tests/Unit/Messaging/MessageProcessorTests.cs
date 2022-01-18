@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using FluentAssertions;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;

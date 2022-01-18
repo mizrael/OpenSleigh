@@ -1,4 +1,6 @@
 ﻿using System;
+using FluentAssertions;
+using NSubstitute;
 using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
@@ -30,6 +32,24 @@ namespace OpenSleigh.Core.Tests.Unit
             var message = StartDummySaga.New();
             var ex = Assert.Throws<StateCreationException>(() => sut.Create(message));
             ex.Message.Contains($"no state factory registered for message type '{message.GetType().FullName}'");
+        }
+
+        [Fact]
+        public void Create_should_use_registered_factory_for_input_message()
+        {
+            var expectedState = new DummySagaState(Guid.NewGuid());
+            var factory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
+            factory.Create(null).ReturnsForAnyArgs(expectedState);
+
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            sp.GetService(Arg.Any<Type>())
+                .Returns(factory);
+
+            var sut = new DefaultSagaStateFactory<DummySagaState>(sp);
+
+            var message = StartDummySaga.New();
+            var result = sut.Create(message);
+            result.Should().Be(expectedState);
         }
     }
 }
