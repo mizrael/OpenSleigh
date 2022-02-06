@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 
@@ -11,8 +13,13 @@ namespace OpenSleigh.Transport.Kafka
             where TM : IMessage
         {
             var messageType = typeof(TM);
+            
             configurator.Services.AddBusSubscriber(
                 typeof(KafkaSubscriber<>).MakeGenericType(messageType));
+
+            configurator.Services.AddSingleton(typeof(IInfrastructureCreator),
+                    typeof(KafkaInfrastructureCreator<>).MakeGenericType(messageType));
+
             return configurator;
         }
     }
