@@ -4,21 +4,21 @@ using OpenSleigh.Core;
 using OpenSleigh.Core.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 
-namespace OpenSleigh.Transport.Kafka
+namespace OpenSleigh.Transport.AzureServiceBus
 {
     [ExcludeFromCodeCoverage]
-    public static class KafkaMessageConfiguratorExtensions
+    public static class ServiceBusMessageConfiguratorExtensions
     {
-        public static IMessageHandlerConfigurator<TM> UseKafkaTransport<TM>(this IMessageHandlerConfigurator<TM> configurator)
+        public static IMessageHandlerConfigurator<TM> UseAzureServiceBusTransport<TM>(this IMessageHandlerConfigurator<TM> configurator)
             where TM : IMessage
         {
             var messageType = typeof(TM);
-            
+
             configurator.Services.AddBusSubscriber(
-                typeof(KafkaSubscriber<>).MakeGenericType(messageType));
+                typeof(ServiceBusSubscriber<>).MakeGenericType(messageType));
 
             configurator.Services.AddSingleton(typeof(IInfrastructureCreator),
-                    typeof(KafkaInfrastructureCreator<>).MakeGenericType(messageType));
+                    typeof(AzureServiceBusInfrastructureCreator<>).MakeGenericType(messageType));
 
             return configurator;
         }
