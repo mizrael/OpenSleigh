@@ -120,27 +120,35 @@ namespace OpenSleigh.Core.Tests.Unit
         [Fact]
         public async Task SaveAsync_should_persist_outbox()
         {
-            var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
-
-            var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
-
-            var outboxRepository = NSubstitute.Substitute.For<IOutboxRepository>();
-
-            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
-
             var state = new DummySagaState(Guid.NewGuid());
             var saga = new DummySaga(state);
 
             var message = StartDummySaga.New();
+
+            var sagaStateFactory = NSubstitute.Substitute.For<ISagaStateFactory<DummySagaState>>();
+
+            var sagaStateRepo = NSubstitute.Substitute.For<ISagaStateRepository>();
+
+            // the outbox collection is mutated inside PersistOutboxAsync()
+            // which would make calls to .Received() fail.
+            var called = false;
+            var outboxRepo = NSubstitute.Substitute.For<IOutboxRepository>();
+            outboxRepo.WhenForAnyArgs(repo =>
+            {
+                repo.AppendAsync(null, default);
+            }).Do(ci =>
+            {
+                var messages = ci.ArgAt<IEnumerable<IMessage>>(0);
+                called = messages != null && messages.Any(msg => msg.Id == message.Id);
+            });
+
+            var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepo);
+                       
             saga.PublishTestWrapper(message);
             var lockId = Guid.NewGuid();
-
             await sut.SaveAsync(saga, lockId, CancellationToken.None);
 
-            await outboxRepository.Received(1)
-                     .AppendAsync(
-                        Arg.Is<IEnumerable<IMessage>>(msg => msg.Contains(message)),
-                        Arg.Any<CancellationToken>());
+            called.Should().BeTrue();
         }
     }
 }

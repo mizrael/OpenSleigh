@@ -46,14 +46,22 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new DummySaga(state);
             sut.PublishTestWrapper(message);
 
+            // the outbox collection is mutated inside PersistOutboxAsync()
+            // which would make calls to .Received() fail.
+            var called = false;
             var outboxRepo = NSubstitute.Substitute.For<IOutboxRepository>();
+            outboxRepo.WhenForAnyArgs(repo =>
+            {
+                repo.AppendAsync(null, default);
+            }).Do(ci =>
+            {
+                var messages = ci.ArgAt<IEnumerable<IMessage>>(0);
+                called = messages != null && messages.Any(msg => msg.Id == message.Id);
+            });
 
             await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
 
-            await outboxRepo.Received(1)
-                      .AppendAsync(
-                        Arg.Is<IEnumerable<IMessage>>(msg => msg.Contains(message)),
-                        Arg.Any<CancellationToken>());
+            called.Should().BeTrue();
         }
     }
 }
