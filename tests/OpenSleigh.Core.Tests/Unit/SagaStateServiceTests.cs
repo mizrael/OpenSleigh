@@ -107,8 +107,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             var state = new DummySagaState(Guid.NewGuid());
             var lockId = Guid.NewGuid();
+            var saga = new DummySaga(state);
 
-            await sut.SaveAsync(state, lockId, CancellationToken.None);
+            await sut.SaveAsync(saga, lockId, CancellationToken.None);
 
             await sagaStateRepo.Received(1)
                 .ReleaseLockAsync(state, lockId, CancellationToken.None);
@@ -126,12 +127,13 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new SagaStateService<DummySaga, DummySagaState>(sagaStateFactory, sagaStateRepo, outboxRepository);
 
             var state = new DummySagaState(Guid.NewGuid());
+            var saga = new DummySaga(state);
 
             var message = StartDummySaga.New();
-            state.AddToOutbox(message);
+            saga.PublishTestWrapper(message);
             var lockId = Guid.NewGuid();
 
-            await sut.SaveAsync(state, lockId, CancellationToken.None);
+            await sut.SaveAsync(saga, lockId, CancellationToken.None);
 
             await outboxRepository.Received(1)
                 .AppendAsync(message, Arg.Any<CancellationToken>());

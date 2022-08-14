@@ -9,9 +9,7 @@ using System.Text.Json.Serialization;
 namespace OpenSleigh.Core
 {
     public abstract record SagaState
-    {
-        private readonly List<IMessage> _outbox = new();
-                
+    {                
         private HashSet<Guid> _processedMessages = new();
         
         protected SagaState(Guid id)
@@ -30,9 +28,6 @@ namespace OpenSleigh.Core
             get { return _processedMessages; }
             private set { _processedMessages = new HashSet<Guid>(value); }
         }
-
-        [JsonIgnore]
-        public IReadOnlyCollection<IMessage> Outbox => _outbox;
 
         public void SetAsProcessed<TM>(TM message) where TM : IMessage
         {
@@ -54,15 +49,5 @@ namespace OpenSleigh.Core
         }        
 
         public void MarkAsCompleted() => this.IsCompleted = true;
-
-        internal void AddToOutbox<TM>(TM message) where TM : IMessage
-        {
-            if (message == null) 
-                throw new ArgumentNullException(nameof(message));
-            _outbox.Add(message);
-        }
-
-        internal void ClearOutbox()
-            => _outbox.Clear();
     }
 }

@@ -67,7 +67,7 @@ namespace OpenSleigh.Core
 
                 state.SetAsProcessed(messageContext.Message);
 
-                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+                await _sagaStateService.SaveAsync(saga, lockId, cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
             }
@@ -77,13 +77,13 @@ namespace OpenSleigh.Core
 
                 if (saga is ICompensateMessage<TM> compensatingHandler)
                 {
-                    await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, state, lockId, cancellationToken);
+                    await ExecuteCompensationAsync(compensatingHandler, messageContext, ex, saga, lockId, cancellationToken);
                     return;
                 }
 
                 // if it's not a compensating handler, we save the state and release the lock
                 // so that the message can be potentially picked up by another consumer.
-                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+                await _sagaStateService.SaveAsync(saga, lockId, cancellationToken);
 
                 throw;
             }
@@ -92,7 +92,7 @@ namespace OpenSleigh.Core
         private async Task ExecuteCompensationAsync<TM>(ICompensateMessage<TM> compensatingHandler,
             IMessageContext<TM> messageContext,
             Exception exception,
-            TD state,
+            Saga<TD> saga,
             Guid lockId,
             CancellationToken cancellationToken) where TM : IMessage
         {
@@ -106,8 +106,8 @@ namespace OpenSleigh.Core
             {
                 await compensatingHandler.CompensateAsync(compensationContext, cancellationToken);
 
-                state.SetAsProcessed(messageContext.Message);
-                await _sagaStateService.SaveAsync(state, lockId, cancellationToken);
+                saga.State.SetAsProcessed(messageContext.Message);
+                await _sagaStateService.SaveAsync(saga, lockId, cancellationToken);
 
                 await compensatingTransaction.CommitAsync(cancellationToken);
             }

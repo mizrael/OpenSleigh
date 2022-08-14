@@ -48,13 +48,13 @@ namespace OpenSleigh.Core
             throw new StateCreationException(typeof(TD), correlationId);
         }
 
-        public async Task SaveAsync(TD state, Guid lockId, CancellationToken cancellationToken = default)
+        public async Task SaveAsync(Saga<TD> saga, Guid lockId, CancellationToken cancellationToken = default)
         {
-            await _sagaStateRepository.ReleaseLockAsync(state, lockId, cancellationToken);
+            await _sagaStateRepository.ReleaseLockAsync(saga.State, lockId, cancellationToken)
+                                      .ConfigureAwait(false);
 
-            foreach (var message in state.Outbox)
-                await _outboxRepository.AppendAsync(message, cancellationToken);
-            state.ClearOutbox();
+            await saga.PersistOutboxAsync(_outboxRepository, cancellationToken)
+                      .ConfigureAwait(false);
         }
     }
 }

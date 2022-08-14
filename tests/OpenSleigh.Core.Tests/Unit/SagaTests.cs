@@ -1,5 +1,9 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 using FluentAssertions;
+using NSubstitute;
+using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
 
@@ -23,7 +27,15 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public void Publish_should_add_message_to_outbox()
+        public void Publish_should_throw_if_message_null()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            var sut = new DummySaga(state);
+            Assert.Throws<ArgumentNullException>(() => sut.PublishTestWrapper<DummyMessage>(null));
+        }
+
+        [Fact]
+        public async Task Publish_should_add_message_to_outbox()
         {
             var message = DummyMessage.New();
 
@@ -31,7 +43,11 @@ namespace OpenSleigh.Core.Tests.Unit
             var sut = new DummySaga(state);
             sut.PublishTestWrapper(message);
 
-            state.Outbox.Should().Contain(message);
+            var outboxRepo = NSubstitute.Substitute.For<IOutboxRepository>();
+
+            await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
+
+            await outboxRepo.Received(1).AppendAsync(message, Arg.Any<CancellationToken>());
         }
     }
 }
