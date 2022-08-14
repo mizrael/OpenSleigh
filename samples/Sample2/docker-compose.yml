@@ -9,7 +9,6 @@ services:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: password
       MONGO_REPLICA_SET_NAME: opensleigh
-    command: ["--replSet", "opensleigh", "--bind_ip_all"]  
     healthcheck:
       test: test $$(echo "rs.initiate().ok || rs.status().ok" | mongo -u root -p password --quiet) -eq 1
       interval: 10s
