@@ -29,11 +29,14 @@ namespace OpenSleigh.Persistence.InMemory.Messaging
             return Task.CompletedTask;
         }
 
-        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IEnumerable<IMessage> messages, CancellationToken cancellationToken = default)
         {
-            if (message == null) 
-                throw new ArgumentNullException(nameof(message));
-            _messages.TryAdd(message.Id, (message, null, false));
+            if (messages == null) 
+                throw new ArgumentNullException(nameof(messages));
+            
+            foreach(var message in messages)
+                _messages.TryAdd(message.Id, (message, null, false));
+
             return Task.CompletedTask;
         }
 

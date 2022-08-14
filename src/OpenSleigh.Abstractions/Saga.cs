@@ -32,9 +32,8 @@ namespace OpenSleigh.Core
             if (outboxRepository is null)            
                 throw new ArgumentNullException(nameof(outboxRepository));
             
-            foreach (var message in _outbox)
-                await outboxRepository.AppendAsync(message, cancellationToken)
-                                      .ConfigureAwait(false);
+            await outboxRepository.AppendAsync(_outbox, cancellationToken)
+                                  .ConfigureAwait(false);
 
             _outbox.Clear();
         }

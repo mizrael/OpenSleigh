@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
@@ -136,7 +138,9 @@ namespace OpenSleigh.Core.Tests.Unit
             await sut.SaveAsync(saga, lockId, CancellationToken.None);
 
             await outboxRepository.Received(1)
-                .AppendAsync(message, Arg.Any<CancellationToken>());
+                     .AppendAsync(
+                        Arg.Is<IEnumerable<IMessage>>(msg => msg.Contains(message)),
+                        Arg.Any<CancellationToken>());
         }
     }
 }

@@ -1,8 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using NSubstitute;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Persistence;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
@@ -47,7 +50,10 @@ namespace OpenSleigh.Core.Tests.Unit
 
             await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
 
-            await outboxRepo.Received(1).AppendAsync(message, Arg.Any<CancellationToken>());
+            await outboxRepo.Received(1)
+                      .AppendAsync(
+                        Arg.Is<IEnumerable<IMessage>>(msg => msg.Contains(message)),
+                        Arg.Any<CancellationToken>());
         }
     }
 }

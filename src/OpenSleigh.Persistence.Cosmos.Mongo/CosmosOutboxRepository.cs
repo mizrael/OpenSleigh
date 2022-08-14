@@ -99,26 +99,28 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo
                 throw new ArgumentException($"message '{message.Id}' not found. Maybe it was already processed?");
         }
 
-        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IEnumerable<IMessage> messages, CancellationToken cancellationToken = default)
         {
-            if (message == null) 
-                throw new ArgumentNullException(nameof(message));
+            if (messages == null) 
+                throw new ArgumentNullException(nameof(messages));
 
-            return AppendAsyncCore(message, cancellationToken);
+            return AppendAsyncCore(messages, cancellationToken);
         }
 
-        private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
+        private async Task AppendAsyncCore(IEnumerable<IMessage> messages, CancellationToken cancellationToken)
         {
-            var data = _serializer.Serialize(message);
-            var entity =
-                new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
-           
+            var entities = messages.Select(message =>
+            {
+                var data = _serializer.Serialize(message);
+                return new Entities.OutboxMessage(message.Id, data, message.GetType().FullName, MessageStatuses.Pending.ToString());
+            });
+
             if (_dbContext.Transaction?.Session != null)
-                await _dbContext.Outbox.InsertOneAsync(_dbContext.Transaction.Session, entity, null, cancellationToken)
-                    .ConfigureAwait(false);
+                await _dbContext.Outbox.InsertManyAsync(_dbContext.Transaction.Session, entities, null, cancellationToken)
+                                       .ConfigureAwait(false);
             else
-                await _dbContext.Outbox.InsertOneAsync(entity, null, cancellationToken)
-                    .ConfigureAwait(false);
+                await _dbContext.Outbox.InsertManyAsync(entities, null, cancellationToken)
+                                        .ConfigureAwait(false);
         }
 
         public async Task CleanProcessedAsync(CancellationToken cancellationToken = default)

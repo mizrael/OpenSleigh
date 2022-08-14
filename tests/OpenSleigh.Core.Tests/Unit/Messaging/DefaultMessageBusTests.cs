@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
@@ -29,7 +31,10 @@ namespace OpenSleigh.Core.Tests.Unit.Messaging
             var message = StartDummySaga.New();
             await sut.PublishAsync(message);
 
-            await repo.Received(1).AppendAsync(message, Arg.Any<CancellationToken>());
+            await repo.Received(1)
+                     .AppendAsync(
+                        Arg.Is<IEnumerable<IMessage>>(msg => msg.Contains(message)), 
+                        Arg.Any<CancellationToken>());
         }
     }
 }

@@ -26,10 +26,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
                 DummyMessage.New(),
                 DummyMessage.New(),
             };
-            var sut = new InMemoryOutboxRepository();
-
-            foreach (var message in messages)
-                await sut.AppendAsync(message);
+            var sut = new InMemoryOutboxRepository();            
+            await sut.AppendAsync(messages);
 
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull().And.Contain(messages);
@@ -53,9 +51,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
                 DummyMessage.New(),
             };
             var sut = new InMemoryOutboxRepository();
-
-            foreach (var message in messages)
-                await sut.AppendAsync(message);
+                        
+            await sut.AppendAsync(messages);
 
             var results = await sut.ReadMessagesToProcess();
             results.Should().NotBeNull().And.Contain(messages);
@@ -71,9 +68,8 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
                 DummyMessage.New(),
             };
             var sut = new InMemoryOutboxRepository();
-
-            foreach (var message in messages)
-                await sut.AppendAsync(message);
+                        
+            await sut.AppendAsync(messages);
 
             var lockId = await sut.LockAsync(messages[0]);
             await sut.ReleaseAsync(messages[0], lockId);
@@ -90,7 +86,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             var message = DummyMessage.New();
             var sut = new InMemoryOutboxRepository();
 
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             
             await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.Empty));
         }
@@ -115,7 +111,7 @@ namespace OpenSleigh.Persistence.InMemory.Tests.Unit
             var message = DummyMessage.New(); 
             
             var sut = new InMemoryOutboxRepository();
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             await sut.LockAsync(message);
 
             await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));

@@ -99,19 +99,23 @@ namespace OpenSleigh.Persistence.Cosmos.SQL
             }
         }
 
-        public Task AppendAsync(IMessage message, CancellationToken cancellationToken = default)
+        public Task AppendAsync(IEnumerable<IMessage> messages, CancellationToken cancellationToken = default)
         {
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
+            if (messages == null)
+                throw new ArgumentNullException(nameof(messages));
 
-            return AppendAsyncCore(message, cancellationToken);
+            return AppendAsyncCore(messages, cancellationToken);
         }
 
-        private async Task AppendAsyncCore(IMessage message, CancellationToken cancellationToken)
+        private async Task AppendAsyncCore(IEnumerable<IMessage> messages, CancellationToken cancellationToken)
         {
-            var serialized = _serializer.Serialize(message);
-            var entity = OutboxMessage.New(message.Id, serialized, message.GetType().FullName, message.CorrelationId);
-            _dbContext.OutboxMessages.Add(entity);
+            var entities = messages.Select(message =>
+            {
+                var serialized = _serializer.Serialize(message);
+                return OutboxMessage.New(message.Id, serialized, message.GetType().FullName, message.CorrelationId);
+            });
+
+            _dbContext.OutboxMessages.AddRange(entities);
             await _dbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);
         }
