@@ -38,7 +38,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var message = StartDummySaga.New();
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
 
             var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.Id, message.Id);
 
@@ -56,9 +56,9 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var message = StartDummySaga.New();
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
 
-            await Assert.ThrowsAsync<MongoDB.Driver.MongoWriteException> (async () => await sut.AppendAsync(message));
+            await Assert.ThrowsAsync<MongoDB.Driver.MongoWriteException> (async () => await sut.AppendAsync(new[] { message }));
         }
 
         [Fact]
@@ -67,7 +67,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var message = StartDummySaga.New();
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
 
             var messages = await sut.ReadMessagesToProcess();
             messages.Should().NotBeNullOrEmpty();
@@ -79,7 +79,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var message = StartDummySaga.New();
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
 
             var lockId = await sut.LockAsync(message);
 
@@ -97,7 +97,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var message = StartDummySaga.New();
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
 
             await sut.LockAsync(message);
 
@@ -111,7 +111,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
             
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             var lockId = await sut.LockAsync(message);
             await sut.ReleaseAsync(message, lockId);
 
@@ -134,7 +134,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             
             await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
         }
@@ -146,7 +146,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             await sut.LockAsync(message);
 
             await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
@@ -159,7 +159,7 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
             var (db, _) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            await sut.AppendAsync(message);
+            await sut.AppendAsync(new[] { message });
             var lockId = await sut.LockAsync(message);
             await sut.ReleaseAsync(message, lockId);
 
@@ -184,11 +184,11 @@ namespace OpenSleigh.Persistence.Cosmos.Mongo.Tests.Integration
                 StartDummySaga.New()
             };
             foreach(var message in messages)
-                await sut.AppendAsync(message);
+                await sut.AppendAsync(new[] { message });
             
             var processedMessage = StartDummySaga.New();
 
-            await sut.AppendAsync(processedMessage);
+            await sut.AppendAsync(new[] { processedMessage });
             var lockId = await sut.LockAsync(processedMessage);
             await sut.ReleaseAsync(processedMessage, lockId);
 
