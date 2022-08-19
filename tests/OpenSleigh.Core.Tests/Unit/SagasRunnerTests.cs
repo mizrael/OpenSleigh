@@ -3,126 +3,92 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
+using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OpenSleigh.Core.Tests.Unit
 {
-    public class SagasRunnerTests
-    {
-        [Fact]
-        public void ctor_should_throw_if_arguments_null(){
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+    //public class SagasRunnerTests
+    //{
+    //    [Fact]
+    //    public void ctor_should_throw_if_arguments_null()
+    //    {
+    //        var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+    //        var runnersFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+    //        Assert.Throws<ArgumentNullException>(() => new SagasRunner(null, sp));
+    //    }
 
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(null, stateTypeResolver, typesCache));
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(sp, null, typesCache));
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(sp, stateTypeResolver, null));
-        }
+    //    [Fact]
+    //    public async Task RunAsync_should_throw_if_message_null()
+    //    {
+    //        var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
 
-        [Fact]
-        public async Task RunAsync_should_throw_if_message_null()
-        {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+    //        var sut = new SagasRunner(runnersFactory);
 
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
-
-            await Assert.ThrowsAsync<ArgumentNullException>(() => sut.RunAsync<StartDummySaga>(null));
-        }
+    //        await Assert.ThrowsAsync<ArgumentNullException>(() => sut.RunAsync<StartDummySaga>(null));
+    //    }
         
-        [Fact]
-        public async Task RunAsync_should_do_nothing_when_no_runners_available()
-        {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+    //    [Fact]
+    //    public async Task RunAsync_should_do_nothing_when_no_runners_available()
+    //    {
+    //        var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
 
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+    //        var sut = new SagasRunner(runnersFactory);
             
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            var result = sut.RunAsync<StartDummySaga>(messageContext);
-            result.Should().Be(Task.CompletedTask);
-        }
+    //        var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+    //        var result = sut.RunAsync(messageContext);
+    //        result.Should().Be(Task.CompletedTask);
+    //    }
 
-        [Fact]
-        public async Task RunAsync_should_throw_if_runner_fails()
-        {
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
+    //    [Fact]
+    //    public async Task RunAsync_should_throw_if_runner_fails()
+    //    {
+    //        var message = StartDummySaga.New();
+    //        var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+    //        messageContext.Message.Returns(message);
             
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var types = (typeof(DummySaga), typeof(DummySagaState));
-            stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(new[]{types});
+    //        var expectedException = new Exception("whoops");
+    //        var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
+    //        runner.When(r => r.RunAsync(messageContext, Arg.Any<CancellationToken>()))
+    //            .Throw(expectedException);
 
-            var expectedException = new Exception("whoops");
-            var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
-            runner.When(r => r.RunAsync(messageContext, Arg.Any<CancellationToken>()))
-                .Throw(expectedException);
-                
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
-                .Returns(runner);
+    //        var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
+    //        runnersFactory.Create<StartDummySaga>()
+    //            .Returns(new[] { runner });
 
-            var scope = NSubstitute.Substitute.For<IServiceScope>();
-            scope.ServiceProvider.Returns(sp);
-            
-            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            scopeFactory.CreateScope().Returns(scope);
-            
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
-                        .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
+    //        var sut = new SagasRunner(runnersFactory);
 
-            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
+    //        var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
+    //        ex.InnerExceptions.Should().NotBeNullOrEmpty()
+    //            .And.HaveCount(1)
+    //            .And.Contain(e => e.Message == expectedException.Message);
+    //    }
 
-            var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
-            ex.InnerExceptions.Should().NotBeNullOrEmpty()
-                .And.HaveCount(1)
-                .And.Contain(e => e.Message == expectedException.Message);
-        }
+    //    [Fact]
+    //    public async Task RunAsync_should_execute_saga_runner()
+    //    {
+    //        var runners = Enumerable.Range(1, 5)
+    //            .Select(i => Substitute.For<ISagaRunner<DummySaga, DummySagaState>>())
+    //            .ToArray();
 
-        [Fact]
-        public async Task RunAsync_should_execute_saga_runner()
-        {
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var types = (typeof(DummySaga), typeof(DummySagaState));
-            stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(new[] { types });
+    //        var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
+    //        runnersFactory.Create<StartDummySaga>()
+    //                        .Returns(runners);
 
-            var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
+    //        var sut = new SagasRunner(runnersFactory);
 
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
-                .Returns(runner);
+    //        var message = StartDummySaga.New();
+    //        var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
+    //        messageContext.Message.Returns(message);
 
-            var scope = NSubstitute.Substitute.For<IServiceScope>();
-            scope.ServiceProvider.Returns(sp);
+    //        await sut.RunAsync(messageContext);
 
-            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            scopeFactory.CreateScope().Returns(scope);
-
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
-                        .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
-
-            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
-
-            var message = StartDummySaga.New();
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            messageContext.Message.Returns(message);
-
-            await sut.RunAsync(messageContext);
-
-            await runner.Received(1)
-                .RunAsync(messageContext, Arg.Any<CancellationToken>());
-        }
-    }
+    //        foreach(var runner in runners)
+    //        await runner.Received(1)
+    //                    .RunAsync(messageContext, Arg.Any<CancellationToken>());
+    //    }
+    //}
 }

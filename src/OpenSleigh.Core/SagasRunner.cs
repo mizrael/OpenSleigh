@@ -1,24 +1,22 @@
+using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.Core.Messaging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core
 {
     public class SagasRunner : ISagasRunner
     {
+        private readonly ISagaRunnersFactory _runnersFactory;
         private readonly IServiceScopeFactory _scopeFactory;
-        private readonly ISagaTypeResolver _stateTypeResolver;
-        private readonly ITypesCache _typesCache;
 
-        public SagasRunner(IServiceScopeFactory scopeFactory, ISagaTypeResolver stateTypeResolver, ITypesCache typesCache)
+        public SagasRunner(ISagaRunnersFactory runnersFactory, IServiceScopeFactory scopeFactory)
         {
-            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-            _stateTypeResolver = stateTypeResolver ?? throw new ArgumentNullException(nameof(stateTypeResolver));
-            _typesCache = typesCache ?? throw new ArgumentNullException(nameof(typesCache));
+            _runnersFactory = runnersFactory ?? throw new ArgumentNullException(nameof(runnersFactory));
+            _scopeFactory = scopeFactory;
         }
 
         public Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
@@ -26,29 +24,28 @@ namespace OpenSleigh.Core
         {
             if (messageContext == null)
                 throw new ArgumentNullException(nameof(messageContext));
-            
-            var sagaTypes = _stateTypeResolver.Resolve<TM>();
-            if (null == sagaTypes)
-                return Task.CompletedTask;
 
-           return RunAsyncCore(messageContext, sagaTypes, cancellationToken);
+            using (var scope = _scopeFactory.CreateScope())
+            {
+                var runners = _runnersFactory.Create<TM>(scope);
+                if (null == runners)
+                    return Task.CompletedTask;
+
+                return RunAsyncCore(messageContext, runners, cancellationToken);
+            }
         }
 
         private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext,
-            IEnumerable<(Type sagaType, Type sagaStateType)> sagaTypes, 
+            IEnumerable<ISagaRunner> runners, 
             CancellationToken cancellationToken) where TM : IMessage
         {
             var exceptions = new List<Exception>();
 
-            foreach (var types in sagaTypes)
+            foreach (var runner in runners)
             {
-                using var scope = _scopeFactory.CreateScope();
                 try
                 {
-                    var runnerType = _typesCache.GetGeneric(typeof(ISagaRunner<,>), types.sagaType, types.sagaStateType);
-                    var runner = (ISagaRunner)scope.ServiceProvider.GetService(runnerType);
-                    if (null != runner)
-                        await runner.RunAsync(messageContext, cancellationToken);
+                    await runner.RunAsync(messageContext, cancellationToken);
                 }
                 catch (Exception e)
                 {
