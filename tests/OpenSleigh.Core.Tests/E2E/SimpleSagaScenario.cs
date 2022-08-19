@@ -23,7 +23,7 @@ namespace OpenSleigh.Core.Tests.E2E
             var message = new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid());
             
             var receivedCount = 0;
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(1));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
             
             Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
             {

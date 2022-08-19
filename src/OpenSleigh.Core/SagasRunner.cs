@@ -16,7 +16,7 @@ namespace OpenSleigh.Core
         public SagasRunner(ISagaRunnersFactory runnersFactory, IServiceScopeFactory scopeFactory)
         {
             _runnersFactory = runnersFactory ?? throw new ArgumentNullException(nameof(runnersFactory));
-            _scopeFactory = scopeFactory;
+            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         }
 
         public Task RunAsync<TM>(IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
@@ -25,36 +25,35 @@ namespace OpenSleigh.Core
             if (messageContext == null)
                 throw new ArgumentNullException(nameof(messageContext));
 
-            using (var scope = _scopeFactory.CreateScope())
-            {
-                var runners = _runnersFactory.Create<TM>(scope);
-                if (null == runners)
-                    return Task.CompletedTask;
-
-                return RunAsyncCore(messageContext, runners, cancellationToken);
-            }
+            return RunAsyncCore(messageContext, cancellationToken);
         }
 
         private async Task RunAsyncCore<TM>(IMessageContext<TM> messageContext,
-            IEnumerable<ISagaRunner> runners, 
-            CancellationToken cancellationToken) where TM : IMessage
+                                            CancellationToken cancellationToken) where TM : IMessage
         {
-            var exceptions = new List<Exception>();
-
-            foreach (var runner in runners)
+            await using (var scope = _scopeFactory.CreateAsyncScope())
             {
-                try
-                {
-                    await runner.RunAsync(messageContext, cancellationToken);
-                }
-                catch (Exception e)
-                {
-                    exceptions.Add(e);
-                }
-            }
+                var runners = _runnersFactory.Create<TM>(scope);
+                if (null == runners)
+                    return;
 
-            if (exceptions.Any())
-                throw new AggregateException(exceptions);
+                var exceptions = new List<Exception>();
+
+                foreach (var runner in runners)
+                {
+                    try
+                    {
+                        await runner.RunAsync(messageContext, cancellationToken);
+                    }
+                    catch (Exception e)
+                    {
+                        exceptions.Add(e);
+                    }
+                }
+
+                if (exceptions.Any())
+                    throw new AggregateException(exceptions);
+            }
         }
     }
 }
