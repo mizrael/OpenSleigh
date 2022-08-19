@@ -18,6 +18,7 @@ namespace OpenSleigh.Core
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
+        /// <inheritdoc/>
         public IEnumerable<(Type sagaType, Type sagaStateType)> Resolve<TM>() where TM : IMessage
         {
             var messageType = typeof(TM);
@@ -26,6 +27,7 @@ namespace OpenSleigh.Core
             return types ?? Enumerable.Empty<(Type sagaType, Type sagaStateType)>();
         }
 
+        /// <inheritdoc/>
         public bool Register<TS, TD>() where TD : SagaState where TS : Saga<TD>
         {
             var hasMessages = false;

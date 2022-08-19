@@ -28,6 +28,7 @@ namespace OpenSleigh.Core.DependencyInjection
                 .AddSingleton<ISystemInfo>(systemInfo)
                 .AddSingleton<ISagaTypeResolver>(sagaTypeResolver)
                 .AddSingleton<ISagasRunner, SagasRunner>()
+                .AddSingleton<ISagaRunnersFactory, SagaRunnersFactory>()
                 .AddSingleton<ITypesCache, TypesCache>()
                 .AddSingleton<ITypeResolver>(typeResolver)
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using FluentAssertions;
+using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using OpenSleigh.Core.Tests.Unit.Utils;
 using Xunit;
@@ -41,12 +42,15 @@ namespace OpenSleigh.Core.Tests.Unit
         {
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new SagaTypeResolver(typeResolver);
-            var result = sut.Resolve<StartDummySaga>();
+
+            sut.Register<DummySaga, DummySagaState>();
+
+            var result = sut.Resolve<UnhandledMessage>();
             result.Should().NotBeNull().And.BeEmpty();
         }
 
         [Fact]
-        public void Resolve_should_return_registered_saga()
+        public void Resolve_should_return_only_registered_saga_for_message()
         {
             var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
             var sut = new SagaTypeResolver(typeResolver);

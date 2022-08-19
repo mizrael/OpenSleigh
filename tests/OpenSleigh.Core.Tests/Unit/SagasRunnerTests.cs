@@ -3,49 +3,53 @@ using System.Threading;
 using System.Threading.Tasks;
 using NSubstitute;
 using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.Core.Messaging;
 using OpenSleigh.Core.Tests.Sagas;
 using Xunit;
+using System.Linq;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace OpenSleigh.Core.Tests.Unit
 {
     public class SagasRunnerTests
     {
         [Fact]
-        public void ctor_should_throw_if_arguments_null(){
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+        public void ctor_should_throw_if_arguments_null()
+        {
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
 
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(null, stateTypeResolver, typesCache));
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(sp, null, typesCache));
-            Assert.Throws<ArgumentNullException>(() => new SagasRunner(sp, stateTypeResolver, null));
+            Assert.Throws<ArgumentNullException>(() => new SagasRunner(null, scopeFactory));
+            Assert.Throws<ArgumentNullException>(() => new SagasRunner(runnersFactory, null));
         }
 
         [Fact]
         public async Task RunAsync_should_throw_if_message_null()
         {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
 
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+            var sut = new SagasRunner(runnersFactory, scopeFactory);
 
             await Assert.ThrowsAsync<ArgumentNullException>(() => sut.RunAsync<StartDummySaga>(null));
         }
-        
+
         [Fact]
         public async Task RunAsync_should_do_nothing_when_no_runners_available()
         {
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var sp = NSubstitute.Substitute.For<IServiceScopeFactory>();
-
-            var sut = new SagasRunner(sp, stateTypeResolver, typesCache);
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var scope = NSubstitute.Substitute.For<IServiceScope>();
+            scope.ServiceProvider.Returns(sp);
             
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            scopeFactory.CreateAsyncScope().Returns(scope);
+
+            var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
+
+            var sut = new SagasRunner(runnersFactory, scopeFactory);
+
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
-            var result = sut.RunAsync<StartDummySaga>(messageContext);
+            var result = sut.RunAsync(messageContext);
             result.Should().Be(Task.CompletedTask);
         }
 
@@ -56,32 +60,23 @@ namespace OpenSleigh.Core.Tests.Unit
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
             messageContext.Message.Returns(message);
 
-            
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var types = (typeof(DummySaga), typeof(DummySagaState));
-            stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(new[]{types});
+            var sp = NSubstitute.Substitute.For<IServiceProvider>();
+            var scope = NSubstitute.Substitute.For<IServiceScope>();
+            scope.ServiceProvider.Returns(sp);
+
+            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+            scopeFactory.CreateAsyncScope().Returns(scope);
 
             var expectedException = new Exception("whoops");
             var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
             runner.When(r => r.RunAsync(messageContext, Arg.Any<CancellationToken>()))
                 .Throw(expectedException);
-                
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
-                .Returns(runner);
 
-            var scope = NSubstitute.Substitute.For<IServiceScope>();
-            scope.ServiceProvider.Returns(sp);
-            
-            var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            scopeFactory.CreateScope().Returns(scope);
-            
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
-                        .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
+            var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
+            runnersFactory.Create<StartDummySaga>(scope)
+                .ReturnsForAnyArgs(new[] { runner });
 
-            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
+            var sut = new SagasRunner(runnersFactory, scopeFactory);
 
             var ex = await Assert.ThrowsAsync<AggregateException>(() => sut.RunAsync(messageContext));
             ex.InnerExceptions.Should().NotBeNullOrEmpty()
@@ -90,30 +85,24 @@ namespace OpenSleigh.Core.Tests.Unit
         }
 
         [Fact]
-        public async Task RunAsync_should_execute_saga_runner()
+        public async Task RunAsync_should_execute_saga_runner_registered_for_message()
         {
-            var stateTypeResolver = NSubstitute.Substitute.For<ISagaTypeResolver>();
-            var types = (typeof(DummySaga), typeof(DummySagaState));
-            stateTypeResolver.Resolve<StartDummySaga>()
-                .Returns(new[] { types });
-
-            var runner = NSubstitute.Substitute.For<ISagaRunner<DummySaga, DummySagaState>>();
-
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(ISagaRunner<DummySaga, DummySagaState>))
-                .Returns(runner);
-
             var scope = NSubstitute.Substitute.For<IServiceScope>();
             scope.ServiceProvider.Returns(sp);
 
             var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
-            scopeFactory.CreateScope().Returns(scope);
+            scopeFactory.CreateAsyncScope().Returns(scope);
 
-            var typesCache = NSubstitute.Substitute.For<ITypesCache>();
-            typesCache.GetGeneric(typeof(ISagaRunner<,>), typeof(DummySaga), typeof(DummySagaState))
-                        .Returns(typeof(ISagaRunner<DummySaga, DummySagaState>));
+            var runners = Enumerable.Range(1, 5)
+                .Select(i => Substitute.For<ISagaRunner<DummySaga, DummySagaState>>())
+                .ToArray();
 
-            var sut = new SagasRunner(scopeFactory, stateTypeResolver, typesCache);
+            var runnersFactory = NSubstitute.Substitute.For<ISagaRunnersFactory>();
+            runnersFactory.Create<StartDummySaga>(scope)
+                            .ReturnsForAnyArgs(runners);
+
+            var sut = new SagasRunner(runnersFactory, scopeFactory);
 
             var message = StartDummySaga.New();
             var messageContext = NSubstitute.Substitute.For<IMessageContext<StartDummySaga>>();
@@ -121,8 +110,9 @@ namespace OpenSleigh.Core.Tests.Unit
 
             await sut.RunAsync(messageContext);
 
-            await runner.Received(1)
-                .RunAsync(messageContext, Arg.Any<CancellationToken>());
+            foreach (var runner in runners)
+                await runner.Received(1)
+                            .RunAsync(messageContext, Arg.Any<CancellationToken>());
         }
     }
 }

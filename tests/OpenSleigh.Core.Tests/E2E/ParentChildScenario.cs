@@ -23,12 +23,12 @@ namespace OpenSleigh.Core.Tests.E2E
             var message = new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
 
             var receivedCount = 0;
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
             
             Action<IMessageContext<ParentSagaCompleted>> onMessage = ctx =>
             {
                 receivedCount++;
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
 
                 ctx.Message.CorrelationId.Should().Be(message.CorrelationId);
             };
