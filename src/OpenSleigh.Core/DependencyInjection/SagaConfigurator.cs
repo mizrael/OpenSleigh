@@ -7,18 +7,6 @@ using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Core.DependencyInjection
 {
-    public interface ISagaConfigurator<TS, in TD>
-        where TS : Saga<TD>
-        where TD : SagaState
-    {
-        IServiceCollection Services { get; }
-        ISagaConfigurator<TS, TD> UseStateFactory<TM>(Func<TM, TD> stateFactory)
-            where TM : IMessage;
-
-        ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<RetryPolicyBuilder> builderAction)
-            where TM : IMessage;
-    }
-
     [ExcludeFromCodeCoverage]
     internal class SagaConfigurator<TS, TD> : ISagaConfigurator<TS, TD>
         where TS : Saga<TD>
@@ -46,7 +34,7 @@ namespace OpenSleigh.Core.DependencyInjection
             return this;
         }
 
-        public ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<RetryPolicyBuilder> builderAction)
+        public ISagaConfigurator<TS, TD> UseRetryPolicy<TM>(Action<IRetryPolicyBuilder> builderAction)
             where TM : IMessage
         {
             if (builderAction == null) 

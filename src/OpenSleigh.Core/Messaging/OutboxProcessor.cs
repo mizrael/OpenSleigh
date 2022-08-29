@@ -6,12 +6,7 @@ using OpenSleigh.Core.Exceptions;
 using OpenSleigh.Core.Persistence;
 
 namespace OpenSleigh.Core.Messaging
-{
-    public record OutboxProcessorOptions(TimeSpan Interval)
-    {
-        public static readonly OutboxProcessorOptions Default = new (TimeSpan.FromSeconds(5));
-    }
-    
+{    
     public class OutboxProcessor : IOutboxProcessor
     {
         private readonly IOutboxRepository _outboxRepository;

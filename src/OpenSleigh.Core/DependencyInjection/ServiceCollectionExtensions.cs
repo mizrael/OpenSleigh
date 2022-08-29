@@ -95,13 +95,5 @@ namespace OpenSleigh.Core.DependencyInjection
 
             Console.WriteLine("preloading all message types completed!");
         }
-        
-        public static IServiceCollection AddBusSubscriber(this IServiceCollection services, Type subscriberType)
-        {
-            if (!services.Any(s => s.ImplementationType == subscriberType))
-                services.AddSingleton(typeof(ISubscriber), subscriberType);
-            return services;
-        }
     }
-
 }
