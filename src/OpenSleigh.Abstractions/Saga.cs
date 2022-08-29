@@ -2,6 +2,7 @@
 using OpenSleigh.Core.Persistence;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -31,7 +32,10 @@ namespace OpenSleigh.Core
         {
             if (outboxRepository is null)            
                 throw new ArgumentNullException(nameof(outboxRepository));
-            
+
+            if (!_outbox.Any())
+                return;
+
             await outboxRepository.AppendAsync(_outbox, cancellationToken)
                                   .ConfigureAwait(false);
 
