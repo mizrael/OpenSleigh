@@ -89,8 +89,21 @@ namespace OpenSleigh.Core.Tests.Unit
             await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
             called.Should().BeTrue();
 
+            called = false;
             await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
             called.Should().BeFalse();
+        }
+
+        [Fact]
+        public async Task PersistOutboxAsync_should_not_call_outbox_when_no_messages_to_send()
+        {
+            var state = new DummySagaState(Guid.NewGuid());
+            var sut = new DummySaga(state);
+
+            var outboxRepo = NSubstitute.Substitute.For<IOutboxRepository>();
+          
+            await sut.PersistOutboxAsync(outboxRepo, CancellationToken.None);
+            await outboxRepo.DidNotReceiveWithAnyArgs().AppendAsync(Arg.Any<IEnumerable<IMessage>>(), Arg.Any<CancellationToken>());    
         }
     }
 }
