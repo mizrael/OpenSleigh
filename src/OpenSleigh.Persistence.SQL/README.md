@@ -1,6 +1,8 @@
 # OpenSleigh.Persistence.SQL
 
-# This package has been deprecated. Use these ones instead:
+# This package should not be used directly, unless you are intentionally using it to create a new SQL persistence layer. 
+
+The following providers are already available:
 - SQL Server: ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Persistence.SQLServer?style=plastic)
 - PostgreSQL: ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Persistence.PostgreSQL?style=plastic)
 

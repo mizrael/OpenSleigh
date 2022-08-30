@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net6.0</TargetFramework>
-        <PackageVersion>2.0.0</PackageVersion>
+        <PackageVersion>2.0.1</PackageVersion>
         <IsPackable>true</IsPackable>
         <Authors>davidguida</Authors>
         <Product>OpenSleigh.Persistence.SQLServer</Product>
@@ -32,11 +32,11 @@
       <ProjectReference Include="..\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
     </ItemGroup>
 
-    <ItemGroup>
-    <None Include="README.md" Pack="true" PackagePath="\">
-        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
+	<ItemGroup>
+		<None Include="README.md" Pack="true" PackagePath="\">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
 
     <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
         <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
