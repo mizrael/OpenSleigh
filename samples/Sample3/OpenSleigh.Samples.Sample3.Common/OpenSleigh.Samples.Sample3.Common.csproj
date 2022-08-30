@@ -4,8 +4,8 @@
    <TargetFramework>net6.0</TargetFramework>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="OpenSleigh.Core" Version="2.0.2" />
+	</ItemGroup>
 
 </Project>

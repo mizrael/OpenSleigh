@@ -1,4 +1,5 @@
-﻿using System.Threading.Tasks;
+﻿using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -9,6 +10,7 @@ using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Samples.Sample3.Common.Messages;
 using OpenSleigh.Samples.Sample3.Worker.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
+using OpenSleigh.Core;
 
 namespace OpenSleigh.Samples.Sample3.Worker
 {
@@ -52,6 +54,8 @@ namespace OpenSleigh.Samples.Sample3.Worker
                                     new QueueReferences("child", "child.process", "child.process", "child.dead", "child.dead.process"));
                             })
                             .UseSqlServerPersistence(sqlConfig);
+                        
+                        Core.SagaState state = new SimpleSagaState(Guid.NewGuid());
 
                         cfg.AddSaga<SimpleSaga, SimpleSagaState>()
                             .UseStateFactory<StartSimpleSaga>(msg => new SimpleSagaState(msg.CorrelationId))

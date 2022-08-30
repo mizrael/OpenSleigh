@@ -5,16 +5,17 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.1" NoWarn="NU1605" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="6.0.1" NoWarn="NU1605" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.2.3" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="6.0.8" NoWarn="NU1605" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="6.0.8" NoWarn="NU1605" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+
+	  <PackageReference Include="OpenSleigh.Persistence.SQL" Version="2.0.1" />
+	  <PackageReference Include="OpenSleigh.Persistence.SQLServer" Version="2.0.1" />
+	  <PackageReference Include="OpenSleigh.Transport.RabbitMQ" Version="2.0.2" />
   </ItemGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\..\..\src\OpenSleigh.Core\OpenSleigh.Core.csproj" />
-    <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj" />
-    <ProjectReference Include="..\..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Samples.Sample3.Common\OpenSleigh.Samples.Sample3.Common.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\OpenSleigh.Samples.Sample3.Common\OpenSleigh.Samples.Sample3.Common.csproj" />
+	</ItemGroup>
 
 </Project>
