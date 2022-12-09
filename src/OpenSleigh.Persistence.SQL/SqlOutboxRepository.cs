@@ -1,15 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Messaging;
+using OpenSleigh.Outbox;
 using System.Diagnostics.CodeAnalysis;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Persistence;
-using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.SQL
 {
@@ -22,91 +14,15 @@ namespace OpenSleigh.Persistence.SQL
     public class SqlOutboxRepository : IOutboxRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly IPersistenceSerializer _serializer;
         private readonly SqlOutboxRepositoryOptions _options;
-        private readonly ITypeResolver _typeResolver;
-
-        private enum MessageStatuses
-        {
-            Pending,
-            Processed
-        }
-
-        public SqlOutboxRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlOutboxRepositoryOptions options, ITypeResolver typeResolver)
+     
+        public SqlOutboxRepository(ISagaDbContext dbContext, SqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
-            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(options));
         }
 
-        public async Task<IEnumerable<IMessage>> ReadMessagesToProcess(CancellationToken cancellationToken = default)
-        {
-            var maxLockDate = DateTime.UtcNow - _options.LockMaxDuration;
-            var entities = await _dbContext.OutboxMessages.AsNoTracking()
-                    .Where(e =>
-                        e.Status == MessageStatuses.Pending.ToString() &&
-                        (e.LockId == null || e.LockTime > maxLockDate))
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-            if (entities is null)
-                return Enumerable.Empty<IMessage>();
-
-            var messages = new List<IMessage>();
-            foreach (var entity in entities)
-            {
-                var messageType = _typeResolver.Resolve(entity.Type);
-                var message = _serializer.Deserialize(entity.Data, messageType) as IMessage;
-                messages.Add(message);
-            }
-
-            return messages;
-        }
-
-        public Task ReleaseAsync(IMessage message, Guid lockId, CancellationToken cancellationToken = default)
-        {
-            if (message == null)
-                throw new ArgumentNullException(nameof(message));
-
-            return ReleaseAsyncCore(message, lockId, cancellationToken);
-        }
-
-        private async Task ReleaseAsyncCore(IMessage message, Guid lockId, CancellationToken cancellationToken)
-        {
-            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
-            try
-            {
-                var entity = await _dbContext.OutboxMessages
-                    .FirstOrDefaultAsync(e =>
-                        e.Id == message.Id &&
-                        e.LockId == lockId,
-                        cancellationToken)
-                    .ConfigureAwait(false);
-                if (entity is null)
-                    throw new ArgumentException($"message '{message.Id}' not found");
-
-                if (!entity.LockId.HasValue)
-                    throw new LockException($"message '{message.Id}' is not locked");
-
-                if (entity.LockId != lockId)
-                    throw new LockException($"invalid lock id '{lockId}' on message '{message.Id}'");
-
-                entity.LockId = null;
-                entity.LockTime = null;
-                entity.PublishingDate = DateTime.UtcNow;
-                entity.Status = MessageStatuses.Processed.ToString();
-                await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-                await transaction.CommitAsync(cancellationToken);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
-        }
-
-        public Task AppendAsync(IEnumerable<IMessage> messages, CancellationToken cancellationToken = default)
+        public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
         {
             if (messages == null)
                 throw new ArgumentNullException(nameof(messages));
@@ -114,94 +30,103 @@ namespace OpenSleigh.Persistence.SQL
             return AppendAsyncCore(messages, cancellationToken);
         }
 
-        private async Task AppendAsyncCore(IEnumerable<IMessage> messages, CancellationToken cancellationToken)
+        private async ValueTask AppendAsyncCore(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken)
         {
-            var entities = messages.Select(message =>
-            {
-                var serialized = _serializer.Serialize(message);
-                return new Entities.OutboxMessage(message.Id, serialized, message.GetType().FullName)
-                {
-                    Status = MessageStatuses.Pending.ToString()
-                };
-            });
+            var entities = messages.Select(message => Entities.OutboxMessage.Create(message));
 
             _dbContext.OutboxMessages.AddRange(entities);
             await _dbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);
         }
 
-        public async Task CleanProcessedAsync(CancellationToken cancellationToken = default)
+        public async ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
         {
-            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
-            try
-            {
-                var messages = await _dbContext.OutboxMessages
-                    .Where(e => e.Status == MessageStatuses.Processed.ToString())
-                    .ToListAsync(cancellationToken)
-                    .ConfigureAwait(false);
-                
-                if (messages.Any())
-                {
-                    _dbContext.OutboxMessages.RemoveRange(messages);
+            var maxLockDate = DateTime.UtcNow - _options.LockMaxDuration;
+            var entities = await _dbContext.OutboxMessages.AsNoTracking()
+                    .Where(e =>
+                        e.Status == Entities.OutboxMessage.Statuses.Pending &&
+                        (e.LockId == null || e.LockTime > maxLockDate))
+                .ToListAsync(cancellationToken)
+                .ConfigureAwait(false);
 
-                    await _dbContext.SaveChangesAsync(cancellationToken)
-                        .ConfigureAwait(false);
-                }
+            if (entities is null)
+                return Enumerable.Empty<OutboxMessage>();
 
-                await transaction.CommitAsync(cancellationToken);
-            }
-            catch
+            var messages = new List<OutboxMessage>();
+            foreach (var entity in entities)
             {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
+                var message = entity.ToModel();
+                messages.Add(message);
             }
+
+            return messages;
         }
 
-        public Task<Guid> LockAsync(IMessage message, CancellationToken cancellationToken = default)
+        public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
         {
             if (message == null)
                 throw new ArgumentNullException(nameof(message));
 
             return LockAsyncCore(message, cancellationToken);
         }
-        
-        private async Task<Guid> LockAsyncCore(IMessage message, CancellationToken cancellationToken)
-        {
-            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
-            try
-            {
-                var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
 
-                var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e =>
-                            e.Id == message.Id &&
-                            (e.LockId == null || e.LockTime > expirationDate) &&
-                            e.Status == MessageStatuses.Pending.ToString(),
-                        cancellationToken: cancellationToken)
+        private async ValueTask<string> LockAsyncCore(OutboxMessage message, CancellationToken cancellationToken)
+        {
+            var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
+
+            var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e =>
+                        e.MessageId == message.MessageId &&
+                        e.Status == Entities.OutboxMessage.Statuses.Pending &&
+                        (e.LockId == null || e.LockTime > expirationDate),
+                    cancellationToken: cancellationToken)
+                .ConfigureAwait(false);
+            if (entity is null)
+                throw new ArgumentException($"message '{message.MessageId}' not found");
+
+            if (entity.LockId is not null && entity.LockTime > DateTime.UtcNow - _options.LockMaxDuration)
+                throw new LockException($"message '{message.MessageId}' is already locked");
+
+            if (entity.Status == Entities.OutboxMessage.Statuses.Processed)
+                throw new LockException($"message '{message.MessageId}' was already processed");
+
+            entity.LockId = Guid.NewGuid().ToString();
+            entity.LockTime = DateTimeOffset.UtcNow;
+
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                .ConfigureAwait(false);
+
+            return entity.LockId;
+        }
+
+        public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
+        {
+            if (message is null)            
+                throw new ArgumentNullException(nameof(message));           
+
+            if (string.IsNullOrWhiteSpace(lockId))           
+                throw new ArgumentException($"'{nameof(lockId)}' cannot be null or whitespace.", nameof(lockId));
+            
+            return DeleteAsyncCore(message, lockId, cancellationToken);
+        }
+
+        private async ValueTask DeleteAsyncCore(OutboxMessage message, string lockId, CancellationToken cancellationToken)
+        {
+                var entity = await _dbContext.OutboxMessages
+                    .FirstOrDefaultAsync(e =>
+                        e.MessageId == message.MessageId,
+                        cancellationToken)
                     .ConfigureAwait(false);
                 if (entity is null)
-                    throw new ArgumentException($"message '{message.Id}' not found");
+                    throw new ArgumentException($"message '{message.MessageId}' not found");
 
-                if (entity.LockId.HasValue && entity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
-                    throw new LockException($"message '{message.Id}' is already locked");
+                if (string.IsNullOrWhiteSpace(entity.LockId))
+                    throw new LockException($"message '{message.MessageId}' is not locked");
 
-                if (entity.Status == MessageStatuses.Processed.ToString())
-                    throw new LockException($"message '{message.Id}' was already processed");
+                if (entity.LockId != lockId)
+                    throw new LockException($"invalid lock id '{lockId}' on message '{message.MessageId}'");
 
-                entity.LockId = Guid.NewGuid();
-                entity.LockTime = DateTime.UtcNow;
-
-                await _dbContext.SaveChangesAsync(cancellationToken)
-                    .ConfigureAwait(false);
-
-                await transaction.CommitAsync(cancellationToken);
-
-                return entity.LockId.Value;
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
+            _dbContext.OutboxMessages.Remove(entity);
+            await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);             
         }
     }
 }

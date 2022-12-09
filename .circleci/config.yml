@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   build:
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:6.0.100-focal-amd64
+      - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
       - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
@@ -11,7 +11,7 @@ jobs:
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh"
-      - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
+      - image: 'mcr.microsoft.com/mssql/server:2022-latest'
         environment:
           SA_PASSWORD: "Sup3r_p4ssword123"
           ACCEPT_EULA: "Y"
@@ -52,7 +52,7 @@ jobs:
 
   sonarscan:
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:6.0.100-focal-amd64
+      - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
       - image: 'circleci/mongo:4.4.3'
         environment:
           MONGO_INITDB_ROOT_USERNAME: root
@@ -60,7 +60,7 @@ jobs:
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh"
-      - image: 'mcr.microsoft.com/mssql/server:2019-CU8-ubuntu-16.04'
+      - image: 'mcr.microsoft.com/mssql/server:2022-latest'
         environment:
           SA_PASSWORD: "Sup3r_p4ssword123"
           ACCEPT_EULA: "Y"

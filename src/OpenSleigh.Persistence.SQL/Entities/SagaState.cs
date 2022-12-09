@@ -1,36 +1,32 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
 namespace OpenSleigh.Persistence.SQL.Entities
 {
     public class SagaState
     {
-        private SagaState() { }
+        public required string CorrelationId { get; init; }
+        public required string InstanceId { get; init; }
+        public required string TriggerMessageId { get; init; }
+        public required string SagaType { get; set; }
+        public required string? SagaStateType { get; set; }
+        public byte[]? StateData { get; set; }
+        public bool IsCompleted { get; init; } //TODO: this is not persisted/mapped
 
-        public SagaState(Guid correlationId, string type, byte[] data, Guid? lockId = null, DateTime? lockTime = null)
-        {
-            CorrelationId = correlationId;
-            Type = type;
-            Data = data;
-            LockId = lockId;
-            LockTime = lockTime;
-        }
+        public ICollection<string> ProcessedMessages { get; init; } = new HashSet<string>();
 
-        public Guid CorrelationId { get; }
-        public string Type { get; }
-        public byte[] Data { get; set; }
-        public Guid? LockId { get; set; }
-        public DateTime? LockTime { get; set; }
+        public string? LockId { get; set; }
+        public DateTimeOffset? LockTime { get; set; }
     }
 
     internal class SagaStateEntityTypeConfiguration : IEntityTypeConfiguration<SagaState>
     {
         public void Configure(EntityTypeBuilder<SagaState> builder)
         {
-            builder.ToTable("SagaStates", "dbo");
-
-            builder.HasKey(e => new {e.CorrelationId, e.Type});
+            builder.ToTable("SagaStates", Constants.DbSchema);
+            
+            builder.HasKey(e => e.InstanceId);
+            builder.HasIndex(e => new { e.CorrelationId, e.SagaType, e.SagaStateType });
         }
     }
 
