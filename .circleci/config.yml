@@ -96,7 +96,7 @@ jobs:
       - run:
           name: Start Sonarcloud 
           command: |
-            dotnet sonarscanner begin \
+            dotnet-sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
               /d:sonar.host.url="https://sonarcloud.io" \
@@ -113,7 +113,7 @@ jobs:
       - run:
           name: Stop Sonarcloud 
           command: |            
-            dotnet sonarscanner end /d:sonar.login="$SONAR_TOKEN"
+            dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
   build_and_test:
