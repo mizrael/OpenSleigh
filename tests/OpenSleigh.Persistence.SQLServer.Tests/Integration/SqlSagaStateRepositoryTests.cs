@@ -1,5 +1,4 @@
-using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Messaging;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests;
 using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
@@ -8,7 +7,6 @@ using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
 
 namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
 {
@@ -28,27 +26,27 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
         {
             var (db,_) = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-
             var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
-
             var result = await sut.FindAsync(descriptor, "lorem", CancellationToken.None);
             result.Should().BeNull();
         }
 
-        //[Fact]
-        //public async Task LockAsync_should_lock_item()
-        //{
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db);
+        [Fact]
+        public async Task LockAsync_should_lock_item()
+        {
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
-        //    var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-        //    var (_, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        //    var lockedState = await db.SagaStates.FirstOrDefaultAsync(e =>
-        //                                e.LockId == lockId && e.CorrelationId == newState.Id);
-        //    lockedState.Should().NotBeNull();
-        //}
+            var lockedState = await db.SagaStates.FirstOrDefaultAsync(e =>
+                                        e.LockId == lockId &&
+                                        e.InstanceId == sagaContext.InstanceId &&
+                                        e.CorrelationId == sagaContext.CorrelationId);
+            lockedState.Should().NotBeNull();
+        }
 
         //[Fact]
         //public async Task LockAsync_should_throw_if_item_locked()
@@ -125,10 +123,10 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
         //    var newState = new DummyState(correlationId, "lorem", 42);
 
         //    var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
-            
+
         //    var updatedState = new DummyState(correlationId, "ipsum", 71);
         //    await sut.ReleaseLockAsync(updatedState, lockId);
-            
+
         //    var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
         //    unLockedState.Should().NotBeNull();
         //    unLockedState.LockId.Should().BeNull();
@@ -148,6 +146,20 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
             var serializer = new JsonSerializer();
             var sut = new SqlSagaStateRepository(db, options ?? SqlSagaStateRepositoryOptions.Default, serializer);
             return sut;
+        }
+
+        private ISagaExecutionContext CreateSagaContext()
+        {
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<FakeMessage>>();
+            messageContext.Id.Returns(Guid.NewGuid().ToString());
+            messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+
+            var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+
+            var factory = new SagaExecutionContextFactory();
+            var context = factory.CreateState(descriptor, messageContext);
+
+            return context;
         }
     }
 }

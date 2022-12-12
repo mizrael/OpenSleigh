@@ -2,13 +2,18 @@
 
 namespace OpenSleigh.Persistence.SQL.Tests
 {
-    public record DummyState(Guid Id, string Foo, int Bar)
+    public record DummyState
     {
-        public static DummyState New() => new DummyState(Guid.NewGuid(), "lorem ipsum", 42);
-    }
+        public Guid Id { get; init; }
+        public string Foo { get; init; }
+        public int Bar { get; init; }
 
-    public record DummyState2(Guid Id)
-    {
-        public static DummyState2 New() => new DummyState2(Guid.NewGuid());
+        public static DummyState New() 
+            => new DummyState()
+            {
+                Id = Guid.NewGuid(),
+                Foo = "lorem ipsum",
+                Bar = 42
+            };
     }
 }
