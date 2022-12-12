@@ -2,7 +2,7 @@
 
 namespace OpenSleigh.Utils
 {
-    internal class JsonSerializer : ISerializer
+    public class JsonSerializer : ISerializer
     {
         private static readonly JsonSerializerOptions Settings = new()
         {

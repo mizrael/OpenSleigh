@@ -30,23 +30,32 @@ namespace OpenSleigh.Persistence.SQL
             var entity = await _dbContext.SagaStates.FirstOrDefaultAsync(e =>
                 e.CorrelationId == correlationId && 
                 e.SagaType == descriptor.SagaType.FullName &&
-                ((descriptor.SagaStateType == null && e.SagaStateType == null)|| 
-                (e.SagaStateType == descriptor.SagaStateType.FullName)),
+                ((descriptor.SagaStateType == null && e.SagaStateType == null) || 
+                (descriptor.SagaStateType != null && e.SagaStateType == descriptor.SagaStateType.FullName)),
                 cancellationToken).ConfigureAwait(false);
 
             if (entity is null)
                 return null;
 
-            if (descriptor.SagaStateType is null)            
-                return new SagaExecutionContext(
+            ISagaExecutionContext? result;
+
+            if (descriptor.SagaStateType is null)
+                result = new SagaExecutionContext(
                     instanceId: entity.InstanceId,
                     triggerMessageId: entity.TriggerMessageId,
                     correlationId: entity.CorrelationId,
                     descriptor: descriptor,
-                    processedMessagesIds: entity.ProcessedMessages);
+                    processedMessagesIds: entity.ProcessedMessages.Select(e => e.MessageId));
+            else
+            {
+                var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
+                result = CreateSagaContext((dynamic)state, entity, descriptor);
+            }
 
-            var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            return CreateSagaContext((dynamic)state, entity, descriptor);
+            if (entity.IsCompleted)
+                result.MarkAsCompleted();
+
+            return result;
         }
 
         private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
@@ -56,7 +65,7 @@ namespace OpenSleigh.Persistence.SQL
                    correlationId: entity.CorrelationId,
                    descriptor: descriptor,
                    state: state,
-                   processedMessagesIds: entity.ProcessedMessages);
+                   processedMessagesIds: entity.ProcessedMessages.Select(e => e.MessageId));
 
         public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
@@ -102,15 +111,15 @@ namespace OpenSleigh.Persistence.SQL
             return entity.LockId;
         }
 
-        public ValueTask SaveAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
+        public ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
         {
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
 
-            return SaveAsyncCore(state, lockId, cancellationToken);
+            return ReleaseAsyncCore(state, lockId, cancellationToken);
         }
 
-        private async ValueTask SaveAsyncCore(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken)
+        private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken)
         {
             var entity = await _dbContext.SagaStates
                  .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)

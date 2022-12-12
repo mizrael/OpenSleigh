@@ -81,7 +81,7 @@ namespace OpenSleigh
 
             executionContext.SetAsProcessed(messageContext);
 
-            await _sagaStateRepository.SaveAsync(executionContext, lockId, cancellationToken)
+            await _sagaStateRepository.ReleaseAsync(executionContext, lockId, cancellationToken)
                                     .ConfigureAwait(false);
 
             _logger.LogInformation(

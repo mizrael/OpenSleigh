@@ -25,6 +25,7 @@ namespace OpenSleigh.Persistence.SQL
         {
             modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
             modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
+            modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
         }
 
         public DbSet<SagaState> SagaStates { get; set; }

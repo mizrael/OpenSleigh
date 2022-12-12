@@ -43,9 +43,7 @@ namespace OpenSleigh.Persistence.SQL
         {
             var maxLockDate = DateTime.UtcNow - _options.LockMaxDuration;
             var entities = await _dbContext.OutboxMessages.AsNoTracking()
-                    .Where(e =>
-                        e.Status == Entities.OutboxMessage.Statuses.Pending &&
-                        (e.LockId == null || e.LockTime > maxLockDate))
+                    .Where(e => e.LockId == null || e.LockTime > maxLockDate)
                 .ToListAsync(cancellationToken)
                 .ConfigureAwait(false);
 
@@ -75,9 +73,7 @@ namespace OpenSleigh.Persistence.SQL
             var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
 
             var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e =>
-                        e.MessageId == message.MessageId &&
-                        e.Status == Entities.OutboxMessage.Statuses.Pending &&
-                        (e.LockId == null || e.LockTime > expirationDate),
+                        e.MessageId == message.MessageId,
                     cancellationToken: cancellationToken)
                 .ConfigureAwait(false);
             if (entity is null)
@@ -86,11 +82,8 @@ namespace OpenSleigh.Persistence.SQL
             if (entity.LockId is not null && entity.LockTime > DateTime.UtcNow - _options.LockMaxDuration)
                 throw new LockException($"message '{message.MessageId}' is already locked");
 
-            if (entity.Status == Entities.OutboxMessage.Statuses.Processed)
-                throw new LockException($"message '{message.MessageId}' was already processed");
-
             entity.LockId = Guid.NewGuid().ToString();
-            entity.LockTime = DateTimeOffset.UtcNow;
+            entity.LockTime = DateTimeOffset.UtcNow;            
 
             await _dbContext.SaveChangesAsync(cancellationToken)
                 .ConfigureAwait(false);

@@ -25,6 +25,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQLS
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQL.Tests", "..\tests\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj", "{0E31E567-07BC-41DB-96DD-91AEE8485584}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.SQLServer", "OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj", "{32E4FA71-EB58-4DA5-B580-6647EFBD92A1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -63,6 +65,10 @@ Global
 		{0E31E567-07BC-41DB-96DD-91AEE8485584}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0E31E567-07BC-41DB-96DD-91AEE8485584}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0E31E567-07BC-41DB-96DD-91AEE8485584}.Release|Any CPU.Build.0 = Release|Any CPU
+		{32E4FA71-EB58-4DA5-B580-6647EFBD92A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{32E4FA71-EB58-4DA5-B580-6647EFBD92A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{32E4FA71-EB58-4DA5-B580-6647EFBD92A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{32E4FA71-EB58-4DA5-B580-6647EFBD92A1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -74,6 +80,7 @@ Global
 		{F68450C3-0D24-4975-8674-C9B5697F2386} = {1153E679-A92D-45D1-8AF2-4EC2EF34CC10}
 		{FE30C814-9EC4-4DA7-9EF8-44D694A21502} = {CFEDF9DA-8557-413C-96CE-6AD2B5D8D1CD}
 		{0E31E567-07BC-41DB-96DD-91AEE8485584} = {CFEDF9DA-8557-413C-96CE-6AD2B5D8D1CD}
+		{32E4FA71-EB58-4DA5-B580-6647EFBD92A1} = {1153E679-A92D-45D1-8AF2-4EC2EF34CC10}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5C347C6E-5B5E-4A71-BF38-48FAD967B0E9}

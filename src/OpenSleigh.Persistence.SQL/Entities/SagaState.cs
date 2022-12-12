@@ -11,9 +11,9 @@ namespace OpenSleigh.Persistence.SQL.Entities
         public required string SagaType { get; set; }
         public required string? SagaStateType { get; set; }
         public byte[]? StateData { get; set; }
-        public bool IsCompleted { get; init; } //TODO: this is not persisted/mapped
+        public bool IsCompleted { get; init; } 
 
-        public ICollection<string> ProcessedMessages { get; init; } = new HashSet<string>();
+        public ICollection<SagaProcessedMessage> ProcessedMessages { get; init; } = new HashSet<SagaProcessedMessage>();
 
         public string? LockId { get; set; }
         public DateTimeOffset? LockTime { get; set; }
@@ -27,7 +27,9 @@ namespace OpenSleigh.Persistence.SQL.Entities
             
             builder.HasKey(e => e.InstanceId);
             builder.HasIndex(e => new { e.CorrelationId, e.SagaType, e.SagaStateType });
+
+            builder.HasMany(e => e.ProcessedMessages)
+                .WithOne(e => e.SagaState);
         }
     }
-
 }

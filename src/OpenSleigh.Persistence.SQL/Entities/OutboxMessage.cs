@@ -5,21 +5,13 @@ namespace OpenSleigh.Persistence.SQL.Entities
 {
     public record OutboxMessage
     {
-        public enum Statuses
-        {
-            Pending = 0,
-            Processed
-        }
-
-        public Statuses Status { get; set; }
-
         public string? LockId { get; set; }
         public DateTimeOffset? LockTime { get; set; }
         
         public required string CorrelationId { get; set; }
         public required byte[] Body { get; set; }
         public required string MessageId { get; set; }
-        public required Type MessageType { get; set; }
+        public required string MessageType { get; set; }
         public required DateTimeOffset CreatedAt { get; set; }
         public string? ParentId { get; set; }
         public string? SenderId { get; set; }
@@ -31,7 +23,7 @@ namespace OpenSleigh.Persistence.SQL.Entities
                 MessageId = MessageId,
                 CorrelationId = CorrelationId,
                 CreatedAt = CreatedAt,
-                MessageType = MessageType,
+                MessageType = Type.GetType(MessageType, true),
                 ParentId = ParentId,
                 SenderId = SenderId
             };
@@ -43,10 +35,9 @@ namespace OpenSleigh.Persistence.SQL.Entities
                 MessageId = message.MessageId,
                 CorrelationId = message.CorrelationId,
                 CreatedAt = message.CreatedAt,
-                MessageType = message.MessageType,
+                MessageType = message.MessageType.AssemblyQualifiedName,
                 ParentId = message.ParentId,
                 SenderId = message.SenderId,
-                Status = Statuses.Pending,
             };
     }
     
