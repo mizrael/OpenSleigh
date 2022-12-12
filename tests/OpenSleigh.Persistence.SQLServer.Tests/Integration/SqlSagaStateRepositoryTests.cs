@@ -32,6 +32,21 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
         }
 
         [Fact]
+        public async Task FindAsync_should_return_item_if_existing()
+        {
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
+            var sagaContext = CreateSagaContext();
+
+            await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var result = await sut.FindAsync(sagaContext.Descriptor, sagaContext.CorrelationId, CancellationToken.None);
+            result.Should().NotBeNull();
+            result.InstanceId.Should().Be(sagaContext.InstanceId);
+        }
+
+        [Fact]
         public async Task LockAsync_should_lock_item()
         {
             var (db, _) = _fixture.CreateDbContext();
@@ -48,57 +63,38 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
             lockedState.Should().NotBeNull();
         }
 
-        //[Fact]
-        //public async Task LockAsync_should_throw_if_item_locked()
-        //{
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db);
+        [Fact]
+        public async Task LockAsync_should_throw_if_item_already_locked()
+        {
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
-        //    var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-        //    await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        //    var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(newState.Id, newState, CancellationToken.None));
-        //    ex.Message.Should().Contain($"saga state '{newState.Id}' is already locked");
-        //}
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(sagaContext, CancellationToken.None));
+            ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' is already locked");
+        }
 
-        //[Fact]
-        //public async Task LockAsync_should_return_state_if_lock_expired()
-        //{
-        //    var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db, options);
+        [Fact]
+        public async Task LockAsync_should_lock_again_if_first_lock_expired()
+        {
+            var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
 
-        //    var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-        //    var (firstState, firstLockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var firstLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        //    await Task.Delay(500);
+            await Task.Delay(500);
 
-        //    var (secondState, secondLockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
-        //    secondLockId.Should().NotBe(firstLockId);
-        //    secondState.Should().NotBeNull();
-        //}
+            var secondLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        //[Fact]
-        //public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
-        //{
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db);
-
-        //    var correlationId = Guid.NewGuid();
-
-        //    var newState = new DummyState(correlationId, "lorem", 42);
-
-        //    var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
-
-        //    var newState2 = new DummyState2(state.Id);
-        //    newState2.Id.Should().Be(newState.Id);
-
-        //    var (state2, lockId2) = await sut.LockAsync(correlationId, newState2, CancellationToken.None);
-        //    state2.Should().NotBeNull();
-        //    state2.Id.Should().Be(correlationId);
-        //}
+            secondLockId.Should().NotBeNull()
+                .And.NotBe(firstLockId);
+        }
 
         //[Fact]
         //public async Task ReleaseLockAsync_should_throw_when_state_not_found()
