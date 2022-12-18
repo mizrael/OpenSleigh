@@ -33,7 +33,8 @@ namespace OpenSleigh.InMemory
                     return (state, lockId);
                 });
 
-            _statesByDescriptor.AddOrUpdate(state.InstanceId,
+            string key = BuildKey(state.Descriptor, state.CorrelationId);
+            _statesByDescriptor.AddOrUpdate(key,
                _ => (state, lockId),
                (k, v) =>
                {
@@ -48,9 +49,9 @@ namespace OpenSleigh.InMemory
         public ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
         {
             string key = BuildKey(state.Descriptor, state.CorrelationId);
-            _statesByDescriptor.AddOrUpdate(key, _ => (state, lockId), (_, _) => (state, null));
+            _statesByDescriptor.AddOrUpdate(key, _ => (state, null), (_, _) => (state, null));
 
-            _statesById.AddOrUpdate(state.InstanceId, _ => (state, lockId), (_, _) => (state, null));
+            _statesById.AddOrUpdate(state.InstanceId, _ => (state, null), (_, _) => (state, null));
 
             return ValueTask.CompletedTask;
         }
