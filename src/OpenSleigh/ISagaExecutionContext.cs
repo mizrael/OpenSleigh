@@ -24,6 +24,8 @@ namespace OpenSleigh
         /// </summary>
         SagaDescriptor Descriptor { get; }
 
+        IReadOnlyCollection<ProcessedMessage> ProcessedMessages { get; }
+
         /// <summary>
         /// true if the execution is completed.
         /// </summary>

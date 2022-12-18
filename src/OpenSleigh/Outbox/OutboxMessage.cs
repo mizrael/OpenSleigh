@@ -63,12 +63,12 @@ namespace OpenSleigh.Outbox
             };
         }
 
-        public required string CorrelationId { get; set; }
-        public required ReadOnlyMemory<byte> Body { get; set; }
-        public required string MessageId { get; set; }
-        public required Type MessageType { get; set; }
-        public required DateTimeOffset CreatedAt { get; set; }
-        public string? ParentId { get; set; }
-        public string? SenderId { get; set; }
+        public required string CorrelationId { get; init; }
+        public required ReadOnlyMemory<byte> Body { get; init; }
+        public required string MessageId { get; init; }
+        public required Type MessageType { get; init; }
+        public required DateTimeOffset CreatedAt { get; init; }
+        public string? ParentId { get; init; }
+        public string? SenderId { get; init; }
     }
 }

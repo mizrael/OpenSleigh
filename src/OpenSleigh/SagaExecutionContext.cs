@@ -4,14 +4,14 @@ namespace OpenSleigh
 {
     public record SagaExecutionContext : ISagaExecutionContext
     {
-        private HashSet<string> _processedMessages = new();
+        private HashSet<ProcessedMessage> _processedMessages = new();
 
         public SagaExecutionContext(
             string instanceId, 
             string triggerMessageId, 
             string correlationId,
             SagaDescriptor descriptor,
-            IEnumerable<string>? processedMessagesIds = null)
+            IEnumerable<ProcessedMessage>? processedMessages = null)
         {
             if (string.IsNullOrWhiteSpace(instanceId))            
                 throw new ArgumentException($"'{nameof(instanceId)}' cannot be null or whitespace.", nameof(instanceId));
@@ -27,9 +27,9 @@ namespace OpenSleigh
             CorrelationId = correlationId;
             Descriptor = descriptor ?? throw new ArgumentNullException(nameof(descriptor));      
             
-            if(processedMessagesIds is not null)
-                foreach(var id in processedMessagesIds)
-                    _processedMessages.Add(id);
+            if(processedMessages is not null)
+                foreach(var msg in processedMessages)
+                    _processedMessages.Add(msg);
         }
 
         public bool CanProcess<TM>(IMessageContext<TM> messageContext) 
@@ -41,7 +41,8 @@ namespace OpenSleigh
             if (this.CorrelationId != messageContext.CorrelationId)
                 return false;
 
-            if (_processedMessages.Contains(messageContext.Id))
+            //TODO: need to speed up this one
+            if (_processedMessages.Any(m => m.MessageId == messageContext.Id))
                 return false;
 
             var messageType = messageContext.Message.GetType();
@@ -53,7 +54,7 @@ namespace OpenSleigh
         }
            
         public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-            => _processedMessages.Add(messageContext.Id);
+            => _processedMessages.Add(ProcessedMessage.Create(messageContext));
 
         public void MarkAsCompleted()
             => this.IsCompleted = true;
@@ -67,6 +68,8 @@ namespace OpenSleigh
         public SagaDescriptor Descriptor { get; }
 
         public bool IsCompleted { get; private set; }
+
+        public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
     }
 
     public record SagaExecutionContext<TS> : SagaExecutionContext, ISagaExecutionContext<TS>
@@ -77,12 +80,12 @@ namespace OpenSleigh
             string correlationId,
             SagaDescriptor descriptor, 
             TS state,
-            IEnumerable<string>? processedMessagesIds = null) : base(
+            IEnumerable<ProcessedMessage>? processedMessages = null) : base(
                 instanceId: instanceId, 
                 triggerMessageId: triggerMessageId,
                 correlationId: correlationId,
                 descriptor: descriptor,
-                processedMessagesIds: processedMessagesIds)
+                processedMessages: processedMessages)
         {
             this.State = state;
         }

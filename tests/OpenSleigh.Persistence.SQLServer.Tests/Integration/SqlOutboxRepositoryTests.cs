@@ -180,7 +180,10 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
 
         private SqlOutboxRepository CreateSut(ISagaDbContext db)
         {
-            var sut = new SqlOutboxRepository(db, SqlOutboxRepositoryOptions.Default);
+            var typeResolver = new TypeResolver();
+            typeResolver.Register(typeof(FakeMessage));
+
+            var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default);
             return sut;
         }
     }

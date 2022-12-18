@@ -27,12 +27,15 @@ namespace OpenSleigh.Persistence.SQL
 
         public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
         {
-            var entity = await _dbContext.SagaStates.FirstOrDefaultAsync(e =>
-                e.CorrelationId == correlationId && 
-                e.SagaType == descriptor.SagaType.FullName &&
-                ((descriptor.SagaStateType == null && e.SagaStateType == null) || 
-                (descriptor.SagaStateType != null && e.SagaStateType == descriptor.SagaStateType.FullName)),
-                cancellationToken).ConfigureAwait(false);
+            var entity = await _dbContext.SagaStates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e =>
+                    e.CorrelationId == correlationId && 
+                    e.SagaType == descriptor.SagaType.FullName &&
+                    ((descriptor.SagaStateType == null && e.SagaStateType == null) || 
+                    (descriptor.SagaStateType != null && e.SagaStateType == descriptor.SagaStateType.FullName)),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (entity is null)
                 return null;
@@ -45,7 +48,11 @@ namespace OpenSleigh.Persistence.SQL
                     triggerMessageId: entity.TriggerMessageId,
                     correlationId: entity.CorrelationId,
                     descriptor: descriptor,
-                    processedMessagesIds: entity.ProcessedMessages.Select(e => e.MessageId));
+                    processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
+                    {
+                        MessageId = e.MessageId,
+                        When = e.When
+                    }));
             else
             {
                 var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
@@ -65,7 +72,11 @@ namespace OpenSleigh.Persistence.SQL
                    correlationId: entity.CorrelationId,
                    descriptor: descriptor,
                    state: state,
-                   processedMessagesIds: entity.ProcessedMessages.Select(e => e.MessageId));
+                   processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
+                   {
+                       MessageId = e.MessageId,
+                       When = e.When
+                   }));
 
         public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
@@ -88,8 +99,8 @@ namespace OpenSleigh.Persistence.SQL
                     CorrelationId = state.CorrelationId,
                     InstanceId = state.InstanceId,
                     IsCompleted = state.IsCompleted,
-                    SagaType = state.Descriptor.SagaType.AssemblyQualifiedName,
-                    SagaStateType = state.Descriptor.SagaStateType?.AssemblyQualifiedName,
+                    SagaType = state.Descriptor.SagaType.FullName,
+                    SagaStateType = state.Descriptor.SagaStateType?.FullName,
                     TriggerMessageId = state.TriggerMessageId,                    
                 };
                 _dbContext.SagaStates.Add(entity);
@@ -129,11 +140,24 @@ namespace OpenSleigh.Persistence.SQL
                 throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
             if (entity.LockId != lockId)
-                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id {lockId}");
+                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{lockId}'");
 
             entity.LockTime = null;
             entity.LockId = null;
 
+            entity.IsCompleted = state.IsCompleted;
+            
+            entity.ProcessedMessages.Clear();
+
+            foreach (var msg in state.ProcessedMessages)
+                entity.ProcessedMessages.Add(new SagaProcessedMessage()
+                {
+                    InstanceId = state.InstanceId,
+                    MessageId = msg.MessageId,
+                    When = msg.When,
+                    SagaState = entity
+                });
+                        
             if (state.GetType().IsGenericType)
                 SetStateData((dynamic)state, entity);
 

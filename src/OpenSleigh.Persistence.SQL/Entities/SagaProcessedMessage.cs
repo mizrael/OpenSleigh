@@ -5,8 +5,9 @@ namespace OpenSleigh.Persistence.SQL.Entities
 {
     public class SagaProcessedMessage
     {
-        public string InstanceId { get; init; }
-        public string MessageId { get; init; }
+        public required string InstanceId { get; init; }
+        public required string MessageId { get; init; }
+        public required DateTimeOffset When { get; init; }
 
         public SagaState SagaState { get; init; }
     }

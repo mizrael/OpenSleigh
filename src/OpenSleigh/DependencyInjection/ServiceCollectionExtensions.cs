@@ -17,12 +17,14 @@ namespace OpenSleigh.DependencyInjection
         {
             SystemInfo systemInfo = SystemInfo.Create(configuration);
 
-            var sagaDescriptorResolver = new SagaDescriptorsResolver();
+            var typeResolver = new TypeResolver();
+            var sagaDescriptorResolver = new SagaDescriptorsResolver(typeResolver);
 
             services
                 .AddSingleton(systemInfo)
                 .AddSingleton<ISystemInfo>(systemInfo)
                 .AddSingleton<ISerializer, JsonSerializer>()
+                .AddSingleton<ITypeResolver>(typeResolver)
                 .AddSingleton<ISagaDescriptorsResolver>(sagaDescriptorResolver)
 
                 .AddTransient<IMessageBus, DefaultMessageBus>()

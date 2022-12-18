@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Messaging;
 using OpenSleigh.Outbox;
+using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQL
@@ -15,11 +16,13 @@ namespace OpenSleigh.Persistence.SQL
     {
         private readonly ISagaDbContext _dbContext;
         private readonly SqlOutboxRepositoryOptions _options;
-     
-        public SqlOutboxRepository(ISagaDbContext dbContext, SqlOutboxRepositoryOptions options)
+        private readonly ITypeResolver _typeResolver;
+
+        public SqlOutboxRepository(ISagaDbContext dbContext, ITypeResolver typeResolver, SqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
 
         public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
@@ -53,7 +56,7 @@ namespace OpenSleigh.Persistence.SQL
             var messages = new List<OutboxMessage>();
             foreach (var entity in entities)
             {
-                var message = entity.ToModel();
+                var message = entity.ToModel(_typeResolver);
                 messages.Add(message);
             }
 

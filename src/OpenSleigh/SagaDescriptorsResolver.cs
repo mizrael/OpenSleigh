@@ -8,7 +8,13 @@ namespace OpenSleigh
 {
     internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
     {
-        private readonly ConcurrentDictionary<Type, ICollection<SagaDescriptor>> _types = new();
+        private readonly ConcurrentDictionary<Type, ICollection<SagaDescriptor>> _descriptorsByMessage = new();
+        private ITypeResolver _typeResolver;
+
+        public SagaDescriptorsResolver(ITypeResolver typeResolver)
+        {
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        }
 
         /// <inheritdoc/>
         public IEnumerable<SagaDescriptor> Resolve(IMessage message)
@@ -18,7 +24,7 @@ namespace OpenSleigh
 
             var messageType = message.GetType();
 
-            _types.TryGetValue(messageType, out var types);
+            _descriptorsByMessage.TryGetValue(messageType, out var types);
             return types ?? Enumerable.Empty<SagaDescriptor>();
         }
 
@@ -50,7 +56,9 @@ namespace OpenSleigh
 
         private void Register(Type messageType, SagaDescriptor descriptor)
         {
-            _types.AddOrUpdate(messageType,
+            _typeResolver.Register(messageType);
+
+            _descriptorsByMessage.AddOrUpdate(messageType,
                 (k) =>
                 {
                     var res = new List<SagaDescriptor> { descriptor };

@@ -96,45 +96,64 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
                 .And.NotBe(firstLockId);
         }
 
-        //[Fact]
-        //public async Task ReleaseLockAsync_should_throw_when_state_not_found()
-        //{
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db);
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_state_not_found()
+        {
+            var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
 
-        //    var correlationId = Guid.NewGuid();
-        //    var state = new DummyState(correlationId, "lorem", 42);
+            var sagaContext = CreateSagaContext();
 
-        //    var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseLockAsync(state, Guid.NewGuid()));
-        //    ex.Message.Should().Contain($"unable to release Saga State");
-        //}
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
+        }
 
-        //[Fact]
-        //public async Task ReleaseLockAsync_should_release_lock_and_update_state()
-        //{
-        //    var (db,_) = _fixture.CreateDbContext();
-        //    var sut = CreateSut(db);
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_lock_invalid()
+        {
+            var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
 
-        //    var correlationId = Guid.NewGuid();
-        //    var newState = new DummyState(correlationId, "lorem", 42);
+            var sagaContext = CreateSagaContext();
 
-        //    var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
+            await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        //    var updatedState = new DummyState(correlationId, "ipsum", 71);
-        //    await sut.ReleaseLockAsync(updatedState, lockId);
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            ex.Message.Should().Contain($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'");
+        }
 
-        //    var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.CorrelationId == newState.Id);
-        //    unLockedState.Should().NotBeNull();
-        //    unLockedState.LockId.Should().BeNull();
-        //    unLockedState.LockTime.Should().BeNull();
-        //    unLockedState.Data.Should().NotBeNull();
+        [Fact]
+        public async Task ReleaseLockAsync_should_release_lock_and_update_state()
+        {
+            var (db, _) = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
 
-        //    var serializer = new JsonSerializer();
-        //    var deserializedState = serializer.Deserialize<DummyState>(unLockedState.Data);
-        //    deserializedState.Id.Should().Be(updatedState.Id);
-        //    deserializedState.Bar.Should().Be(updatedState.Bar);
-        //    deserializedState.Foo.Should().Be(updatedState.Foo);
-        //}
+            var sagaContext = CreateSagaContext();
+
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var messageContext = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext);
+
+            var messageContext2 = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext2);
+
+            sagaContext.MarkAsCompleted();
+
+            await sut.ReleaseAsync(sagaContext, lockId);
+
+            var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == sagaContext.InstanceId);
+            unLockedState.Should().NotBeNull();
+            unLockedState.LockId.Should().BeNull();
+            unLockedState.LockTime.Should().BeNull();
+            unLockedState.IsCompleted.Should().BeTrue();
+            unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
+                                           .And.HaveCount(2)
+                                           .And.Contain(m => m.MessageId == messageContext.Id)
+                                           .And.Contain(m => m.MessageId == messageContext2.Id);
+        }
 
         private SqlSagaStateRepository CreateSut(ISagaDbContext db,
             SqlSagaStateRepositoryOptions options = null)
@@ -144,12 +163,17 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
             return sut;
         }
 
-        private ISagaExecutionContext CreateSagaContext()
+        private IMessageContext<TM> CreateMessageContext<TM>() where TM: IMessage
         {
-            var messageContext = NSubstitute.Substitute.For<IMessageContext<FakeMessage>>();
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
             messageContext.Id.Returns(Guid.NewGuid().ToString());
             messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+            return messageContext;
+        }
 
+        private ISagaExecutionContext CreateSagaContext()
+        {
+            var messageContext = CreateMessageContext<FakeMessage>();
             var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
 
             var factory = new SagaExecutionContextFactory();
