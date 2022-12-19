@@ -1,7 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.DependencyInjection;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using System.ComponentModel;
 

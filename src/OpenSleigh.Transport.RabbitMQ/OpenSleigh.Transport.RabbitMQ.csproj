@@ -1,0 +1,50 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+  <PropertyGroup>
+    <PackageVersion>3.0.0</PackageVersion>
+    <IsPackable>true</IsPackable>
+    <Authors>davidguida</Authors>
+    <Product>OpenSleigh.Transport.RabbitMQ</Product>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <Title>OpenSleigh.Transport.RabbitMQ</Title>
+    <PackageDescription>RabbitMQ transport for OpenSleigh.</PackageDescription>
+    <Copyright>Copyright 2022</Copyright>
+    <PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport rabbitmq</PackageTags>
+    <PackageOutputPath>../../packages/</PackageOutputPath>
+    <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
+    <PackageProjectUrl>https://www.opensleigh.net/</PackageProjectUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+	<PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" Version="6.4.0" />
+	<PackageReference Include="Polly" Version="7.2.3" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\OpenSleigh\OpenSleigh.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+</Project>

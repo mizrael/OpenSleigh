@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace OpenSleigh.Messaging
+namespace OpenSleigh.Transport
 {
     internal class DefaultMessageHandlerFactory : IMessageHandlerFactory
     {

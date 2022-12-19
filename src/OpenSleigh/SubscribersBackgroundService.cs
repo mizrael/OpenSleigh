@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh
 {

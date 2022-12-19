@@ -1,7 +1,7 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.Messaging
+namespace OpenSleigh.Transport
 {
     internal class MessageProcessor : IMessageProcessor
     {

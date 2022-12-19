@@ -1,7 +1,7 @@
 ﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh.E2ETests
 {

@@ -1,6 +1,6 @@
 ﻿using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests;

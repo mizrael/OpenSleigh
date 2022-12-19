@@ -1,6 +1,6 @@
 ﻿using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Messaging
+namespace OpenSleigh.Transport
 {
     internal record MessageContext<TM> : IMessageContext<TM>
         where TM : IMessage

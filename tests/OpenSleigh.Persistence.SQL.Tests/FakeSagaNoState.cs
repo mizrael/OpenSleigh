@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 using System.Threading;
 using System.Threading.Tasks;
 

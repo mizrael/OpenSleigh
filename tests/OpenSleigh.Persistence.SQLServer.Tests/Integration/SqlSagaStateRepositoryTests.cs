@@ -1,4 +1,4 @@
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests;
 using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;

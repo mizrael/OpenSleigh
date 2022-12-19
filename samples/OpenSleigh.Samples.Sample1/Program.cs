@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using Microsoft.Extensions.Configuration;
 
 static IHostBuilder CreateHostBuilder(string[] args) =>

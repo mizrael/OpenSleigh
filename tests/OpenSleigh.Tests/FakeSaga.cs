@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
 namespace OpenSleigh.Tests

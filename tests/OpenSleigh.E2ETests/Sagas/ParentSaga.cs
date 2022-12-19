@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Runtime.Serialization;
 

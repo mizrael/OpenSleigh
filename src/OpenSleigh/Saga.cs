@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using System.Collections.Concurrent;

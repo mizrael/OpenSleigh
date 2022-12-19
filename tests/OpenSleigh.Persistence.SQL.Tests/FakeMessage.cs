@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 
 namespace OpenSleigh.Persistence.SQL.Tests
 {

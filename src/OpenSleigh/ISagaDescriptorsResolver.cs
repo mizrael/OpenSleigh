@@ -1,9 +1,15 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 
 namespace OpenSleigh
 {
     public interface ISagaDescriptorsResolver
     {
+        /// <summary>
+        /// returns the list of registered message types.
+        /// </summary>
+        /// <returns></returns>
+        IEnumerable<Type> GetRegisteredMessageTypes();
+
         /// <summary>
         /// returns the list of saga types with the associated saga state type that
         /// can handle the input message.

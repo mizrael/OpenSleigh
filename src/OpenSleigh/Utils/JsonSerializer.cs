@@ -12,7 +12,7 @@ namespace OpenSleigh.Utils
             PropertyNameCaseInsensitive = true
         };
 
-        public byte[] Serialize<T>(T data)
+        public byte[] Serialize(object data)
         {
             if (data is null)
                 throw new ArgumentNullException(nameof(data));
@@ -27,6 +27,7 @@ namespace OpenSleigh.Utils
                 throw new ArgumentNullException(nameof(returnType));
 
             return System.Text.Json.JsonSerializer.Deserialize(data, returnType, Settings);
-        }
+        }      
     }
+
 }

@@ -1,4 +1,4 @@
-﻿namespace OpenSleigh.Messaging
+﻿namespace OpenSleigh.Transport
 {
     public interface ISubscriber
     {

@@ -2,7 +2,7 @@
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory.Messaging;
 using OpenSleigh.InMemory.Outbox;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;

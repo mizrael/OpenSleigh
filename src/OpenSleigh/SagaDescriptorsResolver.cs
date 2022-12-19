@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Messaging;
+﻿using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
@@ -15,6 +15,10 @@ namespace OpenSleigh
         {
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         }
+
+        /// <inheritdoc/>
+        public IEnumerable<Type> GetRegisteredMessageTypes()
+            => _descriptorsByMessage.Keys;
 
         /// <inheritdoc/>
         public IEnumerable<SagaDescriptor> Resolve(IMessage message)

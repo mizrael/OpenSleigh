@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace OpenSleigh.Messaging
+namespace OpenSleigh.Transport
 {
     [ExcludeFromCodeCoverage]
     public class LockException : Exception

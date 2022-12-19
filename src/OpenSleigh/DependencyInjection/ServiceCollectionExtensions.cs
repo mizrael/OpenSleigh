@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using System.Diagnostics.CodeAnalysis;
 using OpenSleigh.Utils;
 using OpenSleigh.Outbox;
@@ -16,7 +16,7 @@ namespace OpenSleigh.DependencyInjection
             IConfigurationRoot? configuration = null)
         {
             SystemInfo systemInfo = SystemInfo.Create(configuration);
-
+            
             var typeResolver = new TypeResolver();
             var sagaDescriptorResolver = new SagaDescriptorsResolver(typeResolver);
 
@@ -37,7 +37,7 @@ namespace OpenSleigh.DependencyInjection
                 .AddTransient<IOutboxProcessor, OutboxProcessor>()
                 .AddSingleton(OutboxProcessorOptions.Default)
                 .AddHostedService<OutboxBackgroundService>()
-                ;
+            ;
 
             var builder = new BusConfigurator(services, systemInfo, sagaDescriptorResolver);
             busConfigurator?.Invoke(builder);

@@ -3,7 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh;
-using OpenSleigh.Messaging;
+using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
 namespace OpenSleigh.Samples.Sample1
