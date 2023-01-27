@@ -2,9 +2,6 @@
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using Polly;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -32,12 +29,19 @@ namespace OpenSleigh.Transport.RabbitMQ
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            var encodedMessage = _encoder.Serialize(message);
-
             var queueRef = _queueReferenceFactory.Create(message);
             var channel = _channelFactory.Get(queueRef);
             var properties = channel.CreateBasicProperties();
-            properties.Persistent = true;            
+            properties.Persistent = true;
+            properties.MessageId = message.MessageId;
+            properties.CorrelationId = message.CorrelationId;
+            properties.Headers = new Dictionary<string, object>()
+            {
+                { nameof(message.MessageType), message.MessageType.FullName },                
+                { nameof(message.ParentId), message.ParentId ?? string.Empty },
+                { nameof(message.SenderId), message.SenderId ?? string.Empty },
+                { nameof(message.CreatedAt), message.CreatedAt.ToString() }
+            };
 
             var policy = Policy.Handle<Exception>()
                 .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
@@ -56,7 +60,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                     routingKey: queueRef.RoutingKey,
                     mandatory: true,
                     basicProperties: properties,
-                    body: encodedMessage);
+                    body: message.Body);
 
                 _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'",
                     message.MessageId,

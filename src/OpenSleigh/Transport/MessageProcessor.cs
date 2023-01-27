@@ -8,7 +8,7 @@ namespace OpenSleigh.Transport
         private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
         private readonly ISagaRunner _sagaRunner;
         private readonly ISerializer _serializer;
-
+        
         public MessageProcessor(
             ISagaRunner sagaRunner, 
             ISagaDescriptorsResolver sagaDescriptorsResolver,

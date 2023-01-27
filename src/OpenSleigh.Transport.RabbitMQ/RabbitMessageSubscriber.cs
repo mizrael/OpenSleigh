@@ -11,7 +11,7 @@ namespace OpenSleigh.Transport.RabbitMQ
     {
         private readonly IChannelFactory _channelFactory;
         private readonly QueueReferences _queueReferences;
-        private readonly ISerializer _messageParser;
+        private readonly ISerializer _serializer;
         private readonly IMessageProcessor _messageProcessor;
         private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
 
@@ -19,14 +19,14 @@ namespace OpenSleigh.Transport.RabbitMQ
 
         public RabbitMessageSubscriber(IChannelFactory channelFactory,
             IQueueReferenceFactory queueReferenceFactory,
-            ISerializer messageParser,
+            ISerializer serializer,
             IMessageProcessor messageProcessor,
             ILogger<RabbitMessageSubscriber<TM>> logger)
         {
             _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
-            _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
             if (queueReferenceFactory == null)
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
@@ -70,25 +70,33 @@ namespace OpenSleigh.Transport.RabbitMQ
             OutboxMessage? message;
             try
             {
-                message = _messageParser.Deserialize<OutboxMessage>(eventArgs.Body.Span);
-                if (message is null)
-                    throw new ApplicationException("message cannot be parsed.");
+                message = new OutboxMessage()
+                {
+                    Body = eventArgs.Body,
+                    CorrelationId = eventArgs.BasicProperties.CorrelationId,
+                    MessageId = eventArgs.BasicProperties.MessageId,
+                    CreatedAt = DateTimeOffset.UtcNow,
+                    MessageType = typeof(string)
+                };
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
+                _logger.LogError(
+                    ex, 
+                    "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
                     eventArgs.Exchange, ex.Message);
                 channel.BasicReject(eventArgs.DeliveryTag, requeue: false);
                 return;
             }
 
-            _logger.LogInformation("received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...",
+            _logger.LogInformation(
+                "received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...",
                 message.MessageId, _queueReferences.ExchangeName, _queueReferences.QueueName);
 
             try
             {
                 //TODO: provide valid cancellation token
-                await _messageProcessor.ProcessAsync((dynamic)message, CancellationToken.None);
+                await _messageProcessor.ProcessAsync(message, CancellationToken.None);
 
                 channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
             }

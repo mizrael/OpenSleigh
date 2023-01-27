@@ -9,10 +9,10 @@ namespace OpenSleigh.Outbox
         {
             if (serializer is null)
                 throw new ArgumentNullException(nameof(serializer));
-
-            var instance = serializer.Deserialize(Body.Span, MessageType);
+            
+            var instance = serializer.Deserialize(this.Body.Span, this.MessageType);
             if (instance is null || instance is not IMessage message)
-                throw new DataMisalignedException($"Unable to deserialize message '{this.MessageId}' to type '{this.MessageType.FullName}'.");
+                throw new DataMisalignedException($"Unable to deserialize message '{this.MessageId}' to type '{this.MessageType}'.");
             
             return message;
         }

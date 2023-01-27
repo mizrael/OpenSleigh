@@ -2,7 +2,7 @@
 
 namespace OpenSleigh.Tests
 {
-    internal class FakeSagaStarter : IMessage { }
+    public class FakeSagaStarter : IMessage { }
 
-    internal class FakeSagaMessage : IMessage { }
+    public class FakeSagaMessage : IMessage { }
 }
