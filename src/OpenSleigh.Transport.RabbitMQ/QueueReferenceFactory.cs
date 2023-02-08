@@ -3,18 +3,20 @@ using System.Collections.Concurrent;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
+    public delegate QueueReferences QueueReferencesCreator(Type messageType);
+    
     public class QueueReferenceFactory : IQueueReferenceFactory
     {
         private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesCache = new();
-        private readonly Func<Type, QueueReferences> _factory;
+        private readonly QueueReferencesCreator _factory;
         private readonly ISystemInfo _systemInfo;
 
         public QueueReferenceFactory(ISystemInfo systemInfo,
-                                    Func<Type, QueueReferences>? factory = null)
+                                     QueueReferencesCreator? creator = null)
         {
             _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
 
-            _factory = factory ?? (messageType =>
+            _factory = creator ?? (messageType =>
                 {
                     var exchangeName = messageType.Name.ToLower();
 
@@ -33,5 +35,5 @@ namespace OpenSleigh.Transport.RabbitMQ
 
         public QueueReferences Create<TM>() where TM : IMessage
             => _queueReferencesCache.GetOrAdd(typeof(TM), k => _factory(typeof(TM)));
-    }
+    }    
 }
