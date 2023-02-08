@@ -2,9 +2,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
+using System.ComponentModel;
 
 namespace OpenSleigh.E2ETests
 {
+    [Category("E2E")]
+    [Trait("Category", "E2E")]
     public abstract class SimpleSagaScenario : E2ETestsBase
     {
         [Theory]
@@ -20,12 +23,12 @@ namespace OpenSleigh.E2ETests
 
             Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
             {
-                receivedCount++;
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-
                 ctx.Id.Should().NotBeNullOrWhiteSpace();
                 ctx.SenderId.Should().NotBeNullOrWhiteSpace();
                 ctx.ParentId.Should().BeNullOrWhiteSpace();
+
+                receivedCount++;
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
             };
 
             await RunScenarioAsync(hostsCount,

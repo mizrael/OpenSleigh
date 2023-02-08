@@ -5,5 +5,7 @@
         string ClientGroup { get; }
         string ClientId { get; }
         bool PublishOnly { get; }
+
+        string Id => $"{ClientGroup}.{ClientId}";
     }
 }

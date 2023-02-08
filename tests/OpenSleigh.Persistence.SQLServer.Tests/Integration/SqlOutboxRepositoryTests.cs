@@ -27,8 +27,13 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
         }
 
         private static OutboxMessage CreateMessage()
-            => OutboxMessage.Create(new FakeMessage(), new JsonSerializer());
-
+        {
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.ClientGroup.Returns("test");
+            sysInfo.ClientId.Returns("client");
+            return OutboxMessage.Create(new FakeMessage(), sysInfo, new JsonSerializer());
+        }
+        
         [Fact]
         public async Task LockAsync_should_throw_if_message_not_found()
         {

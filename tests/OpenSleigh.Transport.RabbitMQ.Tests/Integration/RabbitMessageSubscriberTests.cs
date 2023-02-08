@@ -66,9 +66,11 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             channelFactory.Get(queueRef)
                 .Returns(channel);
 
+            var typeResolver = Substitute.For<ITypeResolver>();
+
             var logger = Substitute.For<ILogger<RabbitMessageSubscriber<FakeSagaStarter>>>();
 
-            var sut = new RabbitMessageSubscriber<FakeSagaStarter>(channelFactory, queueRefFactory, serializer, processor, logger);
+            var sut = new RabbitMessageSubscriber<FakeSagaStarter>(channelFactory, queueRefFactory, serializer, processor, typeResolver, logger);
 
             sut.Start();
 

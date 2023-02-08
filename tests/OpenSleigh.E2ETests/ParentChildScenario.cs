@@ -2,9 +2,12 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
+using System.ComponentModel;
 
 namespace OpenSleigh.E2ETests
 {
+    [Category("E2E")]
+    [Trait("Category", "E2E")]
     public abstract class ParentChildScenario : E2ETestsBase
     {
         [Theory]

@@ -39,7 +39,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             {
                 { nameof(message.MessageType), message.MessageType.FullName },                
                 { nameof(message.ParentId), message.ParentId ?? string.Empty },
-                { nameof(message.SenderId), message.SenderId ?? string.Empty },
+                { nameof(message.SenderId), message.SenderId },
                 { nameof(message.CreatedAt), message.CreatedAt.ToString() }
             };
 

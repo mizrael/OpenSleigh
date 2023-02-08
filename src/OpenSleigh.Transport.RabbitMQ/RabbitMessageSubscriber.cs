@@ -3,6 +3,8 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System;
+using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -13,6 +15,7 @@ namespace OpenSleigh.Transport.RabbitMQ
         private readonly QueueReferences _queueReferences;
         private readonly ISerializer _serializer;
         private readonly IMessageProcessor _messageProcessor;
+        private readonly ITypeResolver _typeResolver;
         private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
 
         private IModel _channel;
@@ -21,11 +24,13 @@ namespace OpenSleigh.Transport.RabbitMQ
             IQueueReferenceFactory queueReferenceFactory,
             ISerializer serializer,
             IMessageProcessor messageProcessor,
+            ITypeResolver typeResolver,
             ILogger<RabbitMessageSubscriber<TM>> logger)
         {
             _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+            _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
             _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
             if (queueReferenceFactory == null)
@@ -70,13 +75,27 @@ namespace OpenSleigh.Transport.RabbitMQ
             OutboxMessage? message;
             try
             {
+                var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
+                if (string.IsNullOrWhiteSpace(messageTypeName))
+                    throw new ArgumentException("message type cannot be null.");
+                
+                var messageType = _typeResolver.Resolve(messageTypeName);
+
+                var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
+                if (string.IsNullOrWhiteSpace(senderId))
+                    throw new ArgumentException("sender id cannot be null.");
+
+                var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
+
                 message = new OutboxMessage()
                 {
                     Body = eventArgs.Body,
+                    SenderId = senderId,
+                    ParentId = parentId,
                     CorrelationId = eventArgs.BasicProperties.CorrelationId,
                     MessageId = eventArgs.BasicProperties.MessageId,
                     CreatedAt = DateTimeOffset.UtcNow,
-                    MessageType = typeof(string)
+                    MessageType = messageType
                 };
             }
             catch (Exception ex)

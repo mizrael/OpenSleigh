@@ -1,7 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using RabbitMQ.Client;
-using System;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Transport.RabbitMQ

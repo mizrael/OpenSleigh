@@ -44,7 +44,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             return connectionFactory.CreateConnection();
         }
 
-        public QueueReferences CreateQueueReference(string queueName)
+        private QueueReferences CreateQueueReference(string queueName)
         {
             _queues.Add(queueName);
             return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
@@ -80,7 +80,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             using var connection = Connect();
             using var channel = connection.CreateModel();
             
-            foreach (var queueName in _queues) {
+            foreach (var queueName in _queues) 
+            {
                 channel.ExchangeDelete(queueName);
                 channel.QueueDelete(queueName);
 

@@ -1,13 +1,13 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using OpenSleigh.Persistence.SQL;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
-using OpenSleigh.Persistence.SQL;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Persistence.SQLServer.Tests.Fixtures
 {
-    public class DbFixture : IDisposable
+    public class DbFixture : IAsyncLifetime
     {
         private readonly string _connStrTemplate;
         private readonly List<SagaDbContext> _dbContexts = new();
@@ -37,7 +37,9 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Fixtures
             return (dbContext, connectionString);
         }
 
-        public void Dispose()
+        public Task InitializeAsync() => Task.CompletedTask;
+        
+        public async Task DisposeAsync()
         {
             var queue = new Queue<SagaDbContext>(_dbContexts);
             while (queue.Any())
@@ -45,7 +47,7 @@ namespace OpenSleigh.Persistence.SQLServer.Tests.Fixtures
                 var ctx = queue.Dequeue();
                 try
                 {
-                    ctx.Database.EnsureDeleted();
+                    await ctx.Database.EnsureDeletedAsync();
                 }
                 catch (Exception e)
                 {

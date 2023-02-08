@@ -14,6 +14,9 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         public void Create_should_use_provided_creator()
         {
             var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.ClientGroup.Returns("test");
+            sysInfo.ClientId.Returns("client");
+            
             var sut = new QueueReferenceFactory(sysInfo, messageType =>
             {
                 var exchangeName = messageType.Name.ToLower();
@@ -23,8 +26,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
                 var dlQueueName = dlExchangeName + ".c";
                 return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
             });
-
-            var message = OutboxMessage.Create(new FakeSagaStarter(), new JsonSerializer());
+            
+            var message = OutboxMessage.Create(new FakeSagaStarter(), sysInfo, new JsonSerializer());
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("fakesagastarter");
@@ -41,9 +44,10 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         {
             var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             sysInfo.ClientGroup.Returns("test");
+            sysInfo.ClientId.Returns("client");
 
             var sut = new QueueReferenceFactory(sysInfo);
-            var message = OutboxMessage.Create(new FakeSagaStarter(), new JsonSerializer());
+            var message = OutboxMessage.Create(new FakeSagaStarter(), sysInfo, new JsonSerializer());
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("fakesagastarter");

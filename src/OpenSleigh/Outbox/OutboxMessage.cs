@@ -19,6 +19,7 @@ namespace OpenSleigh.Outbox
 
         public static OutboxMessage Create(
            IMessage message,
+           ISystemInfo systemInfo,
            ISerializer serializer)
         {
             if (message is null)
@@ -30,6 +31,7 @@ namespace OpenSleigh.Outbox
             return new OutboxMessage()
             {
                 CorrelationId = Guid.NewGuid().ToString(),
+                SenderId = systemInfo.Id,
                 MessageId = Guid.NewGuid().ToString(),
                 Body = serializer.Serialize(message),
                 MessageType = message.GetType(),
@@ -68,7 +70,7 @@ namespace OpenSleigh.Outbox
         public required string MessageId { get; init; }
         public required Type MessageType { get; init; }
         public required DateTimeOffset CreatedAt { get; init; }
-        public string? ParentId { get; init; }
-        public string? SenderId { get; init; }
+        public required string SenderId { get; init; }        
+        public string? ParentId { get; init; }        
     }
 }
