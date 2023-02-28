@@ -25,21 +25,6 @@ namespace OpenSleigh.E2ETests.SqlRabbit
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
-        {
-            var (_, connStr) = _dbFixture.CreateDbContext();
-            var sqlCfg = new SqlConfiguration(connStr);
-
-            QueueReferencesCreator creator = messageType => 
-            {
-                var queueName = $"{_exchangeName}.{messageType.Name}.workers";
-                var dlExchangeName = _exchangeName + ".dead";
-                var dlQueueName = $"{dlExchangeName}.{messageType.Name}.workers";
-                return new QueueReferences(_exchangeName, queueName, _exchangeName, dlExchangeName, dlQueueName);
-            };
-            cfg.Services.AddSingleton(creator);
-            
-            cfg.UseSqlServerPersistence(sqlCfg)
-                .UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration);
-        }
+            => SqlRabbitScenarioUtils.ConfigureTransportAndPersistence(cfg, _dbFixture, _rabbitFixture, _exchangeName);
     }
 }

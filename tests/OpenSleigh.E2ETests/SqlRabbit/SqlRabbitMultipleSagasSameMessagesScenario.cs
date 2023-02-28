@@ -1,18 +1,11 @@
-﻿using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.DependencyInjection;
-using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQLServer;
+﻿using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
-using OpenSleigh.Transport;
-using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
-using System.ComponentModel;
 
 namespace OpenSleigh.E2ETests.SqlRabbit
 {
-    public class SqlRabbitParentChildScenario : 
-        ParentChildScenario,
+    public class SqlRabbitMultipleSagasSameMessagesScenario : 
+        MultipleSagasSameMessagesScenario,
         IClassFixture<DbFixture>,
         IClassFixture<RabbitFixture>
     {
@@ -20,7 +13,7 @@ namespace OpenSleigh.E2ETests.SqlRabbit
         private readonly DbFixture _dbFixture;
         private readonly string _exchangeName;
 
-        public SqlRabbitParentChildScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
+        public SqlRabbitMultipleSagasSameMessagesScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
             _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;
