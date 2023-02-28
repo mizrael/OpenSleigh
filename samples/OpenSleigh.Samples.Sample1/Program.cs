@@ -16,10 +16,7 @@ static IHostBuilder CreateHostBuilder(string[] args) =>
             })
             .ConfigureLogging((ctx, cfg) =>
             {
-                cfg.AddConfiguration(ctx.Configuration.GetSection("Logging"))
-                    //.AddConsole()
-                    ;
-                
+                cfg.AddConfiguration(ctx.Configuration.GetSection("Logging"));
             })
             .ConfigureServices((hostContext, services) =>
             {

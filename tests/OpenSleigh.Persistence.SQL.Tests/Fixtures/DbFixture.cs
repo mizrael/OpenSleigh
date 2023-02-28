@@ -1,37 +1,35 @@
 ﻿using Microsoft.Extensions.Configuration;
-using OpenSleigh.Persistence.SQL;
-using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.SQLServer.Tests.Fixtures
+namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
 {
-    public class DbFixture : IAsyncLifetime
+    public abstract class DbFixture : IAsyncLifetime
     {
         private readonly string _connStrTemplate;
         private readonly List<SagaDbContext> _dbContexts = new();
         
-        public DbFixture()
+        protected DbFixture(string connectionStringSectionName)
         {
             var configuration = new ConfigurationBuilder()
                 .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
                 .AddEnvironmentVariables()
                 .Build();
 
-            _connStrTemplate = configuration.GetConnectionString("sql");
+            _connStrTemplate = configuration.GetConnectionString(connectionStringSectionName);
             if (string.IsNullOrWhiteSpace(_connStrTemplate))
                 throw new ArgumentException("invalid connection string");
         }
-        
+
+        protected abstract DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString);
+
         public (ISagaDbContext db, string connStr) CreateDbContext()
         {
             var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
-            
-            var options = new DbContextOptionsBuilder<SagaDbContext>()
-                .UseSqlServer(connectionString)
-                .EnableSensitiveDataLogging()
-                .Options;
+
+            var optionsBuilder = CreateOptionsBuilder(connectionString);
+            var options = optionsBuilder.Options;
+
             var dbContext = new SagaDbContext(options);
             _dbContexts.Add(dbContext);
             return (dbContext, connectionString);

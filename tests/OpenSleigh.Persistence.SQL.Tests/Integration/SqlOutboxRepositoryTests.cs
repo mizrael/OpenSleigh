@@ -1,23 +1,16 @@
-﻿using FluentAssertions;
-using Microsoft.EntityFrameworkCore;
+﻿using OpenSleigh.Outbox;
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport;
-using OpenSleigh.Outbox;
-using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.Tests;
-using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
 using OpenSleigh.Utils;
 using System;
 using System.ComponentModel;
-using System.Diagnostics.Eventing.Reader;
 using System.Threading.Tasks;
-using Xunit;
 
-namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
+namespace OpenSleigh.Persistence.SQL.Tests.Integration
 {
-
     [Category("Integration")]
     [Trait("Category", "Integration")]
-    public class SqlOutboxRepositoryTests : IClassFixture<DbFixture>
+    public abstract class SqlOutboxRepositoryTests 
     {
         private readonly DbFixture _fixture;
 

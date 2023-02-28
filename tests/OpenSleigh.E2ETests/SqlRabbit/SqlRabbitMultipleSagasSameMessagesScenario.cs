@@ -1,19 +1,19 @@
 ﻿using OpenSleigh.DependencyInjection;
-using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 
 namespace OpenSleigh.E2ETests.SqlRabbit
 {
     public class SqlRabbitMultipleSagasSameMessagesScenario : 
         MultipleSagasSameMessagesScenario,
-        IClassFixture<DbFixture>,
+        IClassFixture<SqlServerDbFixture>,
         IClassFixture<RabbitFixture>
     {
         private readonly RabbitFixture _rabbitFixture;
-        private readonly DbFixture _dbFixture;
+        private readonly SqlServerDbFixture _dbFixture;
         private readonly string _exchangeName;
 
-        public SqlRabbitMultipleSagasSameMessagesScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
+        public SqlRabbitMultipleSagasSameMessagesScenario(SqlServerDbFixture dbFixture, RabbitFixture rabbitFixture)
         {
             _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;

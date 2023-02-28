@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Persistence.SQLServer;
-using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 

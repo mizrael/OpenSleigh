@@ -1,18 +1,13 @@
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport;
-using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.Tests;
-using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
 using OpenSleigh.Utils;
-using System;
 using System.ComponentModel;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.SQLServer.Tests.Integration
+namespace OpenSleigh.Persistence.SQL.Tests.Integration
 {
     [Category("Integration")]
     [Trait("Category", "Integration")]
-    public class SqlSagaStateRepositoryTests : IClassFixture<DbFixture>
+    public abstract class SqlSagaStateRepositoryTests 
     {
         private readonly DbFixture _fixture;
 

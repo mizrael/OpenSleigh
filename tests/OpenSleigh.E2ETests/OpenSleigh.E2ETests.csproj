@@ -28,7 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenSleigh.InMemory\OpenSleigh.InMemory.csproj" />
     <ProjectReference Include="..\..\src\OpenSleigh\OpenSleigh.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Persistence.SQLServer.Tests\OpenSleigh.Persistence.SQLServer.Tests.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj" />
     <ProjectReference Include="..\OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj" />
   </ItemGroup>
 

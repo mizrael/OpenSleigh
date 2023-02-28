@@ -1,16 +1,12 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.DependencyInjection;
-using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQLServer;
-using OpenSleigh.Persistence.SQLServer.Tests.Fixtures;
-using OpenSleigh.Transport.RabbitMQ;
+﻿using OpenSleigh.DependencyInjection;
+using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 
 namespace OpenSleigh.E2ETests.SqlRabbit
 {
     public class SqlRabbitSimpleSagaScenario : 
         SimpleSagaScenario,
-        IClassFixture<DbFixture>,
+        IClassFixture<SqlServerDbFixture>,
         IClassFixture<RabbitFixture>
     {
         private readonly RabbitFixture _rabbitFixture;        
