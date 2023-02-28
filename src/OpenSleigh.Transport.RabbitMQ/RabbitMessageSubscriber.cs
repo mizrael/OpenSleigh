@@ -12,7 +12,7 @@ namespace OpenSleigh.Transport.RabbitMQ
         where TM : IMessage
     {
         private readonly IChannelFactory _channelFactory;
-        private readonly QueueReferences _queueReferences;
+        private readonly QueueReferences _queueReference;
         private readonly ISerializer _serializer;
         private readonly IMessageProcessor _messageProcessor;
         private readonly ITypeResolver _typeResolver;
@@ -35,14 +35,14 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             if (queueReferenceFactory == null)
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
-            _queueReferences = queueReferenceFactory.Create<TM>();
+            _queueReference = queueReferenceFactory.Create<TM>();
         }
 
         private void InitChannel()
         {
             StopChannel();
 
-            _channel = _channelFactory.Get(_queueReferences);
+            _channel = _channelFactory.Get(_queueReference);
             _channel.CallbackException += OnChannelException;
         }
 
@@ -57,8 +57,8 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             consumer.Received += OnMessageReceivedAsync;
 
-            _logger.LogInformation($"initializing subscription on queue '{_queueReferences.QueueName}' ...");
-            _channel.BasicConsume(queue: _queueReferences.QueueName, autoAck: false, consumer: consumer);
+            _logger.LogInformation($"initializing subscription on queue '{_queueReference.QueueName}' ...");
+            _channel.BasicConsume(queue: _queueReference.QueueName, autoAck: false, consumer: consumer);
         }
 
         private void StopChannel()
@@ -110,7 +110,7 @@ namespace OpenSleigh.Transport.RabbitMQ
 
             _logger.LogInformation(
                 "received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...",
-                message.MessageId, _queueReferences.ExchangeName, _queueReferences.QueueName);
+                message.MessageId, _queueReference.ExchangeName, _queueReference.QueueName);
 
             try
             {
@@ -138,7 +138,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             var errorMsg = "an error has occurred while processing Message '{MessageId}' from Exchange '{ExchangeName}' : {ExceptionMessage} . "
                          + (requeue ? "Reenqueuing..." : "Nacking...");
 
-            _logger.LogWarning(ex, errorMsg, message.MessageId, _queueReferences.ExchangeName, ex.Message);
+            _logger.LogWarning(ex, errorMsg, message.MessageId, _queueReference.ExchangeName, ex.Message);
 
             if (!requeue)
                 channel.BasicReject(deliveryProps.DeliveryTag, requeue: false);
@@ -146,7 +146,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             {
                 channel.BasicAck(deliveryProps.DeliveryTag, false);
                 channel.BasicPublish(
-                    exchange: _queueReferences.RetryExchangeName,
+                    exchange: _queueReference.RetryExchangeName,
                     routingKey: deliveryProps.RoutingKey,
                     basicProperties: deliveryProps.BasicProperties,
                     body: deliveryProps.Body);

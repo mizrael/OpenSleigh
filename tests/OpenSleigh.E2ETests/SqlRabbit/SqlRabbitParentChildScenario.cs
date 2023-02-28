@@ -8,16 +8,16 @@ using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 
 namespace OpenSleigh.E2ETests.SqlRabbit
 {
-    public class SqlRabbitSimpleSagaScenario : 
-        SimpleSagaScenario,
+    public class SqlRabbitParentChildScenario : 
+        ParentChildScenario,
         IClassFixture<DbFixture>,
         IClassFixture<RabbitFixture>
     {
-        private readonly RabbitFixture _rabbitFixture;        
+        private readonly RabbitFixture _rabbitFixture;
         private readonly DbFixture _dbFixture;
         private readonly string _exchangeName;
-        
-        public SqlRabbitSimpleSagaScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
+
+        public SqlRabbitParentChildScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
         {
             _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;
@@ -29,15 +29,15 @@ namespace OpenSleigh.E2ETests.SqlRabbit
             var (_, connStr) = _dbFixture.CreateDbContext();
             var sqlCfg = new SqlConfiguration(connStr);
 
-            QueueReferencesCreator creator = messageType => 
+            QueueReferencesCreator creator = messageType =>
             {
                 var queueName = $"{_exchangeName}.{messageType.Name}.workers";
                 var dlExchangeName = _exchangeName + ".dead";
                 var dlQueueName = $"{dlExchangeName}.{messageType.Name}.workers";
-                return new QueueReferences(_exchangeName, queueName, _exchangeName, dlExchangeName, dlQueueName);
+                return new QueueReferences(_exchangeName, queueName, dlExchangeName, dlQueueName);
             };
             cfg.Services.AddSingleton(creator);
-            
+
             cfg.UseSqlServerPersistence(sqlCfg)
                 .UseRabbitMQTransport(_rabbitFixture.RabbitConfiguration);
         }

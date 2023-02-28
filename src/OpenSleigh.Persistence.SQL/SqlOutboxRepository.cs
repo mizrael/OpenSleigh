@@ -53,12 +53,8 @@ namespace OpenSleigh.Persistence.SQL
             if (entities is null)
                 return Enumerable.Empty<OutboxMessage>();
 
-            var messages = new List<OutboxMessage>();
-            foreach (var entity in entities)
-            {
-                var message = entity.ToModel(_typeResolver);
-                messages.Add(message);
-            }
+            var messages = entities.Select(e => e.ToModel(_typeResolver))
+                                   .ToArray();
 
             return messages;
         }
