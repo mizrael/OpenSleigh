@@ -18,6 +18,28 @@ services:
       POSTGRES_PASSWORD: "Sup3r_p4ssword123"
     ports:
       - 5432:5432    
+
+  # auth is disabled to avoid using a signed key file when running tests.
+  openSleigh.tests.infrastructure.mongodb:
+    image: mongo:latest
+    container_name: openSleigh.tests.infrastructure.mongodb
+    hostname: openSleigh.tests.infrastructure.mongodb    
+    restart: always
+    environment:
+      MONGO_REPLICA_SET_NAME: opensleigh
+    command: ["--replSet", "opensleigh", "--bind_ip_all"]  
+    ports:
+      - 27017:27017  
+
+  # this is necessary to start up the replica set
+  openSleigh.tests.infrastructure.mongosetup:
+    image: mongo:latest
+    depends_on:
+      - openSleigh.tests.infrastructure.mongodb
+    volumes:
+      - ./scripts:/scripts
+    restart: "no"
+    entrypoint: [ "bash", "/scripts/mongo_setup.sh"]
   
   openSleigh.tests.infrastructure.rabbitmq:        
     image: rabbitmq:3-management-alpine
