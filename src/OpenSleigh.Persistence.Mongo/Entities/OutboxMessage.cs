@@ -1,11 +1,12 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
+﻿using MongoDB.Bson;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.Persistence.SQL.Entities
+namespace OpenSleigh.Persistence.Mongo.Entities
 {
     public record OutboxMessage
     {
+        public ObjectId Id { get; init; }
+
         public string? LockId { get; set; }
         public DateTimeOffset? LockTime { get; set; }
         
@@ -41,16 +42,6 @@ namespace OpenSleigh.Persistence.SQL.Entities
                 ParentId = message.ParentId,
                 SenderId = message.SenderId,
             };
-        }
-    }
-    
-    internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfiguration<OutboxMessage>
-    {
-        public void Configure(EntityTypeBuilder<OutboxMessage> builder)
-        {
-            builder.ToTable("OutboxMessages", Constants.DbSchema);
-
-            builder.HasKey(e => e.MessageId);
         }
     }
 }

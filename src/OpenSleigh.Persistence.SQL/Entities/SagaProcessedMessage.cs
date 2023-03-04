@@ -9,7 +9,7 @@ namespace OpenSleigh.Persistence.SQL.Entities
         public required string MessageId { get; init; }
         public required DateTimeOffset When { get; init; }
 
-        public SagaState SagaState { get; init; }
+        public required SagaState SagaState { get; init; }
     }
 
     internal class SagaProcessedMessageTypeConfiguration : IEntityTypeConfiguration<SagaProcessedMessage>

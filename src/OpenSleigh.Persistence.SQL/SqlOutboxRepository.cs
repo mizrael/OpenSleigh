@@ -44,7 +44,7 @@ namespace OpenSleigh.Persistence.SQL
 
         public async ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
         {
-            var maxLockDate = DateTime.UtcNow - _options.LockMaxDuration;
+            var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
             var entities = await _dbContext.OutboxMessages.AsNoTracking()
                     .Where(e => e.LockId == null || e.LockTime > maxLockDate)
                 .ToListAsync(cancellationToken)
