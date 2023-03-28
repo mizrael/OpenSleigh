@@ -137,9 +137,45 @@ namespace OpenSleigh.Persistence.Mongo
             return entity.LockId;
         }
 
-        public ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
+        public async ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
         {
-            throw new NotImplementedException();
+            var filterBuilder = Builders<Entities.SagaState>.Filter;
+            var filter = filterBuilder.Eq(e => e.InstanceId, state.InstanceId);
+            var entity = await _dbContext.SagaStates.FindOneAsync(filter, cancellationToken)
+                                                    .ConfigureAwait(false);
+            if (entity is null)
+                throw new ArgumentException($"saga state '{state.InstanceId}' not found");
+
+            if (entity.LockId != lockId)
+                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{lockId}'");
+
+            entity.LockTime = null;
+            entity.LockId = null;
+
+            entity.IsCompleted = state.IsCompleted;
+
+            entity.ProcessedMessages.Clear();
+
+            foreach (var msg in state.ProcessedMessages)
+                entity.ProcessedMessages.Add(new Entities.SagaProcessedMessage()
+                {
+                    InstanceId = state.InstanceId,
+                    MessageId = msg.MessageId,
+                    When = msg.When, 
+                });
+            
+            if (state.GetType().IsGenericType)
+                SetStateData((dynamic)state, entity);
+
+            await _dbContext.SagaStates.ReplaceOneAsync(filter, entity, new ReplaceOptions()
+            {
+                IsUpsert = false,
+            }).ConfigureAwait(false);
+        }
+
+        private void SetStateData<TS>(ISagaExecutionContext<TS> state, Entities.SagaState entity)
+        {
+            entity.StateData = _serializer.Serialize(state.State);
         }
     }
 }

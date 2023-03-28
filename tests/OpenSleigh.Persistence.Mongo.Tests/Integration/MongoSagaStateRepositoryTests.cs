@@ -119,5 +119,66 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             secondLockId.Should().NotBeNull()
                 .And.NotBe(firstLockId);
         }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_state_not_found()
+        {
+            var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
+
+            var sagaContext = CreateSagaContext();
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_lock_invalid()
+        {
+            var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
+
+            var sagaContext = CreateSagaContext();
+
+            await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            ex.Message.Should().Contain($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'");
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_release_lock_and_update_state()
+        {
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
+            var sagaContext = CreateSagaContext();
+
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var messageContext = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext);
+
+            var messageContext2 = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext2);
+
+            sagaContext.MarkAsCompleted();
+
+            await sut.ReleaseAsync(sagaContext, lockId);
+
+            var filterBuilder = Builders<Entities.SagaState>.Filter;
+            var filter = filterBuilder.Eq(e => e.InstanceId, sagaContext.InstanceId);
+            var unLockedState = await db.SagaStates.FindOneAsync(filter);
+            unLockedState.Should().NotBeNull();
+            unLockedState.LockId.Should().BeNull();
+            unLockedState.LockTime.Should().BeNull();
+            unLockedState.IsCompleted.Should().BeTrue();
+            unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
+                                           .And.HaveCount(2)
+                                           .And.Contain(m => m.MessageId == messageContext.Id)
+                                           .And.Contain(m => m.MessageId == messageContext2.Id);
+        }
     }
 }
