@@ -24,8 +24,8 @@ services:
     image: mongo:latest
     container_name: openSleigh.tests.infrastructure.mongodb
     hostname: openSleigh.tests.infrastructure.mongodb    
-    restart: always
-    environment:
+    restart: always    
+    environment:      
       MONGO_REPLICA_SET_NAME: opensleigh
     command: ["--replSet", "opensleigh", "--bind_ip_all"]  
     ports:

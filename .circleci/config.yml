@@ -4,10 +4,7 @@ jobs:
   build:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
-      - image: 'circleci/mongo:4.4.3'
-        environment:
-          MONGO_INITDB_ROOT_USERNAME: root
-          MONGO_INITDB_ROOT_PASSWORD: password
+      - image: 'circleci/mongo:latest'        
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh"
