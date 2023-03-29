@@ -86,7 +86,8 @@ jobs:
           name: run sonarcloud
           command: |
             cd ./src    
-            export PATH="$PATH:/root/.dotnet/tools"            
+            export PATH="$PATH:/root/.dotnet/tools" 
+            apk update && apk add           
             apt-get update && apt-get install -y openjdk-13-jdk
             dotnet tool install --global dotnet-sonarscanner
             dotnet tool install --global coverlet.console                        
