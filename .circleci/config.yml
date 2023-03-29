@@ -4,8 +4,8 @@ jobs:
   build:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
-      - image: 'circleci/mongo:latest'        
-      - image: 'rabbitmq:3-management-alpine'
+      - image: mongo:latest       
+      - image: rabbitmq:3-management-alpine
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh"
       - image: 'mcr.microsoft.com/mssql/server:2022-latest'
@@ -53,10 +53,7 @@ jobs:
   sonarscan:
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
-      - image: 'circleci/mongo:4.4.3'
-        environment:
-          MONGO_INITDB_ROOT_USERNAME: root
-          MONGO_INITDB_ROOT_PASSWORD: password
+      - image: 'mongo:latest'        
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh"
@@ -93,7 +90,7 @@ jobs:
       - run:
           name: Start Sonarcloud 
           command: |
-            dotnet-sonarscanner begin \
+            dotnet sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
               /d:sonar.host.url="https://sonarcloud.io" \
@@ -110,7 +107,7 @@ jobs:
       - run:
           name: Stop Sonarcloud 
           command: |            
-            dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
+            dotnet sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
   build_and_test:
