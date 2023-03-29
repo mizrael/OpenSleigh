@@ -83,17 +83,13 @@ jobs:
       - checkout
 
       - run:
-          name: Install dependencies
+          name: run sonarcloud
           command: |
+            cd ./src    
+            export PATH="$PATH:/root/.dotnet/tools"            
             apt-get update && apt-get install -y openjdk-13-jdk
             dotnet tool install --global dotnet-sonarscanner
             dotnet tool install --global coverlet.console                        
-
-      - run:
-          name: run Sonarcloud 
-          command: |
-            cd ./src     
-            export PATH="$PATH:/root/.dotnet/tools"            
             dotnet-sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
