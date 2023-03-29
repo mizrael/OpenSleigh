@@ -2,6 +2,8 @@ version: 2.1
 
 jobs:
   build:
+    resource_class: large
+
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
       - image: mongo:latest       
@@ -51,6 +53,7 @@ jobs:
       #      dotnet test --filter "Category=E2E"           
 
   sonarscan:
+    resource_class: large
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:7.0.100-alpine3.16-amd64
       - image: 'mongo:latest'        
@@ -89,8 +92,7 @@ jobs:
       - run:
           name: Start Sonarcloud 
           command: |
-            export PATH="$PATH:/root/.dotnet/tools"
-            echo $PATH
+            export PATH="$PATH:/root/.dotnet/tools"            
             dotnet-sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
@@ -108,6 +110,7 @@ jobs:
       - run:
           name: Stop Sonarcloud 
           command: |            
+            export PATH="$PATH:/root/.dotnet/tools"
             dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
