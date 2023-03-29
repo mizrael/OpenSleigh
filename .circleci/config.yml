@@ -92,16 +92,15 @@ jobs:
       - run:
           name: run Sonarcloud 
           command: |
+            cd ./src     
             export PATH="$PATH:/root/.dotnet/tools"            
             dotnet-sonarscanner begin \
               /k:"mizrael_OpenSleigh" \
               /o:"mizrael" \
               /d:sonar.host.url="https://sonarcloud.io" \
               /d:sonar.login="$SONAR_TOKEN" \
-              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                 
-            cd ./src     
-            dotnet build 
-            dotnet test --no-build --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
+              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                                         
+            dotnet test --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
             dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
