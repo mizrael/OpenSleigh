@@ -87,7 +87,7 @@ jobs:
           command: |
             cd ./src    
             export PATH="$PATH:/root/.dotnet/tools" 
-            apt-get update && apt-get install -y openjdk-13-jdk
+            apt-get update && apt-get install -y openjdk-19-jdk
             dotnet tool install --global dotnet-sonarscanner
             dotnet tool install --global coverlet.console                        
             dotnet-sonarscanner begin \
