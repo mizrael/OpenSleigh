@@ -90,7 +90,7 @@ jobs:
             dotnet tool install --global coverlet.console                        
 
       - run:
-          name: Start Sonarcloud 
+          name: run Sonarcloud 
           command: |
             export PATH="$PATH:/root/.dotnet/tools"            
             dotnet-sonarscanner begin \
@@ -98,19 +98,10 @@ jobs:
               /o:"mizrael" \
               /d:sonar.host.url="https://sonarcloud.io" \
               /d:sonar.login="$SONAR_TOKEN" \
-              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"
-
-      - run:
-          name: Build and test          
-          command: |       
+              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                 
             cd ./src     
             dotnet build 
-            dotnet test --no-build --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml     
-
-      - run:
-          name: Stop Sonarcloud 
-          command: |            
-            export PATH="$PATH:/root/.dotnet/tools"
+            dotnet test --no-build --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
             dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
