@@ -84,8 +84,7 @@ jobs:
 
       - run:
           name: run sonarcloud
-          command: |
-            cd ./src    
+          command: |            
             export PATH="$PATH:/root/.dotnet/tools" 
             apt-get update && apt-get install -y default-jdk
             dotnet tool install --global dotnet-sonarscanner
@@ -96,7 +95,7 @@ jobs:
               /d:sonar.host.url="https://sonarcloud.io" \
               /d:sonar.login="$SONAR_TOKEN" \
               /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                                         
-            dotnet test --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
+            dotnet test  ./src/OpenSleigh.sln --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
             dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
