@@ -76,8 +76,8 @@ jobs:
     #    uses a compiled language
 
     - run: |
-      cd ./src
-      dotnet build -c Release
+        cd ./src
+        dotnet build -c Release
 
     - name: Perform CodeQL Analysis
       uses: github/codeql-action/analyze@v1
