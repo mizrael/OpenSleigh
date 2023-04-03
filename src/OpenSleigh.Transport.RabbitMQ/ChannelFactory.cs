@@ -1,10 +1,11 @@
 ﻿using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Transport.RabbitMQ
-{
-    internal sealed class ChannelFactory : IChannelFactory, IDisposable
+{    
+    public sealed class ChannelFactory : IChannelFactory, IDisposable
     {
         private readonly IBusConnection _connection;
         private readonly ConcurrentDictionary<string, IModel> _channels = new ();
@@ -34,12 +35,12 @@ namespace OpenSleigh.Transport.RabbitMQ
                 return channel;
             });
             
-            InitQueues(queueReferences, channel);
+            EnsureQueues(queueReferences, channel);
 
             return channel;
         }
 
-        private void InitQueues(QueueReferences queueReferences, IModel channel)
+        private void EnsureQueues(QueueReferences queueReferences, IModel channel)
         {
             _logger.LogInformation($"initializing dead-letter queue '{queueReferences.DeadLetterQueue}' on exchange '{queueReferences.DeadLetterExchangeName}'...");
             
