@@ -121,5 +121,25 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
                 routingKey: queueReferences.RoutingKey,
                 arguments: null);
         }
+
+        [Fact]
+        public void Dispose_should_dispose_cached_channels()
+        {
+            var queueReferences = new QueueReferences("foo", "bar", "baz", "qux");
+
+            var channel = NSubstitute.Substitute.For<IModel>();
+            var connection = NSubstitute.Substitute.For<IBusConnection>();
+            connection.CreateChannel().Returns(channel);
+
+            var config = new RabbitConfiguration("localhost", "ipsum", "dolor", retryDelay: TimeSpan.FromSeconds(1));
+            var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
+
+            var sut = new ChannelFactory(connection, config, logger);
+            sut.Get(queueReferences);
+
+            sut.Dispose();
+
+            channel.Received(1).Dispose();
+        }
     }
 }
