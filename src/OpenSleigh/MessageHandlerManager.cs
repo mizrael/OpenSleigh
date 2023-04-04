@@ -4,26 +4,25 @@ using OpenSleigh.Outbox;
 
 namespace OpenSleigh
 {
-    public class MessageHandlerRunner : IMessageHandlerRunner
+    public class MessageHandlerManager : IMessageHandlerManager
     {
         private readonly IOutboxRepository _outboxRepository;
         private readonly IMessageHandlerFactory _messageHandlerFactory;
-        private readonly ILogger<MessageHandlerRunner> _logger;
+        private readonly ILogger<MessageHandlerManager> _logger;
 
-        public MessageHandlerRunner(IOutboxRepository outboxRepository, IMessageHandlerFactory messageHandlerFactory, ILogger<MessageHandlerRunner> logger)
+        public MessageHandlerManager(IOutboxRepository outboxRepository, IMessageHandlerFactory messageHandlerFactory, ILogger<MessageHandlerManager> logger)
         {
             _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _messageHandlerFactory = messageHandlerFactory ?? throw new ArgumentNullException(nameof(messageHandlerFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public async Task ProcessAsync<TM>(
-            IMessageContext<TM> messageContext,
-            SagaDescriptor descriptor,
+        public async ValueTask ProcessAsync<TM>(
+            IMessageContext<TM> messageContext,            
             ISagaExecutionContext executionContext,
             CancellationToken cancellationToken) where TM : IMessage
         {
-            IHandleMessage<TM> handler = _messageHandlerFactory.Create<TM>(descriptor.SagaType, executionContext);
+            IHandleMessage<TM> handler = _messageHandlerFactory.Create<TM>(executionContext);
 
             //TODO: create transaction
             //TODO: pass transaction to the handler factory            
@@ -43,7 +42,7 @@ namespace OpenSleigh
                     ex,
                     "an error has occurred while processing message '{MessageId}' from Saga '{SagaType}/{InstanceId}' : {Error}",
                     messageContext.Id,
-                    descriptor.SagaType,
+                    executionContext.Descriptor.SagaType,
                     executionContext.InstanceId,
                     ex.Message
                 );
@@ -52,7 +51,7 @@ namespace OpenSleigh
                              .ConfigureAwait(false);
 
                 throw new SagaException(
-                    $"an error has occurred while processing message '{messageContext.Id}' from Saga '{descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
+                    $"an error has occurred while processing message '{messageContext.Id}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
                     ex);
             }
         }

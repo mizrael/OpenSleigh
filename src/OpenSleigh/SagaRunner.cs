@@ -6,13 +6,13 @@ namespace OpenSleigh
     public class SagaRunner : ISagaRunner
     {
         private readonly ISagaExecutionService _sagaExecutionService;
-        private readonly IMessageHandlerRunner _messageHandlerRunner;
+        private readonly IMessageHandlerManager _messageHandlerRunner;
         private readonly ILogger<SagaRunner> _logger;
 
         public SagaRunner(
             ILogger<SagaRunner> logger,
             ISagaExecutionService sagaExecutionService,
-            IMessageHandlerRunner messageHandlerRunner)
+            IMessageHandlerManager messageHandlerRunner)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sagaExecutionService = sagaExecutionService ?? throw new ArgumentNullException(nameof(sagaExecutionService));
@@ -39,8 +39,8 @@ namespace OpenSleigh
                 executionContext.InstanceId,
                 messageContext.Id);
 
-            await _messageHandlerRunner.ProcessAsync(messageContext, descriptor, executionContext, cancellationToken)
-                                .ConfigureAwait(false);
+            await _messageHandlerRunner.ProcessAsync(messageContext, executionContext, cancellationToken)
+                                        .ConfigureAwait(false);
 
             await _sagaExecutionService.CommitAsync(executionContext, messageContext, lockId, cancellationToken)
                                         .ConfigureAwait(false);

@@ -11,16 +11,16 @@ namespace OpenSleigh.Transport
             _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         }
 
-        public IHandleMessage<TM> Create<TM>(Type sagaType, object state) 
+        public IHandleMessage<TM> Create<TM>(ISagaExecutionContext context) 
             where TM : IMessage
         {
-            var instance = ActivatorUtilities.CreateInstance(_serviceProvider, sagaType, state);
+            var instance = ActivatorUtilities.CreateInstance(_serviceProvider, context.Descriptor.SagaType, context);
             if (instance is null)
-                throw new TypeLoadException($"unable to create Saga instance with type '{sagaType.FullName}'");
+                throw new TypeLoadException($"unable to create Saga instance with type '{context.Descriptor.SagaType}'");
 
             var handler = instance as IHandleMessage<TM>;
             if (handler is null)
-                throw new InvalidCastException($"type '{sagaType.FullName}' does not implement '{nameof(ISaga)}'");
+                throw new InvalidCastException($"type '{context.Descriptor.SagaType}' does not implement '{nameof(ISaga)}'");
 
             return handler;
         }
