@@ -29,7 +29,9 @@ namespace OpenSleigh.DependencyInjection
 
                 .AddTransient<IMessageBus, DefaultMessageBus>()
                 .AddTransient<ISagaRunner, SagaRunner>()
-                .AddTransient<ISagaExecutionContextFactory, SagaExecutionContextFactory>()                
+                .AddTransient<ISagaExecutionContextFactory, SagaExecutionContextFactory>()       
+                .AddTransient<IMessageHandlerRunner, MessageHandlerRunner>()
+                .AddTransient<ISagaExecutionService, SagaExecutionService>()
                 .AddTransient<IMessageHandlerFactory, DefaultMessageHandlerFactory>()
                 .AddTransient<IMessageProcessor, MessageProcessor>()
                 .AddHostedService<SubscribersBackgroundService>()
