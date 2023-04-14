@@ -100,7 +100,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
 
             var sagaContext = CreateSagaContext();
 
-            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext));
             ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
         }
 
@@ -112,10 +112,13 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
             var sut = CreateSut(db, options);
 
             var sagaContext = CreateSagaContext();
-
             await sut.LockAsync(sagaContext, CancellationToken.None);
 
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(sagaContext, "lorem"));
+            var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+            fakeContext.InstanceId.Returns(sagaContext.InstanceId);
+            fakeContext.LockId.Returns("lorem");
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(fakeContext));
             ex.Message.Should().Contain($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'");
         }
 
@@ -127,7 +130,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
 
             var sagaContext = CreateSagaContext();
 
-            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
+            await sagaContext.LockAsync(sut, CancellationToken.None);
 
             var messageContext = CreateMessageContext<FakeMessage>();
             sagaContext.SetAsProcessed(messageContext);
@@ -137,7 +140,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
 
             sagaContext.MarkAsCompleted();
 
-            await sut.ReleaseAsync(sagaContext, lockId);
+            await sut.ReleaseAsync(sagaContext);
 
             var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == sagaContext.InstanceId);
             unLockedState.Should().NotBeNull();

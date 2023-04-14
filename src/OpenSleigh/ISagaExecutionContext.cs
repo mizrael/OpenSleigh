@@ -1,7 +1,8 @@
 ﻿using OpenSleigh.Transport;
+using System.Threading;
 
 namespace OpenSleigh
-{    
+{
     public interface ISagaExecutionContext
     {
         /// <summary>
@@ -24,6 +25,8 @@ namespace OpenSleigh
         /// </summary>
         SagaDescriptor Descriptor { get; }
 
+        string LockId { get; }
+
         IReadOnlyCollection<ProcessedMessage> ProcessedMessages { get; }
 
         /// <summary>
@@ -31,9 +34,20 @@ namespace OpenSleigh
         /// </summary>
         bool IsCompleted { get; } //TODO: this might become an enum
 
+        //TODO: this should be private
         void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage;
+
+        //TODO: do we really need this?
         void MarkAsCompleted();
+
         bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage;
+
+        ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken);
+        ValueTask ProcessAsync<TM>(
+            IMessageHandlerManager messageHandlerManager, 
+            IMessageContext<TM> messageContext,
+            ISagaExecutionService sagaExecutionService, 
+            CancellationToken cancellationToken) where TM : IMessage;
     }
 
     public interface ISagaExecutionContext<TS> : ISagaExecutionContext

@@ -137,7 +137,7 @@ namespace OpenSleigh.Persistence.Mongo
             return entity.LockId;
         }
 
-        public async ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
+        public async ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
             var filterBuilder = Builders<Entities.SagaState>.Filter;
             var filter = filterBuilder.Eq(e => e.InstanceId, state.InstanceId);
@@ -146,8 +146,8 @@ namespace OpenSleigh.Persistence.Mongo
             if (entity is null)
                 throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
-            if (entity.LockId != lockId)
-                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{lockId}'");
+            if (entity.LockId != state.LockId)
+                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
 
             entity.LockTime = null;
             entity.LockId = null;

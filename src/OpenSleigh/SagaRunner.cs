@@ -6,17 +6,17 @@ namespace OpenSleigh
     public class SagaRunner : ISagaRunner
     {
         private readonly ISagaExecutionService _sagaExecutionService;
-        private readonly IMessageHandlerManager _messageHandlerRunner;
+        private readonly IMessageHandlerManager _messageHandlerManager;
         private readonly ILogger<SagaRunner> _logger;
 
         public SagaRunner(
             ILogger<SagaRunner> logger,
             ISagaExecutionService sagaExecutionService,
-            IMessageHandlerManager messageHandlerRunner)
+            IMessageHandlerManager messageHandlerManager)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _sagaExecutionService = sagaExecutionService ?? throw new ArgumentNullException(nameof(sagaExecutionService));
-            _messageHandlerRunner = messageHandlerRunner ?? throw new ArgumentNullException(nameof(messageHandlerRunner));
+            _messageHandlerManager = messageHandlerManager ?? throw new ArgumentNullException(nameof(messageHandlerManager));
         }
 
         public async ValueTask ProcessAsync<TM>(
@@ -25,25 +25,17 @@ namespace OpenSleigh
             CancellationToken cancellationToken = default)
             where TM : IMessage
         {
-            var (executionContext, lockId) = await _sagaExecutionService.BeginAsync(messageContext, descriptor, cancellationToken)
-                                                                        .ConfigureAwait(false);
-            if (executionContext is null)
-            {
-                // TODO: log
-                return;
-            }
-
+            var executionContext = await _sagaExecutionService.StartExecutionContextAsync(messageContext, descriptor, cancellationToken)
+                                                               .ConfigureAwait(false);
+            
             _logger.LogInformation(
                 "Saga '{SagaType}/{InstanceId}' is processing message '{MessageId}'...",
                 descriptor.SagaType,
                 executionContext.InstanceId,
                 messageContext.Id);
 
-            await _messageHandlerRunner.ProcessAsync(messageContext, executionContext, cancellationToken)
-                                        .ConfigureAwait(false);
-
-            await _sagaExecutionService.CommitAsync(executionContext, messageContext, lockId, cancellationToken)
-                                        .ConfigureAwait(false);
+            await executionContext.ProcessAsync(_messageHandlerManager, messageContext, _sagaExecutionService, cancellationToken)
+                                  .ConfigureAwait(false);
 
             _logger.LogInformation(
                 "Saga '{SagaType}/{InstanceId}' has completed processing message '{MessageId}'.",

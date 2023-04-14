@@ -59,6 +59,29 @@ namespace OpenSleigh
         public void MarkAsCompleted()
             => this.IsCompleted = true;
 
+        public async ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+        {
+            this.LockId = await sagaStateRepository.LockAsync(this, cancellationToken)
+                                                  .ConfigureAwait(false);
+        }
+
+        public async ValueTask ProcessAsync<TM>(
+            IMessageHandlerManager messageHandlerManager, 
+            IMessageContext<TM> messageContext,
+            ISagaExecutionService sagaExecutionService,
+            CancellationToken cancellationToken) where TM : IMessage
+        {
+            await messageHandlerManager.ProcessAsync(messageContext, this, cancellationToken)
+                                        .ConfigureAwait(false);
+
+            this.SetAsProcessed(messageContext);
+
+            await sagaExecutionService.CommitAsync(this, cancellationToken)
+                                      .ConfigureAwait(false);
+
+            this.LockId = string.Empty;
+        }
+
         public string TriggerMessageId { get; }
         
         public string CorrelationId { get; }
@@ -68,6 +91,8 @@ namespace OpenSleigh
         public SagaDescriptor Descriptor { get; }
 
         public bool IsCompleted { get; private set; }
+
+        public string LockId { get; private set; }
 
         public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
     }

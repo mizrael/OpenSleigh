@@ -13,7 +13,7 @@ namespace OpenSleigh.E2ETests.SqlRabbit
         private readonly DbFixture _dbFixture;
         private readonly string _exchangeName;
         
-        public SqlRabbitSimpleSagaScenario(DbFixture dbFixture, RabbitFixture rabbitFixture)
+        public SqlRabbitSimpleSagaScenario(SqlServerDbFixture dbFixture, RabbitFixture rabbitFixture)
         {
             _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;

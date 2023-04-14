@@ -122,15 +122,15 @@ namespace OpenSleigh.Persistence.SQL
             return entity.LockId;
         }
 
-        public ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
+        public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
 
-            return ReleaseAsyncCore(state, lockId, cancellationToken);
+            return ReleaseAsyncCore(state, cancellationToken);
         }
 
-        private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken)
+        private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
         {
             var entity = await _dbContext.SagaStates
                  .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
@@ -139,8 +139,8 @@ namespace OpenSleigh.Persistence.SQL
             if (entity is null)
                 throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
-            if (entity.LockId != lockId)
-                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{lockId}'");
+            if (entity.LockId != state.LockId)
+                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
 
             entity.LockTime = null;
             entity.LockId = null;

@@ -46,7 +46,7 @@ namespace OpenSleigh.InMemory
             return ValueTask.FromResult(lockId);
         }
 
-        public ValueTask ReleaseAsync(ISagaExecutionContext state, string lockId, CancellationToken cancellationToken = default)
+        public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
             string key = BuildKey(state.Descriptor, state.CorrelationId);
             _statesByDescriptor.AddOrUpdate(key, _ => (state, null), (_, _) => (state, null));

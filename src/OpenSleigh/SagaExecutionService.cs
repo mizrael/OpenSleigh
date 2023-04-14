@@ -13,7 +13,7 @@ namespace OpenSleigh
             _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
         }
         
-        public async ValueTask<(ISagaExecutionContext? context, string? lockId)> BeginAsync<TM>(
+        public async ValueTask<ISagaExecutionContext> StartExecutionContextAsync<TM>(
             IMessageContext<TM> messageContext, 
             SagaDescriptor descriptor, 
             CancellationToken cancellationToken = default) 
@@ -22,24 +22,20 @@ namespace OpenSleigh
             var executionContext = await BuildExecutionContextAsync(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
 
             if (!executionContext.CanProcess(messageContext))
-                return (null, null);
+                return NoOpSagaExecutionContext.Create(messageContext, descriptor);
 
-            string lockId = await _sagaStateRepository.LockAsync(executionContext, cancellationToken)
-                                                      .ConfigureAwait(false);
+            await executionContext.LockAsync(_sagaStateRepository, cancellationToken)
+                                  .ConfigureAwait(false);
 
-            return (executionContext, lockId);
+            return executionContext;
         }
 
-        public async ValueTask CommitAsync<TM>(
-            ISagaExecutionContext context,
-            IMessageContext<TM> messageContext,
-            string lockId, 
-            CancellationToken cancellationToken = default) where TM : IMessage
+        public async ValueTask CommitAsync(
+            ISagaExecutionContext context,            
+            CancellationToken cancellationToken = default) 
         {
-            context.SetAsProcessed(messageContext);
-
-            await _sagaStateRepository.ReleaseAsync(context, lockId, cancellationToken)
-                                    .ConfigureAwait(false);
+            await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
+                                     .ConfigureAwait(false);
         }
 
         private async Task<ISagaExecutionContext> BuildExecutionContextAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) where TM : IMessage

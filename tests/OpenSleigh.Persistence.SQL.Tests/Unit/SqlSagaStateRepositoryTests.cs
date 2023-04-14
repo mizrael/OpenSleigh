@@ -26,7 +26,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
             var options = SqlSagaStateRepositoryOptions.Default;
             var sut = new SqlSagaStateRepository(dbContext, options, serializer);
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, "lorem"));
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null));
         }
 
         [Fact]
