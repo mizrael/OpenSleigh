@@ -1,5 +1,4 @@
 url: https://mizrael.github.io/OpenSleigh
-baseurl: /OpenSleigh
 plugins:
   - jekyll-sitemap
   
