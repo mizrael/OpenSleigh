@@ -1,5 +1,8 @@
-﻿using MongoDB.Bson;
+﻿using Microsoft.Extensions.DependencyInjection;
+using MongoDB.Bson;
 using MongoDB.Driver;
+using OpenSleigh.DependencyInjection;
+using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
@@ -176,6 +179,30 @@ namespace OpenSleigh.Persistence.Mongo
         private void SetStateData<TS>(ISagaExecutionContext<TS> state, Entities.SagaState entity)
         {
             entity.StateData = _serializer.Serialize(state.State);
+        }
+    }
+
+    [ExcludeFromCodeCoverage]
+    public static class MongoBusConfiguratorExtensions
+    {
+        public static IBusConfigurator UseMongoPersistence(
+            this IBusConfigurator busConfigurator, MongoConfiguration config)
+        {
+            busConfigurator.Services
+                .AddSingleton<IMongoClient>(ctx => new MongoClient(connectionString: config.ConnectionString))
+                .AddSingleton(ctx =>
+                {
+                    var client = ctx.GetRequiredService<IMongoClient>();
+                    var database = client.GetDatabase(config.DbName);
+                    return database;
+                })
+                .AddSingleton(config.SagaRepositoryOptions)
+                .AddSingleton(config.OutboxRepositoryOptions)
+
+                .AddScoped<IDbContext, DbContext>()
+                .AddScoped<ISagaStateRepository, MongoSagaStateRepository>()
+                .AddScoped<IOutboxRepository, MongoOutboxRepository>();
+            return busConfigurator;
         }
     }
 }
