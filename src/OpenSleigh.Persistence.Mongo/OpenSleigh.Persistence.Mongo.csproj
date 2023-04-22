@@ -39,7 +39,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="README.md" />
+		<None Include="README.md" Pack="true" PackagePath="\">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
