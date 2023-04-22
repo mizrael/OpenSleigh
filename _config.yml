@@ -1,6 +1,7 @@
 url: https://mizrael.github.io/OpenSleigh
 plugins:
   - jekyll-sitemap
+  - jekyll-relative-links
   
 google_analytics: G-V6KPT320HR
 theme: jekyll-theme-architect
