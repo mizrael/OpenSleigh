@@ -12,7 +12,7 @@ A good example could be an Order processing workflow: in this scenario you have 
 
 **OpenSleigh** helps by taking care of [distributed transactions](https://www.davidguida.net/improving-microservices-reliability-part-1-two-phase-commit/){:target="_blank"}, keeping track of the global status and managing the whole flow.
 
-For more details, check the [Use Cases](/use-cases/) page.
+For more details, check the [Use Cases](use-cases/) page.
 
 ## Installation
 The Core module is available [on Nuget](https://www.nuget.org/packages/OpenSleigh.Core/).
