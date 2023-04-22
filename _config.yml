@@ -1,0 +1,29 @@
+url: "https://www.opensleigh.net" 
+plugins:
+  - jekyll-sitemap
+  
+google_analytics: G-V6KPT320HR
+theme: jekyll-theme-architect
+
+title: OpenSleigh
+tagline: Yet another Saga management library for .NET Core.
+description: A simple yet powerful Saga management, Workflow orchestration, pub/sub library for .NET Core.
+
+twitter:
+  username: DavideGuida82
+  card: summary
+
+author:
+  twitter: DavideGuida82
+
+github:
+  repository_url: https://github.com/mizrael/OpenSleigh
+  repository_name: OpenSleigh
+  owner_url: https://www.davideguida.com
+  owner_name: David Guida
+
+sidebar:
+  Home: /
+  How-to: /how-to
+  Use Cases: /use-cases
+  Samples: /samples

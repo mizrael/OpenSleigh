@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="{{ site.lang | default: "en-US" }}">
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link rel="stylesheet" href="{{ '/assets/css/style.css?v=' | append: site.github.build_revision | relative_url }}" media="screen" type="text/css">
+    <link rel="stylesheet" href="{{ '/assets/css/print.css' | relative_url }}" media="print" type="text/css">
+
+    {% if site.google_analytics %}
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id={{ site.google_analytics }}"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', '{{ site.google_analytics }}');
+    </script>
+    {% endif %}
+
+    <!--[if lt IE 9]>
+    <script src="https://oss.maxcdn.com/html5shiv/3.7.3/html5shiv.min.js"></script>
+    <![endif]-->
+
+{% seo %}
+  </head>
+
+  <body>
+    <header id="site-header">
+      <div class="inner">
+        <a href="{{ '/' | absolute_url }}">
+          <h1>{{ site.title  }}</h1>
+        </a>
+        <h2>{{ site.tagline }}</h2>
+        {% if site.github.is_project_page %}
+          <a href="{{ site.github.repository_url }}" class="button" target="_blank"><small>View project on</small> GitHub</a>
+        {% endif %}
+        {% if site.github.is_user_page %}
+          <a href="{{ site.github.owner_url }}" class="button" target="_blank"><small>Follow me on</small> GitHub</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <aside id="sidebar-left">
+          <ins class="adsbygoogle"
+              style="display:block"
+              data-ad-client="ca-pub-2371802329711833"
+              data-ad-slot="3906804588"
+              data-ad-format="auto"
+              data-full-width-responsive="true"></ins>
+          <script>
+              (adsbygoogle = window.adsbygoogle || []).push({});
+          </script>
+        </aside>
+
+        <section id="main-content">
+          {{ content }}
+        </section>
+
+        <aside id="sidebar">
+          {% if site.sidebar %}            
+            <ul id="sidebar-links">
+            {% for item in site.sidebar %}
+              <li><a href="{{ item[1] }}">{{ item[0] }}</a></li>
+            {% endfor %}          
+            </ul>
+          {% endif %}    
+      
+          {% if site.github %}
+            <p class="repo-owner"><a href="{{ site.github.repository_url }}" target="_blank">{{ site.github.repository_name }}</a> is maintained with love by <a target="_blank" href="{{ site.github.owner_url }}">{{ site.github.owner_name }}</a>.</p>
+          {% endif %}
+
+          <p>Proudly powered by <a href="https://github.com/pages-themes/architect" target="_blank">Architect theme</a>.</p>
+
+          <p class="sponsor">
+            Sponsored by 
+            <a class="sponsor-logo" href="https://jb.gg/OpenSource" target="_blank" title="Jetbrains">
+              <img src="/assets/images/jetbrains.png" title="Jetbrains" />
+            </a>
+          </p>
+
+          <div class="donate-form">
+            <form action="https://www.paypal.com/donate" method="post" target="_top">
+              <input type="hidden" name="business" value="9F94U4GWN7YS6" />
+              <input type="hidden" name="currency_code" value="CAD" />
+              <input type="image" src="/assets/images/paypal-donate.png" border="0" name="submit" title="PayPal - The safer, easier way to pay online!" alt="Donate with PayPal button" />
+              <img alt="" border="0" src="https://www.paypal.com/en_CA/i/scr/pixel.gif" width="1" height="1" />
+              </form>              
+          </div>
+        </aside>
+      </div>
+    </div>
+    
+    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2371802329711833"
+     crossorigin="anonymous"></script>
+    <script src="/assets/scripts/site.js" type="text/javascript"></script>
+    
+    <script type="text/javascript">
+    (function(c,l,a,r,i,t,y){
+        c[a]=c[a]||function(){(c[a].q=c[a].q||[]).push(arguments)};
+        t=l.createElement(r);t.async=1;t.src="https://www.clarity.ms/tag/"+i;
+        y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
+    })(window, document, "clarity", "script", "a7evv7zote");
+    </script>
+  </body>
+</html>
