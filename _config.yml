@@ -1,3 +1,4 @@
+url: https://mizrael.github.io/OpenSleigh
 plugins:
   - jekyll-sitemap
   
@@ -22,7 +23,7 @@ github:
   owner_name: David Guida
 
 sidebar:
-  Home: /
-  How-to: /how-to
-  Use Cases: /use-cases
-  Samples: /samples
+  Home: /OpenSleigh
+  How-to: /OpenSleigh/how-to
+  Use Cases: /OpenSleigh/use-cases
+  Samples: /OpenSleigh/samples
