@@ -21,9 +21,3 @@ github:
   repository_name: OpenSleigh
   owner_url: https://www.davidguida.net
   owner_name: David Guida
-
-sidebar:
-  Home: /OpenSleigh
-  How-to: /OpenSleigh/how-to
-  Use Cases: /OpenSleigh/use-cases
-  Samples: /OpenSleigh/samples
