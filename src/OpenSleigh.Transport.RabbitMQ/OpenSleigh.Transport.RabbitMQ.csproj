@@ -1,8 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
+	<PropertyGroup>
+		<TargetFramework>net7.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <PackageVersion>2.0.2</PackageVersion>
+    <PackageVersion>3.0.0-alpha</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Transport.RabbitMQ</Product>
@@ -24,7 +29,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="RabbitMQ.Client" Version="6.4.0" />
+    <PackageReference Include="RabbitMQ.Client" Version="6.5.0" />
 	<PackageReference Include="Polly" Version="7.2.3" />
     <PackageReference Include="Microsoft.SourceLink.GitHub" Version="1.1.1" PrivateAssets="All" />
   </ItemGroup>
@@ -36,7 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OpenSleigh.Abstractions\OpenSleigh.Abstractions.csproj" />
+    <ProjectReference Include="..\OpenSleigh\OpenSleigh.csproj" />
   </ItemGroup>
 
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">

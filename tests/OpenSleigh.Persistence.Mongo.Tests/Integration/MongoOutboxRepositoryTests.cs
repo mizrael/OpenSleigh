@@ -1,14 +1,8 @@
-﻿using System;
-using System.ComponentModel;
-using System.Threading.Tasks;
-using FluentAssertions;
-using MongoDB.Driver;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Tests.Sagas;
-using OpenSleigh.Core.Utils;
+﻿using MongoDB.Driver;
+using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
-using Xunit;
+using OpenSleigh.Transport;
+using System.ComponentModel;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration
 {
@@ -22,70 +16,132 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         {
             _fixture = fixture;
         }
-        
-        [Fact]
-        public async Task LockAsync_should_throw_if_message_not_found()
+
+        private static OutboxMessage CreateMessage()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-            await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
+            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+            sysInfo.ClientGroup.Returns("test");
+            sysInfo.ClientId.Returns("client");
+            return OutboxMessage.Create(new FakeMessage(), sysInfo, new JsonSerializer());
+        }
+
+        private MongoOutboxRepository CreateSut(IDbContext db)
+        {
+            var typeResolver = new TypeResolver();
+            typeResolver.Register(typeof(FakeMessage));
+
+            var sut = new MongoOutboxRepository(db, MongoOutboxRepositoryOptions.Default, typeResolver);
+            return sut;
         }
 
         [Fact]
         public async Task AppendAsync_should_append_message()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
             await sut.AppendAsync(new[] { message });
 
-            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.Id, message.Id);
+            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
-            var cursor = await db.Outbox.FindAsync(filter);
-            var appendedMessage = await cursor.FirstOrDefaultAsync();
+            var appendedMessage = await db.OutboxMessages.FindOneAsync(filter);
             appendedMessage.Should().NotBeNull();
             appendedMessage.LockId.Should().BeNull();
             appendedMessage.LockTime.Should().BeNull();
-            appendedMessage.Status.Should().Be("Pending");
         }
 
         [Fact]
         public async Task AppendAsync_should_fail_if_message_already_appended()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
             await sut.AppendAsync(new[] { message });
 
-            await Assert.ThrowsAsync<MongoDB.Driver.MongoBulkWriteException<OpenSleigh.Persistence.Mongo.Entities.OutboxMessage>> (async () => await sut.AppendAsync(new[] { message }));
+            await Assert.ThrowsAsync<MongoDB.Driver.MongoBulkWriteException<OpenSleigh.Persistence.Mongo.Entities.OutboxMessage>>(async () => await sut.AppendAsync(new[] { message }));
         }
 
         [Fact]
-        public async Task ReadMessagesToProcess_should_return_available_messages()
+        public async Task DeleteAsync_should_throw_if_message_not_found()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
+
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message, "lorem"));
+            ex.Message.Should().Contain($"message '{message.MessageId}' not found");
+        }
+
+        [Fact]
+        public async Task DeleteAsync_should_throw_if_message_not_locked()
+        {
+            var message = CreateMessage();
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
             await sut.AppendAsync(new[] { message });
 
-            var messages = await sut.ReadMessagesToProcess();
-            messages.Should().NotBeNullOrEmpty();
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, "lorem"));
+            ex.Message.Should().Contain($"message '{message.MessageId}' is not locked");
+        }
+
+        [Fact]
+        public async Task DeleteAsync_should_throw_if_lock_invalid()
+        {
+            var message = CreateMessage();
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
+            await sut.AppendAsync(new[] { message });
+            await sut.LockAsync(message);
+
+            var lockId = Guid.NewGuid().ToString();
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, lockId));
+            ex.Message.Should().Contain($"invalid lock id '{lockId}' on message '{message.MessageId}'");
+        }
+
+        [Fact]
+        public async Task DeleteAsync_should_delete_message()
+        {
+            var message = CreateMessage();
+
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
+            await sut.AppendAsync(new[] { message });
+            var lockId = await sut.LockAsync(message);
+            await sut.DeleteAsync(message, lockId);
+
+            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
+            var lockedMessage = await db.OutboxMessages.FindOneAsync(filter);
+            lockedMessage.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task LockAsync_should_throw_if_message_not_found()
+        {
+            var message = CreateMessage();
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+            await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
         }
 
         [Fact]
         public async Task LockAsync_should_lock_existing_message()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
             await sut.AppendAsync(new[] { message });
 
             var lockId = await sut.LockAsync(message);
 
-            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.Id, message.Id);
-            var cursor = await db.Outbox.FindAsync(filter);
-            var lockedMessage = await cursor.FirstOrDefaultAsync();
+            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
+            var lockedMessage = await db.OutboxMessages.FindOneAsync(filter);
             lockedMessage.Should().NotBeNull();
             lockedMessage.LockId.Should().Be(lockId);
             lockedMessage.LockTime.Should().NotBeNull();
@@ -94,8 +150,8 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         [Fact]
         public async Task LockAsync_should_throw_if_message_already_locked()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
             await sut.AppendAsync(new[] { message });
 
@@ -105,114 +161,16 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
         }
 
         [Fact]
-        public async Task LockAsync_should_throw_if_message_already_processed()
+        public async Task ReadMessagesToProcess_should_return_available_messages()
         {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
+            var message = CreateMessage();
+
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
-            
             await sut.AppendAsync(new[] { message });
-            var lockId = await sut.LockAsync(message);
-            await sut.ReleaseAsync(message, lockId);
 
-            await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
+            var messages = await sut.ReadPendingAsync();
+            messages.Should().NotBeNullOrEmpty();
         }
-
-        [Fact]
-        public async Task ReleaseAsync_should_throw_if_message_not_appended()
-        {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
-        }
-
-        [Fact]
-        public async Task ReleaseAsync_should_throw_if_message_not_locked()
-        {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-
-            await sut.AppendAsync(new[] { message });
-            
-            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
-        }
-
-        [Fact]
-        public async Task ReleaseAsync_should_throw_if_message_already_locked()
-        {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-
-            await sut.AppendAsync(new[] { message });
-            await sut.LockAsync(message);
-
-            await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(message, Guid.NewGuid()));
-        }
-
-        [Fact]
-        public async Task ReleaseAsync_should_update_message_status()
-        {
-            var message = StartDummySaga.New();
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-
-            await sut.AppendAsync(new[] { message });
-            var lockId = await sut.LockAsync(message);
-            await sut.ReleaseAsync(message, lockId);
-
-            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.Id, message.Id);
-            var cursor = await db.Outbox.FindAsync(filter);
-            var lockedMessage = await cursor.FirstOrDefaultAsync();
-            lockedMessage.Status.Should().Be("Processed");
-            lockedMessage.LockId.Should().BeNull();
-            lockedMessage.LockTime.Should().BeNull();
-        }
-
-        [Fact]
-        public async Task CleanProcessedAsync_should_clear_processed_messages()
-        {
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
-            
-            var messages = new[]
-            {
-                StartDummySaga.New(),
-                StartDummySaga.New(),
-                StartDummySaga.New()
-            };            
-            await sut.AppendAsync(messages);
-            
-            var processedMessage = StartDummySaga.New();
-
-            await sut.AppendAsync(new[] { processedMessage });
-            var lockId = await sut.LockAsync(processedMessage);
-            await sut.ReleaseAsync(processedMessage, lockId);
-
-            var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.Id, processedMessage.Id);
-            var count = await db.Outbox.CountDocumentsAsync(filter);
-            count.Should().Be(1);
-
-            await sut.CleanProcessedAsync();
-
-            count = await db.Outbox.CountDocumentsAsync(filter);
-            count.Should().Be(0);
-        }
-
-        private MongoOutboxRepository CreateSut(IDbContext dbContext, MongoOutboxRepositoryOptions options = null)
-        {
-            var serializer = new JsonSerializer();
-
-            options ??= MongoOutboxRepositoryOptions.Default;
-
-            var typeResolver = new TypeResolver();
-            typeResolver.Register(typeof(StartDummySaga));
-
-            var sut = new MongoOutboxRepository(dbContext, serializer, options, typeResolver);
-            return sut;
-        }
-
     }
 }

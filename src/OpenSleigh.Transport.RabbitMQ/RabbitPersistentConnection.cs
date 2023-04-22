@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Logging;
 using Polly;
 using RabbitMQ.Client;
-using System;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -10,7 +9,7 @@ namespace OpenSleigh.Transport.RabbitMQ
     {
         private readonly ILogger<RabbitPersistentConnection> _logger;
         private readonly IConnectionFactory _connectionFactory;
-        private IConnection _connection;
+        private IConnection? _connection;
         private bool _disposed;
 
         private readonly object semaphore = new object();

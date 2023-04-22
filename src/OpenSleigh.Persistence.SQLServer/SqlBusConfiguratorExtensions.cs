@@ -1,9 +1,9 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.Core.DependencyInjection;
-using OpenSleigh.Core.Persistence;
+using OpenSleigh.DependencyInjection;
+using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQLServer
 {
@@ -13,15 +13,16 @@ namespace OpenSleigh.Persistence.SQLServer
         public static IBusConfigurator UseSqlServerPersistence(
             this IBusConfigurator busConfigurator, SqlConfiguration config)
         {
-            busConfigurator.Services.AddDbContextPool<SagaDbContext>(builder =>
-            {
-                builder.UseSqlServer(config.ConnectionString);
-            }).AddScoped<ISagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())
-            .AddScoped<ITransactionManager, SqlTransactionManager>()
-            .AddSingleton(config.SagaRepositoryOptions)
-            .AddSingleton(config.OutboxRepositoryOptions)
-            .AddScoped<IOutboxRepository, SqlOutboxRepository>()
-            .AddScoped<ISagaStateRepository, SqlSagaStateRepository>();
+            busConfigurator.Services
+                .AddSingleton(config.SagaRepositoryOptions)
+                .AddSingleton(config.OutboxRepositoryOptions)
+                .AddDbContext<SagaDbContext>(builder =>
+                {
+                    builder.UseSqlServer(config.ConnectionString);
+                }, contextLifetime: ServiceLifetime.Transient)
+                .AddTransient<ISagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())                        
+                .AddTransient<IOutboxRepository, SqlOutboxRepository>()
+                .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
             
             return busConfigurator;
         }

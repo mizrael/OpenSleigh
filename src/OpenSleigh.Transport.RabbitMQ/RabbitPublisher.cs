@@ -1,49 +1,46 @@
 ﻿using Microsoft.Extensions.Logging;
+using OpenSleigh.Outbox;
+using OpenSleigh.Utils;
 using Polly;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using OpenSleigh.Core.Messaging;
-using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Transport.RabbitMQ
-{   
+{
     public class RabbitPublisher : IPublisher
     {
-        private readonly IPublisherChannelFactory _publisherChannelFactory;
+        private readonly IQueueReferenceFactory _queueReferenceFactory;
         private readonly ILogger<RabbitPublisher> _logger;
-        private readonly ITransportSerializer _encoder;
-        
+        private readonly ISerializer _encoder;
+        private readonly IChannelFactory _channelFactory;
+
         public RabbitPublisher(
-            ITransportSerializer encoder,
-            ILogger<RabbitPublisher> logger, 
-            IPublisherChannelFactory publisherChannelFactory)
+            ISerializer encoder,
+            ILogger<RabbitPublisher> logger,
+            IQueueReferenceFactory queueReferenceFactory,
+            IChannelFactory channelFactory)
         {
             _encoder = encoder ?? throw new ArgumentNullException(nameof(encoder));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _publisherChannelFactory = publisherChannelFactory ?? throw new ArgumentNullException(nameof(publisherChannelFactory));
+            _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+            _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         }
 
-        public Task PublishAsync(IMessage message, CancellationToken cancellationToken = default)
+        public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
         {
             if (message is null)
                 throw new ArgumentNullException(nameof(message));
 
-            return PublishAsyncCore(message, cancellationToken);
-        }
-
-        private async Task PublishAsyncCore(IMessage message, CancellationToken cancellationToken)
-        {
-            using var context = _publisherChannelFactory.Create(message);
-
-            var encodedMessage = _encoder.Serialize(message);
-
-            var properties = context.Channel.CreateBasicProperties();
+            var queueRef = _queueReferenceFactory.Create(message);
+            var channel = _channelFactory.Get(queueRef);
+            var properties = channel.CreateBasicProperties();
             properties.Persistent = true;
+            properties.MessageId = message.MessageId;
+            properties.CorrelationId = message.CorrelationId;
             properties.Headers = new Dictionary<string, object>()
             {
-                {HeaderNames.MessageType, message.GetType().FullName}
+                { nameof(message.MessageType), message.MessageType.FullName },                
+                { nameof(message.ParentId), message.ParentId ?? string.Empty },
+                { nameof(message.SenderId), message.SenderId },
+                { nameof(message.CreatedAt), message.CreatedAt.ToString() }
             };
 
             var policy = Policy.Handle<Exception>()
@@ -51,24 +48,26 @@ namespace OpenSleigh.Transport.RabbitMQ
                 {
                     _logger.LogWarning(ex,
                         "Could not publish message '{MessageId}' to Exchange '{ExchangeName}', after {Timeout}s : {ExceptionMessage}",
-                        message.Id,
-                        context.QueueReferences.ExchangeName,
+                        message.MessageId,
+                        queueRef.ExchangeName,
                         $"{time.TotalSeconds:n1}", ex.Message);
                 });
 
             policy.Execute(() =>
             {
-                context.Channel.BasicPublish(
-                    exchange: context.QueueReferences.ExchangeName,
-                    routingKey: context.QueueReferences.RoutingKey,
+                channel.BasicPublish(
+                    exchange: queueRef.ExchangeName,
+                    routingKey: queueRef.RoutingKey,
                     mandatory: true,
                     basicProperties: properties,
-                    body: encodedMessage);
+                    body: message.Body);
 
                 _logger.LogInformation("message '{MessageId}' published to Exchange '{ExchangeName}'",
-                    message.Id,
-                    context.QueueReferences.ExchangeName);
+                    message.MessageId,
+                    queueRef.ExchangeName);
             });
+
+            return ValueTask.CompletedTask;
         }
     }
 }

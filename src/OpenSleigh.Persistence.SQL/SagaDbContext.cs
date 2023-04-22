@@ -1,9 +1,6 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Core.Persistence;
+﻿using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQL
 {
@@ -12,7 +9,6 @@ namespace OpenSleigh.Persistence.SQL
         DbSet<SagaState> SagaStates { get; set; }
         DbSet<OutboxMessage> OutboxMessages { get; set; }
 
-        Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default);
         Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
     }
 
@@ -29,12 +25,7 @@ namespace OpenSleigh.Persistence.SQL
         {
             modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
             modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
-        }
-
-        public async Task<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-        {
-            var transaction = await this.Database.BeginTransactionAsync(cancellationToken);
-            return new SqlTransaction(transaction);
+            modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
         }
 
         public DbSet<SagaState> SagaStates { get; set; }

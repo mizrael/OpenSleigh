@@ -44,10 +44,30 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             return connectionFactory.CreateConnection();
         }
 
-        public QueueReferences CreateQueueReference(string queueName)
+        private QueueReferences CreateQueueReference(string queueName)
         {
             _queues.Add(queueName);
             return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
+        }
+
+        public QueueReferences CreateQueueReference(IModel channel)
+        {
+            var queueName = System.Guid.NewGuid().ToString();
+
+            var queueRef = this.CreateQueueReference(queueName);
+
+            channel.ExchangeDeclare(queueRef.ExchangeName, ExchangeType.Topic, false, true);
+            channel.QueueDeclare(queue: queueRef.QueueName,
+                durable: false,
+                exclusive: false,
+                autoDelete: true,
+                arguments: null);
+            channel.QueueBind(queueRef.QueueName,
+                              queueRef.ExchangeName,
+                              routingKey: queueRef.RoutingKey,
+                              arguments: null);
+
+            return queueRef;
         }
 
         public Task InitializeAsync() => Task.CompletedTask;
@@ -60,7 +80,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             using var connection = Connect();
             using var channel = connection.CreateModel();
             
-            foreach (var queueName in _queues) {
+            foreach (var queueName in _queues) 
+            {
                 channel.ExchangeDelete(queueName);
                 channel.QueueDelete(queueName);
 

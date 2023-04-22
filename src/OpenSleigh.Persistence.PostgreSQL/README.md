@@ -8,13 +8,14 @@ PostgreSQL Persistence library for OpenSleigh
 This library can be installed from Nuget: https://www.nuget.org/packages/OpenSleigh.Persistence.PostgreSQL/
 
 ## How-to
-The first thing to do is build an instance of `SqlConfiguration` with the connection details. This can be done by reading the current app configuration. Once done, all you have to do is to call the `SqlBusConfiguratorExtensions` extension method:
+The first thing to do is build an instance of `SqlConfiguration` with the connection details. This can be done by reading the current app configuration. 
+Once done, all you have to do is to call the `UsePostgreSqlPersistence` extension method:
 ```
 
 services.AddOpenSleigh(cfg =>{ 
     var connectionString = Configuration.GetConnectionString("sql");
     var sqlCfg = new SqlConfiguration(connectionString);
-    cfg.SqlBusConfiguratorExtensions(sqlCfg);
+    cfg.UsePostgreSqlPersistence(sqlCfg);
     
     // register the Sagas here
 });

@@ -1,12 +1,8 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Transport;
+using OpenSleigh.Persistence.SQL.Entities;
+using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Exceptions;
-using OpenSleigh.Core.Persistence;
-using OpenSleigh.Core.Utils;
 
 namespace OpenSleigh.Persistence.SQL
 {
@@ -19,94 +15,159 @@ namespace OpenSleigh.Persistence.SQL
     public class SqlSagaStateRepository : ISagaStateRepository
     {
         private readonly ISagaDbContext _dbContext;
-        private readonly IPersistenceSerializer _serializer;
         private readonly SqlSagaStateRepositoryOptions _options;
+        private readonly ISerializer _serializer;
 
-        public SqlSagaStateRepository(ISagaDbContext dbContext, IPersistenceSerializer serializer, SqlSagaStateRepositoryOptions options)
+        public SqlSagaStateRepository(ISagaDbContext dbContext, SqlSagaStateRepositoryOptions options, ISerializer serializer)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
-            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
             _options = options ?? throw new ArgumentNullException(nameof(options));
+            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         }
 
-        public async Task<(TD state, Guid lockId)> LockAsync<TD>(Guid correlationId, TD newState = default(TD), CancellationToken cancellationToken = default) where TD : SagaState
+        public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
         {
-            TD resultState; 
-            var stateType = typeof(TD);
-            var lockId = Guid.NewGuid();
+            var entity = await _dbContext.SagaStates
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e =>
+                    e.CorrelationId == correlationId && 
+                    e.SagaType == descriptor.SagaType.FullName &&
+                    ((descriptor.SagaStateType == null && e.SagaStateType == null) || 
+                    (descriptor.SagaStateType != null && e.SagaStateType == descriptor.SagaStateType.FullName)),
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-            var transaction = await _dbContext.StartTransactionAsync(cancellationToken);
+            if (entity is null)
+                return null;
 
-            try
+            ISagaExecutionContext? result;
+
+            if (descriptor.SagaStateType is null)
+                result = new SagaExecutionContext(
+                    instanceId: entity.InstanceId,
+                    triggerMessageId: entity.TriggerMessageId,
+                    correlationId: entity.CorrelationId,
+                    descriptor: descriptor,
+                    processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
+                    {
+                        MessageId = e.MessageId,
+                        When = e.When
+                    }));
+            else
             {
-                var stateEntity = await _dbContext.SagaStates
-                    .FirstOrDefaultAsync(e => e.CorrelationId == correlationId && 
-                                              e.Type == stateType.FullName, cancellationToken)
-                    .ConfigureAwait(false); 
-                
-                if (stateEntity is null)
-                {
-                    resultState = newState;
-
-                    var serializedState = _serializer.Serialize(newState);
-                    var newEntity = new Entities.SagaState(correlationId, stateType.FullName, serializedState,
-                                                            lockId, DateTime.UtcNow);
-                    _dbContext.SagaStates.Add(newEntity);
-                }
-                else
-                {
-                    if (stateEntity.LockId.HasValue &&
-                        stateEntity.LockTime.HasValue &&
-                        stateEntity.LockTime.Value > DateTime.UtcNow - _options.LockMaxDuration)
-                        throw new LockException($"saga state '{correlationId}' is already locked");
-                    
-                    stateEntity.LockTime = DateTime.UtcNow;
-                    stateEntity.LockId = lockId;
-                    
-                    resultState = _serializer.Deserialize<TD>(stateEntity.Data);
-                }
-
-                await _dbContext.SaveChangesAsync(cancellationToken)
-                                .ConfigureAwait(false);
-                await transaction.CommitAsync(cancellationToken);
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
+                var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
+                result = CreateSagaContext((dynamic)state, entity, descriptor);
             }
 
-            return (resultState, lockId);
+            if (entity.IsCompleted)
+                result.MarkAsCompleted();
+
+            return result;
         }
 
-        public Task ReleaseLockAsync<TD>(TD state, Guid lockId, 
-            CancellationToken cancellationToken = default) where TD : SagaState
+        private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
+            => new SagaExecutionContext<TS>(
+                   instanceId: entity.InstanceId,
+                   triggerMessageId: entity.TriggerMessageId,
+                   correlationId: entity.CorrelationId,
+                   descriptor: descriptor,
+                   state: state,
+                   processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
+                   {
+                       MessageId = e.MessageId,
+                       When = e.When
+                   }));
+
+        public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+        {
+            if (state == null)
+                throw new ArgumentNullException(nameof(state));
+
+            return LockAsyncCore(state, cancellationToken);
+        }
+
+        private async ValueTask<string> LockAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+        {
+            var entity = await _dbContext.SagaStates
+                .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (entity is null)
+            {
+                entity = new SagaState()
+                {
+                    CorrelationId = state.CorrelationId,
+                    InstanceId = state.InstanceId,
+                    IsCompleted = state.IsCompleted,
+                    SagaType = state.Descriptor.SagaType.FullName,
+                    SagaStateType = state.Descriptor.SagaStateType?.FullName,
+                    TriggerMessageId = state.TriggerMessageId,                    
+                };
+                _dbContext.SagaStates.Add(entity);
+            }
+            else
+            {
+                if (entity.LockId is not null &&
+                    entity.LockTime is not null &&
+                    entity.LockTime > DateTimeOffset.UtcNow - _options.LockMaxDuration)
+                    throw new LockException($"saga state '{state.InstanceId}' is already locked");               
+            }
+
+            entity.LockTime = DateTimeOffset.UtcNow;
+            entity.LockId = Guid.NewGuid().ToString();
+
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                            .ConfigureAwait(false);
+
+            return entity.LockId;
+        }
+
+        public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
         {
             if (state == null) 
                 throw new ArgumentNullException(nameof(state));
 
-            return ReleaseLockAsyncCore(state, lockId, cancellationToken);
+            return ReleaseAsyncCore(state, cancellationToken);
         }
 
-        private async Task ReleaseLockAsyncCore<TD>(TD state, Guid lockId, CancellationToken cancellationToken) where TD : SagaState
+        private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
         {
-            var stateType = typeof(TD);
+            var entity = await _dbContext.SagaStates
+                 .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
+                 .ConfigureAwait(false);
 
-            var stateEntity = await _dbContext.SagaStates
-                .FirstOrDefaultAsync(e => e.LockId == lockId &&
-                                          e.CorrelationId == state.Id &&
-                                          e.Type == stateType.FullName, cancellationToken)
-                .ConfigureAwait(false);
+            if (entity is null)
+                throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
-            if (null == stateEntity)
-                throw new LockException($"unable to release Saga State '{state.Id}' with type '{stateType.FullName}' by lock id {lockId}");
+            if (entity.LockId != state.LockId)
+                throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
 
-            stateEntity.LockTime = null;
-            stateEntity.LockId = null;
-            stateEntity.Data = _serializer.Serialize(state);
+            entity.LockTime = null;
+            entity.LockId = null;
+
+            entity.IsCompleted = state.IsCompleted;
+            
+            entity.ProcessedMessages.Clear();
+
+            foreach (var msg in state.ProcessedMessages)
+                entity.ProcessedMessages.Add(new SagaProcessedMessage()
+                {
+                    InstanceId = state.InstanceId,
+                    MessageId = msg.MessageId,
+                    When = msg.When,
+                    SagaState = entity
+                });
+                        
+            if (state.GetType().IsGenericType)
+                SetStateData((dynamic)state, entity);
 
             await _dbContext.SaveChangesAsync(cancellationToken)
-                .ConfigureAwait(false);
+                        .ConfigureAwait(false);
+        }
+
+        private void SetStateData<TS>(ISagaExecutionContext<TS> state, SagaState entity)
+        {
+            entity.StateData = _serializer.Serialize(state.State);
         }
     }
 }

@@ -1,12 +1,6 @@
-﻿using System;
-using System.Threading;
+﻿using OpenSleigh.Utils;
+using System;
 using System.Threading.Tasks;
-using FluentAssertions;
-using NSubstitute;
-using NSubstitute.ExceptionExtensions;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Persistence;
-using OpenSleigh.Core.Utils;
 using Xunit;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Unit
@@ -17,22 +11,20 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         public void ctor_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var options = SqlOutboxRepositoryOptions.Default;
-            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, serializer, options, typeResolver));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null, options, typeResolver));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, null, typeResolver));
-            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, serializer, options, null));
+            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(null, resolver, SqlOutboxRepositoryOptions.Default));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, resolver, null));
+            Assert.Throws<ArgumentNullException>(() => new SqlOutboxRepository(dbContext, null, SqlOutboxRepositoryOptions.Default));
         }
 
         [Fact]
         public async Task LockAsync_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
+            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+
+            var sut = new SqlOutboxRepository(dbContext, resolver, SqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.LockAsync(null));
         }
 
@@ -40,45 +32,21 @@ namespace OpenSleigh.Persistence.SQL.Tests.Unit
         public async Task AppendAsync_should_throw_when_input_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
+            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
+
+            var sut = new SqlOutboxRepository(dbContext, resolver, SqlOutboxRepositoryOptions.Default);
             await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.AppendAsync(null));
         }
 
         [Fact]
-        public async Task ReleaseAsync_should_throw_if_message_null()
+        public async Task DeleteAsync_should_throw_if_message_null()
         {
             var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
+            var resolver = NSubstitute.Substitute.For<ITypeResolver>();
 
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.ReleaseAsync(null, Guid.Empty));
-        }
+            var sut = new SqlOutboxRepository(dbContext, resolver, SqlOutboxRepositoryOptions.Default);
 
-        [Fact]
-        public async Task CleanProcessedAsync_should_rollback_transaction_when_an_exception_occurs_and_rethrow()
-        {
-            var transaction = NSubstitute.Substitute.For<ITransaction>();
-            
-            var dbContext = NSubstitute.Substitute.For<ISagaDbContext>();
-            dbContext.StartTransactionAsync(default)
-                .ReturnsForAnyArgs(transaction);
-            
-            var expectedException = new Exception("whoops");
-            dbContext.OutboxMessages.ThrowsForAnyArgs(expectedException);
-
-            var serializer = NSubstitute.Substitute.For<IPersistenceSerializer>();
-
-            var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-
-            var sut = new SqlOutboxRepository(dbContext, serializer, SqlOutboxRepositoryOptions.Default, typeResolver);
-            var ex = await Assert.ThrowsAsync<Exception>(async () => await sut.CleanProcessedAsync());
-            ex.Should().Be(expectedException);
-
-            await transaction.Received(1)
-                .RollbackAsync(Arg.Any<CancellationToken>());
+            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.DeleteAsync(null, "lorem"));
         }
     }
 }

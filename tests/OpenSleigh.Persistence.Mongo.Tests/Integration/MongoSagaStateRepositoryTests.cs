@@ -1,13 +1,7 @@
-﻿using FluentAssertions;
-using System;
-using System.ComponentModel;
-using System.Threading;
-using System.Threading.Tasks;
-using MongoDB.Driver;
-using OpenSleigh.Core.Exceptions;
+﻿using MongoDB.Driver;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
-using Xunit;
-using OpenSleigh.Core.Utils;
+using OpenSleigh.Transport;
+using System.ComponentModel;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration
 {
@@ -22,98 +16,172 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             _fixture = fixture;
         }
 
-        private MongoSagaStateRepository CreateSut(IDbContext dbContext, MongoSagaStateRepositoryOptions options = null)
+        private MongoSagaStateRepository CreateSut(IDbContext db, MongoSagaStateRepositoryOptions? options = null)
         {
             var serializer = new JsonSerializer();
 
-            options ??= MongoSagaStateRepositoryOptions.Default;
-
-            var sut = new MongoSagaStateRepository(dbContext, serializer, options);
+            var sut = new MongoSagaStateRepository(db, options, serializer);
             return sut;
         }
 
-        [Fact]
-        public async Task LockAsync_should_create_and_return_locked_item_if_not_existing()
+        private IMessageContext<TM> CreateMessageContext<TM>() where TM : IMessage
         {
-            var (db,_) = _fixture.CreateDbContext();
+            var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
+            messageContext.Id.Returns(Guid.NewGuid().ToString());
+            messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+            return messageContext;
+        }
+
+        private ISagaExecutionContext CreateSagaContext()
+        {
+            var messageContext = CreateMessageContext<FakeMessage>();
+            var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+
+            var factory = new SagaExecutionContextFactory();
+            var context = factory.CreateState(descriptor, messageContext);
+
+            return context;
+        }
+
+        [Fact]
+        public async Task FindAsync_should_return_null_if_not_existing()
+        {
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+            var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+            var result = await sut.FindAsync(descriptor, "lorem", CancellationToken.None);
+            result.Should().BeNull();
+        }
+
+        [Fact]
+        public async Task FindAsync_should_return_item_if_existing()
+        {
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
-            state.Should().NotBeNull();
-            state.Id.Should().Be(newState.Id);
-            state.Bar.Should().Be(newState.Bar);
-            state.Foo.Should().Be(newState.Foo);
+            await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var result = await sut.FindAsync(sagaContext.Descriptor, sagaContext.CorrelationId, CancellationToken.None);
+            result.Should().NotBeNull();
+            result.InstanceId.Should().Be(sagaContext.InstanceId);
         }
 
         [Fact]
         public async Task LockAsync_should_lock_item()
         {
-            var (db,_) = _fixture.CreateDbContext();
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-            var (state, lockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-            var filter = Builders<Entities.SagaState>.Filter.Eq(e => e.LockId, lockId);
-            var cursor = await db.SagaStates.FindAsync(filter);
-            var lockedState = await cursor.FirstOrDefaultAsync();
+            var filterBuilder = Builders<Entities.SagaState>.Filter;
+            var filter = filterBuilder.And(
+                filterBuilder.Eq(e => e.LockId, lockId),
+                filterBuilder.Eq(e => e.InstanceId, sagaContext.InstanceId),
+                filterBuilder.Eq(e => e.CorrelationId, sagaContext.CorrelationId));
+            var lockedState = await db.SagaStates.FindOneAsync(filter);
             lockedState.Should().NotBeNull();
         }
 
         [Fact]
-        public async Task LockAsync_should_throw_if_item_locked()
+        public async Task LockAsync_should_throw_if_item_already_locked()
         {
-            var (db,_) = _fixture.CreateDbContext();
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db);
 
-            var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-            await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(newState.Id, newState, CancellationToken.None));
-            ex.Message.Should().Contain($"saga state '{newState.Id}' is already locked");
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(sagaContext, CancellationToken.None));
+            ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' is already locked");
         }
 
         [Fact]
-        public async Task LockAsync_should_return_state_if_lock_expired()
+        public async Task LockAsync_should_lock_again_if_first_lock_expired()
         {
-            var (db,_) = _fixture.CreateDbContext();
             var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
+            var db = _fixture.CreateDbContext();
             var sut = CreateSut(db, options);
 
-            var newState = DummyState.New();
+            var sagaContext = CreateSagaContext();
 
-            var (firstState, firstLockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
+            var firstLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
             await Task.Delay(500);
-            
-            var (secondState, secondLockId) = await sut.LockAsync(newState.Id, newState, CancellationToken.None);
-            secondLockId.Should().NotBe(firstLockId);
-            secondState.Should().NotBeNull();
+
+            var secondLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            secondLockId.Should().NotBeNull()
+                .And.NotBe(firstLockId);
         }
 
         [Fact]
-        public async Task LockAsync_should_allow_different_saga_state_types_to_share_the_correlation_id()
+        public async Task ReleaseLockAsync_should_throw_when_state_not_found()
         {
-            var (db,_) = _fixture.CreateDbContext();
-            var sut = CreateSut(db);
+            var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
 
-            var correlationId = Guid.NewGuid();
+            var sagaContext = CreateSagaContext();
 
-            var newState = new DummyState(correlationId, "lorem", 42);
-            
-            var (state, lockId) = await sut.LockAsync(correlationId, newState, CancellationToken.None);
-
-            var newState2 = new DummyState2(state.Id);
-            newState2.Id.Should().Be(newState.Id);
-            
-            var (state2, lockId2) = await sut.LockAsync(correlationId, newState2, CancellationToken.None);
-            state2.Should().NotBeNull();
-            state2.Id.Should().Be(correlationId);
+            var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext));
+            ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
         }
 
+        [Fact]
+        public async Task ReleaseLockAsync_should_throw_when_lock_invalid()
+        {
+            var options = new MongoSagaStateRepositoryOptions(TimeSpan.Zero);
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db, options);
+
+            var sagaContext = CreateSagaContext();
+            await sut.LockAsync(sagaContext, CancellationToken.None);
+
+            var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+            fakeContext.InstanceId.Returns(sagaContext.InstanceId);
+            fakeContext.LockId.Returns("lorem");
+
+            var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(fakeContext));
+            ex.Message.Should().Contain($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'");
+        }
+
+        [Fact]
+        public async Task ReleaseLockAsync_should_release_lock_and_update_state()
+        {
+            var db = _fixture.CreateDbContext();
+            var sut = CreateSut(db);
+
+            var sagaContext = CreateSagaContext();
+
+            await sagaContext.LockAsync(sut, CancellationToken.None);
+
+            var messageContext = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext);
+
+            var messageContext2 = CreateMessageContext<FakeMessage>();
+            sagaContext.SetAsProcessed(messageContext2);
+
+            sagaContext.MarkAsCompleted();
+
+            await sut.ReleaseAsync(sagaContext);
+
+            var filterBuilder = Builders<Entities.SagaState>.Filter;
+            var filter = filterBuilder.Eq(e => e.InstanceId, sagaContext.InstanceId);
+            var unLockedState = await db.SagaStates.FindOneAsync(filter);
+            unLockedState.Should().NotBeNull();
+            unLockedState.LockId.Should().BeNull();
+            unLockedState.LockTime.Should().BeNull();
+            unLockedState.IsCompleted.Should().BeTrue();
+            unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
+                                           .And.HaveCount(2)
+                                           .And.Contain(m => m.MessageId == messageContext.Id)
+                                           .And.Contain(m => m.MessageId == messageContext2.Id);
+        }
     }
 }

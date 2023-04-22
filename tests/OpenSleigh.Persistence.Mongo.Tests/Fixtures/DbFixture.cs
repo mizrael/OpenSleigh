@@ -1,12 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using MongoDB.Driver;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
 {
-    public class DbFixture : IDisposable
+    public class DbFixture : IAsyncLifetime
     {
+        private readonly string _connectionString;
         private readonly MongoClient _client;
         private readonly List<IMongoDatabase> _dbs = new();
 
@@ -17,30 +16,32 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Fixtures
                 .AddEnvironmentVariables()
                 .Build();
 
-            this.ConnectionString = configuration.GetConnectionString("mongo");
-            if (string.IsNullOrWhiteSpace(this.ConnectionString))
+            _connectionString = configuration.GetConnectionString("mongo");
+            if (string.IsNullOrWhiteSpace(_connectionString))
                 throw new ArgumentException("invalid connection string");
 
-            _client = new MongoClient(this.ConnectionString);
+            _client = new MongoClient(_connectionString);
         }
 
-        public (IDbContext db, string name) CreateDbContext()
+        public IDbContext CreateDbContext()
         {
             var dbName = $"openSleigh_{Guid.NewGuid()}";
             var db = _client.GetDatabase(dbName);
             var dbContext = new DbContext(db);
             _dbs.Add(db);
-            return (dbContext, dbName);
+            return dbContext;
         }
 
-        public string ConnectionString { get; }
-        
-        public void Dispose()
+        public Task InitializeAsync()
+            => Task.CompletedTask;
+
+        public async Task DisposeAsync()
         {
             if (_client is null)
                 return;
-            foreach(var db in _dbs)
-                _client.DropDatabase(db.DatabaseNamespace.DatabaseName);
+            foreach (var db in _dbs)
+                await _client.DropDatabaseAsync(db.DatabaseNamespace.DatabaseName)
+                            .ConfigureAwait(false);
         }
     }
 }
