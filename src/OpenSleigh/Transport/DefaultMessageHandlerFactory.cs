@@ -20,7 +20,7 @@ namespace OpenSleigh.Transport
 
             var handler = instance as IHandleMessage<TM>;
             if (handler is null)
-                throw new InvalidCastException($"type '{context.Descriptor.SagaType}' does not implement '{nameof(ISaga)}'");
+                throw new InvalidCastException($"type '{context.Descriptor.SagaType}' cannot handle messages of type '{typeof(TM)}'");
 
             return handler;
         }

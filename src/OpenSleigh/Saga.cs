@@ -21,8 +21,7 @@ namespace OpenSleigh
         protected void Publish<TM>(TM message)
             where TM : IMessage
         {
-            if (message is null)
-                throw new ArgumentNullException(nameof(message));
+            ArgumentNullException.ThrowIfNull(message);
 
             var outboxMessage = OutboxMessage.Create(message, _serializer, this.Context);
             _outbox.Enqueue(outboxMessage);
@@ -30,10 +29,9 @@ namespace OpenSleigh
 
         public async ValueTask PersistOutboxAsync(IOutboxRepository outboxRepository, CancellationToken cancellationToken)
         {
-            if (outboxRepository is null)
-                throw new ArgumentNullException(nameof(outboxRepository));
+            ArgumentNullException.ThrowIfNull(outboxRepository);
 
-            if (!_outbox.Any())
+            if (_outbox.IsEmpty)
                 return;
 
             await outboxRepository.AppendAsync(_outbox, cancellationToken)

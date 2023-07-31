@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
-using System.Runtime.Serialization;
 
 namespace OpenSleigh.E2ETests
 {
