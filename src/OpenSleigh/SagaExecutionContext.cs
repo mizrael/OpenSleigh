@@ -1,10 +1,13 @@
-﻿using OpenSleigh.Transport;
+﻿using OpenSleigh.Outbox;
+using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh
 {
     public record SagaExecutionContext : ISagaExecutionContext
     {
-        private HashSet<ProcessedMessage> _processedMessages = new();
+        private readonly HashSet<ProcessedMessage> _processedMessages = new();
+        private readonly ConcurrentQueue<OutboxMessage> _outbox = new();
 
         public SagaExecutionContext(
             string instanceId, 
@@ -65,6 +68,16 @@ namespace OpenSleigh
                                                   .ConfigureAwait(false);
         }
 
+        public void Publish(OutboxMessage message)
+        {
+            ArgumentNullException.ThrowIfNull(message);
+
+            _outbox.Enqueue(message);
+        }
+
+        public void ClearOutbox()
+            => _outbox.Clear();
+
         public async ValueTask ProcessAsync<TM>(
             IMessageHandlerManager messageHandlerManager, 
             IMessageContext<TM> messageContext,
@@ -72,7 +85,7 @@ namespace OpenSleigh
             CancellationToken cancellationToken) where TM : IMessage
         {
             await messageHandlerManager.ProcessAsync(messageContext, this, cancellationToken)
-                                        .ConfigureAwait(false);
+                                       .ConfigureAwait(false);
 
             this.SetAsProcessed(messageContext);
 
@@ -95,6 +108,7 @@ namespace OpenSleigh
         public string LockId { get; private set; }
 
         public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
+        public IReadOnlyCollection<OutboxMessage> Outbox => _outbox;
     }
 
     public record SagaExecutionContext<TS> : SagaExecutionContext, ISagaExecutionContext<TS>

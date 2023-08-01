@@ -1,4 +1,5 @@
-﻿using OpenSleigh.Transport;
+﻿using OpenSleigh.Outbox;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh
 {
@@ -21,6 +22,9 @@ namespace OpenSleigh
 
         public string LockId => string.Empty;
 
+        public IReadOnlyCollection<OutboxMessage> Outbox =>
+            (IReadOnlyCollection<OutboxMessage>)Enumerable.Empty<OutboxMessage>();
+
         public static ISagaExecutionContext Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
         => new NoOpSagaExecutionContext()
         {
@@ -32,6 +36,10 @@ namespace OpenSleigh
 
         public bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage
             => false;
+
+        public void ClearOutbox()
+        {          
+        }
 
         public ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
             => ValueTask.CompletedTask;
@@ -46,6 +54,10 @@ namespace OpenSleigh
             ISagaExecutionService sagaExecutionService, 
             CancellationToken cancellationToken) where TM : IMessage
             => ValueTask.CompletedTask;
+
+        public void Publish(OutboxMessage message)
+        {            
+        }
 
         public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
         {            
