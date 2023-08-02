@@ -27,20 +27,22 @@ namespace OpenSleigh.E2ETests
         protected async Task RunScenarioAsync(int hostsCount,
             Action<HostBuilderContext, IServiceCollection> configureServices,
             Func<IMessageBus, Task> runner,
-            CancellationTokenSource tokenSource)
+            CancellationTokenSource runningTokenSource)
         {
+            var startupTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(60) * hostsCount);
+
             var createHostTasks = Enumerable.Range(1, hostsCount)
                 .Select(async i =>
                 {
                     var host = await SetupHost(configureServices);
 
-                    await host.StartAsync(tokenSource.Token);
+                    await host.StartAsync(startupTokenSource.Token);
                     return host;
                 }).ToArray();
 
             await Task.WhenAll(createHostTasks);
 
-            if (tokenSource.IsCancellationRequested)
+            if (startupTokenSource.IsCancellationRequested)
                 throw new Exception("a timeout occurred during hosts initialization.");
 
             var producerHost = createHostTasks.First().Result;
@@ -49,7 +51,7 @@ namespace OpenSleigh.E2ETests
 
             await runner(bus);
 
-            while (!tokenSource.IsCancellationRequested)
+            while (!runningTokenSource.IsCancellationRequested)
                 await Task.Delay(10);
 
             foreach (var t in createHostTasks)
