@@ -2,8 +2,8 @@
 using System.Threading;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Samples.Sample2.Common.Messages;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh.Samples.Sample2.API.Controllers
 {
@@ -24,11 +24,11 @@ namespace OpenSleigh.Samples.Sample2.API.Controllers
             IMessage message = isSimple ? new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid()) :
                 new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
             
-            await _bus.PublishAsync(message, cancellationToken);
+            var receipt = await _bus.PublishAsync(message, cancellationToken);
 
             return Accepted(new
             {
-                SagaId = message.CorrelationId
+                SagaId = receipt.CorrelationId
             });
         }
     }

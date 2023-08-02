@@ -200,8 +200,8 @@ namespace OpenSleigh.Persistence.Mongo
                 .AddSingleton(config.OutboxRepositoryOptions)
 
                 .AddScoped<IDbContext, DbContext>()
-                .AddScoped<ISagaStateRepository, MongoSagaStateRepository>()
-                .AddScoped<IOutboxRepository, MongoOutboxRepository>();
+                .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
+                .AddTransient<IOutboxRepository, MongoOutboxRepository>();
             return busConfigurator;
         }
     }

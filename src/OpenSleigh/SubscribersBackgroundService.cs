@@ -10,7 +10,8 @@ namespace OpenSleigh
         private readonly ISystemInfo _systemInfo;
         private readonly ILogger<SubscribersBackgroundService> _logger;
 
-        public SubscribersBackgroundService(IEnumerable<ISubscriber> subscribers,
+        public SubscribersBackgroundService(
+            IEnumerable<ISubscriber> subscribers,
             ISystemInfo systemInfo,
             ILogger<SubscribersBackgroundService> logger)
         {

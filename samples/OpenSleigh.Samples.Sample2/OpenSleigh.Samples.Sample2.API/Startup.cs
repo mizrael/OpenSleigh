@@ -35,7 +35,9 @@ namespace OpenSleigh.Samples.Sample2.API
                     mongoSection["DbName"]);
                 
                 var rabbitSection = Configuration.GetSection("Rabbit");
-                var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"],
+                var rabbitCfg = new RabbitConfiguration(
+                    rabbitSection["HostName"],
+                    rabbitSection["VirtualHost"],
                     rabbitSection["UserName"],
                     rabbitSection["Password"]);
                 

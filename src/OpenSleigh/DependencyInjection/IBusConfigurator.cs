@@ -14,6 +14,8 @@ namespace OpenSleigh.DependencyInjection
 
         IBusConfigurator WithOutboxProcessorOptions(OutboxProcessorOptions options);
 
+        IBusConfigurator SetPublishOnly(bool value = true);
+
         IServiceCollection Services { get; }
     }
 }

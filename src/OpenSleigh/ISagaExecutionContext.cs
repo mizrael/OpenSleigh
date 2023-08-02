@@ -1,6 +1,5 @@
-﻿using OpenSleigh.Outbox;
+using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
-using System.Threading;
 
 namespace OpenSleigh
 {

@@ -1,12 +1,11 @@
-﻿using System.Threading.Tasks;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core.DependencyInjection;
+using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.Mongo;
-using OpenSleigh.Samples.Sample2.Common.Messages;
 using OpenSleigh.Samples.Sample2.Worker.Sagas;
 using OpenSleigh.Transport.RabbitMQ;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Samples.Sample2.Worker
 {
@@ -31,7 +30,9 @@ namespace OpenSleigh.Samples.Sample2.Worker
                     .AddOpenSleigh(cfg =>
                     {
                         var rabbitSection = hostContext.Configuration.GetSection("Rabbit");
-                        var rabbitCfg = new RabbitConfiguration(rabbitSection["HostName"], 
+                        var rabbitCfg = new RabbitConfiguration(
+                            rabbitSection["HostName"],
+                            rabbitSection["VirtualHost"],
                             rabbitSection["UserName"],
                             rabbitSection["Password"]);
 
@@ -41,27 +42,12 @@ namespace OpenSleigh.Samples.Sample2.Worker
                             MongoSagaStateRepositoryOptions.Default,
                             MongoOutboxRepositoryOptions.Default);
 
-                        cfg.UseRabbitMQTransport(rabbitCfg, builder =>
-                            {
-                                // OPTIONAL
-                                // using a custom naming policy allows us to define the names for exchanges, queues and routing keys.
-                                // for example, we could have a single exchange bound to multiple queues.                                
-                                builder.UseMessageNamingPolicy<StartChildSaga>(() => new QueueReferences("child", "child.start", "child.start", "child.dead", "child.dead.start"));
-                                builder.UseMessageNamingPolicy<ProcessChildSaga>(() => new QueueReferences("child", "child.process", "child.process", "child.dead", "child.dead.process"));
-                            })
-                            .UseMongoPersistence(mongoCfg);
+                        cfg.UseRabbitMQTransport(rabbitCfg)
+                           .UseMongoPersistence(mongoCfg);
 
                         cfg.AddSaga<SimpleSaga, SimpleSagaState>()
-                            .UseStateFactory<StartSimpleSaga>(msg => new SimpleSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport();
-
-                        cfg.AddSaga<ParentSaga, ParentSagaState>()
-                            .UseStateFactory<StartParentSaga>(msg => new ParentSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport();
-
-                        cfg.AddSaga<ChildSaga, ChildSagaState>()
-                            .UseStateFactory<StartChildSaga>(msg => new ChildSagaState(msg.CorrelationId))
-                            .UseRabbitMQTransport();
+                           .AddSaga<ParentSaga, ParentSagaState>()
+                           .AddSaga<ChildSaga, ChildSagaState>();
                     });
             });
     }

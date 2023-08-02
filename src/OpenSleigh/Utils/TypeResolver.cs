@@ -10,8 +10,10 @@ namespace OpenSleigh.Utils
 
         public void Register(Type type)
         {
-            if (type == null)
-                throw new ArgumentNullException(nameof(type));
+            ArgumentNullException.ThrowIfNull(type);
+
+            if(_assemblies.Contains(type.Assembly))
+                return;
 
             _assemblies.Add(type.Assembly);
             _typesByName.TryAdd(type.Name.ToLower(), type);

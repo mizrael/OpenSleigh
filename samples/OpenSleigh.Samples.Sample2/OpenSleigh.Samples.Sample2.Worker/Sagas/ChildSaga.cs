@@ -1,21 +1,19 @@
+using Microsoft.Extensions.Logging;
+using OpenSleigh.Transport;
+using OpenSleigh.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Messaging;
 
 namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 {
-    public record ChildSagaState : SagaState{
-        public ChildSagaState(Guid id) : base(id){}
-    }
+    public record ChildSagaState;
 
-    public record StartChildSaga(Guid Id, Guid CorrelationId) : ICommand { }
+    public record StartChildSaga(Guid Id, Guid CorrelationId) : IMessage { }
 
-    public record ProcessChildSaga(Guid Id, Guid CorrelationId) : ICommand { }
+    public record ProcessChildSaga(Guid Id, Guid CorrelationId) : IMessage { }
 
-    public record ChildSagaCompleted(Guid Id, Guid CorrelationId) : IEvent { }
+    public record ChildSagaCompleted(Guid Id, Guid CorrelationId) : IMessage { }
 
     public class ChildSaga :
         Saga<ChildSagaState>,
@@ -26,12 +24,15 @@ namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 
         private readonly Random _random = new Random();
 
-        public ChildSaga(ILogger<ChildSaga> logger, ChildSagaState state) : base(state)
+        public ChildSaga(
+            ILogger<ChildSaga> logger,
+            ISagaExecutionContext<ChildSagaState> context,
+            ISerializer serializer) : base(context, serializer)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
         
-        public async Task HandleAsync(IMessageContext<StartChildSaga> context, CancellationToken cancellationToken = default)
+        public async ValueTask HandleAsync(IMessageContext<StartChildSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"starting child saga '{context.Message.CorrelationId}'...");
 
@@ -41,7 +42,7 @@ namespace OpenSleigh.Samples.Sample2.Worker.Sagas
             this.Publish(message);
         }
 
-        public async Task HandleAsync(IMessageContext<ProcessChildSaga> context, CancellationToken cancellationToken = default)
+        public async ValueTask HandleAsync(IMessageContext<ProcessChildSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"processing child saga '{context.Message.CorrelationId}'...");
             

@@ -1,10 +1,9 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System;
-using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -13,8 +12,7 @@ namespace OpenSleigh.Transport.RabbitMQ
     {
         private readonly IChannelFactory _channelFactory;
         private readonly QueueReferences _queueReference;
-        private readonly ISerializer _serializer;
-        private readonly IMessageProcessor _messageProcessor;
+        private readonly IServiceProvider _serviceProvider;
         private readonly ITypeResolver _typeResolver;
         private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
 
@@ -22,16 +20,14 @@ namespace OpenSleigh.Transport.RabbitMQ
 
         public RabbitMessageSubscriber(IChannelFactory channelFactory,
             IQueueReferenceFactory queueReferenceFactory,
-            ISerializer serializer,
-            IMessageProcessor messageProcessor,
+            IServiceProvider serviceProvider,
             ITypeResolver typeResolver,
             ILogger<RabbitMessageSubscriber<TM>> logger)
         {
             _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+            _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
             _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
-            _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
             if (queueReferenceFactory == null)
                 throw new ArgumentNullException(nameof(queueReferenceFactory));
@@ -115,7 +111,10 @@ namespace OpenSleigh.Transport.RabbitMQ
             try
             {
                 //TODO: provide valid cancellation token
-                await _messageProcessor.ProcessAsync(message, CancellationToken.None);
+
+                using var scope = _serviceProvider.CreateScope();
+                var processor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
+                await processor.ProcessAsync(message, CancellationToken.None);
 
                 channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
             }

@@ -38,6 +38,7 @@ namespace OpenSleigh.DependencyInjection
             _sagaDescriptorResolver.Register<TS, TD>();
 
             this.Services.AddTransient<TD>(_ => default) // this will allow DI container validation at startup
+                         .AddTransient<ISagaExecutionContext<TD>>(_ => default)
                          .AddTransient<TS>();
 
             return this;
@@ -50,6 +51,12 @@ namespace OpenSleigh.DependencyInjection
             
             this.Services.AddTransient<TS>();
 
+            return this;
+        }
+
+        public IBusConfigurator SetPublishOnly(bool value = true)
+        {
+            _systemInfo.PublishOnly = value;
             return this;
         }
 
