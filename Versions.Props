@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <CSharpLanguageVersion>11</CSharpLanguageVersion>
+    <TargetFrameworkVersion>net7.0</TargetFrameworkVersion>
+    <NugetPackagesVersion>3.0.2-alpha</NugetPackagesVersion>
+  </PropertyGroup>
+</Project>

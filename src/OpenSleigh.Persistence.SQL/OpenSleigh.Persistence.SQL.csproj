@@ -1,13 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
+		<TargetFramework>$(TargetFrameworkVersion)</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
     <PropertyGroup>
-        <PackageVersion>3.0.1-alpha</PackageVersion>
+		<PackageVersion>$(PackageVersion)</PackageVersion>
         <IsPackable>true</IsPackable>
         <Authors>davidguida</Authors>
         <Product>OpenSleigh.Persistence.SQL</Product>

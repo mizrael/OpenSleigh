@@ -1,14 +1,13 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFramework>net7.0</TargetFramework>
-		<PackageVersion>3.0.1-alpha</PackageVersion>
+		<TargetFramework>$(TargetFrameworkVersion)</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
-	<PropertyGroup>		
-		
+	<PropertyGroup>
+		<PackageVersion>$(PackageVersion)</PackageVersion>
 		<IsPackable>true</IsPackable>
 		<Authors>davidguida</Authors>
 		<Product>OpenSleigh.Persistence.Mongo</Product>
@@ -39,7 +38,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<None Include="README.md" />
+		<None Include="README.md" Pack="true" PackagePath="\">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</None>
 	</ItemGroup>
 
 	<PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
