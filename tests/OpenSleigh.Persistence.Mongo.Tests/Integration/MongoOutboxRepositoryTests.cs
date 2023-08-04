@@ -22,6 +22,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration
             var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
             sysInfo.ClientGroup.Returns("test");
             sysInfo.ClientId.Returns("client");
+            sysInfo.Id.Returns("sender");
             return OutboxMessage.Create(new FakeMessage(), sysInfo, new JsonSerializer());
         }
 

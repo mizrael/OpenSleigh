@@ -79,6 +79,8 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
                 .Returns(channel);
 
             var typeResolver = Substitute.For<ITypeResolver>();
+            typeResolver.Resolve(typeof(FakeSagaStarter).FullName)
+                        .Returns(typeof(FakeSagaStarter));
 
             var logger = Substitute.For<ILogger<RabbitMessageSubscriber<FakeSagaStarter>>>();
 
