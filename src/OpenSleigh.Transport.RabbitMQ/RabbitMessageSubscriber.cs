@@ -82,17 +82,16 @@ namespace OpenSleigh.Transport.RabbitMQ
                     throw new ArgumentException("sender id cannot be null.");
 
                 var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
+                var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
 
-                message = new OutboxMessage()
-                {
-                    Body = eventArgs.Body,
-                    SenderId = senderId,
-                    ParentId = parentId,
-                    CorrelationId = eventArgs.BasicProperties.CorrelationId,
-                    MessageId = eventArgs.BasicProperties.MessageId,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    MessageType = messageType
-                };
+                if (!OutboxMessage.TryCreate(eventArgs.Body,
+                                            messageId: eventArgs.BasicProperties.MessageId,
+                                            correlationId: eventArgs.BasicProperties.CorrelationId,
+                                            createdAt, messageType,
+                                            parentId: parentId,
+                                            senderId: senderId, 
+                                            out message))
+                    throw new ArgumentException("unable to parse outbox message.");
             }
             catch (Exception ex)
             {

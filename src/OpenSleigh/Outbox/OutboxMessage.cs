@@ -4,7 +4,9 @@ using OpenSleigh.Utils;
 namespace OpenSleigh.Outbox
 {
     public class OutboxMessage
-    {
+    { 
+        private OutboxMessage() { }
+
         public IMessage GetMessage(ISerializer serializer)
         {
             if (serializer is null)
@@ -17,6 +19,40 @@ namespace OpenSleigh.Outbox
             return message;
         }
 
+        public static bool TryCreate(
+            ReadOnlyMemory<byte> body,
+            string messageId,
+            string correlationId,
+            DateTimeOffset createdAt,
+            Type messageType,
+            string? parentId,
+            string senderId,
+            out OutboxMessage? message)
+        {
+            if (body.Length == 0 ||
+                string.IsNullOrEmpty(messageId) ||
+                string.IsNullOrEmpty(correlationId) ||
+                createdAt == default ||
+                messageType is null || 
+                string.IsNullOrEmpty(senderId))
+            {
+                message = null;
+                return false;
+            }
+
+            message = new OutboxMessage()
+            {
+                Body = body,
+                MessageId = messageId,
+                CorrelationId = correlationId,
+                CreatedAt = createdAt,
+                MessageType = messageType,
+                ParentId = parentId,
+                SenderId = senderId
+            };
+            return true;
+        }
+    
         public static OutboxMessage Create(
            IMessage message,
            ISystemInfo systemInfo,
