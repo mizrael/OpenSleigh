@@ -11,6 +11,9 @@ namespace OpenSleigh.Transport.RabbitMQ
         public RabbitConfiguration(string hostName, string userName, string password, TimeSpan retryDelay)
             : this(hostName: hostName, vhost: null, userName: userName, password:password, retryDelay) { }
 
+        public RabbitConfiguration(string hostName, string vhost, string userName, string password)
+            : this(hostName, vhost, userName, password, TimeSpan.FromSeconds(30)) { }
+
         public RabbitConfiguration(string hostName, string vhost, string userName, string password, TimeSpan retryDelay)
         {
             HostName = hostName;

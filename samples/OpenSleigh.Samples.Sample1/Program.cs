@@ -25,8 +25,7 @@ static IHostBuilder CreateHostBuilder(string[] args) =>
                     cfg.UseInMemoryTransport()
                        .UseInMemoryPersistence()
                        .AddSaga<SagaWithoutState>()
-                       .AddSaga<SagaWithState, MySagaState>()
-                       ;
+                       .AddSaga<SagaWithState, MySagaState>();
                 });
             });
 

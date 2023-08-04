@@ -1,4 +1,5 @@
-﻿using OpenSleigh.Transport;
+﻿using OpenSleigh.Outbox;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh
 {
@@ -6,13 +7,18 @@ namespace OpenSleigh
     {
         private readonly ISagaExecutionContextFactory _sagaExecCtxFactory;
         private readonly ISagaStateRepository _sagaStateRepository;
+        private readonly IOutboxRepository _outboxRepository;
 
-        public SagaExecutionService(ISagaExecutionContextFactory sagaExecCtxFactory, ISagaStateRepository sagaStateRepository)
+        public SagaExecutionService(
+            ISagaExecutionContextFactory sagaExecCtxFactory, 
+            ISagaStateRepository sagaStateRepository, 
+            IOutboxRepository outboxRepository)
         {
             _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
             _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
+            _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         }
-        
+
         public async ValueTask<ISagaExecutionContext> StartExecutionContextAsync<TM>(
             IMessageContext<TM> messageContext, 
             SagaDescriptor descriptor, 
@@ -34,8 +40,15 @@ namespace OpenSleigh
             ISagaExecutionContext context,            
             CancellationToken cancellationToken = default) 
         {
+            // TODO: transaction
+
             await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
                                      .ConfigureAwait(false);
+            
+            await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
+                                   .ConfigureAwait(false);
+
+            context.ClearOutbox();
         }
 
         private async Task<ISagaExecutionContext> BuildExecutionContextAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) where TM : IMessage

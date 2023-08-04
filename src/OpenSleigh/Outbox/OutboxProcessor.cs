@@ -20,10 +20,22 @@ namespace OpenSleigh.Outbox
 
         public async ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default)
         {
-            IEnumerable<OutboxMessage> messages = await _outboxRepository.ReadPendingAsync(cancellationToken).ConfigureAwait(false);
+            IEnumerable<OutboxMessage> messages;
+            try
+            {
+                messages = await _outboxRepository.ReadPendingAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "an error has occurred while pulling messages from the Outbox: {Error}", ex.Message);
+                return;
+            }            
 
             foreach (var message in messages)
             {
+                if (message is null) 
+                    continue;
+
                 try
                 {
                     string lockId = await _outboxRepository.LockAsync(message, cancellationToken)
@@ -34,6 +46,8 @@ namespace OpenSleigh.Outbox
 
                     await _outboxRepository.DeleteAsync(message, lockId, cancellationToken)
                                            .ConfigureAwait(false);
+
+                    _logger.LogInformation("message '{MessageId}' has been published.", message.MessageId);
                 }
                 catch (LockException e)
                 {

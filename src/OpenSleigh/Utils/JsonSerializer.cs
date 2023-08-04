@@ -29,5 +29,4 @@ namespace OpenSleigh.Utils
             return System.Text.Json.JsonSerializer.Deserialize(data, returnType, Settings);
         }      
     }
-
 }

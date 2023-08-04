@@ -2,19 +2,17 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using OpenSleigh.Core;
-using OpenSleigh.Core.Messaging;
 using OpenSleigh.Samples.Sample2.Common.Messages;
+using OpenSleigh.Transport;
+using OpenSleigh.Utils;
 
 namespace OpenSleigh.Samples.Sample2.Worker.Sagas
 {
-    public record SimpleSagaState : SagaState{
-        public SimpleSagaState(Guid id) : base(id){}
-    }
+    public record SimpleSagaState;
 
-    public record ProcessSimpleSaga(Guid Id, Guid CorrelationId) : ICommand { }
+    public record ProcessSimpleSaga(Guid Id, Guid CorrelationId) : IMessage { }
 
-    public record SimpleSagaCompleted(Guid Id, Guid CorrelationId) : IEvent { }
+    public record SimpleSagaCompleted(Guid Id, Guid CorrelationId) : IMessage { }
 
     public class SimpleSaga :
         Saga<SimpleSagaState>,
@@ -24,12 +22,15 @@ namespace OpenSleigh.Samples.Sample2.Worker.Sagas
     {
         private readonly ILogger<SimpleSaga> _logger;
 
-        public SimpleSaga(ILogger<SimpleSaga> logger, SimpleSagaState state): base(state)
+        public SimpleSaga(
+            ILogger<SimpleSaga> logger,
+            ISagaExecutionContext<SimpleSagaState> context,
+            ISerializer serializer) : base(context, serializer)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
         
-        public async Task HandleAsync(IMessageContext<StartSimpleSaga> context, CancellationToken cancellationToken = default)
+        public async ValueTask HandleAsync(IMessageContext<StartSimpleSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"starting saga '{context.Message.CorrelationId}'...");
             
@@ -37,7 +38,7 @@ namespace OpenSleigh.Samples.Sample2.Worker.Sagas
             this.Publish(message);
         }
         
-        public async Task HandleAsync(IMessageContext<ProcessSimpleSaga> context, CancellationToken cancellationToken = default)
+        public async ValueTask HandleAsync(IMessageContext<ProcessSimpleSaga> context, CancellationToken cancellationToken = default)
         {
             _logger.LogInformation($"processing saga '{context.Message.CorrelationId}'...");
             
@@ -45,11 +46,11 @@ namespace OpenSleigh.Samples.Sample2.Worker.Sagas
             this.Publish(message);
         }
 
-        public Task HandleAsync(IMessageContext<SimpleSagaCompleted> context, CancellationToken cancellationToken = default)
+        public ValueTask HandleAsync(IMessageContext<SimpleSagaCompleted> context, CancellationToken cancellationToken = default)
         {
-            this.State.MarkAsCompleted(); 
+            this.Context.MarkAsCompleted();
             _logger.LogInformation($"saga '{context.Message.CorrelationId}' completed!");
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         }
     }
 }

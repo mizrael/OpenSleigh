@@ -18,17 +18,19 @@ namespace OpenSleigh.Persistence.Mongo.Entities
         public string? ParentId { get; set; }
         public required string SenderId { get; set; }
 
-        public Outbox.OutboxMessage ToModel(ITypeResolver typeResolver)
-            => new Outbox.OutboxMessage()
-            {
-                Body = Body,
-                MessageId = MessageId,
-                CorrelationId = CorrelationId,
-                CreatedAt = CreatedAt,
-                MessageType = typeResolver.Resolve(MessageType),
-                ParentId = ParentId,
-                SenderId = SenderId
-            };
+        public Outbox.OutboxMessage? ToModel(ITypeResolver typeResolver)
+        {
+            Outbox.OutboxMessage.TryCreate(
+                Body,
+                messageId: MessageId,
+                correlationId: CorrelationId,
+                CreatedAt,
+                typeResolver.Resolve(MessageType, false),
+                parentId: ParentId,
+                senderId: SenderId,
+                out var result);
+            return result;
+        }
 
         public static OutboxMessage Create(Outbox.OutboxMessage message)
         {

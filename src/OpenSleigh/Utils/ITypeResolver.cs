@@ -3,6 +3,6 @@
     public interface ITypeResolver
     {
         void Register(Type type);
-        Type Resolve(string typeName);
+        Type? Resolve(string typeName, bool throwOnError = true);
     }
 }

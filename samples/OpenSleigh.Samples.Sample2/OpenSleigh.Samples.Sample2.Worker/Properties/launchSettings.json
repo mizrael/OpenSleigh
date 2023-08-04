@@ -1,6 +1,6 @@
 {
   "profiles": {
-    "OpenSleigh.Samples.Console": {
+    "OpenSleigh.Samples.Sample2.Worker": {
       "commandName": "Project",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"

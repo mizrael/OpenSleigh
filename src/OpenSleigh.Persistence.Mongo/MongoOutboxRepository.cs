@@ -128,6 +128,7 @@ namespace OpenSleigh.Persistence.Mongo
                 return Enumerable.Empty<OutboxMessage>();
 
             var messages = entities.Select(e => e.ToModel(_typeResolver))
+                                   .Where(m => m is not null)
                                    .ToArray();
 
             return messages;

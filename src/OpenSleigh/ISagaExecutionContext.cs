@@ -1,5 +1,5 @@
-﻿using OpenSleigh.Transport;
-using System.Threading;
+using OpenSleigh.Outbox;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh
 {
@@ -29,6 +29,8 @@ namespace OpenSleigh
 
         IReadOnlyCollection<ProcessedMessage> ProcessedMessages { get; }
 
+        IReadOnlyCollection<OutboxMessage> Outbox { get; }
+
         /// <summary>
         /// true if the execution is completed.
         /// </summary>
@@ -48,6 +50,9 @@ namespace OpenSleigh
             IMessageContext<TM> messageContext,
             ISagaExecutionService sagaExecutionService, 
             CancellationToken cancellationToken) where TM : IMessage;
+
+        void Publish(OutboxMessage message);
+        void ClearOutbox();        
     }
 
     public interface ISagaExecutionContext<TS> : ISagaExecutionContext

@@ -1,4 +1,5 @@
 ﻿using FluentAssertions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Outbox;
@@ -61,16 +62,29 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
                     received = true;
                     tokenSource.Cancel();
                 });
-            
+
+            var scopeFactory = Substitute.For<IServiceScopeFactory>();
+
+            var sp = Substitute.For<IServiceProvider>();
+            sp.GetService(typeof(IMessageProcessor)).Returns(processor);
+            sp.GetService(typeof(IServiceScopeFactory)).Returns(scopeFactory);
+
+            var scope = Substitute.For<IServiceScope>();
+            scope.ServiceProvider.Returns(sp);
+
+            scopeFactory.CreateScope().Returns(scope);
+
             var channelFactory = Substitute.For<IChannelFactory>();
             channelFactory.Get(queueRef)
                 .Returns(channel);
 
             var typeResolver = Substitute.For<ITypeResolver>();
+            typeResolver.Resolve(typeof(FakeSagaStarter).FullName)
+                        .Returns(typeof(FakeSagaStarter));
 
             var logger = Substitute.For<ILogger<RabbitMessageSubscriber<FakeSagaStarter>>>();
 
-            var sut = new RabbitMessageSubscriber<FakeSagaStarter>(channelFactory, queueRefFactory, serializer, processor, typeResolver, logger);
+            var sut = new RabbitMessageSubscriber<FakeSagaStarter>(channelFactory, queueRefFactory, sp, typeResolver, logger);
 
             sut.Start();
 

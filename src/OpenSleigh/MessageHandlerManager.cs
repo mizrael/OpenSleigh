@@ -6,13 +6,11 @@ namespace OpenSleigh
 {
     public class MessageHandlerManager : IMessageHandlerManager
     {
-        private readonly IOutboxRepository _outboxRepository;
         private readonly IMessageHandlerFactory _messageHandlerFactory;
         private readonly ILogger<MessageHandlerManager> _logger;
 
-        public MessageHandlerManager(IOutboxRepository outboxRepository, IMessageHandlerFactory messageHandlerFactory, ILogger<MessageHandlerManager> logger)
+        public MessageHandlerManager(IMessageHandlerFactory messageHandlerFactory, ILogger<MessageHandlerManager> logger)
         {
-            _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
             _messageHandlerFactory = messageHandlerFactory ?? throw new ArgumentNullException(nameof(messageHandlerFactory));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
@@ -24,17 +22,10 @@ namespace OpenSleigh
         {
             IHandleMessage<TM> handler = _messageHandlerFactory.Create<TM>(executionContext);
 
-            //TODO: create transaction
-            //TODO: pass transaction to the handler factory            
-
             try
             {
                 await handler.HandleAsync(messageContext, cancellationToken)
                             .ConfigureAwait(false);
-
-                if (handler is IHasOutbox outbox)
-                    await outbox.PersistOutboxAsync(_outboxRepository, cancellationToken)
-                                .ConfigureAwait(false);
             }
             catch (Exception ex)
             {

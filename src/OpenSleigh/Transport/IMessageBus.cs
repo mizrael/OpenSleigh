@@ -2,6 +2,6 @@
 {
     public interface IMessageBus
     {
-        ValueTask PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
+        ValueTask<IMessageContext<TM>> PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
     }
 }

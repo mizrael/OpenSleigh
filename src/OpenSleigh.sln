@@ -33,9 +33,17 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Transport.Rabbit
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.PostgreSQL", "OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj", "{D82C02E4-4626-480E-8531-143EDA3A45B3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.Mongo", "OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj", "{F107BF6B-BB4D-426F-A7A0-576EE1B12F18}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo", "OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj", "{F107BF6B-BB4D-426F-A7A0-576EE1B12F18}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Persistence.Mongo.Tests", "..\tests\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj", "{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Persistence.Mongo.Tests", "..\tests\OpenSleigh.Persistence.Mongo.Tests\OpenSleigh.Persistence.Mongo.Tests.csproj", "{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Sample2", "Sample2", "{1CA18E27-00EB-4D57-942E-D6EB84F6B530}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample2.Common", "..\samples\OpenSleigh.Samples.Sample2\OpenSleigh.Samples.Sample2.Common\OpenSleigh.Samples.Sample2.Common.csproj", "{717B2018-CD31-408B-BF79-17D5B1924092}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample2.API", "..\samples\OpenSleigh.Samples.Sample2\OpenSleigh.Samples.Sample2.API\OpenSleigh.Samples.Sample2.API.csproj", "{E639D65D-5D2E-484D-AF4F-C9688232FFEC}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh.Samples.Sample2.Worker", "..\samples\OpenSleigh.Samples.Sample2\OpenSleigh.Samples.Sample2.Worker\OpenSleigh.Samples.Sample2.Worker.csproj", "{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -95,6 +103,18 @@ Global
 		{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB}.Release|Any CPU.Build.0 = Release|Any CPU
+		{717B2018-CD31-408B-BF79-17D5B1924092}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{717B2018-CD31-408B-BF79-17D5B1924092}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{717B2018-CD31-408B-BF79-17D5B1924092}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{717B2018-CD31-408B-BF79-17D5B1924092}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E639D65D-5D2E-484D-AF4F-C9688232FFEC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E639D65D-5D2E-484D-AF4F-C9688232FFEC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E639D65D-5D2E-484D-AF4F-C9688232FFEC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E639D65D-5D2E-484D-AF4F-C9688232FFEC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -111,6 +131,10 @@ Global
 		{D82C02E4-4626-480E-8531-143EDA3A45B3} = {1153E679-A92D-45D1-8AF2-4EC2EF34CC10}
 		{F107BF6B-BB4D-426F-A7A0-576EE1B12F18} = {1153E679-A92D-45D1-8AF2-4EC2EF34CC10}
 		{AA0E6F48-1573-47A5-B13C-FFF29E51AFFB} = {CFEDF9DA-8557-413C-96CE-6AD2B5D8D1CD}
+		{1CA18E27-00EB-4D57-942E-D6EB84F6B530} = {F1765378-35DE-4A5F-914A-B2F63A6252A3}
+		{717B2018-CD31-408B-BF79-17D5B1924092} = {1CA18E27-00EB-4D57-942E-D6EB84F6B530}
+		{E639D65D-5D2E-484D-AF4F-C9688232FFEC} = {1CA18E27-00EB-4D57-942E-D6EB84F6B530}
+		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130} = {1CA18E27-00EB-4D57-942E-D6EB84F6B530}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5C347C6E-5B5E-4A71-BF38-48FAD967B0E9}

@@ -10,14 +10,16 @@ namespace OpenSleigh.Utils
 
         public void Register(Type type)
         {
-            if (type == null)
-                throw new ArgumentNullException(nameof(type));
+            ArgumentNullException.ThrowIfNull(type);
+
+            if(_assemblies.Contains(type.Assembly))
+                return;
 
             _assemblies.Add(type.Assembly);
             _typesByName.TryAdd(type.Name.ToLower(), type);
         }
 
-        public Type Resolve(string typeName)
+        public Type? Resolve(string typeName, bool throwOnError = true)
         {
             Type? dataType = null;
             foreach (var assembly in _assemblies)
@@ -30,7 +32,7 @@ namespace OpenSleigh.Utils
             if (dataType is null)
                 _typesByName.TryGetValue(typeName.ToLower(), out dataType);
 
-            if (dataType is null)
+            if (dataType is null && throwOnError)
                 throw new TypeLoadException($"unable to resolve type '{typeName}'");
 
             return dataType;

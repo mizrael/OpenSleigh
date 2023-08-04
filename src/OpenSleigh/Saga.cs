@@ -1,13 +1,11 @@
-﻿using OpenSleigh.Transport;
-using OpenSleigh.Outbox;
+﻿using OpenSleigh.Outbox;
+using OpenSleigh.Transport;
 using OpenSleigh.Utils;
-using System.Collections.Concurrent;
 
 namespace OpenSleigh
 {
-    public abstract class Saga : ISaga, IHasOutbox
+    public abstract class Saga : ISaga
     {
-        private readonly ConcurrentQueue<OutboxMessage> _outbox = new();
         private readonly ISerializer _serializer;
         private readonly ISagaExecutionContext _context;
 
@@ -24,20 +22,7 @@ namespace OpenSleigh
             ArgumentNullException.ThrowIfNull(message);
 
             var outboxMessage = OutboxMessage.Create(message, _serializer, this.Context);
-            _outbox.Enqueue(outboxMessage);
-        }
-
-        public async ValueTask PersistOutboxAsync(IOutboxRepository outboxRepository, CancellationToken cancellationToken)
-        {
-            ArgumentNullException.ThrowIfNull(outboxRepository);
-
-            if (_outbox.IsEmpty)
-                return;
-
-            await outboxRepository.AppendAsync(_outbox, cancellationToken)
-                                  .ConfigureAwait(false);
-
-            _outbox.Clear();
+            _context.Publish(outboxMessage);
         }
 
         public ISagaExecutionContext Context => _context;
