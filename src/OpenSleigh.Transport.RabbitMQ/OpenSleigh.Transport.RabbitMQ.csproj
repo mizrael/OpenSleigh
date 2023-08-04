@@ -7,7 +7,7 @@
 	</PropertyGroup>
 
   <PropertyGroup>
-    <PackageVersion>3.0.0-alpha</PackageVersion>
+    <PackageVersion>3.0.1-alpha</PackageVersion>
     <IsPackable>true</IsPackable>
     <Authors>davidguida</Authors>
     <Product>OpenSleigh.Transport.RabbitMQ</Product>
