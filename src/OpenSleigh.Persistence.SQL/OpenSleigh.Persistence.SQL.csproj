@@ -20,7 +20,7 @@
         <PackageTags>saga saga-pattern dotnet-core csharp message-queue message-bus saga-state-persistence message-transport entityframework sql</PackageTags>
         <PackageOutputPath>../../packages/</PackageOutputPath>
         <RepositoryUrl>https://github.com/mizrael/OpenSleigh/</RepositoryUrl>
-        <PackageProjectUrl>https://www.opensleigh.net/</PackageProjectUrl>
+        <PackageProjectUrl>https://github.com/mizrael/OpenSleigh/</PackageProjectUrl>
         <PublishRepositoryUrl>true</PublishRepositoryUrl>
         <IncludeSymbols>true</IncludeSymbols>
         <SymbolPackageFormat>snupkg</SymbolPackageFormat>

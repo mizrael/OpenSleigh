@@ -101,6 +101,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             received.Should().BeTrue();
         }
 
+        // TODO: check
         //[Fact]
         //public async Task StartAsync_should_retry_message_when_locked()
         //{

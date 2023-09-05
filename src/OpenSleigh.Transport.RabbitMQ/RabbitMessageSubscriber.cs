@@ -7,7 +7,7 @@ using RabbitMQ.Client.Events;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
-    public sealed class RabbitMessageSubscriber<TM> : IDisposable, IRabbitMessageSubscriber<TM>
+    public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscriber<TM>
         where TM : IMessage
     {
         private readonly IChannelFactory _channelFactory;
@@ -18,7 +18,8 @@ namespace OpenSleigh.Transport.RabbitMQ
 
         private IModel _channel;
 
-        public RabbitMessageSubscriber(IChannelFactory channelFactory,
+        public RabbitMessageSubscriber(
+            IChannelFactory channelFactory,
             IQueueReferenceFactory queueReferenceFactory,
             IServiceProvider serviceProvider,
             ITypeResolver typeResolver,

@@ -30,8 +30,7 @@ namespace OpenSleigh.Transport.RabbitMQ
             });
 
             busConfigurator.Services.AddSingleton<IBusConnection, RabbitPersistentConnection>();
-            busConfigurator.Services.AddSingleton<ISubscriber, RabbitSubscriber>();
-            busConfigurator.Services.AddSingleton(typeof(IRabbitMessageSubscriber<>), typeof(RabbitMessageSubscriber<>));
+            busConfigurator.Services.AddSingleton(typeof(IMessageSubscriber<>), typeof(RabbitMessageSubscriber<>));
 
             busConfigurator.Services.AddSingleton(config);
 

@@ -1,16 +1,16 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
-namespace OpenSleigh.Transport.RabbitMQ
+namespace OpenSleigh.Transport
 {
-    public class RabbitSubscriber : ISubscriber
+    internal sealed class DefaultSubscriber : ISubscriber
     {
         private readonly IHostApplicationLifetime _hostApplicationLifetime;
         private readonly ISagaDescriptorsResolver _resolver;
         private readonly IServiceProvider _sp;
-        private readonly List<IRabbitMessageSubscriber> _subscribers = new();
+        private readonly List<IMessageSubscriber> _subscribers = new();
 
-        public RabbitSubscriber(
+        public DefaultSubscriber(
             IHostApplicationLifetime hostApplicationLifetime, 
             ISagaDescriptorsResolver resolver, 
             IServiceProvider sp)
@@ -24,12 +24,12 @@ namespace OpenSleigh.Transport.RabbitMQ
 
         private void OnApplicationStarted()
         {
-            var subscriberTypeBase = typeof(IRabbitMessageSubscriber<>);
+            var subscriberTypeBase = typeof(IMessageSubscriber<>);
             var messageTypes = _resolver.GetRegisteredMessageTypes();
             foreach (var messageType in messageTypes)
             {
                 var subscriberType = subscriberTypeBase.MakeGenericType(messageType);
-                var subscriber = (IRabbitMessageSubscriber)_sp.GetRequiredService(subscriberType);
+                var subscriber = (IMessageSubscriber)_sp.GetRequiredService(subscriberType);
                 subscriber.Start();
                 _subscribers.Add(subscriber);
             }
