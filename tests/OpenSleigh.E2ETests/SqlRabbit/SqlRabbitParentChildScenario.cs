@@ -17,7 +17,7 @@ namespace OpenSleigh.E2ETests.SqlRabbit
         {
             _dbFixture = dbFixture;
             _rabbitFixture = rabbitFixture;
-            _exchangeName = Guid.NewGuid().ToString();
+            _exchangeName = "SqlRabbitParentChildScenario-" + Guid.NewGuid().ToString("N");
         }
 
         protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)

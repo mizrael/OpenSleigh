@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Outbox
 {
@@ -26,12 +27,12 @@ namespace OpenSleigh.Outbox
         {
             _logger.LogInformation(
                 "Outbox Background Service is starting on client '{ClientId}' ...",
-                _systemInfo.ClientId);
+            _systemInfo.ClientId);
 
-            return Task.Run(async () => await ProcessMessagesAsync(stoppingToken), stoppingToken);
+            return Task.Factory.StartNew(async () => await ProcessMessagesAsync(stoppingToken), TaskCreationOptions.LongRunning);
         }
 
-        private async Task ProcessMessagesAsync(CancellationToken stoppingToken)
+        private async ValueTask ProcessMessagesAsync(CancellationToken stoppingToken)
         {
             while (!stoppingToken.IsCancellationRequested)
             {
