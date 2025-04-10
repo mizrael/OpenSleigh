@@ -1,43 +1,37 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using OpenSleigh.Outbox;
 using System.Collections.Concurrent;
 
-namespace OpenSleigh.Transport.Kafka
+namespace OpenSleigh.Transport.Kafka;
+
+public delegate QueueReferences QueueReferencesCreator(Type messageType);
+
+public class QueueReferenceFactory : IQueueReferenceFactory
 {
-    public class QueueReferenceFactory : IQueueReferenceFactory
+    private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesCache = new();
+    private readonly QueueReferencesCreator _creator;
+
+    public QueueReferenceFactory(QueueReferencesCreator? creator = null)
     {
-        private readonly ConcurrentDictionary<Type, QueueReferences> _queueReferencesCache = new();
-        private readonly Func<Type, QueueReferences> _defaultCreator;
-        private readonly IServiceProvider _sp;
-
-        public QueueReferenceFactory(IServiceProvider sp, Func<Type, QueueReferences> defaultCreator = null)
+        _creator = creator ?? (messageType =>
         {
-            _sp = sp ?? throw new ArgumentNullException(nameof(sp));
+            var topicName = messageType.Name.ToLower();
+            return new QueueReferences(topicName, $"{topicName}.dead");
+        });
+    }
 
-            _defaultCreator = defaultCreator ?? (messageType =>
-            {
-                var topicName = messageType.Name.ToLower();
-                return new QueueReferences(topicName, $"{topicName}.dead");
-            });
-        }
+    public QueueReferences Create(OutboxMessage message)
+        => _queueReferencesCache.GetOrAdd(message.MessageType, k => _creator(message.MessageType));
 
-        public QueueReferences Create<TM>(TM message = default) where TM : IMessage
-            => _queueReferencesCache.GetOrAdd(typeof(TM), k => CreateCore<TM>());
+    public QueueReferences Create<TM>() where TM : IMessage
+        => _queueReferencesCache.GetOrAdd(typeof(TM), k => _creator(typeof(TM)));
 
-        private QueueReferences CreateCore<TM>()
-            where TM : IMessage
-        {
-            var creator = _sp.GetService<QueueReferencesPolicy<TM>>();
-            return (creator is null) ? _defaultCreator(typeof(TM)) : creator();
-        }
+    public Type GetQueueType(string topic)
+    {
+        if (string.IsNullOrWhiteSpace(topic))
+            throw new ArgumentNullException(topic);
 
-        public Type GetQueueType(string topic)
-        {
-            if (string.IsNullOrWhiteSpace(topic))
-                throw new ArgumentNullException(topic);
-
-            var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
-            
-            return queueRef.Key;
-        }
+        var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
+        
+        return queueRef.Key;
     }
 }

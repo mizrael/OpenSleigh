@@ -29,18 +29,19 @@ namespace OpenSleigh.Transport
             var messageContext = ToContext((dynamic)message, outboxMessage);
 
             var descriptors = _sagaDescriptorsResolver.Resolve(message);
-            foreach (var descriptor in descriptors) //TODO: parallelize
-            {                
+            async void process(SagaDescriptor descriptor)
+            {
                 try
                 {
                     await _sagaRunner.ProcessAsync(messageContext, descriptor, cancellationToken)
                                  .ConfigureAwait(false);
                 }
-                catch(SagaException)
+                catch (SagaException)
                 {
                     // TODO: send outboxMessage + descriptor to deadletter   
                 }
             }
+            Parallel.ForEach(descriptors, process);
         }
 
         private static IMessageContext<TM> ToContext<TM>(TM message, OutboxMessage outboxMessage)

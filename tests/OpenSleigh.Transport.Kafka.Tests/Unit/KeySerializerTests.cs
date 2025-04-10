@@ -23,7 +23,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             var sut = new KeySerializer<DummyMessage>();
 
-            var message = DummyMessage.New();
+            var message = new DummyMessage();
             var jsonMessage = JsonSerializer.Serialize(message);
             var expectedData = Encoding.UTF8.GetBytes(jsonMessage); 
             

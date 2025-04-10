@@ -1,6 +1,5 @@
-using System;
 using FluentAssertions;
-using NSubstitute;
+using System;
 using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit
@@ -10,14 +9,13 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Create_should_use_default_creator_when_none_defined()
         {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp, messageType =>
+            var sut = new QueueReferenceFactory(messageType =>
             {
                 var topicName = messageType.Name.ToLower();
                 return new QueueReferences(topicName, topicName + ".dead");
             });
             
-            var message = DummyMessage.New();
+            var message = DummyMessage.CreateOutboxMessage();
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
@@ -25,28 +23,17 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         }
 
         [Fact]
-        public void Create_should_use_registered_creator()
-        {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-
-            var policy = new QueueReferencesPolicy<DummyMessage>(() => new QueueReferences("dummy", "dummy.dead"));
-
-            sp.GetService(typeof(QueueReferencesPolicy<DummyMessage>))
-                .Returns(policy);
-            var sut = new QueueReferenceFactory(sp);
-            
-            var result = sut.Create<DummyMessage>();
-            result.Should().NotBeNull();
-            result.TopicName.Should().Be("dummy");
-            result.DeadLetterTopicName.Should().Be("dummy.dead");
-        }
-
-        [Fact]
         public void Create_should_return_valid_references()
         {
+            var queueRef = new QueueReferences("dummymessage", "dummymessage.dead");
+            QueueReferencesCreator creator = messageType =>
+            {
+                var topicName = messageType.Name.ToLower();
+                return new QueueReferences(topicName, topicName + ".dead");
+            };
             var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp);
-            var message = DummyMessage.New();
+            var sut = new QueueReferenceFactory(creator);
+            var message = DummyMessage.CreateOutboxMessage();
             var result = sut.Create(message);
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
@@ -56,8 +43,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void Create_generic_should_return_valid_references()
         {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp);
+            var sut = new QueueReferenceFactory();
             var result = sut.Create<DummyMessage>();
             result.Should().NotBeNull();
             result.TopicName.Should().Be("dummymessage");
@@ -65,16 +51,9 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         }
 
         [Fact]
-        public void ctor_should_throw_if_service_provider_null()
-        {
-            Assert.Throws<ArgumentNullException>(() => new QueueReferenceFactory(null));
-        }
-
-        [Fact]
         public void GetQueueType_should_throw_when_input_invalid()
         {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp);
+            var sut = new QueueReferenceFactory();
 
             Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(null));
             Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(""));
@@ -84,8 +63,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void GetQueueType_should_return_null_when_type_not_found()
         {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp);
+            var sut = new QueueReferenceFactory();
 
             var result = sut.GetQueueType("invalid topic name");
             result.Should().BeNull();
@@ -94,8 +72,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public void GetQueueType_should_return_type_when_input_valid()
         {
-            var sp = NSubstitute.Substitute.For<IServiceProvider>();
-            var sut = new QueueReferenceFactory(sp);
+            var sut = new QueueReferenceFactory();
 
             var queueRef = sut.Create<DummyMessage>();
             queueRef.Should().NotBeNull();

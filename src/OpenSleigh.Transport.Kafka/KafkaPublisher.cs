@@ -24,7 +24,7 @@ namespace OpenSleigh.Transport.Kafka
 
         private async ValueTask PublishAsyncCore(OutboxMessage message, CancellationToken cancellationToken)
         {
-            var queueRefs = _queueReferenceFactory.Create((dynamic)message);
+            var queueRefs = _queueReferenceFactory.Create(message);
             var result = await _executor.PublishAsync(message, queueRefs.TopicName, cancellationToken: cancellationToken);
             if (result is null || result.Status == PersistenceStatus.NotPersisted)
                 throw new InvalidOperationException($"unable to publish message '{message.MessageId}'");

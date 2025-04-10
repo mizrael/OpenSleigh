@@ -7,6 +7,7 @@ using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
+using OpenSleigh.Outbox;
 using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit
@@ -38,7 +39,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public async Task StartAsync_should_process_incoming_messages()
         {
             var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
-            var expectedMessage = NSubstitute.Substitute.For<IMessage>();
+            var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
             var parser = NSubstitute.Substitute.For<IMessageParser>();
@@ -61,7 +62,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public async Task StartAsync_should_republish_to_deadletter_when_exception_occurs()
         {
             var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
-            var expectedMessage = NSubstitute.Substitute.For<IMessage>();
+            var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
             var parser = NSubstitute.Substitute.For<IMessageParser>();
@@ -71,7 +72,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             var ex = new Exception("whoops");
             var expectedErrorHeader = new Header(HeaderNames.Error, Encoding.UTF8.GetBytes(ex.Message));
             var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
-            messageProcessor.WhenForAnyArgs(mp => mp.ProcessAsync((dynamic)expectedMessage))
+            messageProcessor.WhenForAnyArgs(mp => ((ValueTask)mp.ProcessAsync((dynamic)expectedMessage)).AsTask())
                 .Throw(ex);
 
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
@@ -92,15 +93,15 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         public async Task StartAsync_should_not_republish_to_deadletter_when_exception_occurs_and_no_deadletter_available()
         {
             var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
-            var expectedMessage = NSubstitute.Substitute.For<IMessage>();
+            var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "");
 
             var parser = NSubstitute.Substitute.For<IMessageParser>();
             parser.Parse(consumeResult)
-                .Returns(expectedMessage);
+                  .Returns(expectedMessage);
 
             var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
-            messageProcessor.WhenForAnyArgs(mp => mp.ProcessAsync((dynamic)expectedMessage))
+            messageProcessor.WhenForAnyArgs(mp => ((ValueTask)mp.ProcessAsync((dynamic)expectedMessage)).AsTask())
                 .Throw(new Exception("whoops"));
 
             var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
@@ -112,7 +113,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             await sut.HandleAsync(consumeResult, queueRefs);
 
-            await publisher.DidNotReceiveWithAnyArgs().PublishAsync(Arg.Any<IMessage>(),
+            await publisher.DidNotReceiveWithAnyArgs().PublishAsync(Arg.Any<OutboxMessage>(),
                 Arg.Any<string>(),
                 null,
                 Arg.Any<CancellationToken>());
@@ -140,7 +141,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             await sut.HandleAsync(consumeResult, queueRefs);
 
             await messageProcessor.DidNotReceiveWithAnyArgs()
-                                .ProcessAsync(Arg.Any<IMessage>(), Arg.Any<CancellationToken>());
+                                .ProcessAsync(Arg.Any<OutboxMessage>(), Arg.Any<CancellationToken>());
         }
     }
 }

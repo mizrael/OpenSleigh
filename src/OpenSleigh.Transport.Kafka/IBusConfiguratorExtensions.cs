@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace OpenSleigh.Transport.Kafka
 {
     [ExcludeFromCodeCoverage]
-    public record KafkaConfiguration(string ConnectionString, Func<Type, QueueReferences> DefaultQueueReferenceCreator = null);
+    public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator? DefaultQueueReferenceCreator = null);
 
     [ExcludeFromCodeCoverage]
     public static class IBusConfiguratorExtensions
@@ -16,7 +16,7 @@ namespace OpenSleigh.Transport.Kafka
         {
             busConfigurator.Services.AddSingleton(config);
             
-            busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(ctx => new QueueReferenceFactory(ctx, config.DefaultQueueReferenceCreator));
+            busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(_ => new QueueReferenceFactory(config.DefaultQueueReferenceCreator));
 
             busConfigurator.Services.AddSingleton(ctx =>
             {

@@ -4,5 +4,6 @@
   
   <PropertyGroup>
     <LangVersion>$(CSharpLanguageVersion)</LangVersion>
+    <Nullable>enable</Nullable>
   </PropertyGroup>  
 </Project>

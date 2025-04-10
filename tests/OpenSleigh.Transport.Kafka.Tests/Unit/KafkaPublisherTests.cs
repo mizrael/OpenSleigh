@@ -32,7 +32,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task PublishAsync_publish_message()
         {
-            var message = DummyMessage.New();
+            var message = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
             var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
@@ -56,7 +56,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task PublishAsync_should_throw_when_publish_fails()
         {
-            var message = DummyMessage.New();
+            var message = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
             var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();

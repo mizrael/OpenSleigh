@@ -66,12 +66,11 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             await producer.Received(1)
                 .ProduceAsync(topicName,
                     Arg.Is((Message<string,  ReadOnlyMemory<byte>> km) =>
-                    km.Key == message.MessageId &&
-                        km.Headers.Any(h =>
-                            h.Key == nameof(message.MessageType) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(typeof(DummyMessage).FullName)) &&
-                            h.Key == nameof(message.CorrelationId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.CorrelationId)) &&
-                            h.Key == nameof(message.SenderId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.SenderId.ToString()))
-                       )));
+                        km.Key == message.MessageId &&
+                        km.Headers.Any(h => h.Key == nameof(message.MessageType) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(typeof(DummyMessage).FullName))) &&
+                        km.Headers.Any(h => h.Key == nameof(message.CorrelationId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.CorrelationId))) &&
+                        km.Headers.Any(h => h.Key == nameof(message.SenderId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.SenderId.ToString())))
+                       ));
         }
 
         [Fact]

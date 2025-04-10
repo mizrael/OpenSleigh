@@ -22,6 +22,7 @@ namespace OpenSleigh.Transport
             _hostApplicationLifetime.ApplicationStarted.Register(this.OnApplicationStarted);            
         }
 
+        //TODO: can we move to StartAsync?
         private void OnApplicationStarted()
         {
             var subscriberTypeBase = typeof(IMessageSubscriber<>);

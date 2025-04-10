@@ -1,5 +1,6 @@
 ﻿using OpenSleigh.Transport;
 using OpenSleigh.Utils;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Outbox
 {
@@ -27,7 +28,7 @@ namespace OpenSleigh.Outbox
             Type messageType,
             string? parentId,
             string senderId,
-            out OutboxMessage? message)
+            [NotNullWhen(true)] out OutboxMessage? message)
         {
             if (body.Length == 0 ||
                 string.IsNullOrEmpty(messageId) ||
