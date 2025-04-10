@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,30 +20,34 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
                 .Build();
 
             var rabbitSection = configuration.GetSection("Rabbit");
+
+            if (!int.TryParse(rabbitSection["RetryDelayInMilliseconds"], out var retryDelayMs))
+                retryDelayMs = 1000;
+
             this.RabbitConfiguration = new RabbitConfiguration(
                 rabbitSection["HostName"],
                 rabbitSection["VirtualHost"],
                 rabbitSection["UserName"],
                 rabbitSection["Password"],
-                System.TimeSpan.FromSeconds(10));
+                System.TimeSpan.FromMilliseconds(retryDelayMs));
         }
 
         /// <summary>
         /// returns a RabbitMQ connection. Needs to be disposed after use.
         /// </summary>
         public IConnection Connect()
+        => this.ConnectionFactory.CreateConnection();
+
+        private ConnectionFactory CreateConnectionFactory()
+        => new ConnectionFactory()
         {
-            var connectionFactory = new ConnectionFactory()
-            {
-                HostName = RabbitConfiguration.HostName,
-                UserName = RabbitConfiguration.UserName,
-                Password = RabbitConfiguration.Password,
-                VirtualHost = RabbitConfiguration.VirtualHost,
-                Port = AmqpTcpEndpoint.UseDefaultPort,
-                DispatchConsumersAsync = true
-            };
-            return connectionFactory.CreateConnection();
-        }
+            HostName = RabbitConfiguration.HostName,
+            UserName = RabbitConfiguration.UserName,
+            Password = RabbitConfiguration.Password,
+            VirtualHost = RabbitConfiguration.VirtualHost,
+            Port = AmqpTcpEndpoint.UseDefaultPort,
+            DispatchConsumersAsync = true
+        };
 
         private QueueReferences CreateQueueReference(string queueName)
         {
@@ -93,6 +98,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             }
         }
 
-        public RabbitConfiguration RabbitConfiguration { get; init; }
+        public RabbitConfiguration RabbitConfiguration { get; }
+        public ConnectionFactory ConnectionFactory => CreateConnectionFactory();
     }
 }

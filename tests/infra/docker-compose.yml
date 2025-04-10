@@ -1,4 +1,4 @@
-version: '3.4'
+name: openSleigh.tests
 
 services:
   openSleigh.tests.infrastructure.sql:
@@ -46,7 +46,7 @@ services:
     container_name: openSleigh.tests.infrastructure.rabbitmq    
     restart: always
     environment:
-      RABBITMQ_DEFAULT_VHOST: "/opensleigh"
+      RABBITMQ_DEFAULT_VHOST: "/opensleigh-tests"
     ports:     
       - "15671:15671"
       - "15672:15672"   

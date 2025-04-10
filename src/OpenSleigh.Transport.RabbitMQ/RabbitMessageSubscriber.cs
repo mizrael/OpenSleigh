@@ -4,6 +4,7 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {
@@ -143,7 +144,10 @@ namespace OpenSleigh.Transport.RabbitMQ
                 channel.BasicReject(deliveryProps.DeliveryTag, requeue: false);
             else
             {
-                channel.BasicAck(deliveryProps.DeliveryTag, false);
+                // we acknowledge the message so it's removed from the original queue
+                channel.BasicAck(deliveryProps.DeliveryTag, multiple: false);
+
+                // we publish the message to the retry exchange
                 channel.BasicPublish(
                     exchange: _queueReference.RetryExchangeName,
                     routingKey: deliveryProps.RoutingKey,

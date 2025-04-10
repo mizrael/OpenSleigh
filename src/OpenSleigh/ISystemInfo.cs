@@ -1,11 +1,10 @@
-﻿namespace OpenSleigh
-{
-    public interface ISystemInfo
-    {
-        string ClientGroup { get; }
-        string ClientId { get; }
-        bool PublishOnly { get; }
+﻿namespace OpenSleigh;
 
-        string Id => $"{ClientGroup}.{ClientId}";
-    }
+public interface ISystemInfo
+{
+    string ClientGroup { get; }
+    string ClientId { get; }
+    bool PublishOnly { get; }
+
+    string Id => $"{ClientGroup}.{ClientId}";
 }

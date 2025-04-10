@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Transport.RabbitMQ
 {    
@@ -32,10 +31,10 @@ namespace OpenSleigh.Transport.RabbitMQ
                 channel.ExchangeDeclare(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic);
                 channel.ExchangeDeclare(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic);
 
+                EnsureQueues(queueReferences, channel);
+
                 return channel;
             });
-            
-            EnsureQueues(queueReferences, channel);
 
             return channel;
         }
@@ -53,7 +52,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                               queueReferences.DeadLetterExchangeName,
                               routingKey: queueReferences.DeadLetterQueue,
                               arguments: null);
-
+           
             _logger.LogInformation($"initializing retry queue '{queueReferences.RetryQueueName}' on exchange '{queueReferences.RetryExchangeName}'...");
             channel.QueueDeclare(queue: queueReferences.RetryQueueName,
                     durable: true,
@@ -63,7 +62,7 @@ namespace OpenSleigh.Transport.RabbitMQ
                     {
                         {Headers.XMessageTTL, (int)_rabbitCfg.RetryDelay.TotalMilliseconds },
                         {Headers.XDeadLetterExchange, queueReferences.ExchangeName},
-                        {Headers.XDeadLetterRoutingKey, queueReferences.QueueName}
+                        {Headers.XDeadLetterRoutingKey, queueReferences.RoutingKey}
                     });
             channel.QueueBind(queue: queueReferences.RetryQueueName,
                 exchange: queueReferences.RetryExchangeName,

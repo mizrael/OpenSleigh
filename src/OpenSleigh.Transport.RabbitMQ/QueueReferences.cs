@@ -41,6 +41,9 @@
                                 string DeadLetterExchangeName, string DeadLetterQueue) : this(ExchangeName, queueName: QueueName, routingKey: QueueName,
                                                                                               DeadLetterExchangeName, DeadLetterQueue){}
 
+        /// <summary>
+        /// this will be used to delay the message before re-sending it to the main queue
+        /// </summary>
         public string RetryExchangeName => this.ExchangeName + ".retry";
         public string RetryQueueName => this.QueueName + ".retry";
 

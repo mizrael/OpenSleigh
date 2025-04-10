@@ -36,7 +36,6 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
 
             var message = OutboxMessage.Create(new FakeSagaStarter(), new JsonSerializer(), sagaContext);
-            var encoder = new JsonSerializer();
 
             var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
@@ -82,7 +81,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
             queueRefFactory.Create(message)
                 .Returns(queueRef);
 
-            var sut = new RabbitPublisher(encoder, logger, queueRefFactory, channelFactory);
+            var sut = new RabbitPublisher(queueRefFactory, channelFactory, logger);
             await sut.PublishAsync(message);
 
             while (!tokenSource.IsCancellationRequested)

@@ -1,10 +1,11 @@
 ﻿using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Transport.RabbitMQ
+namespace OpenSleigh.Transport.RabbitMQ;
+
+public interface IQueueReferenceFactory
 {
-    public interface IQueueReferenceFactory
-    {
-        QueueReferences Create(OutboxMessage message);
-        QueueReferences Create<TM>() where TM : IMessage;
-    }
+    QueueReferences Create(OutboxMessage message);
+    QueueReferences Create<TM>() where TM : IMessage;
+
+    IEnumerable<QueueReferences> RegisteredQueueReferences { get; }
 }

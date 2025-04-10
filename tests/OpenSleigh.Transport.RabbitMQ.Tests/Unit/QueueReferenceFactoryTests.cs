@@ -1,10 +1,8 @@
 using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Outbox;
-using OpenSleigh.Tests;
 using OpenSleigh.Utils;
 using System;
-using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 {
@@ -17,7 +15,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             sysInfo.ClientGroup.Returns("test");
             sysInfo.ClientId.Returns("client");
             
-            var sut = new QueueReferenceFactory(sysInfo, messageType =>
+            var sut = new QueueReferenceFactory(messageType =>
             {
                 var exchangeName = messageType.Name.ToLower();
                 var queueName = exchangeName + ".a";
@@ -46,7 +44,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             sysInfo.ClientGroup.Returns("test");
             sysInfo.ClientId.Returns("client");
 
-            var sut = new QueueReferenceFactory(sysInfo);
+            var sut = new QueueReferenceFactory();
             var message = OutboxMessage.Create(new FakeSagaStarter(), sysInfo, new JsonSerializer());
             var result = sut.Create(message);
             result.Should().NotBeNull();
@@ -62,10 +60,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
         [Fact]
         public void Create_generic_should_return_valid_references()
         {
-            var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
-            sysInfo.ClientGroup.Returns("test");
-
-            var sut = new QueueReferenceFactory(sysInfo);
+            var sut = new QueueReferenceFactory();
             var result = sut.Create<FakeSagaStarter>();
             result.Should().NotBeNull();
             result.ExchangeName.Should().Be("fakesagastarter");
