@@ -16,9 +16,8 @@ namespace OpenSleigh.Transport.Kafka
         private readonly ILogger<KafkaMessageSubscriber<TM>> _logger;
         private readonly KafkaSubscriberConfig _config;
         
-        private CancellationTokenSource _stoppingCts;
         private Task _consumerTask;
-        private IConsumer<string, ReadOnlyMemory<byte>>? _consumer;
+        private readonly IConsumer<string, ReadOnlyMemory<byte>> _consumer;
 
         public KafkaMessageSubscriber(
             IConsumerBuilderFactory builderFactory,
@@ -42,11 +41,10 @@ namespace OpenSleigh.Transport.Kafka
             _config = config ?? KafkaSubscriberConfig.Default;
         }
 
-        public void Start()
+        public ValueTask StartAsync(CancellationToken cancellationToken)
         {
-            _stoppingCts = new ();
-
-            _consumerTask = Task.Run(async () => await ConsumeMessages(_stoppingCts.Token));
+            _consumerTask = Task.Run(async () => await ConsumeMessages(cancellationToken), cancellationToken);
+            return ValueTask.CompletedTask;
         }
 
         private async Task ConsumeMessages(CancellationToken stoppingToken)
@@ -121,20 +119,16 @@ namespace OpenSleigh.Transport.Kafka
             return false;
         }
 
-        public void Stop()
+        public ValueTask StopAsync(CancellationToken cancellationToken)
         {
-            if (_consumerTask == null)
-                return;
-
-            _stoppingCts.Cancel();
-            _consumer?.Close();
+            _consumer.Close();
+            return ValueTask.CompletedTask;
         }
 
         public void Dispose()
         {
-            _stoppingCts?.Cancel();
-            _consumer?.Dispose();
-            _consumer = null;
+            _consumer.Close();
+            _consumer.Dispose();
         }
     }
 }

@@ -36,7 +36,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.Start();
+        sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);
@@ -61,7 +61,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.Start();
+        sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);
@@ -86,7 +86,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.Start();
+        sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);

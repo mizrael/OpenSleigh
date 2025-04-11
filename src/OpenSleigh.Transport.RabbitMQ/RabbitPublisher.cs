@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
-using OpenSleigh.Utils;
 using Polly;
+using RabbitMQ.Client;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -21,18 +21,18 @@ public class RabbitPublisher : IPublisher
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
     }
 
-    public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    public async ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
         if (message is null)
             throw new ArgumentNullException(nameof(message));
 
         var queueRef = _queueReferenceFactory.Create(message);
-        var channel = _channelFactory.Get(queueRef);
-        var properties = channel.CreateBasicProperties();
+        var channel = await _channelFactory.GetAsync(queueRef, cancellationToken);
+        var properties = new BasicProperties();
         properties.Persistent = true;
         properties.MessageId = message.MessageId;
         properties.CorrelationId = message.CorrelationId;
-        properties.Headers = new Dictionary<string, object>()
+        properties.Headers = new Dictionary<string, object?>()
         {
             { nameof(message.MessageType), message.MessageType.FullName },                
             { nameof(message.ParentId), message.ParentId ?? string.Empty },
@@ -40,8 +40,9 @@ public class RabbitPublisher : IPublisher
             { nameof(message.CreatedAt), message.CreatedAt.ToString() }
         };
 
-        var policy = Policy.Handle<Exception>()
-            .WaitAndRetry(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
+        var policy = Policy
+            .Handle<Exception>()
+            .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)), (ex, time) =>
             {
                 _logger.LogWarning(ex,
                     "Could not publish message '{MessageId}' to Exchange '{ExchangeName}', after {Timeout}s : {ExceptionMessage}",
@@ -50,9 +51,9 @@ public class RabbitPublisher : IPublisher
                     $"{time.TotalSeconds:n1}", ex.Message);
             });
 
-        policy.Execute(() =>
+        await policy.ExecuteAsync(async () =>
         {
-            channel.BasicPublish(
+            await channel.BasicPublishAsync(
                 exchange: queueRef.ExchangeName,
                 routingKey: queueRef.RoutingKey,
                 mandatory: true,
@@ -63,7 +64,5 @@ public class RabbitPublisher : IPublisher
                 message.MessageId,
                 queueRef.ExchangeName);
         });
-
-        return ValueTask.CompletedTask;
     }
 }

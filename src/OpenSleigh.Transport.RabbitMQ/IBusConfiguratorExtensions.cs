@@ -24,7 +24,8 @@ public static class IBusConfiguratorExtensions
                 UserName = config.UserName,
                 Password = config.Password,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
-                DispatchConsumersAsync = true
+                NetworkRecoveryInterval = config.RetryDelay,
+                AutomaticRecoveryEnabled = true,
             };
             return connectionFactory;
         });

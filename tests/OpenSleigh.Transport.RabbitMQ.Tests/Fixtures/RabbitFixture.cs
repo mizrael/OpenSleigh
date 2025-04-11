@@ -1,16 +1,14 @@
 ﻿using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
 {
     public class RabbitFixture : IAsyncLifetime
     {
-        private readonly List<string> _queues = new();
+        private readonly List<QueueReferences> _queues = new();
 
         public RabbitFixture()
         {
@@ -32,12 +30,6 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
                 System.TimeSpan.FromMilliseconds(retryDelayMs));
         }
 
-        /// <summary>
-        /// returns a RabbitMQ connection. Needs to be disposed after use.
-        /// </summary>
-        public IConnection Connect()
-        => this.ConnectionFactory.CreateConnection();
-
         private ConnectionFactory CreateConnectionFactory()
         => new ConnectionFactory()
         {
@@ -46,28 +38,26 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             Password = RabbitConfiguration.Password,
             VirtualHost = RabbitConfiguration.VirtualHost,
             Port = AmqpTcpEndpoint.UseDefaultPort,
-            DispatchConsumersAsync = true
         };
 
-        private QueueReferences CreateQueueReference(string queueName)
+        private QueueReferences CreateQueueReference()
         {
-            _queues.Add(queueName);
+            var queueName = System.Guid.CreateVersion7().ToString("N");
             return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
         }
 
-        public QueueReferences CreateQueueReference(IModel channel)
+        public async ValueTask<QueueReferences> CreateQueueReferenceAsync(IChannel channel)
         {
-            var queueName = System.Guid.NewGuid().ToString();
+            var queueRef = this.CreateQueueReference();
+            _queues.Add(queueRef);
 
-            var queueRef = this.CreateQueueReference(queueName);
-
-            channel.ExchangeDeclare(queueRef.ExchangeName, ExchangeType.Topic, false, true);
-            channel.QueueDeclare(queue: queueRef.QueueName,
+            await channel.ExchangeDeclareAsync(queueRef.ExchangeName, ExchangeType.Topic, false, true);
+            await channel.QueueDeclareAsync(queue: queueRef.QueueName,
                 durable: false,
                 exclusive: false,
                 autoDelete: true,
                 arguments: null);
-            channel.QueueBind(queueRef.QueueName,
+            await channel.QueueBindAsync(queueRef.QueueName,
                               queueRef.ExchangeName,
                               routingKey: queueRef.RoutingKey,
                               arguments: null);
@@ -82,19 +72,12 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Fixtures
             if (!_queues.Any())
                 return;
 
-            using var connection = Connect();
-            using var channel = connection.CreateModel();
+            using var connection = await this.ConnectionFactory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
             
-            foreach (var queueName in _queues) 
+            foreach (var queueRef in _queues) 
             {
-                channel.ExchangeDelete(queueName);
-                channel.QueueDelete(queueName);
-
-                channel.ExchangeDelete(queueName + ".dead");
-                channel.QueueDelete(queueName + ".dead");
-
-                channel.ExchangeDelete(queueName + ".retry");
-                channel.QueueDelete(queueName + ".retry");
+                await channel.DeleteAsync(queueRef);
             }
         }
 

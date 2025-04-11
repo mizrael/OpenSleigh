@@ -31,7 +31,7 @@ namespace OpenSleigh.Transport
             {
                 var subscriberType = subscriberTypeBase.MakeGenericType(messageType);
                 var subscriber = (IMessageSubscriber)_sp.GetRequiredService(subscriberType);
-                subscriber.Start();
+                subscriber.StartAsync();
                 _subscribers.Add(subscriber);
             }
         }
@@ -42,7 +42,7 @@ namespace OpenSleigh.Transport
         public ValueTask StopAsync(CancellationToken cancellationToken = default)
         {
             foreach (var subscriber in _subscribers)
-                subscriber.Stop();
+                subscriber.StopAsync();
             return ValueTask.CompletedTask;
         }
     }

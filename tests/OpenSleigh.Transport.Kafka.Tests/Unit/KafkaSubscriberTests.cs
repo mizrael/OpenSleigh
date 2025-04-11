@@ -29,7 +29,7 @@ public class KafkaSubscriberTests
 
         var sut = BuildSUT(queueRefs, consumer);
 
-        sut.Start();
+        await sut.StartAsync(CancellationToken.None);
 
         await Task.Delay(250);
 
@@ -48,7 +48,7 @@ public class KafkaSubscriberTests
 
         var sut = BuildSUT(queueRefs, consumer, handler);
 
-        sut.Start();
+        await sut.StartAsync(CancellationToken.None);
 
         await Task.Delay(250);
 
@@ -63,9 +63,9 @@ public class KafkaSubscriberTests
 
         var sut = BuildSUT(queueRefs, consumer);
 
-        sut.Start();
+        await sut.StartAsync(CancellationToken.None);
         await Task.Delay(200);
-        sut.Stop();
+        await sut.StopAsync(CancellationToken.None);
 
         consumer.Received(1).Close();
     }

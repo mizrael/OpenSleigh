@@ -2,7 +2,7 @@
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
-using Xunit;
+using System.Threading;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
 {
@@ -16,7 +16,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
             var sut = new ChannelFactory(connection, config, logger);
 
-            Assert.Throws<ArgumentNullException>(() => sut.Get(null));
+            Assert.Throws<ArgumentNullException>(() => sut.GetAsync(null, cancellationToken: CancellationToken.None));
         }
 
         [Fact]
@@ -32,7 +32,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
             
             var sut = new ChannelFactory(connection, config, logger);
-            sut.Get(queueReferences); 
+            sut.GetAsync(queueReferences); 
             
             channel.Received(1).ExchangeDeclare(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic);
             channel.Received(1).ExchangeDeclare(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic);
@@ -52,7 +52,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
 
             var sut = new ChannelFactory(connection, config, logger);
-            sut.Get(queueReferences);
+            sut.GetAsync(queueReferences);
 
             channel.Received(1).QueueDeclare(queue: queueReferences.DeadLetterQueue,
                  durable: true,
@@ -78,7 +78,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
 
             var sut = new ChannelFactory(connection, config, logger);
-            sut.Get(queueReferences);
+            sut.GetAsync(queueReferences);
 
             channel.Received(1).QueueDeclare(queue: queueReferences.RetryQueueName,
                     durable: true,
@@ -107,7 +107,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
 
             var sut = new ChannelFactory(connection, config, logger);
-            sut.Get(queueReferences);
+            sut.GetAsync(queueReferences);
 
             channel.Received(1).QueueDeclare(queue: queueReferences.QueueName,
                     durable: true,
@@ -135,7 +135,7 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit
             var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
 
             var sut = new ChannelFactory(connection, config, logger);
-            sut.Get(queueReferences);
+            sut.GetAsync(queueReferences);
 
             sut.Dispose();
 

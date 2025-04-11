@@ -2,17 +2,14 @@
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Outbox;
-using OpenSleigh.Tests;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using OpenSleigh.Utils;
-using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.ComponentModel;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 {
@@ -39,14 +36,14 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 
             var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
-            using var connection = _fixture.Connect();
-            using var channel = connection.CreateModel();
+            using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
+            using var channel = await connection.CreateChannelAsync();
 
-            var queueRef = _fixture.CreateQueueReference(channel);
+            var queueRef = await _fixture.CreateQueueReferenceAsync(channel);
 
             bool received = false;
             var consumer = new AsyncEventingBasicConsumer(channel);
-            consumer.Received += async (_, evt) =>
+            consumer.ReceivedAsync += async (_, evt) =>
             {
                 evt.Body.Should().NotBeNull();
                 evt.Body.ToArray().Should().BeEquivalentTo(message.Body.ToArray());
@@ -69,12 +66,12 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
 
                 tokenSource.Cancel();
             };
-            channel.BasicConsume(queue: queueRef.QueueName, autoAck: false, consumer: consumer);
+            await channel.BasicConsumeAsync(queue: queueRef.QueueName, autoAck: false, consumer: consumer, cancellationToken: CancellationToken.None);
 
             var logger = Substitute.For<ILogger<RabbitPublisher>>();
 
             var channelFactory = Substitute.For<IChannelFactory>();
-            channelFactory.Get(queueRef)
+            channelFactory.GetAsync(queueRef)
                 .Returns(channel);
 
             var queueRefFactory = Substitute.For<IQueueReferenceFactory>();

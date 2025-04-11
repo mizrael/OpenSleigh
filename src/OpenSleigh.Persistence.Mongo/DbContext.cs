@@ -70,8 +70,6 @@ namespace OpenSleigh.Persistence.Mongo
 
         private static void ConfigureMappings()
         {
-            BsonDefaults.GuidRepresentationMode = GuidRepresentationMode.V3;
-
             //TODO: not sure this one is necessary
             TryRegisterClassMap<Entities.SagaProcessedMessage>(mapper =>
             {

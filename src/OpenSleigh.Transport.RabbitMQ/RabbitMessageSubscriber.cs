@@ -7,7 +7,7 @@ using RabbitMQ.Client.Events;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
-public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscriber<TM>
+public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubscriber<TM>
     where TM : IMessage
 {
     private readonly IChannelFactory _channelFactory;
@@ -16,7 +16,7 @@ public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscribe
     private readonly ITypeResolver _typeResolver;
     private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
 
-    private IModel _channel;
+    private IChannel? _channel;
 
     public RabbitMessageSubscriber(
         IChannelFactory channelFactory,
@@ -35,59 +35,70 @@ public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscribe
         _queueReference = queueReferenceFactory.Create<TM>();
     }
 
-    private void InitChannel()
+    private async ValueTask InitChannelAsync(CancellationToken cancellationToken)
     {
-        StopChannel();
+        await StopChannelAsync(cancellationToken);
 
-        _channel = _channelFactory.Get(_queueReference);
-        _channel.CallbackException += OnChannelException;
+        _channel = await _channelFactory.GetAsync(_queueReference, cancellationToken);
+        _channel.CallbackExceptionAsync += OnChannelException;
     }
 
-    private void OnChannelException(object _, CallbackExceptionEventArgs ea)
+    private Task OnChannelException(object _, CallbackExceptionEventArgs ea)
     {
         _logger.LogError(ea.Exception, "the RabbitMQ Channel has encountered an error: {ExceptionMessage}", ea.Exception.Message);
+        return Task.CompletedTask;
     }
 
-    private void InitSubscription()
+    private async ValueTask InitSubscriptionAsync(CancellationToken cancellationToken)
     {
         var consumer = new AsyncEventingBasicConsumer(_channel);
 
-        consumer.Received += OnMessageReceivedAsync;
+        consumer.ReceivedAsync += OnMessageReceivedAsync;
 
         _logger.LogInformation($"initializing subscription on queue '{_queueReference.QueueName}' ...");
-        _channel.BasicConsume(queue: _queueReference.QueueName, autoAck: false, consumer: consumer);
+        
+        await _channel.BasicConsumeAsync(queue: _queueReference.QueueName, autoAck: false, consumer: consumer, cancellationToken);
     }
 
-    private void StopChannel()
+    private ValueTask StopChannelAsync(CancellationToken cancellationToken)
     {
         if (_channel is not null)
-            _channel.CallbackException -= OnChannelException;
+            _channel.CallbackExceptionAsync -= OnChannelException;
+        return ValueTask.CompletedTask;
     }
 
+    //TODO: figure out how to pass a cancellation token
     private async Task OnMessageReceivedAsync(object sender, BasicDeliverEventArgs eventArgs)
     {
-        var consumer = sender as IBasicConsumer;
-        var channel = consumer?.Model ?? _channel;
+        var consumer = sender as IAsyncBasicConsumer;
+        var channel = consumer?.Channel ?? _channel;
+
+        if(channel is null)
+            throw new InvalidOperationException("Unable to retrieve channel from consumer.");
 
         OutboxMessage? message;
         try
         {
             var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
-            if (string.IsNullOrWhiteSpace(messageTypeName))
-                throw new ArgumentException("message type cannot be null.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageTypeName, nameof(messageTypeName));
             
             var messageType = _typeResolver.Resolve(messageTypeName);
 
             var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
-            if (string.IsNullOrWhiteSpace(senderId))
-                throw new ArgumentException("sender id cannot be null.");
+            ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
+
+            var messageId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageId));
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId, nameof(messageId));
+
+            var correlationId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.CorrelationId));
+            ArgumentException.ThrowIfNullOrWhiteSpace(correlationId, nameof(correlationId));
 
             var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
             var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
 
             if (!OutboxMessage.TryCreate(eventArgs.Body,
-                                        messageId: eventArgs.BasicProperties.MessageId,
-                                        correlationId: eventArgs.BasicProperties.CorrelationId,
+                                        messageId: messageId,
+                                        correlationId: correlationId,
                                         createdAt, messageType,
                                         parentId: parentId,
                                         senderId: senderId, 
@@ -100,7 +111,7 @@ public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscribe
                 ex, 
                 "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
                 eventArgs.Exchange, ex.Message);
-            channel.BasicReject(eventArgs.DeliveryTag, requeue: false);
+            await channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false);
             return;
         }
 
@@ -110,29 +121,27 @@ public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscribe
 
         try
         {
-            //TODO: provide valid cancellation token
-
             using var scope = _serviceProvider.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
             await processor.ProcessAsync(message, CancellationToken.None);
 
-            channel.BasicAck(eventArgs.DeliveryTag, multiple: false);
+            await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false);
         }
         catch (LockException lockEx)
         {
-            HandleConsumerException(lockEx, eventArgs, channel, message, true);
+            await HandleConsumerException(lockEx, eventArgs, channel, message, true);
         }
         catch (AggregateException aggEx) when (aggEx.InnerExceptions.Any(ex => ex is LockException))
         {
-            HandleConsumerException(aggEx, eventArgs, channel, message, true);
+            await HandleConsumerException(aggEx, eventArgs, channel, message, true);
         }
         catch (Exception ex)
         {
-            HandleConsumerException(ex, eventArgs, channel, message, false);
+            await HandleConsumerException(ex, eventArgs, channel, message, false);
         }
     }
 
-    private void HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IModel channel, OutboxMessage message, bool requeue)
+    private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, OutboxMessage message, bool requeue)
     {
         var errorMsg = "an error has occurred while processing Message '{MessageId}' from Exchange '{ExchangeName}' : {ExceptionMessage} . "
                      + (requeue ? "Reenqueuing..." : "Nacking...");
@@ -140,34 +149,36 @@ public sealed class RabbitMessageSubscriber<TM> : IDisposable, IMessageSubscribe
         _logger.LogWarning(ex, errorMsg, message.MessageId, _queueReference.ExchangeName, ex.Message);
 
         if (!requeue)
-            channel.BasicReject(deliveryProps.DeliveryTag, requeue: false);
+            await channel.BasicRejectAsync(deliveryProps.DeliveryTag, requeue: false);
         else
         {
             // we acknowledge the message so it's removed from the original queue
-            channel.BasicAck(deliveryProps.DeliveryTag, multiple: false);
+            await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
 
+            var props = new BasicProperties(deliveryProps.BasicProperties);
             // we publish the message to the retry exchange
-            channel.BasicPublish(
+            await channel.BasicPublishAsync(
                 exchange: _queueReference.RetryExchangeName,
                 routingKey: deliveryProps.RoutingKey,
-                basicProperties: deliveryProps.BasicProperties,
+                mandatory: true,
+                basicProperties: props,
                 body: deliveryProps.Body);
         }
     }
 
-    public void Start()
+    public async ValueTask StartAsync(CancellationToken cancellationToken)
     {
-        InitChannel();
-        InitSubscription();
+        await InitChannelAsync(cancellationToken);
+        await InitSubscriptionAsync(cancellationToken);
     }
 
-    public void Stop()
+    public async ValueTask StopAsync(CancellationToken cancellationToken)
     {
-        StopChannel();
+        await StopChannelAsync(cancellationToken);
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        StopChannel();
+        await StopChannelAsync(CancellationToken.None);
     }
 }

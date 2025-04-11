@@ -36,12 +36,13 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _cts?.Dispose();
     }
 
-    public void Start()
+    public async ValueTask StartAsync(CancellationToken cancellationToken)
     {
         if(_cts is not null)
             throw new InvalidOperationException("The subscriber has already been started.");
         _cts = new CancellationTokenSource();
-        Task.Factory.StartNew(ProcessQueueAsync, TaskCreationOptions.LongRunning);
+
+        await Task.Run(() => ProcessQueueAsync(), _cts.Token);
     }
 
     private async ValueTask ProcessQueueAsync()
@@ -67,10 +68,12 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _consumer.Close();
     }
 
-    public void Stop()
+    public ValueTask StopAsync(CancellationToken cancellationToken)
     {
         _cts?.Cancel();
         _cts?.Dispose();
         _cts = null;
+
+        return ValueTask.CompletedTask;
     }
 }

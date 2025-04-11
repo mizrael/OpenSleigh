@@ -12,7 +12,7 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
     private IConnection? _connection;
     private bool _disposed;
 
-    private readonly object semaphore = new object();
+    private readonly SemaphoreSlim _semaphore = new(1, 1);
 
     public RabbitPersistentConnection(IConnectionFactory connectionFactory, ILogger<RabbitPersistentConnection> logger)
     {
@@ -31,38 +31,50 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
         _connection?.Dispose();
     }
 
-    private void TryConnect()
+    private async Task TryConnectAsync(CancellationToken cancellationToken = default)
     {
-        lock (semaphore)
+        _semaphore.Wait(cancellationToken);
+
+        try
         {
-            if (IsConnected)
-                return;
-
-            var policy = Policy
-                            .Handle<Exception>()
-                            .WaitAndRetry(5,
-                                retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
-                                (ex, timeSpan, context) =>
-                                {
-                                    _logger.LogError(ex, $"an exception has occurred while opening RabbitMQ connection: {ex.Message}");
-                                });
-
-            _connection = policy.Execute(_connectionFactory.CreateConnection);
-
-            _connection.ConnectionShutdown += (s, e) => TryConnect();
-            _connection.CallbackException += (s, e) => TryConnect();
-            _connection.ConnectionBlocked += (s, e) => TryConnect();
+            await TryConnectCoreAsync(cancellationToken);
+        }
+        finally
+        {
+            _semaphore.Release();
         }
     }
 
-    public IModel CreateChannel()
+    private async ValueTask TryConnectCoreAsync(CancellationToken cancellationToken)
     {
-        TryConnect();
+        if (IsConnected)
+            return;
 
-        if (!IsConnected)
+        var policy = Policy
+                    .Handle<Exception>()
+                    .WaitAndRetryAsync(5,
+                        retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
+                        (ex, timeSpan, context) =>
+                        {
+                            _logger.LogError(ex, $"an exception has occurred while opening RabbitMQ connection: {ex.Message}");
+                        });
+
+        _connection = await policy.ExecuteAsync(_connectionFactory.CreateConnectionAsync, cancellationToken);
+
+        _connection.ConnectionShutdownAsync += async (s, e) => await TryConnectAsync();
+        _connection.CallbackExceptionAsync += async (s, e) => await TryConnectAsync();
+        _connection.ConnectionShutdownAsync += async (s, e) => await TryConnectAsync();
+    }
+
+    public async Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken)
+    {
+        await TryConnectAsync(cancellationToken);
+
+        if (!IsConnected || _connection is null)
             throw new InvalidOperationException("No RabbitMQ connections are available to perform this action");
 
-        return _connection.CreateModel();
+        var channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        return channel;
     }
 
 }

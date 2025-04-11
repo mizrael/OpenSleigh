@@ -1,10 +1,9 @@
-﻿namespace OpenSleigh.Transport
-{
-    public interface IMessageSubscriber
-    {
-        void Start();
-        void Stop();
-    }
+﻿namespace OpenSleigh.Transport;
 
-    public interface IMessageSubscriber<TM> : IMessageSubscriber where TM : IMessage { }
+public interface IMessageSubscriber
+{
+    ValueTask StartAsync(CancellationToken cancellationToken = default);
+    ValueTask StopAsync(CancellationToken cancellationToken = default);
 }
+
+public interface IMessageSubscriber<TM> : IMessageSubscriber where TM : IMessage { }
