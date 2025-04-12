@@ -25,7 +25,7 @@ namespace OpenSleigh
             CancellationToken cancellationToken = default)
             where TM : IMessage
         {
-            var executionContext = await _sagaExecutionService.StartExecutionContextAsync(messageContext, descriptor, cancellationToken)
+            var executionContext = await _sagaExecutionService.BeginExecutionContextAsync(messageContext, descriptor, cancellationToken)
                                                                .ConfigureAwait(false);
             
             _logger.LogInformation(

@@ -4,7 +4,7 @@ namespace OpenSleigh
 {
     public interface ISagaExecutionService
     {
-        ValueTask<ISagaExecutionContext> StartExecutionContextAsync<TM>(IMessageContext<TM> messageContext,
+        ValueTask<ISagaExecutionContext> BeginExecutionContextAsync<TM>(IMessageContext<TM> messageContext,
             SagaDescriptor descriptor,
             CancellationToken cancellationToken = default) where TM : IMessage;
 

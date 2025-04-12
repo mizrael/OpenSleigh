@@ -17,7 +17,7 @@ namespace OpenSleigh.Tests
             var executionContext = Substitute.For<ISagaExecutionContext>();
 
             var sagaExecutionService = Substitute.For<ISagaExecutionService>();
-            sagaExecutionService.StartExecutionContextAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
+            sagaExecutionService.BeginExecutionContextAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
                 .Returns(executionContext);
             
             var messageHandlerManager = Substitute.For<IMessageHandlerManager>();
@@ -25,7 +25,7 @@ namespace OpenSleigh.Tests
             
             await sut.ProcessAsync(messageContext, descriptor);
 
-            await sagaExecutionService.Received(1).StartExecutionContextAsync(messageContext, descriptor);
+            await sagaExecutionService.Received(1).BeginExecutionContextAsync(messageContext, descriptor);
             await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(messageContext, null);
             await sagaExecutionService.DidNotReceiveWithAnyArgs().CommitAsync(null);        
         }

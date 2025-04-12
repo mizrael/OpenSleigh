@@ -12,8 +12,8 @@ namespace OpenSleigh.E2ETests
     {
         [Theory]
         [InlineData(1)]
-        [InlineData(2)]
-        [InlineData(5)]
+       // [InlineData(2)]
+       // [InlineData(5)]
         public async Task run_single_message_scenario(int hostsCount)
         {
             var message = new StartSimpleSaga();

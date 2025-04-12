@@ -23,7 +23,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Fixtures
 
         protected abstract DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString);
 
-        public (ISagaDbContext db, string connStr) CreateDbContext()
+        public (SagaDbContext db, string connStr) CreateDbContext()
         {
             var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
 

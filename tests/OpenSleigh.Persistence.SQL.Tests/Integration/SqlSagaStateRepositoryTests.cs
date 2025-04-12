@@ -153,7 +153,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration
                                            .And.Contain(m => m.MessageId == messageContext2.Id);
         }
 
-        private SqlSagaStateRepository CreateSut(ISagaDbContext db,
+        private SqlSagaStateRepository CreateSut(SagaDbContext db,
             SqlSagaStateRepositoryOptions options = null)
         {
             var serializer = new JsonSerializer();

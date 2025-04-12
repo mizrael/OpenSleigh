@@ -14,11 +14,11 @@ namespace OpenSleigh.Persistence.SQL
     
     public class SqlOutboxRepository : IOutboxRepository
     {
-        private readonly ISagaDbContext _dbContext;
+        private readonly SagaDbContext _dbContext;
         private readonly SqlOutboxRepositoryOptions _options;
         private readonly ITypeResolver _typeResolver;
 
-        public SqlOutboxRepository(ISagaDbContext dbContext, ITypeResolver typeResolver, SqlOutboxRepositoryOptions options)
+        public SqlOutboxRepository(SagaDbContext dbContext, ITypeResolver typeResolver, SqlOutboxRepositoryOptions options)
         {
             _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
             _options = options ?? throw new ArgumentNullException(nameof(options));

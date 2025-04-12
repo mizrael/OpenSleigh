@@ -20,7 +20,7 @@ namespace OpenSleigh.Persistence.PostgreSQL
                 {
                     builder.UseNpgsql(config.ConnectionString);
                 }, contextLifetime: ServiceLifetime.Transient)
-                .AddTransient<ISagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())                        
+                .AddTransient<SagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())                        
                 .AddTransient<IOutboxRepository, SqlOutboxRepository>()
                 .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
             
