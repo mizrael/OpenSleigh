@@ -4,6 +4,7 @@ using NSubstitute;
 using OpenSleigh.Outbox;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using OpenSleigh.Utils;
+using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System;
 using System.ComponentModel;

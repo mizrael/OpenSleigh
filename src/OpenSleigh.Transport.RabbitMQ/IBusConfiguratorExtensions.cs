@@ -11,6 +11,13 @@ public static class IBusConfiguratorExtensions
     public static IBusConfigurator UseRabbitMQTransport(this IBusConfigurator busConfigurator,
         RabbitConfiguration config)
     {
+        // TODO: make this configurable by the user
+        busConfigurator.Services.AddSingleton(ctx =>
+        {
+            var sysInfo = ctx.GetRequiredService<ISystemInfo>();
+            return QueueReferenceFactory.BuildDefaultCreator(sysInfo);
+        });
+
         busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();            
         busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();
         busConfigurator.Services.AddSingleton<IChannelFactory, ChannelFactory>();

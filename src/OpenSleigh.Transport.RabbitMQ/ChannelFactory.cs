@@ -21,10 +21,9 @@ namespace OpenSleigh.Transport.RabbitMQ
             _rabbitCfg = rabbitCfg ?? throw new ArgumentNullException(nameof(rabbitCfg));
         }
 
-        public async ValueTask<IChannel> GetAsync(QueueReferences queueReferences, CancellationToken cancellationToken)
+        public async ValueTask<IChannel> GetAsync(QueueReferences queueReferences, CancellationToken cancellationToken = default)
         {
-            if (queueReferences == null)
-                throw new ArgumentNullException(nameof(queueReferences));
+            ArgumentNullException.ThrowIfNull(queueReferences, nameof(queueReferences));
 
             if (_channelsByExchange.TryGetValue(queueReferences.ExchangeName, out var channel))
                 return channel;
