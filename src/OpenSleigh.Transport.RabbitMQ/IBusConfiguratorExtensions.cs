@@ -8,15 +8,19 @@ namespace OpenSleigh.Transport.RabbitMQ;
 [ExcludeFromCodeCoverage]
 public static class IBusConfiguratorExtensions
 {
-    public static IBusConfigurator UseRabbitMQTransport(this IBusConfigurator busConfigurator,
-        RabbitConfiguration config)
+    public static IBusConfigurator UseRabbitMQTransport(
+        this IBusConfigurator busConfigurator,
+        RabbitConfiguration config,
+        QueueReferencesCreator? queueReferencesCreator = null)
     {
-        // TODO: make this configurable by the user
-        busConfigurator.Services.AddSingleton(ctx =>
-        {
-            var sysInfo = ctx.GetRequiredService<ISystemInfo>();
-            return QueueReferenceFactory.BuildDefaultCreator(sysInfo);
-        });
+        if (queueReferencesCreator is null)
+            busConfigurator.Services.AddSingleton(ctx =>
+            {
+                var sysInfo = ctx.GetRequiredService<ISystemInfo>();
+                return QueueReferenceFactory.BuildDefaultCreator(sysInfo);
+            });
+        else 
+            busConfigurator.Services.AddSingleton(queueReferencesCreator);
 
         busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();            
         busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();

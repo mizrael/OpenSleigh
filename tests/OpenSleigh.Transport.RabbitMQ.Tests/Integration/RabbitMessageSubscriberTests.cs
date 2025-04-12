@@ -26,7 +26,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     [Fact]
     public async Task StartAsync_should_consume_messages()
     {
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100));
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         bool received = false;
 
         var (publisher, sut) = CreateSUT(_ =>
@@ -36,7 +36,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.StartAsync();
+        await sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);
@@ -49,7 +49,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     [Fact]
     public async Task StartAsync_should_retry_message_when_locked()
     {
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100));
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var processCount = 0;
 
         var (publisher, sut) = CreateSUT(_ =>
@@ -61,7 +61,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.StartAsync();
+        await sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);
@@ -74,7 +74,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     [Fact]
     public async Task StartAsync_should_retry_message_when_AggregateException_with_lock()
     {
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100));
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         var processCount = 0;
 
         var (publisher, sut) = CreateSUT(_ =>
@@ -86,7 +86,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             tokenSource.Cancel();
         });
 
-        sut.StartAsync();
+        await sut.StartAsync();
 
         var message = CreateMessage();
         await publisher.PublishAsync(message);
@@ -106,7 +106,6 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         var busConfig = Substitute.For<IBusConfigurator>();
         busConfig.Services.Returns(services);
-        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration);
 
         QueueReferencesCreator queueReferencesCreator = messageType =>
         {
@@ -116,12 +115,12 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             var dlQueueName = $"{dlExchangeName}.workers";
             return new QueueReferences(exchangeName, queueName, exchangeName, dlExchangeName, dlQueueName);
         };
-        services.AddSingleton(queueReferencesCreator);
+        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration, queueReferencesCreator);
 
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns("test");
-        sysInfo.ClientId.Returns(Guid.NewGuid().ToString());
-        sysInfo.Id.Returns(Guid.NewGuid().ToString());
+        sysInfo.ClientId.Returns(Guid.CreateVersion7().ToString("N"));
+        sysInfo.Id.Returns(Guid.CreateVersion7().ToString("N"));
         services.AddSingleton(sysInfo);
 
         var typeResolver = Substitute.For<ITypeResolver>();
@@ -156,56 +155,4 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         var message = OutboxMessage.Create(new FakeSagaStarter(), serializer, sagaContext);
         return message;
     }
-
-    //[Fact]
-    //public async Task StartAsync_should_retry_message_when_AggregateException_with_lock()
-    //{
-    //    var message = DummyMessage.New();
-    //    var encodedMessage = Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(message));
-
-    //    using var connection = _fixture.Connect();
-    //    using var channel = connection.CreateModel();
-    //    var queueRef = _fixture.CreateQueueReference("test_publisher");
-
-    //    var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-    //    var busConn = Substitute.For<IBusConnection>();
-    //    busConn.CreateChannel()
-    //        .Returns(channel);
-
-    //    var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-    //    queueRefFactory.Create<DummyMessage>()
-    //        .ReturnsForAnyArgs(queueRef);
-
-    //    var messageParser = Substitute.For<IMessageParser>();
-    //    messageParser.Resolve(null, null)
-    //        .ReturnsForAnyArgs(message);
-
-    //    var processCount = 0;
-    //    var processor = Substitute.For<IMessageProcessor>();
-    //    processor.When(p => p.ProcessAsync(Arg.Any<DummyMessage>(), Arg.Any<CancellationToken>()))
-    //        .Do(p =>
-    //        {
-    //            processCount++;
-    //            if (1 == processCount)
-    //                throw new AggregateException(new LockException("whoops"));
-
-    //            tokenSource.Cancel();
-    //        });
-
-    //    var logger = Substitute.For<ILogger<RabbitSubscriber<DummyMessage>>>();
-
-    //    var sut = new RabbitSubscriber<DummyMessage>(busConn, queueRefFactory, messageParser,
-    //                                                processor, logger, _fixture.RabbitConfiguration);
-
-    //    await sut.StartAsync();
-
-    //    var props = channel.CreateBasicProperties();
-    //    channel.BasicPublish(queueRef.ExchangeName, queueRef.QueueName, false, props, encodedMessage);
-
-    //    while (!tokenSource.IsCancellationRequested)
-    //        await Task.Delay(10);
-
-    //    processCount.Should().BeGreaterThan(0);
-    //}
 }

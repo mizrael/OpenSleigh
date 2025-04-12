@@ -1,9 +1,8 @@
 ﻿using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Transport
+namespace OpenSleigh.Transport;
+
+public interface IPublisher
 {
-    public interface IPublisher
-    {
-        ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default);
-    }
+    ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default);
 }

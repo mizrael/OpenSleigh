@@ -79,6 +79,12 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         OutboxMessage? message;
         try
         {
+            var messageId = eventArgs.BasicProperties.MessageId;
+            ArgumentException.ThrowIfNullOrWhiteSpace(messageId, nameof(messageId));
+
+            var correlationId = eventArgs.BasicProperties.CorrelationId;
+            ArgumentException.ThrowIfNullOrWhiteSpace(correlationId, nameof(correlationId));
+
             var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
             ArgumentException.ThrowIfNullOrWhiteSpace(messageTypeName, nameof(messageTypeName));
             
@@ -86,12 +92,6 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
 
             var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
             ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
-
-            var messageId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageId));
-            ArgumentException.ThrowIfNullOrWhiteSpace(messageId, nameof(messageId));
-
-            var correlationId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.CorrelationId));
-            ArgumentException.ThrowIfNullOrWhiteSpace(correlationId, nameof(correlationId));
 
             var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
             var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
