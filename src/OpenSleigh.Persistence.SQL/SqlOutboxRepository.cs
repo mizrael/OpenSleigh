@@ -51,13 +51,13 @@ namespace OpenSleigh.Persistence.SQL
                 .ConfigureAwait(false);
 
             if (entities is null)
-                return Enumerable.Empty<OutboxMessage>();
+                return Array.Empty<OutboxMessage>();
 
             var messages = entities.Select(e => e.ToModel(_typeResolver))
                                    .Where(m => m is not null)
                                    .ToArray();
 
-            return messages;
+            return messages ?? Array.Empty<OutboxMessage>();
         }
 
         public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
@@ -82,7 +82,7 @@ namespace OpenSleigh.Persistence.SQL
             if (entity.LockId is not null && entity.LockTime > DateTime.UtcNow - _options.LockMaxDuration)
                 throw new LockException($"message '{message.MessageId}' is already locked");
 
-            entity.LockId = Guid.NewGuid().ToString();
+            entity.LockId = Guid.CreateVersion7().ToString("N");
             entity.LockTime = DateTimeOffset.UtcNow;            
 
             await _dbContext.SaveChangesAsync(cancellationToken)

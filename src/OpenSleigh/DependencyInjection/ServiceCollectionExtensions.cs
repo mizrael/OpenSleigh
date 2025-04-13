@@ -34,7 +34,6 @@ namespace OpenSleigh.DependencyInjection
                 .AddTransient<ISagaExecutionService, SagaExecutionService>()
                 .AddTransient<IMessageHandlerFactory, DefaultMessageHandlerFactory>()
                 .AddTransient<IMessageProcessor, MessageProcessor>()
-                .AddSingleton<ISubscriber, DefaultSubscriber>()
                 .AddHostedService<SubscribersBackgroundService>()
                             
                 .AddTransient<IOutboxProcessor, OutboxProcessor>()

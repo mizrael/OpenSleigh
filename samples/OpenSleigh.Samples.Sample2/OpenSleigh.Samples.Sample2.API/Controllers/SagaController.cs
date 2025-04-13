@@ -23,13 +23,10 @@ namespace OpenSleigh.Samples.Sample2.API.Controllers
         {
             IMessage message = isSimple ? new StartSimpleSaga(Guid.NewGuid(), Guid.NewGuid()) :
                 new StartParentSaga(Guid.NewGuid(), Guid.NewGuid());
-            
-            var receipt = await _bus.PublishAsync(message, cancellationToken);
 
-            return Accepted(new
-            {
-                SagaId = receipt.CorrelationId
-            });
+            await _bus.PublishAsync(message, cancellationToken);
+
+            return Accepted();
         }
     }
 }

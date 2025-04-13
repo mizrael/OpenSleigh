@@ -73,7 +73,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         var consumer = sender as IAsyncBasicConsumer;
         var channel = consumer?.Channel ?? _channel;
 
-        if(channel is null)
+        if (channel is null)
             throw new InvalidOperationException("Unable to retrieve channel from consumer.");
 
         OutboxMessage? message;
@@ -87,7 +87,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
 
             var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
             ArgumentException.ThrowIfNullOrWhiteSpace(messageTypeName, nameof(messageTypeName));
-            
+
             var messageType = _typeResolver.Resolve(messageTypeName);
 
             var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
@@ -101,14 +101,14 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
                                         correlationId: correlationId,
                                         createdAt, messageType,
                                         parentId: parentId,
-                                        senderId: senderId, 
+                                        senderId: senderId,
                                         out message))
                 throw new ArgumentException("unable to parse outbox message.");
         }
         catch (Exception ex)
         {
             _logger.LogError(
-                ex, 
+                ex,
                 "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
                 eventArgs.Exchange, ex.Message);
             await channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false);
@@ -140,7 +140,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             await HandleConsumerException(ex, eventArgs, channel, message, false);
         }
     }
-
+    
     private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, OutboxMessage message, bool requeue)
     {
         var errorMsg = "an error has occurred while processing Message '{MessageId}' from Exchange '{ExchangeName}' : {ExceptionMessage} . "

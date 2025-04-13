@@ -4,44 +4,43 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
 using System.ComponentModel;
 
-namespace OpenSleigh.E2ETests
+namespace OpenSleigh.E2ETests;
+
+[Category("E2E")]
+[Trait("Category", "E2E")]
+public abstract class SimpleSagaScenario : E2ETestsBase
 {
-    [Category("E2E")]
-    [Trait("Category", "E2E")]
-    public abstract class SimpleSagaScenario : E2ETestsBase
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(5)]
+    public async Task run_single_message_scenario(int hostsCount)
     {
-        [Theory]
-        [InlineData(1)]
-       // [InlineData(2)]
-       // [InlineData(5)]
-        public async Task run_single_message_scenario(int hostsCount)
+        var message = new StartSimpleSaga();
+
+        var receivedCount = 0;
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+
+        Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
         {
-            var message = new StartSimpleSaga();
+            ctx.Id.Should().NotBeNullOrWhiteSpace();
+            ctx.SenderId.Should().NotBeNullOrWhiteSpace();
+            ctx.ParentId.Should().BeNullOrWhiteSpace();
 
-            var receivedCount = 0;
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+            receivedCount++;
+            tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+        };
 
-            Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
-            {
-                ctx.Id.Should().NotBeNullOrWhiteSpace();
-                ctx.SenderId.Should().NotBeNullOrWhiteSpace();
-                ctx.ParentId.Should().BeNullOrWhiteSpace();
+        await RunScenarioAsync(hostsCount,
+            (ctx, services) => services.AddSingleton(onMessage),
+            async bus => await bus.PublishAsync(message, tokenSource.Token),
+            tokenSource);
 
-                receivedCount++;
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            };
+        receivedCount.Should().Be(1);
+    }
 
-            await RunScenarioAsync(hostsCount,
-                (ctx, services) => services.AddSingleton(onMessage),
-                async bus => await bus.PublishAsync(message, tokenSource.Token),
-                tokenSource);
-
-            receivedCount.Should().Be(1);
-        }
-
-        protected override void RegisterSagas(IBusConfigurator cfg)
-        {
-            cfg.AddSaga<SimpleSaga>();
-        }
+    protected override void RegisterSagas(IBusConfigurator cfg)
+    {
+        cfg.AddSaga<SimpleSaga>();
     }
 }

@@ -16,11 +16,10 @@ public static class SqlBusConfiguratorExtensions
         busConfigurator.Services
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
-            .AddDbContextPool<SagaDbContext>(builder =>
+            .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseSqlServer(config.ConnectionString);
-            })
-            .AddTransient<SagaDbContext>(ctx => ctx.GetRequiredService<SagaDbContext>())                        
+            }, contextLifetime: ServiceLifetime.Transient)
             .AddTransient<IOutboxRepository, SqlOutboxRepository>()
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
         

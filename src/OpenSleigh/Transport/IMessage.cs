@@ -1,4 +1,3 @@
-﻿namespace OpenSleigh.Transport
-{
-    public interface IMessage { }
-}
+﻿namespace OpenSleigh.Transport;
+
+public interface IMessage { }

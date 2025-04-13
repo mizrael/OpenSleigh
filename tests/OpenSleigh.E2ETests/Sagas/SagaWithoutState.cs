@@ -47,7 +47,7 @@ namespace OpenSleigh.E2ETests
         {
             this.Context.MarkAsCompleted();
 
-            _logger.LogInformation("saga with state '{InstanceId}' completed!", this.Context.InstanceId);
+            _logger.LogInformation("saga without state '{InstanceId}' completed!", this.Context.InstanceId);
 
             _onCompleted(context);
 

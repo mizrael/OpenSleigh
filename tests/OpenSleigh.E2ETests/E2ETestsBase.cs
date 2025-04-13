@@ -46,7 +46,7 @@ namespace OpenSleigh.E2ETests
                 throw new Exception("a timeout occurred during hosts initialization.");
 
             var producerHost = createHostTasks.First().Result;
-            var scope = producerHost.Services.CreateScope();
+            using var scope = producerHost.Services.CreateScope();
             var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 
             await runner(bus);
@@ -58,6 +58,7 @@ namespace OpenSleigh.E2ETests
             {
                 try
                 {
+                    await t.Result.StopAsync();
                     t.Result.Dispose();
                 }
                 catch { }
