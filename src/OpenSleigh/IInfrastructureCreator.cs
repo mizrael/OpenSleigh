@@ -1,9 +1,8 @@
 ﻿using Microsoft.Extensions.Hosting;
 
-namespace OpenSleigh
+namespace OpenSleigh;
+
+public interface IInfrastructureCreator
 {
-    public interface IInfrastructureCreator
-    {
-        Task SetupAsync(IHost host);
-    }
+    Task SetupAsync(IHost host);
 }

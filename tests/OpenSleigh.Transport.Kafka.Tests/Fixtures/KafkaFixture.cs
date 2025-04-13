@@ -16,10 +16,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Fixtures
             _connStr = configuration.GetConnectionString("kafka");
         }
 
-        public KafkaConfiguration BuildKafkaConfiguration(string topicPrefix)
+        public KafkaConfiguration BuildKafkaConfiguration(string? topicPrefix = null)
         {
             if(string.IsNullOrWhiteSpace(topicPrefix))
-                topicPrefix = Guid.NewGuid().ToString();
+                topicPrefix = Guid.CreateVersion7().ToString();
             
             return new KafkaConfiguration(_connStr, 
                 t => new QueueReferences($"{topicPrefix}.{t.FullName}", $"{topicPrefix}.{t.FullName}.dead"));

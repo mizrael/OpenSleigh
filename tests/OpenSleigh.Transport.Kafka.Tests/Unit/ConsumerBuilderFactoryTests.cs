@@ -18,7 +18,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         {
             var config = new KafkaConfiguration("lorem");
             var sut = new ConsumerBuilderFactory(config);
-            var result = sut.Create<IMessage, string,  ReadOnlyMemory<byte>>();
+            var result = sut.Create<IMessage, string, byte[]>();
             result.Should().NotBeNull();
      
         }

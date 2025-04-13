@@ -29,7 +29,7 @@ public abstract class E2ETestsBase
         Func<IMessageBus, Task> runner,
         CancellationTokenSource runningTokenSource)
     {
-        var startupTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(60) * hostsCount);
+        var startupTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30) * hostsCount);
 
         var createHostTasks = Enumerable.Range(1, hostsCount)
             .Select(async i =>

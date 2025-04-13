@@ -6,7 +6,7 @@ namespace OpenSleigh.Transport.Kafka;
 public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposable
     where TMessage : IMessage
 {
-    private readonly IConsumer<string, ReadOnlyMemory<byte>> _consumer;
+    private readonly IConsumer<string, byte[]> _consumer;
     private readonly QueueReferences _queueRef;
     private readonly IKafkaMessageHandler _messageHandler;
     private readonly ILogger<KafkaSubscriber<IMessage>> _logger;
@@ -21,7 +21,7 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        _consumer = builderFactory.Create<IMessage, string, ReadOnlyMemory<byte>>().Build();
+        _consumer = builderFactory.Create<IMessage, string, byte[]>().Build();
 
         _queueRef = queueReferenceFactory.Create<IMessage>();
         _consumer.Subscribe(_queueRef.TopicName);

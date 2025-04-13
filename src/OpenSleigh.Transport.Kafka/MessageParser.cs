@@ -12,7 +12,7 @@ public class MessageParser : IMessageParser
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
     }
 
-    public OutboxMessage Parse(ConsumeResult<string, ReadOnlyMemory<byte>> consumeResult)
+    public OutboxMessage Parse(ConsumeResult<string, byte[]> consumeResult)
     {
         if (consumeResult is null)
             throw new ArgumentNullException(nameof(consumeResult));

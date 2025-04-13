@@ -26,7 +26,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
             
             var queueRefs = new QueueReferences("lorem", "ipsum");
             
-            var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
+            var consumeResult = new ConsumeResult<string,  byte[]>();
 
             var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
 
@@ -38,7 +38,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task StartAsync_should_process_incoming_messages()
         {
-            var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
+            var consumeResult = new ConsumeResult<string, byte[]>();
             var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
@@ -61,7 +61,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task StartAsync_should_republish_to_deadletter_when_exception_occurs()
         {
-            var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
+            var consumeResult = new ConsumeResult<string, byte[]>();
             var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
@@ -92,7 +92,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task StartAsync_should_not_republish_to_deadletter_when_exception_occurs_and_no_deadletter_available()
         {
-            var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
+            var consumeResult = new ConsumeResult<string, byte[]>();
             var expectedMessage = DummyMessage.CreateOutboxMessage();
             var queueRefs = new QueueReferences("lorem", "");
 
@@ -122,7 +122,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
         [Fact]
         public async Task StartAsync_should_hanle_null_messages()
         {
-            var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
+            var consumeResult = new ConsumeResult<string, byte[]>();
             var queueRefs = new QueueReferences("lorem", "ipsum");
 
             var parser = NSubstitute.Substitute.For<IMessageParser>();

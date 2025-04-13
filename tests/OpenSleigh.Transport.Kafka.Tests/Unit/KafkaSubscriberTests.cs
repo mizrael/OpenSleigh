@@ -14,7 +14,7 @@ public class KafkaSubscriberTests
     public void Start_should_subscribe_to_topic()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
-        var consumer = NSubstitute.Substitute.For<IConsumer<string,  ReadOnlyMemory<byte>>>();
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
 
         var sut = BuildSUT(queueRefs, consumer);
         
@@ -25,7 +25,7 @@ public class KafkaSubscriberTests
     public async Task Start_should_consume_incoming_messages()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
-        var consumer = NSubstitute.Substitute.For<IConsumer<string,  ReadOnlyMemory<byte>>>();
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
 
         var sut = BuildSUT(queueRefs, consumer);
 
@@ -40,8 +40,8 @@ public class KafkaSubscriberTests
     public async Task Start_should_process_incoming_messages()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
-        var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>();
-        var consumer = NSubstitute.Substitute.For<IConsumer<string,  ReadOnlyMemory<byte>>>();
+        var consumeResult = new ConsumeResult<string, byte[]>();
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
         consumer.Consume(Arg.Any<CancellationToken>()).ReturnsForAnyArgs(consumeResult);
 
         var handler = NSubstitute.Substitute.For<IKafkaMessageHandler>();
@@ -59,7 +59,7 @@ public class KafkaSubscriberTests
     public async Task Stop_should_close_consumer()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
-        var consumer = NSubstitute.Substitute.For<IConsumer<string,  ReadOnlyMemory<byte>>>();
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
 
         var sut = BuildSUT(queueRefs, consumer);
 
@@ -72,19 +72,19 @@ public class KafkaSubscriberTests
 
     private static KafkaSubscriber<IMessage> BuildSUT(
         QueueReferences queueRefs, 
-        IConsumer<string,  ReadOnlyMemory<byte>> consumer,
+        IConsumer<string, byte[]> consumer,
         IKafkaMessageHandler messageHandler = null)
     {
         var config = new ConsumerConfig()
         {
             GroupId = "group id"
         };
-        var builder = NSubstitute.Substitute.ForPartsOf<ConsumerBuilder<string, ReadOnlyMemory<byte>>>(config);
+        var builder = NSubstitute.Substitute.ForPartsOf<ConsumerBuilder<string, byte[]>>(config);
         builder.When(b => b.Build()).DoNotCallBase();
         builder.Build().Returns(consumer);
 
         var builderFactory = NSubstitute.Substitute.For<IConsumerBuilderFactory>();
-        builderFactory.Create<IMessage, string,  ReadOnlyMemory<byte>>().Returns(builder);
+        builderFactory.Create<IMessage, string, byte[]>().Returns(builder);
 
         messageHandler ??= NSubstitute.Substitute.For<IKafkaMessageHandler>();
 

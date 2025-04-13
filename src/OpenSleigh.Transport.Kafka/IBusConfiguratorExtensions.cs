@@ -37,14 +37,14 @@ namespace OpenSleigh.Transport.Kafka
             busConfigurator.Services.AddSingleton(ctx =>
             {
                 var config = ctx.GetRequiredService<ProducerConfig>();
-                var builder = new ProducerBuilder<string, ReadOnlyMemory<byte>>(config);
+                var builder = new ProducerBuilder<string, byte[]>(config);
                 builder.SetKeySerializer(new KeySerializer<string>());
 
                 return builder;
             });
             busConfigurator.Services.AddSingleton(ctx =>
             {
-                var builder = ctx.GetRequiredService<ProducerBuilder<Guid, ReadOnlyMemory<byte>>>();
+                var builder = ctx.GetRequiredService<ProducerBuilder<string, byte[]>>();
                 return builder.Build();
             });
             busConfigurator.Services.AddTransient<IKafkaPublisherExecutor, KafkaPublisherExecutor>();
@@ -57,7 +57,7 @@ namespace OpenSleigh.Transport.Kafka
 
             busConfigurator.Services.AddSingleton(typeof(IMessageSubscriber<>), typeof(KafkaMessageSubscriber<>));
 
-            busConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator), typeof(KafkaInfrastructureCreator<>));
+           // busConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator), typeof(KafkaInfrastructureCreator<>));
 
             return busConfigurator;
         }

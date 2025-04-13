@@ -37,7 +37,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             executor.PublishAsync(message, queueRefs.TopicName, null, Arg.Any<CancellationToken>())
-                .Returns(new DeliveryReport<string,  ReadOnlyMemory<byte>>()
+                .Returns(new DeliveryReport<string, byte[]>()
                 {
                     Status = PersistenceStatus.Persisted
                 });
@@ -61,7 +61,7 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit
 
             var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
             executor.PublishAsync(message, queueRefs.TopicName, null, Arg.Any<CancellationToken>())
-                .Returns(new DeliveryReport<string,  ReadOnlyMemory<byte>>()
+                .Returns(new DeliveryReport<string, byte[]>()
                 {
                     Status = PersistenceStatus.NotPersisted
                 });

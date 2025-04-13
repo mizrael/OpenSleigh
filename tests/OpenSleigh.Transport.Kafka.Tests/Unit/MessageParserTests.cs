@@ -25,9 +25,9 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Message = new Message<string,  ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = new Headers()
             }
@@ -47,10 +47,10 @@ public class MessageParserTests
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string,  ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic= messageTopic,
-            Message = new Message<string,  ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
         };
         
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
@@ -71,12 +71,12 @@ public class MessageParserTests
         
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
-                Value = message.Body,
+                Value = message.Body.ToArray(),
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(message.MessageId)),
                     new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(message.SenderId)),
@@ -108,10 +108,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = new(),
                 Value = Array.Empty<byte>()
@@ -132,10 +132,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -158,10 +158,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -185,10 +185,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -213,10 +213,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -241,10 +241,10 @@ public class MessageParserTests
 
         var sut = new MessageParser(queueReferenceFactory);
 
-        var consumeResult = new ConsumeResult<string, ReadOnlyMemory<byte>>()
+        var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
-            Message = new Message<string, ReadOnlyMemory<byte>>()
+            Message = new Message<string, byte[]>()
             {
                 Value = Array.Empty<byte>()
             }
