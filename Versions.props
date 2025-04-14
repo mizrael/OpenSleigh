@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <PackageVersion>3.0.0-alpha</PackageVersion>
     <CSharpLanguageVersion>12</CSharpLanguageVersion>
     <TargetFrameworkVersion>net9.0</TargetFrameworkVersion>
   </PropertyGroup>
