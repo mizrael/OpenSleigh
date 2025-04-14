@@ -1,12 +1,11 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace OpenSleigh.Persistence.SQL
+namespace OpenSleigh.Persistence.SQL;
+
+[ExcludeFromCodeCoverage]
+public record SqlConfiguration(string ConnectionString,
+    SqlSagaStateRepositoryOptions SagaRepositoryOptions,
+    SqlOutboxRepositoryOptions OutboxRepositoryOptions)
 {
-    [ExcludeFromCodeCoverage]
-    public record SqlConfiguration(string ConnectionString,
-        SqlSagaStateRepositoryOptions SagaRepositoryOptions,
-        SqlOutboxRepositoryOptions OutboxRepositoryOptions)
-    {
-        public SqlConfiguration(string connectionString) : this(connectionString, SqlSagaStateRepositoryOptions.Default, SqlOutboxRepositoryOptions.Default) { }
-    }
+    public SqlConfiguration(string connectionString) : this(connectionString, SqlSagaStateRepositoryOptions.Default, SqlOutboxRepositoryOptions.Default) { }
 }

@@ -1,13 +1,12 @@
 ﻿using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 
-namespace OpenSleigh.Persistence.SQL.Tests.Integration.PostgreSQL
+namespace OpenSleigh.Persistence.SQL.Tests.Integration.PostgreSQL;
+
+public class PostgreSQLSagaStateRepositoryTests :
+    SqlSagaStateRepositoryTests,
+    IClassFixture<PostgreSQLDbFixture>
 {
-    public class PostgreSQLSagaStateRepositoryTests :
-        SqlSagaStateRepositoryTests,
-        IClassFixture<PostgreSQLDbFixture>
+    public PostgreSQLSagaStateRepositoryTests(PostgreSQLDbFixture fixture) : base(fixture)
     {
-        public PostgreSQLSagaStateRepositoryTests(PostgreSQLDbFixture fixture) : base(fixture)
-        {
-        }
     }
 }

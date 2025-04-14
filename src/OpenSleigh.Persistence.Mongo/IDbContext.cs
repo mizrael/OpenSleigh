@@ -1,11 +1,10 @@
 ﻿using MongoDB.Driver;
 using OpenSleigh.Persistence.Mongo.Entities;
 
-namespace OpenSleigh.Persistence.Mongo
+namespace OpenSleigh.Persistence.Mongo;
+
+public interface IDbContext
 {
-    public interface IDbContext
-    {
-        IMongoCollection<OutboxMessage> OutboxMessages { get; }
-        IMongoCollection<SagaState> SagaStates { get; }
-    }
+    IMongoCollection<OutboxMessage> OutboxMessages { get; }
+    IMongoCollection<SagaState> SagaStates { get; }
 }

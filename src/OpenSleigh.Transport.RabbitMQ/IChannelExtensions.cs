@@ -1,5 +1,6 @@
-﻿using OpenSleigh.Transport.RabbitMQ;
-using RabbitMQ.Client;
+﻿using RabbitMQ.Client;
+
+namespace OpenSleigh.Transport.RabbitMQ;
 
 public static class IChannelExtensions
 {

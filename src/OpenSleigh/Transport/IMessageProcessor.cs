@@ -1,9 +1,8 @@
 ﻿using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Transport
+namespace OpenSleigh.Transport;
+
+public interface IMessageProcessor
 {
-    public interface IMessageProcessor
-    {
-        ValueTask ProcessAsync(OutboxMessage outboxMessage, CancellationToken cancellationToken = default);
-    }
+    ValueTask ProcessAsync(OutboxMessage outboxMessage, CancellationToken cancellationToken = default);
 }

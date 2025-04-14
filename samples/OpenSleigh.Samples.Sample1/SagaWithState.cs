@@ -2,57 +2,56 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.Samples.Sample1
+namespace OpenSleigh.Samples.Sample1;
+
+public record MySagaState
 {
-    public record MySagaState
+    public int Foo = 42;
+    public string Bar = "71";
+};
+
+public class SagaWithState :
+    Saga<MySagaState>,
+    IStartedBy<StartSaga>,
+    IHandleMessage<ProcessMySaga>,
+    IHandleMessage<MySagaCompleted>
+{
+    private readonly ILogger<SagaWithState> _logger;
+
+    public SagaWithState(
+        ILogger<SagaWithState> logger, 
+        ISagaExecutionContext<MySagaState> context,
+        ISerializer serializer) : base(context, serializer)
     {
-        public int Foo = 42;
-        public string Bar = "71";
-    };
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
 
-    public class SagaWithState :
-        Saga<MySagaState>,
-        IStartedBy<StartSaga>,
-        IHandleMessage<ProcessMySaga>,
-        IHandleMessage<MySagaCompleted>
+    public ValueTask HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
     {
-        private readonly ILogger<SagaWithState> _logger;
+        _logger.LogInformation("starting saga with state '{InstanceId}'...", this.Context.InstanceId);
 
-        public SagaWithState(
-            ILogger<SagaWithState> logger, 
-            ISagaExecutionContext<MySagaState> context,
-            ISerializer serializer) : base(context, serializer)
-        {
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        }
+        var message = new ProcessMySaga();
+        this.Publish(message);
 
-        public ValueTask HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("starting saga with state '{InstanceId}'...", this.Context.InstanceId);
+        return ValueTask.CompletedTask;
+    }
 
-            var message = new ProcessMySaga();
-            this.Publish(message);
+    public ValueTask HandleAsync(IMessageContext<ProcessMySaga> context, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation("processing saga with state '{InstanceId}'...", this.Context.InstanceId);
 
-            return ValueTask.CompletedTask;
-        }
+        var message = new MySagaCompleted();
+        this.Publish(message);
 
-        public ValueTask HandleAsync(IMessageContext<ProcessMySaga> context, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation("processing saga with state '{InstanceId}'...", this.Context.InstanceId);
+        return ValueTask.CompletedTask;
+    }
 
-            var message = new MySagaCompleted();
-            this.Publish(message);
+    public ValueTask HandleAsync(IMessageContext<MySagaCompleted> context, CancellationToken cancellationToken = default)
+    {
+        this.Context.MarkAsCompleted();
 
-            return ValueTask.CompletedTask;
-        }
+        _logger.LogInformation("saga with state '{InstanceId}' completed!", this.Context.InstanceId);
 
-        public ValueTask HandleAsync(IMessageContext<MySagaCompleted> context, CancellationToken cancellationToken = default)
-        {
-            this.Context.MarkAsCompleted();
-
-            _logger.LogInformation("saga with state '{InstanceId}' completed!", this.Context.InstanceId);
-
-            return ValueTask.CompletedTask;
-        }
+        return ValueTask.CompletedTask;
     }
 }

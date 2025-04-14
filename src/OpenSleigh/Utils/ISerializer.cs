@@ -1,8 +1,7 @@
-﻿namespace OpenSleigh.Utils
+﻿namespace OpenSleigh.Utils;
+
+public interface ISerializer
 {
-    public interface ISerializer
-    {
-        byte[] Serialize(object data);
-        object? Deserialize(ReadOnlySpan<byte> data, Type returnType);
-    }
+    byte[] Serialize(object data);
+    object? Deserialize(ReadOnlySpan<byte> data, Type returnType);
 }

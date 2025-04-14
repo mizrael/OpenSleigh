@@ -1,13 +1,12 @@
 ﻿using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Transport.Kafka
+namespace OpenSleigh.Transport.Kafka;
+
+public interface IQueueReferenceFactory
 {
-    public interface IQueueReferenceFactory
-    {
-        QueueReferences Create(OutboxMessage message);
+    QueueReferences Create(OutboxMessage message);
 
-        QueueReferences Create<TM>() where TM : IMessage;
+    QueueReferences Create<TM>() where TM : IMessage;
 
-        Type GetQueueType(string topic);
-    }
+    Type GetQueueType(string topic);
 }

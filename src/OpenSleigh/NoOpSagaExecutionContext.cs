@@ -1,66 +1,65 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 
-namespace OpenSleigh
+namespace OpenSleigh;
+
+internal class NoOpSagaExecutionContext : ISagaExecutionContext
 {
-    internal class NoOpSagaExecutionContext : ISagaExecutionContext
+    private NoOpSagaExecutionContext() { }
+
+    public string TriggerMessageId { get; private set; }
+
+    public string CorrelationId { get; private set; }
+
+    public string InstanceId { get; private set; }
+
+    public SagaDescriptor Descriptor { get; private set; }
+
+    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => 
+        (IReadOnlyCollection<ProcessedMessage>)Enumerable.Empty<ProcessedMessage>();
+
+    public bool IsCompleted => true;
+
+    public string LockId => string.Empty;
+
+    public IReadOnlyCollection<OutboxMessage> Outbox =>
+        (IReadOnlyCollection<OutboxMessage>)Enumerable.Empty<OutboxMessage>();
+
+    public static ISagaExecutionContext Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
+    => new NoOpSagaExecutionContext()
     {
-        private NoOpSagaExecutionContext() { }
+        Descriptor = descriptor,
+        TriggerMessageId = messageContext.Id,
+        CorrelationId = messageContext.CorrelationId,
+        InstanceId = Guid.NewGuid().ToString()            
+    };
 
-        public string TriggerMessageId { get; private set; }
+    public bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage
+        => false;
 
-        public string CorrelationId { get; private set; }
+    public void ClearOutbox()
+    {          
+    }
 
-        public string InstanceId { get; private set; }
+    public ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+        => ValueTask.CompletedTask;
 
-        public SagaDescriptor Descriptor { get; private set; }
+    public void MarkAsCompleted()
+    {            
+    }
 
-        public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => 
-            (IReadOnlyCollection<ProcessedMessage>)Enumerable.Empty<ProcessedMessage>();
+    public ValueTask ProcessAsync<TM>(
+        IMessageHandlerManager messageHandlerManager, 
+        IMessageContext<TM> messageContext,
+        ISagaExecutionService sagaExecutionService, 
+        CancellationToken cancellationToken) where TM : IMessage
+        => ValueTask.CompletedTask;
 
-        public bool IsCompleted => true;
+    public void Publish(OutboxMessage message)
+    {            
+    }
 
-        public string LockId => string.Empty;
-
-        public IReadOnlyCollection<OutboxMessage> Outbox =>
-            (IReadOnlyCollection<OutboxMessage>)Enumerable.Empty<OutboxMessage>();
-
-        public static ISagaExecutionContext Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
-        => new NoOpSagaExecutionContext()
-        {
-            Descriptor = descriptor,
-            TriggerMessageId = messageContext.Id,
-            CorrelationId = messageContext.CorrelationId,
-            InstanceId = Guid.NewGuid().ToString()            
-        };
-
-        public bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-            => false;
-
-        public void ClearOutbox()
-        {          
-        }
-
-        public ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
-            => ValueTask.CompletedTask;
-
-        public void MarkAsCompleted()
-        {            
-        }
-
-        public ValueTask ProcessAsync<TM>(
-            IMessageHandlerManager messageHandlerManager, 
-            IMessageContext<TM> messageContext,
-            ISagaExecutionService sagaExecutionService, 
-            CancellationToken cancellationToken) where TM : IMessage
-            => ValueTask.CompletedTask;
-
-        public void Publish(OutboxMessage message)
-        {            
-        }
-
-        public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-        {            
-        }
+    public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
+    {            
     }
 }

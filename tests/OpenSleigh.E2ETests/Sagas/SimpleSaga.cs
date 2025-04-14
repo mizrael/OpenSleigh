@@ -1,32 +1,31 @@
 ﻿using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.E2ETests
+namespace OpenSleigh.E2ETests;
+
+public record StartSimpleSaga : IMessage
 {
-    public record StartSimpleSaga : IMessage
+    public int Foo { get; init; }
+    public string Bar { get; init; }        
+}
+
+public class SimpleSaga : 
+    Saga, 
+    IStartedBy<StartSimpleSaga>
+{
+    private readonly Action<IMessageContext<StartSimpleSaga>> _onStart;
+
+    public SimpleSaga(
+        Action<IMessageContext<StartSimpleSaga>> onStart, 
+        ISagaExecutionContext context,
+        ISerializer serializer) :  base(context, serializer)
     {
-        public int Foo { get; init; }
-        public string Bar { get; init; }        
+        _onStart = onStart;
     }
 
-    public class SimpleSaga : 
-        Saga, 
-        IStartedBy<StartSimpleSaga>
+    public ValueTask HandleAsync(IMessageContext<StartSimpleSaga> context, CancellationToken cancellationToken = default)
     {
-        private readonly Action<IMessageContext<StartSimpleSaga>> _onStart;
-
-        public SimpleSaga(
-            Action<IMessageContext<StartSimpleSaga>> onStart, 
-            ISagaExecutionContext context,
-            ISerializer serializer) :  base(context, serializer)
-        {
-            _onStart = onStart;
-        }
-
-        public ValueTask HandleAsync(IMessageContext<StartSimpleSaga> context, CancellationToken cancellationToken = default)
-        {
-            _onStart?.Invoke(context);
-            return ValueTask.CompletedTask;
-        }
+        _onStart?.Invoke(context);
+        return ValueTask.CompletedTask;
     }
 }

@@ -2,61 +2,60 @@
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.E2ETests
+namespace OpenSleigh.E2ETests;
+
+public record StartParentSaga : IMessage;
+
+public record ProcessParentSaga : IMessage;
+
+public record ParentSagaCompleted : IMessage;
+
+public class ParentSaga :
+    Saga,
+    IStartedBy<StartParentSaga>,
+    IHandleMessage<ProcessParentSaga>,
+    IHandleMessage<ChildSagaCompleted>,
+    IHandleMessage<ParentSagaCompleted>
 {
-    public record StartParentSaga : IMessage;
-
-    public record ProcessParentSaga : IMessage;
-
-    public record ParentSagaCompleted : IMessage;
-
-    public class ParentSaga :
-        Saga,
-        IStartedBy<StartParentSaga>,
-        IHandleMessage<ProcessParentSaga>,
-        IHandleMessage<ChildSagaCompleted>,
-        IHandleMessage<ParentSagaCompleted>
+    private readonly Action<IMessageContext<ParentSagaCompleted>> _onCompleted;        
+    private readonly ILogger<ParentSaga> _logger;
+    
+    public ParentSaga(
+        Action<IMessageContext<ParentSagaCompleted>> onCompleted, 
+        ILogger<ParentSaga> logger, 
+        ISagaExecutionContext context,
+        ISerializer serializer) : base(context, serializer)
     {
-        private readonly Action<IMessageContext<ParentSagaCompleted>> _onCompleted;        
-        private readonly ILogger<ParentSaga> _logger;
-        
-        public ParentSaga(
-            Action<IMessageContext<ParentSagaCompleted>> onCompleted, 
-            ILogger<ParentSaga> logger, 
-            ISagaExecutionContext context,
-            ISerializer serializer) : base(context, serializer)
-        {
-            _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
-            _logger = logger;
-        }
+        _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
+        _logger = logger;
+    }
 
-        public async ValueTask HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
-        {
-            var message = new ProcessParentSaga();
-            this.Publish(message);
-        }
+    public async ValueTask HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
+    {
+        var message = new ProcessParentSaga();
+        this.Publish(message);
+    }
 
-        public async ValueTask HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
-        {
-            var message = new StartChildSaga();
-            this.Publish(message);
-        }
+    public async ValueTask HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
+    {
+        var message = new StartChildSaga();
+        this.Publish(message);
+    }
 
-        public async ValueTask HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
-        {
-            var message = new ParentSagaCompleted();
-            this.Publish(message);
-        }
+    public async ValueTask HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
+    {
+        var message = new ParentSagaCompleted();
+        this.Publish(message);
+    }
 
-        public ValueTask HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
-        {
-            _logger.LogInformation($"completing Parent Saga '{this.Context.InstanceId}'");
+    public ValueTask HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
+    {
+        _logger.LogInformation($"completing Parent Saga '{this.Context.InstanceId}'");
 
-            this.Context.MarkAsCompleted();
+        this.Context.MarkAsCompleted();
 
-            _onCompleted?.Invoke(context);
+        _onCompleted?.Invoke(context);
 
-            return ValueTask.CompletedTask;
-        }
+        return ValueTask.CompletedTask;
     }
 }
