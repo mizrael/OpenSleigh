@@ -31,9 +31,9 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
         _connection?.Dispose();
     }
 
-    private async Task TryConnectAsync(CancellationToken cancellationToken = default)
+    private async ValueTask TryConnectAsync(CancellationToken cancellationToken = default)
     {
-        _semaphore.Wait(cancellationToken);
+        await _semaphore.WaitAsync(cancellationToken);
 
         try
         {

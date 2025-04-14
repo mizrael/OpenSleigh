@@ -27,7 +27,8 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
         if (_channelsByExchange.TryGetValue(queueReferences.ExchangeName, out var channel))
             return channel;
 
-        _semaphore.Wait();
+        await _semaphore.WaitAsync();
+        
         try
         {
             if (_channelsByExchange.TryGetValue(queueReferences.ExchangeName, out channel))

@@ -18,12 +18,12 @@ internal class InMemoryOutboxRepository : IOutboxRepository
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken)
+    public ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
     => ValueTask.FromResult(
         _messages.Values.Where(m => m.lockId == null)
                         .Select(m => m.message));
 
-    public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken)
+    public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -33,7 +33,7 @@ internal class InMemoryOutboxRepository : IOutboxRepository
         return ValueTask.FromResult(lockId);
     }
 
-    public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken)
+    public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 

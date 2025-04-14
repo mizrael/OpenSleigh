@@ -55,7 +55,7 @@ public class SqlOutboxRepository : IOutboxRepository
         var messages = new List<OutboxMessage>(entities.Count);
         foreach (var entity in entities)
         {
-            if (entity.TryMapToModel(_typeResolver, out var m) && m is not null)
+            if (entity.TryMapToModel(_typeResolver, out var m))
                 messages.Add(m);    
         }
         return messages;

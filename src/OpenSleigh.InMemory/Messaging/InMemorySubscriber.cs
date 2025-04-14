@@ -5,7 +5,7 @@ using System.Threading.Channels;
 
 namespace OpenSleigh.InMemory.Messaging;
 
-public class InMemorySubscriber<TM> : IMessageSubscriber<TM>
+public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
     where TM : IMessage
 {
     private readonly IMessageProcessor _messageProcessor;
@@ -13,8 +13,8 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>
     private readonly ILogger<InMemorySubscriber<TM>> _logger;
     private readonly InMemorySubscriberOptions _options;
     
-    private CancellationTokenSource _stoppingCts;
-    private Task _consumerTask;
+    private CancellationTokenSource? _stoppingCts;
+    private Task? _consumerTask;
 
     public InMemorySubscriber(IMessageProcessor messageProcessor,
         ChannelReader<OutboxMessage> reader,
@@ -75,5 +75,10 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>
         {
             await Task.WhenAny(_consumerTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
         }
+    }
+
+    public void Dispose()
+    {
+        _stoppingCts?.Dispose();
     }
 }
