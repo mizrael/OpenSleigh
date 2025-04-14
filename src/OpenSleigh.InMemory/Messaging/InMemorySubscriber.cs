@@ -15,6 +15,7 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
     
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
+    private bool disposedValue;
 
     public InMemorySubscriber(IMessageProcessor messageProcessor,
         ChannelReader<OutboxMessage> reader,
@@ -64,21 +65,39 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_consumerTask == null)
-            return;
-
         try
         {
-            _stoppingCts.Cancel();
+            _stoppingCts?.Cancel();
+            _stoppingCts = null;
         }
         finally
         {
-            await Task.WhenAny(_consumerTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            if (_consumerTask is not null)
+                await Task.WhenAny(_consumerTask, Task.Delay(Timeout.Infinite, cancellationToken)).ConfigureAwait(false);
+            _consumerTask = null;
+        }
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (!disposedValue)
+        {
+            if (disposing)
+            {
+                _stoppingCts?.Cancel();
+                _stoppingCts?.Dispose();
+                _stoppingCts = null;
+                _consumerTask = null;
+            }
+
+            disposedValue = true;
         }
     }
 
     public void Dispose()
     {
-        _stoppingCts?.Dispose();
+        // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
     }
 }
