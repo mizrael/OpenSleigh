@@ -34,7 +34,7 @@ public class ChildSaga :
     
     public async ValueTask HandleAsync(IMessageContext<StartChildSaga> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"starting child saga '{context.Message.CorrelationId}'...");
+        _logger.LogInformation("starting child saga. Correlation id: {CorrelationId}", context.Message.CorrelationId);
 
         await Task.Delay(TimeSpan.FromSeconds(_random.Next(1, 5)), cancellationToken);
 
@@ -44,11 +44,11 @@ public class ChildSaga :
 
     public async ValueTask HandleAsync(IMessageContext<ProcessChildSaga> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"processing child saga '{context.Message.CorrelationId}'...");
-        
+        _logger.LogInformation("processing child saga. Correlation id: {CorrelationId}", context.Message.CorrelationId);
+
         await Task.Delay(TimeSpan.FromSeconds(_random.Next(1, 5)), cancellationToken);
         
-        _logger.LogInformation($"child saga '{context.Message.CorrelationId}' completed!");
+        _logger.LogInformation("child saga completed!. Correlation id: {CorrelationId}", context.Message.CorrelationId);
 
         var completedEvent = new ChildSagaCompleted(Guid.NewGuid(), context.Message.CorrelationId);
         this.Publish(completedEvent);

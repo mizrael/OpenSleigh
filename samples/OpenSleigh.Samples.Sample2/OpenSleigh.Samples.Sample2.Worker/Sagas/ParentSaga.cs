@@ -34,7 +34,7 @@ public class ParentSaga :
     
     public async ValueTask HandleAsync(IMessageContext<StartParentSaga> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"starting parent saga '{context.Message.CorrelationId}'...");
+        _logger.LogInformation("starting parent saga. Correlation id: {CorrelationId}", context.Message.CorrelationId);
         
         var message = new ProcessParentSaga(Guid.NewGuid(), context.Message.CorrelationId);
         this.Publish(message);
@@ -42,15 +42,15 @@ public class ParentSaga :
     
     public async ValueTask HandleAsync(IMessageContext<ProcessParentSaga> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"starting child saga from parent saga '{context.Message.CorrelationId}'...");
-        
+        _logger.LogInformation("starting child saga from parent saga. Correlation id: {CorrelationId}", context.Message.CorrelationId);
+
         var message = new StartChildSaga(Guid.NewGuid(), context.Message.CorrelationId);
         this.Publish(message);
     }
 
     public async ValueTask HandleAsync(IMessageContext<ChildSagaCompleted> context, CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation($"child saga completed, finalizing parent saga '{context.Message.CorrelationId}'...");
+        _logger.LogInformation("child saga completed, finalizing parent saga. Correlation id: {CorrelationId}", context.Message.CorrelationId);
 
         await Task.Delay(TimeSpan.FromSeconds(_random.Next(1, 5)), cancellationToken);
         
@@ -61,7 +61,7 @@ public class ParentSaga :
     public ValueTask HandleAsync(IMessageContext<ParentSagaCompleted> context, CancellationToken cancellationToken = default)
     {
         this.Context.MarkAsCompleted(); 
-        _logger.LogInformation($"parent saga '{context.Message.CorrelationId}' completed!");
+        _logger.LogInformation("parent saga completed!. Correlation id: {CorrelationId}", context.Message.CorrelationId);
         return ValueTask.CompletedTask;
     }
 }
