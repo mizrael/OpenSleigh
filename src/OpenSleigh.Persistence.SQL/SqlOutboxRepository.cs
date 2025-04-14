@@ -63,8 +63,7 @@ public class SqlOutboxRepository : IOutboxRepository
 
     public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
-        if (message == null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         return LockAsyncCore(message, cancellationToken);
     }
@@ -94,8 +93,7 @@ public class SqlOutboxRepository : IOutboxRepository
 
     public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
     {
-        if (message is null)            
-            throw new ArgumentNullException(nameof(message));           
+        ArgumentNullException.ThrowIfNull(message);
 
         if (string.IsNullOrWhiteSpace(lockId))           
             throw new ArgumentException($"'{nameof(lockId)}' cannot be null or whitespace.", nameof(lockId));

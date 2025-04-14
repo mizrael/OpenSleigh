@@ -23,8 +23,7 @@ internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
     /// <inheritdoc/>
     public IEnumerable<SagaDescriptor> Resolve(IMessage message)
     {
-        if (message is null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         var messageType = message.GetType();
 

@@ -28,8 +28,7 @@ public class MongoOutboxRepository : IOutboxRepository
 
     public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
     {
-        if (messages == null)
-            throw new ArgumentNullException(nameof(messages));
+        ArgumentNullException.ThrowIfNull(messages);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
@@ -44,8 +43,7 @@ public class MongoOutboxRepository : IOutboxRepository
 
     public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
     {
-        if (message is null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         if (string.IsNullOrWhiteSpace(lockId))
             throw new ArgumentException($"'{nameof(lockId)}' cannot be null or whitespace.", nameof(lockId));
@@ -74,8 +72,7 @@ public class MongoOutboxRepository : IOutboxRepository
 
     public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
-        if (message == null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         return LockAsyncCore(message, cancellationToken);
     }

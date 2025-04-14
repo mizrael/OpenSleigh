@@ -7,12 +7,10 @@ public class SagaExecutionContextFactory : ISagaExecutionContextFactory
     public ISagaExecutionContext CreateState<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext)
         where TM : IMessage
     {
-        if (descriptor is null)
-            throw new ArgumentNullException(nameof(descriptor));
-        if (messageContext is null)
-            throw new ArgumentNullException(nameof(messageContext));
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentNullException.ThrowIfNull(messageContext);
 
-        if(descriptor.SagaStateType is null)            
+        if (descriptor.SagaStateType is null)            
             return new SagaExecutionContext(
                 instanceId: Guid.NewGuid().ToString(), 
                 triggerMessageId: messageContext.Id, 

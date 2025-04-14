@@ -18,8 +18,7 @@ public class InMemoryPublisher : IPublisher
 
     public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
-        if (message == null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         return PublishAsyncCore((dynamic)message, cancellationToken);
     }

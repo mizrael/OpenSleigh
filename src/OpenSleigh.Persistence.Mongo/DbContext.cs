@@ -17,8 +17,7 @@ public class DbContext : IDbContext
 
     public DbContext(IMongoDatabase db)
     {
-        if (db == null)
-            throw new ArgumentNullException(nameof(db));
+        ArgumentNullException.ThrowIfNull(db);
 
         OutboxMessages = db.GetCollection<Entities.OutboxMessage>("outbox");
         BuildOutboxIndexes();

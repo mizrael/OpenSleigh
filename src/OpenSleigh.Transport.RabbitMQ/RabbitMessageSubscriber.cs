@@ -30,8 +30,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
 
-        if (queueReferenceFactory == null)
-            throw new ArgumentNullException(nameof(queueReferenceFactory));
+        ArgumentNullException.ThrowIfNull(queueReferenceFactory);
         _queueReference = queueReferenceFactory.Create<TM>();
     }
 

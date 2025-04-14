@@ -91,8 +91,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
 
     public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
     {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
 
         return LockAsyncCore(state, cancellationToken);
     }

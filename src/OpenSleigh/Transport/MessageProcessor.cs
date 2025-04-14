@@ -22,8 +22,7 @@ internal class MessageProcessor : IMessageProcessor
 
     public async ValueTask ProcessAsync(OutboxMessage outboxMessage, CancellationToken cancellationToken = default)
     {
-        if (outboxMessage is null)
-            throw new ArgumentNullException(nameof(outboxMessage));
+        ArgumentNullException.ThrowIfNull(outboxMessage);
 
         var message = outboxMessage.GetMessage(_serializer);
         var messageContext = ToContext((dynamic)message, outboxMessage);

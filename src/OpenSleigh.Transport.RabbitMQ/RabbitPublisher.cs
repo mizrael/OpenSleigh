@@ -23,8 +23,7 @@ public class RabbitPublisher : IPublisher
 
     public async ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
     {
-        if (message is null)
-            throw new ArgumentNullException(nameof(message));
+        ArgumentNullException.ThrowIfNull(message);
 
         var queueRef = _queueReferenceFactory.Create(message);
         var channel = await _channelFactory.GetAsync(queueRef, cancellationToken);

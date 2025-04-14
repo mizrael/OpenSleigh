@@ -23,8 +23,7 @@ internal class BusConfigurator : IBusConfigurator
 
     public IBusConfigurator WithOutboxProcessorOptions(OutboxProcessorOptions options)
     {
-        if (options == null)
-            throw new ArgumentNullException(nameof(options));
+        ArgumentNullException.ThrowIfNull(options);
 
         this.Services.Replace(ServiceDescriptor.Singleton(options));
 

@@ -16,14 +16,9 @@ public record SagaExecutionContext : ISagaExecutionContext
         SagaDescriptor descriptor,
         IEnumerable<ProcessedMessage>? processedMessages = null)
     {
-        if (string.IsNullOrWhiteSpace(instanceId))            
-            throw new ArgumentException($"'{nameof(instanceId)}' cannot be null or whitespace.", nameof(instanceId));
-        
-        if (string.IsNullOrWhiteSpace(triggerMessageId))            
-            throw new ArgumentException($"'{nameof(triggerMessageId)}' cannot be null or whitespace.", nameof(triggerMessageId));
-
-        if (string.IsNullOrWhiteSpace(correlationId))
-            throw new ArgumentException($"'{nameof(correlationId)}' cannot be null or whitespace.", nameof(correlationId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId, nameof(instanceId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(triggerMessageId, nameof(triggerMessageId));
+        ArgumentException.ThrowIfNullOrWhiteSpace(correlationId, nameof(correlationId));
 
         InstanceId = instanceId;
         TriggerMessageId = triggerMessageId;

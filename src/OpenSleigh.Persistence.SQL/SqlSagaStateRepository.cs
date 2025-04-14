@@ -80,8 +80,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
 
     public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
     {
-        if (state == null)
-            throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
 
         return LockAsyncCore(state, cancellationToken);
     }
@@ -124,8 +123,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
 
     public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
     {
-        if (state == null) 
-            throw new ArgumentNullException(nameof(state));
+        ArgumentNullException.ThrowIfNull(state);
 
         return ReleaseAsyncCore(state, cancellationToken);
     }

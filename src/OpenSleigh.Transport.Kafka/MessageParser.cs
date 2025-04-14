@@ -14,9 +14,8 @@ public class MessageParser : IMessageParser
 
     public OutboxMessage Parse(ConsumeResult<string, byte[]> consumeResult)
     {
-        if (consumeResult is null)
-            throw new ArgumentNullException(nameof(consumeResult));
-        
+        ArgumentNullException.ThrowIfNull(consumeResult);
+
         var messageType = _queueReferenceFactory.GetQueueType(consumeResult.Topic);
         if(messageType is null) 
             throw new ArgumentException("invalid message type");
