@@ -7,23 +7,23 @@ namespace OpenSleigh.InMemory.Messaging;
 
 public class InMemoryPublisher : IPublisher
 {
-    private readonly ChannelWriter<OutboxMessage> _writer;
+    private readonly ChannelWriter<MessageEnvelope> _writer;
     private readonly ILogger<InMemoryPublisher> _logger;
 
-    public InMemoryPublisher(ChannelWriter<OutboxMessage> writer, ILogger<InMemoryPublisher> logger)
+    public InMemoryPublisher(ChannelWriter<MessageEnvelope> writer, ILogger<InMemoryPublisher> logger)
     {
         _writer = writer ?? throw new ArgumentNullException(nameof(writer));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    public ValueTask PublishAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return PublishAsyncCore((dynamic)message, cancellationToken);
     }
 
-    private async ValueTask PublishAsyncCore(OutboxMessage message, CancellationToken cancellationToken)            
+    private async ValueTask PublishAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)            
     {
         _logger.LogInformation(
                 "publishing message '{MessageType}/{MessageId}'...",

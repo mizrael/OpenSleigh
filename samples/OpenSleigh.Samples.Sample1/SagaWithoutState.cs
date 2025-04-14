@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.Samples.Sample1;
 
@@ -14,8 +13,7 @@ public class SagaWithoutState :
 
     public SagaWithoutState(
         ILogger<SagaWithoutState> logger, 
-        ISagaExecutionContext context,
-        ISerializer serializer) : base(context, serializer)
+        ISagaExecutionContext context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

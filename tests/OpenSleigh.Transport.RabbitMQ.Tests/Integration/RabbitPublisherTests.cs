@@ -33,7 +33,7 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
         sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
 
-        var message = OutboxMessage.Create(new FakeSagaStarter(), new JsonSerializer(), sagaContext);
+        var envelope = MessageEnvelope.Create(new FakeSagaStarter(), sagaContext);
 
         var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
@@ -46,22 +46,26 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, evt) =>
         {
-            evt.Body.Should().NotBeNull();
-            evt.Body.ToArray().Should().BeEquivalentTo(message.Body.ToArray());
-
             evt.BasicProperties.Headers.Should().NotBeNullOrEmpty();
             evt.BasicProperties.Headers.Should().ContainKeys(
-                nameof(OutboxMessage.ParentId),
-                nameof(OutboxMessage.SenderId),                    
-                nameof(OutboxMessage.CreatedAt),
-                nameof(OutboxMessage.MessageType)
+                nameof(MessageEnvelope.ParentId),
+                nameof(MessageEnvelope.SenderId),                    
+                nameof(MessageEnvelope.CreatedAt),
+                nameof(MessageEnvelope.MessageType)
             );
-            evt.BasicProperties.CorrelationId.Should().Be(message.CorrelationId);
-            evt.BasicProperties.MessageId.Should().Be(message.MessageId);
-            evt.BasicProperties.Headers[nameof(OutboxMessage.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));                
-            evt.BasicProperties.Headers[nameof(OutboxMessage.CreatedAt)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(message.CreatedAt.ToString()));
-            evt.BasicProperties.Headers[nameof(OutboxMessage.ParentId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(message.ParentId));
-            evt.BasicProperties.Headers[nameof(OutboxMessage.SenderId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(message.SenderId));
+            evt.BasicProperties.CorrelationId.Should().Be(envelope.CorrelationId);
+            evt.BasicProperties.MessageId.Should().Be(envelope.MessageId);
+            evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));                
+            evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()));
+            evt.BasicProperties.Headers[nameof(MessageEnvelope.ParentId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.ParentId));
+            evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.SenderId));
+
+            evt.Body.Should().NotBeNull();
+
+            var serializer = new JsonSerializer();
+            var message = serializer.Deserialize<FakeSagaStarter>(evt.Body.Span);
+            Assert.NotNull(message);
+            Assert.Equivalent(envelope.Message, message);
 
             received = true;
 
@@ -76,11 +80,11 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
             .Returns(channel);
 
         var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-        queueRefFactory.Create(message)
+        queueRefFactory.Create(envelope)
             .Returns(queueRef);
 
-        var sut = new RabbitPublisher(queueRefFactory, channelFactory, logger);
-        await sut.PublishAsync(message);
+        var sut = new RabbitPublisher(queueRefFactory, channelFactory, logger, new JsonSerializer());
+        await sut.PublishAsync(envelope);
 
         while (!tokenSource.IsCancellationRequested)
             await Task.Delay(10);

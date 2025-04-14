@@ -22,8 +22,8 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
 
     public string LockId => string.Empty;
 
-    public IReadOnlyCollection<OutboxMessage> Outbox =>
-        (IReadOnlyCollection<OutboxMessage>)Enumerable.Empty<OutboxMessage>();
+    public IReadOnlyCollection<MessageEnvelope> Outbox =>
+        (IReadOnlyCollection<MessageEnvelope>)Enumerable.Empty<MessageEnvelope>();
 
     public static ISagaExecutionContext Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
     => new NoOpSagaExecutionContext()
@@ -55,7 +55,7 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
         CancellationToken cancellationToken) where TM : IMessage
         => ValueTask.CompletedTask;
 
-    public void Publish(OutboxMessage message)
+    public void Publish(MessageEnvelope message)
     {            
     }
 

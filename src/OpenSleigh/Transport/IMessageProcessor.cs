@@ -4,5 +4,5 @@ namespace OpenSleigh.Transport;
 
 public interface IMessageProcessor
 {
-    ValueTask ProcessAsync(OutboxMessage outboxMessage, CancellationToken cancellationToken = default);
+    ValueTask ProcessAsync(MessageEnvelope outboxMessage, CancellationToken cancellationToken = default);
 }

@@ -1,7 +1,6 @@
 using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Outbox;
-using OpenSleigh.Utils;
 using System;
 
 namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit;
@@ -25,7 +24,7 @@ public class QueueReferenceFactoryTests
             return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
         });
         
-        var message = OutboxMessage.Create(new FakeSagaStarter(), sysInfo, new JsonSerializer());
+        var message = MessageEnvelope.Create(new FakeSagaStarter(), sysInfo);
         var result = sut.Create(message);
         result.Should().NotBeNull();
         result.ExchangeName.Should().Be("fakesagastarter");
@@ -62,7 +61,7 @@ public class QueueReferenceFactoryTests
 
         var creator = QueueReferenceFactory.BuildDefaultCreator(sysInfo);
         var sut = new QueueReferenceFactory(creator);
-        var message = OutboxMessage.Create(new FakeSagaStarter(), sysInfo, new JsonSerializer());
+        var message = MessageEnvelope.Create(new FakeSagaStarter(), sysInfo);
         var result = sut.Create(message);
         result.Should().NotBeNull();
         result.ExchangeName.Should().Be("fakesagastarter");

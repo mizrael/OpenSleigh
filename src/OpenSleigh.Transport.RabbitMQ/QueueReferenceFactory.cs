@@ -15,7 +15,7 @@ public class QueueReferenceFactory : IQueueReferenceFactory
         _factory = creator ?? throw new ArgumentNullException(nameof(creator));
     }
 
-    public QueueReferences Create(OutboxMessage message)
+    public QueueReferences Create(MessageEnvelope message)
         => _queueReferencesCache.GetOrAdd(message.MessageType, k => _factory(message.MessageType));
 
     public QueueReferences Create<TM>() where TM : IMessage

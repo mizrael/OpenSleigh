@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.E2ETests;
 
@@ -23,8 +22,7 @@ public class ParentSaga :
     public ParentSaga(
         Action<IMessageContext<ParentSagaCompleted>> onCompleted, 
         ILogger<ParentSaga> logger, 
-        ISagaExecutionContext context,
-        ISerializer serializer) : base(context, serializer)
+        ISagaExecutionContext context) : base(context)
     {
         _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
         _logger = logger;

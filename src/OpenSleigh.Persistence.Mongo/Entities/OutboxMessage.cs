@@ -1,5 +1,6 @@
 ﻿using MongoDB.Bson;
 using OpenSleigh.Utils;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.Mongo.Entities;
 
@@ -18,29 +19,47 @@ public record OutboxMessage
     public string? ParentId { get; set; }
     public required string SenderId { get; set; }
 
-    public Outbox.OutboxMessage? ToModel(ITypeResolver typeResolver)
+    public bool TryMap(
+        ITypeResolver typeResolver,
+        ISerializer serializer,
+        [NotNullWhen(true)] out Outbox.MessageEnvelope? envelope)
     {
-        Outbox.OutboxMessage.TryCreate(
+        ArgumentNullException.ThrowIfNull(typeResolver, nameof(typeResolver));
+
+        var type = typeResolver.Resolve(MessageType, false);
+        if (type is null)
+        {
+            envelope = null;
+            return false;
+        }
+
+        return Outbox.MessageEnvelope.TryCreate(
             Body,
             messageId: MessageId,
             correlationId: CorrelationId,
             CreatedAt,
-            typeResolver.Resolve(MessageType, false),
+            type,
             parentId: ParentId,
             senderId: SenderId,
-            out var result);
-        return result;
+            serializer,
+            out envelope);
     }
 
-    public static OutboxMessage Create(Outbox.OutboxMessage message)
+    public static OutboxMessage Create(
+        Outbox.MessageEnvelope message,
+        ISerializer serializer)
     {
+        ArgumentNullException.ThrowIfNull(message, nameof(message));
+
+        var body = serializer.Serialize(message.Message);
+
         return new OutboxMessage()
         {
-            Body = message.Body.ToArray(),
+            Body = body,
             MessageId = message.MessageId,
             CorrelationId = message.CorrelationId,
             CreatedAt = message.CreatedAt,
-            MessageType = message.MessageType.FullName,
+            MessageType = message.MessageType.FullName!,
             ParentId = message.ParentId,
             SenderId = message.SenderId,
         };

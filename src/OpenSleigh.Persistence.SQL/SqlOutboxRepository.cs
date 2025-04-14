@@ -17,31 +17,37 @@ public class SqlOutboxRepository : IOutboxRepository
     private readonly SagaDbContext _dbContext;
     private readonly SqlOutboxRepositoryOptions _options;
     private readonly ITypeResolver _typeResolver;
+    private readonly ISerializer _serializer;
 
-    public SqlOutboxRepository(SagaDbContext dbContext, ITypeResolver typeResolver, SqlOutboxRepositoryOptions options)
+    public SqlOutboxRepository(
+        SagaDbContext dbContext, 
+        ITypeResolver typeResolver, 
+        SqlOutboxRepositoryOptions options, 
+        ISerializer serializer)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
+    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
 
-    private async ValueTask AppendAsyncCore(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken)
+    private async ValueTask AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
-        var entities = messages.Select(message => Entities.OutboxMessage.Create(message));
+        var entities = messages.Select(message => Entities.OutboxMessage.Map(message, _serializer));
 
         _dbContext.OutboxMessages.AddRange(entities);
         await _dbContext.SaveChangesAsync(cancellationToken)
                         .ConfigureAwait(false);
     }
 
-    public async ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
         var entities = await _dbContext.OutboxMessages.AsNoTracking()
@@ -50,25 +56,25 @@ public class SqlOutboxRepository : IOutboxRepository
                 .ConfigureAwait(false);
 
         if (entities is null)
-            return Array.Empty<OutboxMessage>();
+            return Array.Empty<MessageEnvelope>();
 
-        var messages = new List<OutboxMessage>(entities.Count);
+        var messages = new List<MessageEnvelope>(entities.Count);
         foreach (var entity in entities)
         {
-            if (entity.TryMapToModel(_typeResolver, out var m))
+            if (entity.TryMap(_typeResolver, _serializer, out var m))
                 messages.Add(m);    
         }
         return messages;
     }
 
-    public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return LockAsyncCore(message, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(OutboxMessage message, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
         var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
 
@@ -91,7 +97,7 @@ public class SqlOutboxRepository : IOutboxRepository
         return entity.LockId;
     }
 
-    public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -101,7 +107,7 @@ public class SqlOutboxRepository : IOutboxRepository
         return DeleteAsyncCore(message, lockId, cancellationToken);
     }
 
-    private async ValueTask DeleteAsyncCore(OutboxMessage message, string lockId, CancellationToken cancellationToken)
+    private async ValueTask DeleteAsyncCore(MessageEnvelope message, string lockId, CancellationToken cancellationToken)
     {
             var entity = await _dbContext.OutboxMessages
                 .FirstOrDefaultAsync(e =>

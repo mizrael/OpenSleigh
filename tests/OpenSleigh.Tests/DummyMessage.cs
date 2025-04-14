@@ -5,17 +5,15 @@ namespace OpenSleigh.Tests;
 
 public record DummyMessage : IMessage
 {
-    public static OutboxMessage CreateOutboxMessage(string? parentId = null)
+    public static MessageEnvelope CreateEnvelope(string? parentId = null)
     {
-        var body = new byte[] { 1, 2, 3 };
-        OutboxMessage.TryCreate(
-            body, 
-            "message id", 
-            "correlation id", 
-            DateTimeOffset.UtcNow, 
-            typeof(DummyMessage),
-            parentId, 
-            "sender", out var message);
-        return message;
+        var message = new DummyMessage();
+
+        var context = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        context.CorrelationId.Returns(Guid.NewGuid().ToString());
+        context.TriggerMessageId.Returns(parentId);
+        context.InstanceId.Returns(Guid.NewGuid().ToString());
+
+        return MessageEnvelope.Create(message, context);
     }
 }

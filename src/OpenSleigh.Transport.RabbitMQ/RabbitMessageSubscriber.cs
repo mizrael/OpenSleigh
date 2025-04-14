@@ -14,6 +14,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
     private readonly QueueReferences _queueReference;
     private readonly IServiceProvider _serviceProvider;
     private readonly ITypeResolver _typeResolver;
+    private readonly ISerializer _serializer;
     private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
 
     private IChannel? _channel;
@@ -23,12 +24,14 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         IQueueReferenceFactory queueReferenceFactory,
         IServiceProvider serviceProvider,
         ITypeResolver typeResolver,
-        ILogger<RabbitMessageSubscriber<TM>> logger)
+        ILogger<RabbitMessageSubscriber<TM>> logger,
+        ISerializer serializer)
     {
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
 
         ArgumentNullException.ThrowIfNull(queueReferenceFactory);
         _queueReference = queueReferenceFactory.Create<TM>();
@@ -75,7 +78,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         if (channel is null)
             throw new InvalidOperationException("Unable to retrieve channel from consumer.");
 
-        OutboxMessage? message;
+        MessageEnvelope? message;
         try
         {
             var messageId = eventArgs.BasicProperties.MessageId;
@@ -87,7 +90,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
             ArgumentException.ThrowIfNullOrWhiteSpace(messageTypeName, nameof(messageTypeName));
 
-            var messageType = _typeResolver.Resolve(messageTypeName);
+            var messageType = _typeResolver.Resolve(messageTypeName, throwOnError: true);
 
             var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
             ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
@@ -95,12 +98,14 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
             var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
 
-            if (!OutboxMessage.TryCreate(eventArgs.Body,
+            if (!MessageEnvelope.TryCreate(eventArgs.Body.Span,
                                         messageId: messageId,
                                         correlationId: correlationId,
-                                        createdAt, messageType,
+                                        createdAt, 
+                                        messageType!,
                                         parentId: parentId,
                                         senderId: senderId,
+                                        _serializer,
                                         out message))
                 throw new ArgumentException("unable to parse outbox message.");
         }
@@ -140,7 +145,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         }
     }
     
-    private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, OutboxMessage message, bool requeue)
+    private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, MessageEnvelope message, bool requeue)
     {
         var errorMsg = "an error has occurred while processing Message '{MessageId}' from Exchange '{ExchangeName}' : {ExceptionMessage} . "
                      + (requeue ? "Reenqueuing..." : "Nacking...");

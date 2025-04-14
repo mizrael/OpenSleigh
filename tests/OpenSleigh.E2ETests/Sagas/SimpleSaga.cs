@@ -1,5 +1,4 @@
 ﻿using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.E2ETests;
 
@@ -17,8 +16,7 @@ public class SimpleSaga :
 
     public SimpleSaga(
         Action<IMessageContext<StartSimpleSaga>> onStart, 
-        ISagaExecutionContext context,
-        ISerializer serializer) :  base(context, serializer)
+        ISagaExecutionContext context) :  base(context)
     {
         _onStart = onStart;
     }

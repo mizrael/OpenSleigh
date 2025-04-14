@@ -6,9 +6,9 @@ namespace OpenSleigh.InMemory.Outbox;
 
 internal class InMemoryOutboxRepository : IOutboxRepository
 {
-    private readonly ConcurrentDictionary<string, (OutboxMessage message, string? lockId)> _messages = new();
+    private readonly ConcurrentDictionary<string, (MessageEnvelope message, string? lockId)> _messages = new();
 
-    public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken)
+    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
@@ -18,12 +18,12 @@ internal class InMemoryOutboxRepository : IOutboxRepository
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
+    public ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     => ValueTask.FromResult(
         _messages.Values.Where(m => m.lockId == null)
                         .Select(m => m.message));
 
-    public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -33,7 +33,7 @@ internal class InMemoryOutboxRepository : IOutboxRepository
         return ValueTask.FromResult(lockId);
     }
 
-    public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 

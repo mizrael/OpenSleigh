@@ -20,7 +20,7 @@ public class OutboxProcessor : IOutboxProcessor
 
     public async ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default)
     {
-        IEnumerable<OutboxMessage> messages;
+        IEnumerable<MessageEnvelope> messages;
         try
         {
             messages = await _outboxRepository.ReadPendingAsync(cancellationToken).ConfigureAwait(false);

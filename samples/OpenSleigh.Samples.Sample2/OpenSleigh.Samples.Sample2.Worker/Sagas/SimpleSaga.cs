@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Samples.Sample2.Common.Messages;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.Samples.Sample2.Worker.Sagas;
 
@@ -24,8 +23,7 @@ public class SimpleSaga :
 
     public SimpleSaga(
         ILogger<SimpleSaga> logger,
-        ISagaExecutionContext<SimpleSagaState> context,
-        ISerializer serializer) : base(context, serializer)
+        ISagaExecutionContext<SimpleSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

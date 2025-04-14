@@ -4,31 +4,23 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Outbox;
 
-public class OutboxMessage
+public class MessageEnvelope
 { 
-    private OutboxMessage() { }
-
-    public IMessage GetMessage(ISerializer serializer)
-    {
-        ArgumentNullException.ThrowIfNull(serializer);
-
-        var instance = serializer.Deserialize(this.Body.Span, this.MessageType);
-        if (instance is null || instance is not IMessage message)
-            throw new DataMisalignedException($"Unable to deserialize message '{this.MessageId}' to type '{this.MessageType}'.");
-        
-        return message;
-    }
+    private MessageEnvelope() { }
 
     public static bool TryCreate(
-        ReadOnlyMemory<byte> body,
+        ReadOnlySpan<byte> body,
         string messageId,
         string correlationId,
         DateTimeOffset createdAt,
         Type messageType,
         string? parentId,
         string senderId,
-        [NotNullWhen(true)] out OutboxMessage? message)
+        ISerializer serializer,
+        [NotNullWhen(true)] out MessageEnvelope? result)
     {
+        ArgumentNullException.ThrowIfNull(serializer, nameof(serializer));
+
         if (body.Length == 0 ||
             string.IsNullOrEmpty(messageId) ||
             string.IsNullOrEmpty(correlationId) ||
@@ -36,13 +28,20 @@ public class OutboxMessage
             messageType is null || 
             string.IsNullOrEmpty(senderId))
         {
-            message = null;
+            result = null;
             return false;
         }
 
-        message = new OutboxMessage()
+        var message = serializer.Deserialize(body, messageType) as IMessage;
+        if(message is null)
         {
-            Body = body,
+            result = null;
+            return false;
+        }
+
+        result = new MessageEnvelope()
+        {
+            Message = message,
             MessageId = messageId,
             CorrelationId = correlationId,
             CreatedAt = createdAt,
@@ -53,53 +52,50 @@ public class OutboxMessage
         return true;
     }
 
-    public static OutboxMessage Create(
+    public static MessageEnvelope Create(
        IMessage message,
-       ISystemInfo systemInfo,
-       ISerializer serializer)
+       ISystemInfo systemInfo)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        ArgumentNullException.ThrowIfNull(serializer);
-
-        return new OutboxMessage()
+        return new MessageEnvelope()
         {
             CorrelationId = Guid.CreateVersion7().ToString(),
             SenderId = systemInfo.Id,
             MessageId = Guid.CreateVersion7().ToString(),
-            Body = serializer.Serialize(message),
+            Message = message,
             MessageType = message.GetType(),
             CreatedAt = DateTimeOffset.UtcNow
         };
     }
 
-    public static OutboxMessage Create(
+    public static MessageEnvelope Create(
         IMessage message,
-        ISerializer serializer,
         ISagaExecutionContext executionContext)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        ArgumentNullException.ThrowIfNull(serializer);
-
         ArgumentNullException.ThrowIfNull(executionContext);
 
-        return new OutboxMessage()
+        return new MessageEnvelope()
         {
-            CorrelationId = executionContext.CorrelationId,
-            MessageId = Guid.CreateVersion7().ToString(),
-            Body = serializer.Serialize(message),
+            Message = message,
             MessageType = message.GetType(),
             CreatedAt = DateTimeOffset.UtcNow,
+            MessageId = Guid.CreateVersion7().ToString(),
+            CorrelationId = executionContext.CorrelationId,
             ParentId = executionContext.TriggerMessageId,
             SenderId = executionContext.InstanceId
         };
     }
+    
+    public required IMessage Message { get; init; }
 
-    public required string CorrelationId { get; init; }
-    public required ReadOnlyMemory<byte> Body { get; init; }
-    public required string MessageId { get; init; }
+    // TODO: we don't need this anymore
     public required Type MessageType { get; init; }
+    
+    public required string CorrelationId { get; init; }
+    public required string MessageId { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required string SenderId { get; init; }        
     public string? ParentId { get; init; }        

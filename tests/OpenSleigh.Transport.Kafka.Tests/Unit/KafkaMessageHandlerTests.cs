@@ -38,7 +38,7 @@ public class KafkaMessageHandlerTests
     public async Task StartAsync_should_process_incoming_messages()
     {
         var consumeResult = new ConsumeResult<string, byte[]>();
-        var expectedMessage = DummyMessage.CreateOutboxMessage();
+        var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
         var parser = NSubstitute.Substitute.For<IMessageParser>();
@@ -61,7 +61,7 @@ public class KafkaMessageHandlerTests
     public async Task StartAsync_should_republish_to_deadletter_when_exception_occurs()
     {
         var consumeResult = new ConsumeResult<string, byte[]>();
-        var expectedMessage = DummyMessage.CreateOutboxMessage();
+        var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
         var parser = NSubstitute.Substitute.For<IMessageParser>();
@@ -92,7 +92,7 @@ public class KafkaMessageHandlerTests
     public async Task StartAsync_should_not_republish_to_deadletter_when_exception_occurs_and_no_deadletter_available()
     {
         var consumeResult = new ConsumeResult<string, byte[]>();
-        var expectedMessage = DummyMessage.CreateOutboxMessage();
+        var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "");
 
         var parser = NSubstitute.Substitute.For<IMessageParser>();
@@ -112,7 +112,7 @@ public class KafkaMessageHandlerTests
 
         await sut.HandleAsync(consumeResult, queueRefs);
 
-        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(Arg.Any<OutboxMessage>(),
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(Arg.Any<MessageEnvelope>(),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
@@ -140,6 +140,6 @@ public class KafkaMessageHandlerTests
         await sut.HandleAsync(consumeResult, queueRefs);
 
         await messageProcessor.DidNotReceiveWithAnyArgs()
-                            .ProcessAsync(Arg.Any<OutboxMessage>(), Arg.Any<CancellationToken>());
+                            .ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
     }
 }

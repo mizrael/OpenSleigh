@@ -20,14 +20,13 @@ internal class MessageProcessor : IMessageProcessor
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public async ValueTask ProcessAsync(OutboxMessage outboxMessage, CancellationToken cancellationToken = default)
+    public async ValueTask ProcessAsync(MessageEnvelope outboxMessage, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(outboxMessage);
 
-        var message = outboxMessage.GetMessage(_serializer);
-        var messageContext = ToContext((dynamic)message, outboxMessage);
+        var messageContext = ToContext((dynamic)outboxMessage.Message, outboxMessage);
 
-        var descriptors = _sagaDescriptorsResolver.Resolve(message);
+        var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
         foreach(var descriptor in descriptors) {
             try
             {
@@ -41,7 +40,7 @@ internal class MessageProcessor : IMessageProcessor
         }
     }
 
-    private static IMessageContext<TM> ToContext<TM>(TM message, OutboxMessage outboxMessage)
+    private static IMessageContext<TM> ToContext<TM>(TM message, MessageEnvelope outboxMessage)
         where TM : IMessage
     {
         return MessageContext<TM>.Create(message, outboxMessage);

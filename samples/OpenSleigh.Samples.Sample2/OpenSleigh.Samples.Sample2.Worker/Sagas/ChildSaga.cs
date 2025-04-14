@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,8 +25,7 @@ public class ChildSaga :
 
     public ChildSaga(
         ILogger<ChildSaga> logger,
-        ISagaExecutionContext<ChildSagaState> context,
-        ISerializer serializer) : base(context, serializer)
+        ISagaExecutionContext<ChildSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
