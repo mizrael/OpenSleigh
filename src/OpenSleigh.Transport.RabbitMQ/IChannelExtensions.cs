@@ -1,6 +1,5 @@
 ﻿using OpenSleigh.Transport.RabbitMQ;
 using RabbitMQ.Client;
-using System.Threading.Tasks;
 
 public static class IChannelExtensions
 {

@@ -1,6 +1,4 @@
 ﻿using OpenSleigh.Transport;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace OpenSleigh.Persistence.Mongo.Tests
 {

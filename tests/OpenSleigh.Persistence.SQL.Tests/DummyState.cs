@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace OpenSleigh.Persistence.SQL.Tests
+﻿namespace OpenSleigh.Persistence.SQL.Tests
 {
     public record DummyState
     {

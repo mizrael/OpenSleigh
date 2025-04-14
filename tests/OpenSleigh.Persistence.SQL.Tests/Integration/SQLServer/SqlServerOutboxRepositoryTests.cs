@@ -1,5 +1,4 @@
 ﻿using OpenSleigh.Persistence.SQL.Tests.Fixtures;
-using Xunit;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Integration.SQLServer
 {

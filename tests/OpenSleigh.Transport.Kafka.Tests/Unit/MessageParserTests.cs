@@ -4,7 +4,6 @@ using NSubstitute;
 using OpenSleigh.Outbox;
 using System;
 using System.Text;
-using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 

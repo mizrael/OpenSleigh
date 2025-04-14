@@ -3,9 +3,12 @@ using Confluent.Kafka.Admin;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Transport.Kafka;
 
+//TODO: not sure I want to keep this.
+[ExcludeFromCodeCoverage]
 internal class KafkaInfrastructureCreator<TM> : IInfrastructureCreator
     where TM : IMessage
 {        

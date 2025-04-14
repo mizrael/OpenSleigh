@@ -1,6 +1,5 @@
 ﻿using System;
 using FluentAssertions;
-using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit
 {

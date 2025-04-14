@@ -8,7 +8,6 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Outbox;
-using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit
 {

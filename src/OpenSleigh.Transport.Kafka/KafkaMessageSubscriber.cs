@@ -25,11 +25,9 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         ILogger<KafkaMessageSubscriber<TM>> logger,
         KafkaSubscriberConfig? config = null)
     {
-        if (builderFactory is null)
-            throw new ArgumentNullException(nameof(builderFactory));
+        ArgumentNullException.ThrowIfNull(builderFactory);
 
-        if (queueReferenceFactory is null)
-            throw new ArgumentNullException(nameof(queueReferenceFactory));
+        ArgumentNullException.ThrowIfNull(queueReferenceFactory);
 
         var builder = builderFactory.Create<TM, string, byte[]>();
         _consumer = builder.Build();

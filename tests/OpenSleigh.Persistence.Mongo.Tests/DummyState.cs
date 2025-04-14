@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace OpenSleigh.Persistence.Mongo.Tests
+﻿namespace OpenSleigh.Persistence.Mongo.Tests
 {
     public record DummyState
     {

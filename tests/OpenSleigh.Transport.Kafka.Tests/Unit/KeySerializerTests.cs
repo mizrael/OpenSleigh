@@ -2,7 +2,6 @@
 using System.Text;
 using System.Text.Json;
 using FluentAssertions;
-using Xunit;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit
 {

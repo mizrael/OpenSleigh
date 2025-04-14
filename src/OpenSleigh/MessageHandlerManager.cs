@@ -1,6 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
-using OpenSleigh.Outbox;
 
 namespace OpenSleigh
 {

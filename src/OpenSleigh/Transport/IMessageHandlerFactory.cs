@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace OpenSleigh.Transport
+﻿namespace OpenSleigh.Transport
 {
     public interface IMessageHandlerFactory
     {
