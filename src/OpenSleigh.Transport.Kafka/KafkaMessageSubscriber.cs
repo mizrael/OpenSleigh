@@ -44,7 +44,7 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         return ValueTask.CompletedTask;
     }
 
-    private async Task ConsumeMessages(CancellationToken stoppingToken)
+    private async ValueTask ConsumeMessages(CancellationToken stoppingToken)
     {
         _consumer?.Subscribe(_queueReferences.TopicName);
 
@@ -63,7 +63,7 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
     /// consumes a single message 
     /// </summary>
     /// <returns>false if consumer loop should be stopped</returns>
-    private async Task<bool> ConsumeMessageAsync(CancellationToken stoppingToken)
+    private async ValueTask<bool> ConsumeMessageAsync(CancellationToken stoppingToken)
     {
         try
         {
