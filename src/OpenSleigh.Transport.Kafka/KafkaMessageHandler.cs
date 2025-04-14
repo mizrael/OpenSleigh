@@ -52,6 +52,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         {
             await _messageProcessor.ProcessAsync(message, cancellationToken);
         }
+        catch (TaskCanceledException) { }
         catch (Exception ex)
         {
             await HandleProcessErrors(message, queueReferences, ex, cancellationToken);

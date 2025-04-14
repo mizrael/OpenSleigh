@@ -19,7 +19,7 @@ public abstract class SimpleSagaScenario : E2ETestsBase
         var message = new StartSimpleSaga();
 
         var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100) * hostsCount);
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
         Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
         {

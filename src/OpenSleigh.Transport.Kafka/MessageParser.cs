@@ -24,7 +24,7 @@ public class MessageParser : IMessageParser
         if(consumeResult.Message.Headers is null)
             throw new ArgumentException("message headers cannot be null.");
 
-        var messageId = consumeResult.Message.Headers.GetHeaderValue(nameof(OutboxMessage.MessageId));
+        var messageId = consumeResult.Message.Key;
         if (string.IsNullOrWhiteSpace(messageId))
             throw new ArgumentException("message id cannot be null.");
 
