@@ -2,56 +2,60 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace OpenSleigh.Outbox
+namespace OpenSleigh.Outbox;
+
+public class OutboxBackgroundService : BackgroundService
 {
-    public class OutboxBackgroundService : BackgroundService
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly OutboxProcessorOptions _options;
+    private readonly ILogger<OutboxBackgroundService> _logger;
+    private readonly ISystemInfo _systemInfo;
+
+    public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
+        OutboxProcessorOptions options,
+        ILogger<OutboxBackgroundService> logger,
+        ISystemInfo systemInfo)
     {
-        private readonly IServiceScopeFactory _scopeFactory;
-        private readonly OutboxProcessorOptions _options;
-        private readonly ILogger<OutboxBackgroundService> _logger;
-        private readonly ISystemInfo _systemInfo;
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+    }
 
-        public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
-            OutboxProcessorOptions options,
-            ILogger<OutboxBackgroundService> logger,
-            ISystemInfo systemInfo)
-        {
-            _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
-            _options = options ?? throw new ArgumentNullException(nameof(options));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
-        }
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation(
+            "Outbox Background Service is starting on client '{ClientId}' ...",
+            _systemInfo.ClientId);
 
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation(
-                "Outbox Background Service is starting on client '{ClientId}' ...",
-                _systemInfo.ClientId);
+        await ProcessMessagesAsync(stoppingToken);
+    }
 
-            return Task.Run(async () => await ProcessMessagesAsync(stoppingToken), stoppingToken);
-        }
-
-        private async Task ProcessMessagesAsync(CancellationToken stoppingToken)
+    private async ValueTask ProcessMessagesAsync(CancellationToken stoppingToken)
+    {
+        try
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                using (var scope = _scopeFactory.CreateScope())
-                {
-                    var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
-                    await service.ProcessPendingMessagesAsync(stoppingToken)
-                        .ConfigureAwait(false);
-                }
+                using var scope = _scopeFactory.CreateScope();
+
+                var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
+                await service.ProcessPendingMessagesAsync(stoppingToken)
+                    .ConfigureAwait(false);
 
                 await Task.Delay(_options.Interval, stoppingToken)
                     .ConfigureAwait(false);
             }
         }
-
-        public override async Task StopAsync(CancellationToken cancellationToken)
+        catch (TaskCanceledException)
         {
-            _logger.LogInformation("Outbox Background Service is stopping on client '{ClientId}'.", _systemInfo.ClientId);
-
-            await base.StopAsync(cancellationToken);
         }
+    }
+
+    public override async Task StopAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Outbox Background Service is stopping on client '{ClientId}'.", _systemInfo.ClientId);
+
+        await base.StopAsync(cancellationToken);
     }
 }

@@ -1,100 +1,119 @@
 ﻿using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
-namespace OpenSleigh.Transport.RabbitMQ
-{    
-    public sealed class ChannelFactory : IChannelFactory, IDisposable
+namespace OpenSleigh.Transport.RabbitMQ;
+
+public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
+{
+    private readonly IBusConnection _connection;
+    private readonly ConcurrentDictionary<string, IChannel> _channelsByExchange = new ();
+    private readonly SemaphoreSlim _semaphore;
+    private readonly RabbitConfiguration _rabbitCfg;
+    private readonly ILogger<ChannelFactory> _logger;
+
+    public ChannelFactory(IBusConnection connection, RabbitConfiguration rabbitCfg, ILogger<ChannelFactory> logger)
     {
-        private readonly IBusConnection _connection;
-        private readonly ConcurrentDictionary<string, IModel> _channels = new ();
-        private readonly RabbitConfiguration _rabbitCfg;
-        private readonly ILogger<ChannelFactory> _logger;
+        _semaphore = new SemaphoreSlim (1);
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _rabbitCfg = rabbitCfg ?? throw new ArgumentNullException(nameof(rabbitCfg));
+    }
 
-        public ChannelFactory(IBusConnection connection, RabbitConfiguration rabbitCfg, ILogger<ChannelFactory> logger)
+    public async ValueTask<IChannel> GetAsync(QueueReferences queueReferences, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(queueReferences, nameof(queueReferences));
+
+        if (_channelsByExchange.TryGetValue(queueReferences.ExchangeName, out var channel))
+            return channel;
+
+        _semaphore.Wait();
+        try
         {
-            _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _rabbitCfg = rabbitCfg ?? throw new ArgumentNullException(nameof(rabbitCfg));
-        }
-
-        public IModel Get(QueueReferences queueReferences)
-        {
-            if (queueReferences == null)
-                throw new ArgumentNullException(nameof(queueReferences));
-
-            var channel = _channels.GetOrAdd(queueReferences.ExchangeName, _ =>
-            {
-                var channel = _connection.CreateChannel();
-
-                channel.ExchangeDeclare(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic);
-                channel.ExchangeDeclare(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic);
-                channel.ExchangeDeclare(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic);
-
+            if (_channelsByExchange.TryGetValue(queueReferences.ExchangeName, out channel))
                 return channel;
-            });
-            
-            EnsureQueues(queueReferences, channel);
+
+            channel = await _connection.CreateChannelAsync(cancellationToken);
+            await EnsureExchangesAsync(queueReferences, channel, cancellationToken);
+            await EnsureQueuesAsync(queueReferences, channel, cancellationToken);
+
+            _channelsByExchange.TryAdd(queueReferences.ExchangeName, channel);
 
             return channel;
         }
-
-        private void EnsureQueues(QueueReferences queueReferences, IModel channel)
+        finally
         {
-            _logger.LogInformation($"initializing dead-letter queue '{queueReferences.DeadLetterQueue}' on exchange '{queueReferences.DeadLetterExchangeName}'...");
-            
-            channel.QueueDeclare(queue: queueReferences.DeadLetterQueue,
-                  durable: true,
-                  exclusive: false,
-                  autoDelete: false,
-                  arguments: null);
-            channel.QueueBind(queueReferences.DeadLetterQueue,
-                              queueReferences.DeadLetterExchangeName,
-                              routingKey: queueReferences.DeadLetterQueue,
-                              arguments: null);
-
-            _logger.LogInformation($"initializing retry queue '{queueReferences.RetryQueueName}' on exchange '{queueReferences.RetryExchangeName}'...");
-            channel.QueueDeclare(queue: queueReferences.RetryQueueName,
-                    durable: true,
-                    exclusive: false,
-                    autoDelete: false,
-                    arguments: new Dictionary<string, object>()
-                    {
-                        {Headers.XMessageTTL, (int)_rabbitCfg.RetryDelay.TotalMilliseconds },
-                        {Headers.XDeadLetterExchange, queueReferences.ExchangeName},
-                        {Headers.XDeadLetterRoutingKey, queueReferences.QueueName}
-                    });
-            channel.QueueBind(queue: queueReferences.RetryQueueName,
-                exchange: queueReferences.RetryExchangeName,
-                routingKey: queueReferences.RoutingKey,
-                arguments: null);
-
-            _logger.LogInformation($"initializing queue '{queueReferences.QueueName}' on exchange '{queueReferences.ExchangeName}'...");
-            channel.QueueDeclare(queue: queueReferences.QueueName,
-                   durable: true,
-                   exclusive: false,
-                   autoDelete: false,
-                   arguments: new Dictionary<string, object>()
-                   {
-                        {Headers.XDeadLetterExchange, queueReferences.DeadLetterExchangeName},
-                        {Headers.XDeadLetterRoutingKey, queueReferences.DeadLetterQueue}
-                   });
-            channel.QueueBind(queue: queueReferences.QueueName,
-                exchange: queueReferences.ExchangeName,
-                routingKey: queueReferences.RoutingKey,
-                arguments: null);
+            _semaphore.Release();
         }
+    }
 
-        public void Dispose()
+    private static async Task EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, CancellationToken cancellationToken)
+    {
+        await channel.ExchangeDeclareAsync(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
+    }
+
+    private async Task EnsureQueuesAsync(QueueReferences queueReferences, IChannel channel, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation($"initializing dead-letter queue '{queueReferences.DeadLetterQueue}' on exchange '{queueReferences.DeadLetterExchangeName}'...");
+        
+        await channel.QueueDeclareAsync(queue: queueReferences.DeadLetterQueue,
+              durable: true,
+              exclusive: false,
+              autoDelete: false,
+              arguments: null,
+              cancellationToken: cancellationToken);
+        await channel.QueueBindAsync(queueReferences.DeadLetterQueue,
+                          queueReferences.DeadLetterExchangeName,
+                          routingKey: queueReferences.DeadLetterQueue,
+                          arguments: null,
+                          cancellationToken: cancellationToken);
+       
+        _logger.LogInformation($"initializing retry queue '{queueReferences.RetryQueueName}' on exchange '{queueReferences.RetryExchangeName}'...");
+        await channel.QueueDeclareAsync(queue: queueReferences.RetryQueueName,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: new Dictionary<string, object?>()
+                {
+                    {Headers.XMessageTTL, (int)_rabbitCfg.RetryDelay.TotalMilliseconds },
+                    {Headers.XDeadLetterExchange, queueReferences.ExchangeName},
+                    {Headers.XDeadLetterRoutingKey, queueReferences.RoutingKey}
+                }, cancellationToken: cancellationToken);
+        await channel.QueueBindAsync(queue: queueReferences.RetryQueueName,
+            exchange: queueReferences.RetryExchangeName,
+            routingKey: queueReferences.RoutingKey,
+            arguments: null,
+            cancellationToken: cancellationToken);
+
+        _logger.LogInformation($"initializing queue '{queueReferences.QueueName}' on exchange '{queueReferences.ExchangeName}'...");
+        await channel.QueueDeclareAsync(queue: queueReferences.QueueName,
+               durable: true,
+               exclusive: false,
+               autoDelete: false,
+               arguments: new Dictionary<string, object?>()
+               {
+                    {Headers.XDeadLetterExchange, queueReferences.DeadLetterExchangeName},
+                    {Headers.XDeadLetterRoutingKey, queueReferences.DeadLetterQueue}
+               },
+               cancellationToken: cancellationToken);
+
+        await channel.QueueBindAsync(queue: queueReferences.QueueName,
+            exchange: queueReferences.ExchangeName,
+            routingKey: queueReferences.RoutingKey,
+            arguments: null,
+            cancellationToken: cancellationToken);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        foreach (KeyValuePair<string, IChannel> kv in _channelsByExchange)
         {
-            foreach (KeyValuePair<string, IModel> kv in _channels)
-            {   
-                if (kv.Value.IsOpen)
-                    kv.Value.Close();
-                kv.Value.Dispose();
-            }
-            _channels.Clear();
+            if (kv.Value.IsOpen)
+                await kv.Value.CloseAsync();
+            kv.Value.Dispose();
         }
+        _channelsByExchange.Clear();
     }
 }

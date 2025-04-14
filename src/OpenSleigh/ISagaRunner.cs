@@ -1,9 +1,8 @@
 ﻿using OpenSleigh.Transport;
 
-namespace OpenSleigh
+namespace OpenSleigh;
+
+public interface ISagaRunner
 {
-    public interface ISagaRunner
-    {
-        ValueTask ProcessAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken = default) where TM : IMessage;
-    }
+    ValueTask ProcessAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken = default) where TM : IMessage;
 }

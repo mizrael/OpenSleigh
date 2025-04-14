@@ -1,6 +1,5 @@
-﻿namespace OpenSleigh.Transport
-{
-    public interface IStartedBy<TM> : IHandleMessage<TM>
-        where TM : IMessage
-    { }
-}
+﻿namespace OpenSleigh.Transport;
+
+public interface IStartedBy<TM> : IHandleMessage<TM>
+    where TM : IMessage
+{ }

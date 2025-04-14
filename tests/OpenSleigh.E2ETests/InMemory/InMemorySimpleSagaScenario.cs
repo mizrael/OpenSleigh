@@ -1,14 +1,13 @@
 ﻿using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory;
 
-namespace OpenSleigh.E2ETests.InMemory
+namespace OpenSleigh.E2ETests.InMemory;
+
+public class InMemorySimpleSagaScenario : SimpleSagaScenario
 {
-    public class InMemorySimpleSagaScenario : SimpleSagaScenario
+    protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
     {
-        protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
-        {
-            cfg.UseInMemoryPersistence()
-                .UseInMemoryTransport();
-        }
+        cfg.UseInMemoryPersistence()
+            .UseInMemoryTransport();
     }
 }

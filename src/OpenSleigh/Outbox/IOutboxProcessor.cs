@@ -1,7 +1,6 @@
-﻿namespace OpenSleigh.Outbox
+﻿namespace OpenSleigh.Outbox;
+
+public interface IOutboxProcessor
 {
-    public interface IOutboxProcessor
-    {
-        ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default);
-    }
+    ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default);
 }

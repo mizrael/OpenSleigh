@@ -1,7 +1,6 @@
-﻿namespace OpenSleigh.Persistence.SQL
+﻿namespace OpenSleigh.Persistence.SQL;
+
+internal class Constants
 {
-    internal class Constants
-    {
-        public const string DbSchema = "opensleigh";
-    }
+    public const string DbSchema = "opensleigh";
 }

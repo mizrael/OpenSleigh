@@ -1,208 +1,158 @@
-﻿using FluentAssertions;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
+using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
-using OpenSleigh.Tests;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using OpenSleigh.Utils;
-using RabbitMQ.Client;
 using System;
 using System.ComponentModel;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Xunit;
 
-namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration
+namespace OpenSleigh.Transport.RabbitMQ.Tests.Integration;
+
+[Category("Integration")]
+[Trait("Category", "Integration")]
+public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 {
-    [Category("Integration")]
-    [Trait("Category", "Integration")]
-    public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
+    private readonly RabbitFixture _fixture;
+
+    public RabbitMessageSubscriberTests(RabbitFixture fixture)
     {
-        private readonly RabbitFixture _fixture;
+        _fixture = fixture;
+    }
 
-        public RabbitMessageSubscriberTests(RabbitFixture fixture)
+    [Fact]
+    public async Task StartAsync_should_consume_messages()
+    {
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        bool received = false;
+
+        var (publisher, sut) = CreateSUT(_ =>
         {
-            _fixture = fixture;
-        }
+            received = true;
 
-        [Fact]
-        public async Task StartAsync_should_consume_messages()
+            tokenSource.Cancel();
+        });
+
+        await sut.StartAsync();
+
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
+
+        while (!tokenSource.IsCancellationRequested)
+            await Task.Delay(10);
+        Assert.True(received, "Message was not received");
+    }
+
+    [Fact]
+    public async Task StartAsync_should_retry_message_when_locked()
+    {
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var processCount = 0;
+
+        var (publisher, sut) = CreateSUT(_ =>
         {
-            var sagaContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
-            sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
-            sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
-            sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
+            processCount++;
+            if (1 == processCount)
+                throw new LockException("whoops");
 
-            var serializer = new JsonSerializer();
+            tokenSource.Cancel();
+        });
 
-            var message = OutboxMessage.Create(new FakeSagaStarter(), serializer, sagaContext);
+        await sut.StartAsync();
 
-            using var connection = _fixture.Connect();
-            using var channel = connection.CreateModel();
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
 
-            var queueRef = _fixture.CreateQueueReference(channel);
+        while (!tokenSource.IsCancellationRequested)
+            await Task.Delay(10);
+        Assert.Equal(2, processCount);
+    }
 
-            var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    [Fact]
+    public async Task StartAsync_should_retry_message_when_AggregateException_with_lock()
+    {
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var processCount = 0;
 
-            var busConn = Substitute.For<IBusConnection>();
-            busConn.CreateChannel()
-                .Returns(channel);
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            processCount++;
+            if (1 == processCount)
+                throw new AggregateException(new LockException("whoops"));
 
-            var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-            queueRefFactory.Create(message).Returns(queueRef);
-            queueRefFactory.Create<FakeSagaStarter>().Returns(queueRef);
+            tokenSource.Cancel();
+        });
 
-            bool received = false;
-            var processor = Substitute.For<IMessageProcessor>();
+        await sut.StartAsync();
+
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
+
+        while (!tokenSource.IsCancellationRequested)
+            await Task.Delay(10);
+        Assert.Equal(2, processCount);
+    }
+
+    private (IPublisher publisher, IMessageSubscriber<FakeSagaStarter> sut) CreateSUT(Action<OutboxMessage>? onMessage = null)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging(cfg =>
+        {
+            cfg.AddJsonConsole();
+        });
+
+        var busConfig = Substitute.For<IBusConfigurator>();
+        busConfig.Services.Returns(services);
+
+        QueueReferencesCreator queueReferencesCreator = messageType =>
+        {
+            var exchangeName = $"{messageType.Name.ToLower()}-{Guid.CreateVersion7().ToString("N")}";
+            var queueName = $"{exchangeName}.workers";
+            var dlExchangeName = exchangeName + ".dead";
+            var dlQueueName = $"{dlExchangeName}.workers";
+            return new QueueReferences(exchangeName, queueName, exchangeName, dlExchangeName, dlQueueName);
+        };
+        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration, queueReferencesCreator);
+
+        var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+        sysInfo.ClientGroup.Returns("test");
+        sysInfo.ClientId.Returns(Guid.CreateVersion7().ToString("N"));
+        sysInfo.Id.Returns(Guid.CreateVersion7().ToString("N"));
+        services.AddSingleton(sysInfo);
+
+        var typeResolver = Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(typeof(FakeSagaStarter).FullName)
+                    .Returns(typeof(FakeSagaStarter));
+        services.AddSingleton(typeResolver);
+
+        var processor = Substitute.For<IMessageProcessor>();
+        if(onMessage is not null)
             processor.When(p => p.ProcessAsync(Arg.Any<OutboxMessage>(), Arg.Any<CancellationToken>()))
-                .Do(p =>
+                .Do(call =>
                 {
-                    received = true;
-                    tokenSource.Cancel();
+                    var message = call.Arg<OutboxMessage>();
+                    onMessage(message);
                 });
+        services.AddSingleton(processor);
 
-            var scopeFactory = Substitute.For<IServiceScopeFactory>();
+        var sp = services.BuildServiceProvider();
 
-            var sp = Substitute.For<IServiceProvider>();
-            sp.GetService(typeof(IMessageProcessor)).Returns(processor);
-            sp.GetService(typeof(IServiceScopeFactory)).Returns(scopeFactory);
+        var sut = sp.GetRequiredService<IMessageSubscriber<FakeSagaStarter>>();
+        var publisher = sp.GetRequiredService<IPublisher>();
+        return (publisher, sut);
+    }
 
-            var scope = Substitute.For<IServiceScope>();
-            scope.ServiceProvider.Returns(sp);
-
-            scopeFactory.CreateScope().Returns(scope);
-
-            var channelFactory = Substitute.For<IChannelFactory>();
-            channelFactory.Get(queueRef)
-                .Returns(channel);
-
-            var typeResolver = Substitute.For<ITypeResolver>();
-            typeResolver.Resolve(typeof(FakeSagaStarter).FullName)
-                        .Returns(typeof(FakeSagaStarter));
-
-            var logger = Substitute.For<ILogger<RabbitMessageSubscriber<FakeSagaStarter>>>();
-
-            var sut = new RabbitMessageSubscriber<FakeSagaStarter>(channelFactory, queueRefFactory, sp, typeResolver, logger);
-
-            sut.Start();
-
-            var publisher = new RabbitPublisher(
-                serializer,
-                Substitute.For<ILogger<RabbitPublisher>>(),
-                queueRefFactory,
-                channelFactory);
-            await publisher.PublishAsync(message);
-
-            while (!tokenSource.IsCancellationRequested)
-                await Task.Delay(10);
-
-            received.Should().BeTrue();
-        }
-
-        //[Fact]
-        //public async Task StartAsync_should_retry_message_when_locked()
-        //{
-        //    var message = DummyMessage.New();
-        //    var encodedMessage = Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(message));
-
-        //    using var connection = _fixture.Connect();
-        //    using var channel = connection.CreateModel();
-        //    var queueRef = _fixture.CreateQueueReference("test_publisher");
-
-        //    var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-        //    var busConn = Substitute.For<IBusConnection>();
-        //    busConn.CreateChannel()
-        //        .Returns(channel);
-
-        //    var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-        //    queueRefFactory.Create<DummyMessage>()
-        //        .ReturnsForAnyArgs(queueRef);
-
-        //    var messageParser = Substitute.For<IMessageParser>();
-        //    messageParser.Resolve(null, null)
-        //        .ReturnsForAnyArgs(message);
-
-        //    var processCount = 0;
-        //    var processor = Substitute.For<IMessageProcessor>();
-        //    processor.When(p => p.ProcessAsync(Arg.Any<DummyMessage>(), Arg.Any<CancellationToken>()))
-        //        .Do(p =>
-        //         {
-        //             processCount++;
-        //             if (1 == processCount)
-        //                 throw new LockException("whoops");
-
-        //             tokenSource.Cancel();
-        //         });
-
-        //    var logger = Substitute.For<ILogger<RabbitSubscriber<DummyMessage>>>();
-
-        //    var sut = new RabbitSubscriber<DummyMessage>(busConn, queueRefFactory, messageParser,
-        //                                                processor, logger, _fixture.RabbitConfiguration);
-
-        //    await sut.StartAsync();
-
-        //    var props = channel.CreateBasicProperties();
-        //    channel.BasicPublish(queueRef.ExchangeName, queueRef.QueueName, false, props, encodedMessage);
-
-        //    while (!tokenSource.IsCancellationRequested)
-        //        await Task.Delay(10);
-
-        //    processCount.Should().BeGreaterThan(0);
-        //}
-
-        //[Fact]
-        //public async Task StartAsync_should_retry_message_when_AggregateException_with_lock()
-        //{
-        //    var message = DummyMessage.New();
-        //    var encodedMessage = Encoding.UTF8.GetBytes(Newtonsoft.Json.JsonConvert.SerializeObject(message));
-
-        //    using var connection = _fixture.Connect();
-        //    using var channel = connection.CreateModel();
-        //    var queueRef = _fixture.CreateQueueReference("test_publisher");
-
-        //    var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-        //    var busConn = Substitute.For<IBusConnection>();
-        //    busConn.CreateChannel()
-        //        .Returns(channel);
-
-        //    var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-        //    queueRefFactory.Create<DummyMessage>()
-        //        .ReturnsForAnyArgs(queueRef);
-
-        //    var messageParser = Substitute.For<IMessageParser>();
-        //    messageParser.Resolve(null, null)
-        //        .ReturnsForAnyArgs(message);
-
-        //    var processCount = 0;
-        //    var processor = Substitute.For<IMessageProcessor>();
-        //    processor.When(p => p.ProcessAsync(Arg.Any<DummyMessage>(), Arg.Any<CancellationToken>()))
-        //        .Do(p =>
-        //        {
-        //            processCount++;
-        //            if (1 == processCount)
-        //                throw new AggregateException(new LockException("whoops"));
-
-        //            tokenSource.Cancel();
-        //        });
-
-        //    var logger = Substitute.For<ILogger<RabbitSubscriber<DummyMessage>>>();
-
-        //    var sut = new RabbitSubscriber<DummyMessage>(busConn, queueRefFactory, messageParser,
-        //                                                processor, logger, _fixture.RabbitConfiguration);
-
-        //    await sut.StartAsync();
-
-        //    var props = channel.CreateBasicProperties();
-        //    channel.BasicPublish(queueRef.ExchangeName, queueRef.QueueName, false, props, encodedMessage);
-
-        //    while (!tokenSource.IsCancellationRequested)
-        //        await Task.Delay(10);
-
-        //    processCount.Should().BeGreaterThan(0);
-        //}
+    private static OutboxMessage CreateMessage()
+    {
+        var sagaContext = Substitute.For<ISagaExecutionContext>();
+        sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+        sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
+        sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
+        var serializer = new JsonSerializer();
+        var message = OutboxMessage.Create(new FakeSagaStarter(), serializer, sagaContext);
+        return message;
     }
 }

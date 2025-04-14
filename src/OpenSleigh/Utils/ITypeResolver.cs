@@ -1,8 +1,7 @@
-﻿namespace OpenSleigh.Utils
+﻿namespace OpenSleigh.Utils;
+
+public interface ITypeResolver
 {
-    public interface ITypeResolver
-    {
-        void Register(Type type);
-        Type? Resolve(string typeName, bool throwOnError = true);
-    }
+    void Register(Type type);
+    Type? Resolve(string typeName, bool throwOnError = true);
 }

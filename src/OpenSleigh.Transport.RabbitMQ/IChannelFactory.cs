@@ -1,9 +1,8 @@
 ﻿using RabbitMQ.Client;
 
-namespace OpenSleigh.Transport.RabbitMQ
+namespace OpenSleigh.Transport.RabbitMQ;
+
+public interface IChannelFactory
 {
-    public interface IChannelFactory
-    {
-        IModel Get(QueueReferences references);
-    }
+    ValueTask<IChannel> GetAsync(QueueReferences queueReferences, CancellationToken cancellationToken = default);
 }

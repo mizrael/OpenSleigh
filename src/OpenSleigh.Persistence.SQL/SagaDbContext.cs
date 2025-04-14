@@ -2,33 +2,24 @@
 using OpenSleigh.Persistence.SQL.Entities;
 using System.Diagnostics.CodeAnalysis;
 
-namespace OpenSleigh.Persistence.SQL
+namespace OpenSleigh.Persistence.SQL;
+
+[ExcludeFromCodeCoverage]
+public class SagaDbContext : DbContext
 {
-    public interface ISagaDbContext
+    public SagaDbContext(DbContextOptions<SagaDbContext> options)
+        : base(options)
     {
-        DbSet<SagaState> SagaStates { get; set; }
-        DbSet<OutboxMessage> OutboxMessages { get; set; }
-
-        Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+        Database.EnsureCreated(); 
     }
 
-    [ExcludeFromCodeCoverage]
-    public class SagaDbContext : DbContext, ISagaDbContext
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        public SagaDbContext(DbContextOptions<SagaDbContext> options)
-            : base(options)
-        {
-            Database.EnsureCreated(); 
-        }
-
-        protected override void OnModelCreating(ModelBuilder modelBuilder)
-        {
-            modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
-            modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
-            modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
-        }
-
-        public DbSet<SagaState> SagaStates { get; set; }
-        public DbSet<OutboxMessage> OutboxMessages { get; set; }
+        modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
     }
+
+    public DbSet<SagaState> SagaStates { get; set; }
+    public DbSet<OutboxMessage> OutboxMessages { get; set; }
 }

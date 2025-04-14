@@ -1,10 +1,9 @@
 ﻿using OpenSleigh.Transport;
 
-namespace OpenSleigh.Samples.Sample1
-{
-    public record StartSaga() : IMessage { }
+namespace OpenSleigh.Samples.Sample1;
 
-    public record ProcessMySaga() : IMessage { }
+public record StartSaga() : IMessage { }
 
-    public record MySagaCompleted() : IMessage { }
-}
+public record ProcessMySaga() : IMessage { }
+
+public record MySagaCompleted() : IMessage { }

@@ -1,7 +1,6 @@
-﻿namespace OpenSleigh.Transport
+﻿namespace OpenSleigh.Transport;
+
+public interface IMessageBus
 {
-    public interface IMessageBus
-    {
-        ValueTask<IMessageContext<TM>> PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
-    }
+    ValueTask PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) where TM : IMessage;
 }

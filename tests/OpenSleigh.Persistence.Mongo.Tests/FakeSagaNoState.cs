@@ -1,38 +1,35 @@
 ﻿using OpenSleigh.Transport;
-using System.Threading;
-using System.Threading.Tasks;
 
-namespace OpenSleigh.Persistence.Mongo.Tests
+namespace OpenSleigh.Persistence.Mongo.Tests;
+
+public class FakeSagaNoState : ISaga, IStartedBy<FakeMessage>
 {
-    public class FakeSagaNoState : ISaga, IStartedBy<FakeMessage>
+    public FakeSagaNoState(ISagaExecutionContext context)
     {
-        public FakeSagaNoState(ISagaExecutionContext context)
-        {
-            this.Context = context;
-        }
-
-        public ISagaExecutionContext Context { get; }
-
-        public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
-        {
-            throw new System.NotImplementedException();
-        }
+        this.Context = context;
     }
 
-    public class FakeSagaWithState : ISaga<DummyState>, IStartedBy<FakeMessage>
+    public ISagaExecutionContext Context { get; }
+
+    public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
     {
-        public FakeSagaWithState(ISagaExecutionContext<DummyState> context)
-        {
-            this.Context = context;
-        }
+        throw new System.NotImplementedException();
+    }
+}
 
-        public ISagaExecutionContext<DummyState> Context { get; }
+public class FakeSagaWithState : ISaga<DummyState>, IStartedBy<FakeMessage>
+{
+    public FakeSagaWithState(ISagaExecutionContext<DummyState> context)
+    {
+        this.Context = context;
+    }
 
-        ISagaExecutionContext ISaga.Context => throw new System.NotImplementedException();
+    public ISagaExecutionContext<DummyState> Context { get; }
 
-        public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
-        {
-            throw new System.NotImplementedException();
-        }
+    ISagaExecutionContext ISaga.Context => throw new System.NotImplementedException();
+
+    public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
+    {
+        throw new System.NotImplementedException();
     }
 }

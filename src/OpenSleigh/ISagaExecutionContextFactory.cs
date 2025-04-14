@@ -1,12 +1,11 @@
 ﻿using OpenSleigh.Transport;
 
-namespace OpenSleigh
+namespace OpenSleigh;
+
+public interface ISagaExecutionContextFactory
 {
-    public interface ISagaExecutionContextFactory
-    {
-        ISagaExecutionContext CreateState<TM>(
-            SagaDescriptor descriptor, 
-            IMessageContext<TM> messageContext)
-            where TM : IMessage;
-    }
+    ISagaExecutionContext CreateState<TM>(
+        SagaDescriptor descriptor, 
+        IMessageContext<TM> messageContext)
+        where TM : IMessage;
 }
