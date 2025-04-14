@@ -1,77 +1,153 @@
-﻿using System;
+﻿using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
+using NSubstitute;
+using System;
+using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Confluent.Kafka;
-using NSubstitute;
-using Xunit;
 
-namespace OpenSleigh.Transport.Kafka.Tests.Unit
+namespace OpenSleigh.Transport.Kafka.Tests.Unit;
+
+public class KafkaPublisherTests
 {
-    public class KafkaPublisherTests
+    private static KafkaPublisher CreateSUT(IProducer<string, byte[]>? producer = null, IQueueReferenceFactory? factory = null)
     {
-        [Fact]
-        public void ctor_should_throw_when_input_invalid()
+        producer ??= NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        factory ??= NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisher>>();
+        var sut = new KafkaPublisher(factory, producer, logger);
+        return sut;
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task PublishAsync_should_throw_when_topic_invalid(string topicName)
+    {
+        var message = DummyMessage.CreateOutboxMessage();
+
+        var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisher>>();
+
+        var sut = CreateSUT();
+
+        await Assert.ThrowsAnyAsync<ArgumentException>(async () => await sut.PublishAsync(message, topicName));
+    }
+
+    [Fact]
+    public async Task PublishAsync_should_throw_when_message_null()
+    {
+        var sut = CreateSUT();
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(null));
+    }
+
+    [Fact]
+    public async Task PublishAsync_publish_message()
+    {
+        var message = DummyMessage.CreateOutboxMessage();
+        var queueRefs = new QueueReferences("lorem", "ipsum");
+
+        var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        producer.ProduceAsync(queueRefs.TopicName, Arg.Any<Message<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(new DeliveryReport<string, byte[]>()
+            {
+                Status = PersistenceStatus.Persisted
+            });
+
+        var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        factory.Create(message).ReturnsForAnyArgs(queueRefs);
+
+        var sut = CreateSUT(producer, factory);
+
+        await sut.PublishAsync(message);
+
+        await producer.Received(1)
+            .ProduceAsync(queueRefs.TopicName, Arg.Any<Message<string, byte[]>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task PublishAsync_should_throw_when_publish_fails()
+    {
+        var message = DummyMessage.CreateOutboxMessage();
+        var queueRefs = new QueueReferences("lorem", "ipsum");
+
+        var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        producer.ProduceAsync(queueRefs.TopicName, Arg.Any<Message<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(new DeliveryReport<string, byte[]>()
+            {
+                Status = PersistenceStatus.NotPersisted
+            });
+
+        var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        factory.Create(message).ReturnsForAnyArgs(queueRefs);
+
+        var sut = CreateSUT(producer, factory);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.PublishAsync(message));
+    }
+
+    [Fact]
+    public async Task PublishAsync_should_publish_message()
+    {
+        var message = DummyMessage.CreateOutboxMessage();
+
+        var topicName = "lorem";
+
+        var producerResult = new DeliveryResult<string, byte[]>()
         {
-            var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
-            var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            
-            Assert.Throws<ArgumentNullException>(() => new KafkaPublisher(null, factory));
-            Assert.Throws<ArgumentNullException>(() => new KafkaPublisher(executor, null));
-        }
+            Status = PersistenceStatus.Persisted
+        };
+        var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        producer.ProduceAsync(topicName, Arg.Any<Message<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(producerResult);
 
-        [Fact]
-        public async Task PublishAsync_should_throw_when_message_null()
+        var sut = CreateSUT(producer);
+
+        await sut.PublishAsync(message, topicName);
+
+        await producer.Received(1)
+            .ProduceAsync(topicName,
+                Arg.Is((Message<string, byte[]> km) =>
+                    km.Key == message.MessageId &&
+                    km.Headers.Any(h => h.Key == nameof(message.MessageType) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(typeof(DummyMessage).FullName))) &&
+                    km.Headers.Any(h => h.Key == nameof(message.CorrelationId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.CorrelationId))) &&
+                    km.Headers.Any(h => h.Key == nameof(message.SenderId) && h.GetValueBytes().SequenceEqual(Encoding.UTF8.GetBytes(message.SenderId.ToString())))
+                   ));
+    }
+
+    [Fact]
+    public async Task PublishAsync_should_include_additional_headers_when_provided()
+    {
+        var message = DummyMessage.CreateOutboxMessage();
+
+        var topicName = "lorem";
+
+        var producerResult = new DeliveryResult<string, byte[]>()
         {
-            var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
-            var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            var sut = new KafkaPublisher(executor, factory);
+            Status = PersistenceStatus.Persisted
+        };
+        var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
+        producer.ProduceAsync(topicName, Arg.Any<Message<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(producerResult);
 
-            await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.PublishAsync(null));
-        }
+        var sut = CreateSUT(producer);
 
-        [Fact]
-        public async Task PublishAsync_publish_message()
+        var headers = new[]
         {
-            var message = DummyMessage.CreateOutboxMessage();
-            var queueRefs = new QueueReferences("lorem", "ipsum");
+            new Header("lorem", Encoding.UTF8.GetBytes("ipsum")),
+            new Header("dolor", Encoding.UTF8.GetBytes("amet"))
+        };
 
-            var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
-            executor.PublishAsync(message, queueRefs.TopicName, null, Arg.Any<CancellationToken>())
-                .Returns(new DeliveryReport<string, byte[]>()
-                {
-                    Status = PersistenceStatus.Persisted
-                });
+        await sut.PublishAsync(message, topicName, headers);
 
-            var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            factory.Create(message).ReturnsForAnyArgs(queueRefs);
-
-            var sut = new KafkaPublisher(executor, factory);
-
-            await sut.PublishAsync(message);
-
-            await executor.Received(1)
-                .PublishAsync(message, queueRefs.TopicName);
-        }
-
-        [Fact]
-        public async Task PublishAsync_should_throw_when_publish_fails()
-        {
-            var message = DummyMessage.CreateOutboxMessage();
-            var queueRefs = new QueueReferences("lorem", "ipsum");
-
-            var executor = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
-            executor.PublishAsync(message, queueRefs.TopicName, null, Arg.Any<CancellationToken>())
-                .Returns(new DeliveryReport<string, byte[]>()
-                {
-                    Status = PersistenceStatus.NotPersisted
-                });
-
-            var factory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-            factory.Create(message).ReturnsForAnyArgs(queueRefs);
-
-            var sut = new KafkaPublisher(executor, factory);
-            
-            await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.PublishAsync(message));
-        }
+        await producer.Received(1)
+            .ProduceAsync(topicName,
+                Arg.Is((Message<string, byte[]> km) => km.Headers.Count == 7 &&
+                    km.Headers.Single(h => h.Key == "lorem") != null &&
+                    km.Headers.Single(h => h.Key == "dolor") != null &&
+                    km.Key == message.MessageId));
     }
 }

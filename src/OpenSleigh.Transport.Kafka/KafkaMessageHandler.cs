@@ -58,38 +58,16 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         }
     }
 
-    private async Task HandleProcessErrors(OutboxMessage message, QueueReferences queueReferences, Exception ex,
+    private ValueTask HandleProcessErrors(OutboxMessage message, QueueReferences queueReferences, Exception ex,
                                             CancellationToken cancellationToken)
     {
         _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
                            message.MessageId, ex.Message);
         
-        //TODO: consider adding retry policy, maybe using message headers to store the retry count
-
-        //await RePublishAsync(message, queueReferences, cancellationToken);
-        await PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
-    }
-    
-    private async Task RePublishAsync(OutboxMessage message, QueueReferences queueReferences, CancellationToken cancellationToken)
-    {
-        try
-        {
-            _logger.LogWarning("republishing message '{MessageId}' to topic '{Topic}' ...",
-                message.MessageId, queueReferences.TopicName);
-
-            await _publisher.PublishAsync(message, queueReferences.TopicName, cancellationToken: cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex,
-                "an exception has occurred while publishing message '{MessageId}' to topic '{Topic}': {Exception}",
-                message.MessageId,
-                queueReferences.TopicName,
-                ex.Message);
-        }
+        return PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
     }
 
-    private async Task PublishToDLQAsync(OutboxMessage message, QueueReferences queueReferences, Exception ex,
+    private async ValueTask PublishToDLQAsync(OutboxMessage message, QueueReferences queueReferences, Exception ex,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(queueReferences.DeadLetterTopicName))

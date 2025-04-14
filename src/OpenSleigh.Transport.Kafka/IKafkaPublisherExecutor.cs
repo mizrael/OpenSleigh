@@ -1,13 +1,13 @@
 ﻿using Confluent.Kafka;
 using OpenSleigh.Outbox;
 
-namespace OpenSleigh.Transport.Kafka
+namespace OpenSleigh.Transport.Kafka;
+
+public interface IKafkaPublisherExecutor
 {
-    public interface IKafkaPublisherExecutor
-    {
-        Task<DeliveryResult<string, ReadOnlyMemory<byte>>> PublishAsync(OutboxMessage message, 
-            string topic,
-            IEnumerable<Header>? additionalHeaders = null,
-            CancellationToken cancellationToken = default);
-    }
+    ValueTask<DeliveryResult<string, byte[]>> PublishAsync(
+        OutboxMessage message, 
+        string topic,
+        IEnumerable<Header>? additionalHeaders = null,
+        CancellationToken cancellationToken = default);
 }
