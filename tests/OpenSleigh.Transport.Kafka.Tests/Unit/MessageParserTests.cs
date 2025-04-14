@@ -76,6 +76,7 @@ public class MessageParserTests
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
+                Key = message.MessageId,
                 Value = message.Body.ToArray(),
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(message.MessageId)),
@@ -98,7 +99,7 @@ public class MessageParserTests
     }
 
     [Fact]
-    public void Resolve_should_throw_when_MessageId_header_missing()
+    public void Resolve_should_throw_when_MessageId_missing()
     {
         var messageTopic = "DummyMessage";     
         var messageType = typeof(DummyMessage);
@@ -118,7 +119,7 @@ public class MessageParserTests
             }
         };
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        Assert.Contains(nameof(OutboxMessage.MessageId), ex.Message);
+        Assert.Contains("message id cannot be null", ex.Message);
     }
 
     [Fact]
@@ -137,8 +138,8 @@ public class MessageParserTests
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
+                Key = Guid.NewGuid().ToString(),
                 Headers = [
-                    new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                 ],
                 Value = Array.Empty<byte>()
             }
@@ -163,6 +164,7 @@ public class MessageParserTests
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
+                Key = Guid.NewGuid().ToString(),
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -190,6 +192,7 @@ public class MessageParserTests
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
+                Key = Guid.NewGuid().ToString(),
                 Headers = [
                     new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -218,8 +221,8 @@ public class MessageParserTests
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
+                Key = Guid.NewGuid().ToString(),
                 Headers = [
-                    new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(OutboxMessage.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(OutboxMessage.CreatedAt), Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("o"))),
