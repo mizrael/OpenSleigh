@@ -40,7 +40,7 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         _config = config ?? KafkaSubscriberConfig.Default;
     }
 
-    public ValueTask StartAsync(CancellationToken cancellationToken)
+    public ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         Task.Run(async () => await ConsumeMessages(cancellationToken), cancellationToken);
         return ValueTask.CompletedTask;
@@ -113,7 +113,7 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         return false;
     }
 
-    public ValueTask StopAsync(CancellationToken cancellationToken)
+    public ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         _consumer.Close();
         return ValueTask.CompletedTask;

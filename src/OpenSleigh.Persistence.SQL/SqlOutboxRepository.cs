@@ -27,8 +27,7 @@ namespace OpenSleigh.Persistence.SQL
 
         public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
         {
-            if (messages == null)
-                throw new ArgumentNullException(nameof(messages));
+            ArgumentNullException.ThrowIfNull(messages);
 
             return AppendAsyncCore(messages, cancellationToken);
         }
@@ -47,17 +46,19 @@ namespace OpenSleigh.Persistence.SQL
             var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
             var entities = await _dbContext.OutboxMessages.AsNoTracking()
                     .Where(e => e.LockId == null || e.LockTime > maxLockDate)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
+                    .ToListAsync(cancellationToken)
+                    .ConfigureAwait(false);
 
             if (entities is null)
                 return Array.Empty<OutboxMessage>();
 
-            var messages = entities.Select(e => e.ToModel(_typeResolver))
-                                   .Where(m => m is not null)
-                                   .ToArray();
-
-            return messages ?? Array.Empty<OutboxMessage>();
+            var messages = new List<OutboxMessage>(entities.Count);
+            foreach (var entity in entities)
+            {
+                if (entity.TryMapToModel(_typeResolver, out var m) && m is not null)
+                    messages.Add(m);    
+            }
+            return messages;
         }
 
         public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)

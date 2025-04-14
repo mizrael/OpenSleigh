@@ -166,13 +166,13 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         }
     }
 
-    public async ValueTask StartAsync(CancellationToken cancellationToken)
+    public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         await InitChannelAsync(cancellationToken);
         await InitSubscriptionAsync(cancellationToken);
     }
 
-    public async ValueTask StopAsync(CancellationToken cancellationToken)
+    public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         await StopChannelAsync(cancellationToken);
     }

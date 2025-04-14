@@ -9,7 +9,6 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
     private readonly IConsumer<string, byte[]> _consumer;
     private readonly QueueReferences _queueRef;
     private readonly IKafkaMessageHandler _messageHandler;
-    private readonly ILogger<KafkaSubscriber<IMessage>> _logger;
     private CancellationTokenSource? _cts;
 
     public KafkaSubscriber(
@@ -19,7 +18,6 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         ILogger<KafkaSubscriber<IMessage>> logger)
     {
         _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         _consumer = builderFactory.Create<IMessage, string, byte[]>().Build();
 
@@ -36,7 +34,7 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _cts?.Dispose();
     }
 
-    public ValueTask StartAsync(CancellationToken cancellationToken)
+    public ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         if(_cts is not null)
             throw new InvalidOperationException("The subscriber has already been started.");
@@ -69,7 +67,7 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _consumer.Close();
     }
 
-    public ValueTask StopAsync(CancellationToken cancellationToken)
+    public ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
         _cts?.Cancel();
         _cts?.Dispose();

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OpenSleigh.Utils;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQL.Entities
 {
@@ -17,18 +18,24 @@ namespace OpenSleigh.Persistence.SQL.Entities
         public string? ParentId { get; set; }
         public required string SenderId { get; set; }
 
-        public Outbox.OutboxMessage? ToModel(ITypeResolver typeResolver)
+        public bool TryMapToModel(ITypeResolver typeResolver, [NotNullWhen(true)] out Outbox.OutboxMessage? message)
         {
-            Outbox.OutboxMessage.TryCreate(
+            var type = typeResolver.Resolve(MessageType, false);
+            if(type is null)
+            {
+                message = null;
+                return false;
+            }
+
+            return Outbox.OutboxMessage.TryCreate(
                 Body,
                 messageId: MessageId,
                 correlationId: CorrelationId,
                 CreatedAt,
-                typeResolver.Resolve(MessageType, false),
+                type,
                 parentId: ParentId,
                 senderId: SenderId,
-                out var result);
-            return result;
+                out message);
         }
 
         public static OutboxMessage Create(Outbox.OutboxMessage message)

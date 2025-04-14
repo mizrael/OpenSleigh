@@ -230,7 +230,8 @@ public class MessageParserTests
                 Value = new byte[] {1,2,3}
             }
         };
-        sut.Parse(consumeResult);
+        var message = sut.Parse(consumeResult);
+        Assert.NotNull(message);
     }
 
     [Fact]
