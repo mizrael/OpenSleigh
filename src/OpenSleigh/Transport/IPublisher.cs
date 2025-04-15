@@ -4,5 +4,5 @@ namespace OpenSleigh.Transport;
 
 public interface IPublisher
 {
-    ValueTask PublishAsync(MessageEnvelope message, CancellationToken cancellationToken = default);
+    ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default);
 }

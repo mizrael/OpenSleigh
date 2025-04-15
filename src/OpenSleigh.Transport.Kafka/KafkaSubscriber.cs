@@ -72,6 +72,7 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IAsyncDis
         try
         {
             _stoppingCts?.Cancel();
+            _stoppingCts?.Dispose();
             _stoppingCts = null;
         }
         finally

@@ -7,7 +7,6 @@ internal class MessageProcessor : IMessageProcessor
 {
     private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ISagaRunner _sagaRunner;
-    private readonly ISerializer _serializer;
     
     public MessageProcessor(
         ISagaRunner sagaRunner, 
@@ -16,8 +15,6 @@ internal class MessageProcessor : IMessageProcessor
     {
         _sagaRunner = sagaRunner ?? throw new ArgumentNullException(nameof(sagaRunner));
         _sagaDescriptorsResolver = sagaDescriptorsResolver ?? throw new ArgumentNullException(nameof(sagaDescriptorsResolver));
-
-        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
     public async ValueTask ProcessAsync(MessageEnvelope outboxMessage, CancellationToken cancellationToken = default)

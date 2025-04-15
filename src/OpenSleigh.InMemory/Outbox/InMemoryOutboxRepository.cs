@@ -8,7 +8,7 @@ internal class InMemoryOutboxRepository : IOutboxRepository
 {
     private readonly ConcurrentDictionary<string, (MessageEnvelope message, string? lockId)> _messages = new();
 
-    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
+    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
