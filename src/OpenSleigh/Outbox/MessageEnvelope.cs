@@ -5,8 +5,33 @@ using System.Diagnostics.CodeAnalysis;
 namespace OpenSleigh.Outbox;
 
 public class MessageEnvelope
-{ 
+{
+    private Type _messageType;
+
     private MessageEnvelope() { }
+
+    public required IMessage Message { get; init; }
+
+    public Type MessageType
+    {
+        get
+        {
+            if(this.Message is null)
+                throw new InvalidOperationException("Message is null. Cannot determine message type.");
+
+            _messageType ??= this.Message.GetType();
+
+            return _messageType;
+        }
+    }
+
+    public required string CorrelationId { get; init; }
+    public required string MessageId { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public required string SenderId { get; init; }        
+    public string? ParentId { get; init; }
+
+    #region Factory
 
     public static bool TryCreate(
         ReadOnlySpan<byte> body,
@@ -25,7 +50,7 @@ public class MessageEnvelope
             string.IsNullOrEmpty(messageId) ||
             string.IsNullOrEmpty(correlationId) ||
             createdAt == default ||
-            messageType is null || 
+            messageType is null ||
             string.IsNullOrEmpty(senderId))
         {
             result = null;
@@ -33,7 +58,7 @@ public class MessageEnvelope
         }
 
         var message = serializer.Deserialize(body, messageType) as IMessage;
-        if(message is null)
+        if (message is null)
         {
             result = null;
             return false;
@@ -45,7 +70,6 @@ public class MessageEnvelope
             MessageId = messageId,
             CorrelationId = correlationId,
             CreatedAt = createdAt,
-            MessageType = messageType,
             ParentId = parentId,
             SenderId = senderId
         };
@@ -64,7 +88,6 @@ public class MessageEnvelope
             SenderId = systemInfo.Id,
             MessageId = Guid.CreateVersion7().ToString(),
             Message = message,
-            MessageType = message.GetType(),
             CreatedAt = DateTimeOffset.UtcNow
         };
     }
@@ -80,7 +103,6 @@ public class MessageEnvelope
         return new MessageEnvelope()
         {
             Message = message,
-            MessageType = message.GetType(),
             CreatedAt = DateTimeOffset.UtcNow,
             MessageId = Guid.CreateVersion7().ToString(),
             CorrelationId = executionContext.CorrelationId,
@@ -88,15 +110,6 @@ public class MessageEnvelope
             SenderId = executionContext.InstanceId
         };
     }
-    
-    public required IMessage Message { get; init; }
 
-    // TODO: we don't need this anymore
-    public required Type MessageType { get; init; }
-    
-    public required string CorrelationId { get; init; }
-    public required string MessageId { get; init; }
-    public required DateTimeOffset CreatedAt { get; init; }
-    public required string SenderId { get; init; }        
-    public string? ParentId { get; init; }        
+    #endregion Factory
 }
