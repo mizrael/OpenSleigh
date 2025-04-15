@@ -1,12 +1,12 @@
-# OpenSleigh.Core
-![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Core?style=plastic)
+# OpenSleigh
+![Nuget](https://img.shields.io/nuget/v/OpenSleigh?style=plastic)
 
 ## Description
 OpenSleigh is a distributed saga management library, written in C# with .NET Core. 
 It is intended to be reliable, fast, easy to use, configurable and extensible.
 
 ## Installation
-This library can be installed from Nuget: https://www.nuget.org/packages/OpenSleigh.Core/
+This library can be installed from Nuget: https://www.nuget.org/packages/OpenSleigh/
 
 ---
 
