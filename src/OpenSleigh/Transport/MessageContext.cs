@@ -27,7 +27,7 @@ internal record MessageContext<TM> : IMessageContext<TM>
     public string? ParentId { get; }
     public string? SenderId { get; }
 
-    public static IMessageContext<TM> Create(TM message, OutboxMessage outboxMessage)
+    public static IMessageContext<TM> Create(TM message, MessageEnvelope outboxMessage)
         => new MessageContext<TM>(
             id: outboxMessage.MessageId,
             correlationId: outboxMessage.CorrelationId,

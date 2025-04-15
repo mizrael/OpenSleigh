@@ -4,16 +4,23 @@ using NSubstitute;
 using OpenSleigh.Outbox;
 using System;
 using System.Text;
+using System.Text.Json;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class MessageParserTests
 {
+    private static MessageParser CreateSUT(IQueueReferenceFactory? queueReferenceFactory = null)
+    {
+        queueReferenceFactory ??= NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        var sut = new MessageParser(queueReferenceFactory, new Utils.JsonSerializer());
+        return sut;
+    }
+
     [Fact]
     public void Resolve_should_throw_when_input_null()
-    {          
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        var sut = new MessageParser(queueReferenceFactory);
+    {
+        var sut = CreateSUT();
 
         Assert.Throws<ArgumentNullException>(() => sut.Parse(null));
     }
@@ -21,8 +28,7 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_headers_do_not_contain_message_type()
     {
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT();
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -43,8 +49,8 @@ public class MessageParserTests
         var messageTopic = "lorem";
 
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
-        var sut = new MessageParser(queueReferenceFactory);
+        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -61,40 +67,39 @@ public class MessageParserTests
     {
         var messageTopic = nameof(DummyMessage);
         var parentId = "parent id";
-;       var message = DummyMessage.CreateOutboxMessage(parentId);
-        var messageType = typeof(DummyMessage);
-        var encodedMessage = Newtonsoft.Json.JsonConvert.SerializeObject(message);
+;       var envelope = DummyMessage.CreateEnvelope(parentId);
+        var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType); 
-        
-        var sut = new MessageParser(queueReferenceFactory);
+        queueReferenceFactory.GetQueueType(messageTopic).Returns(envelope.MessageType);
+
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
             Topic = messageTopic,
             Message = new Message<string, byte[]>()
             {
-                Key = message.MessageId,
-                Value = message.Body.ToArray(),
+                Key = envelope.MessageId,
+                Value = Encoding.UTF8.GetBytes(jsonMessage),
                 Headers = [
-                    new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(message.MessageId)),
-                    new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(message.SenderId)),
-                    new Header(nameof(OutboxMessage.CorrelationId), Encoding.UTF8.GetBytes(message.CorrelationId)),
-                    new Header(nameof(OutboxMessage.CreatedAt), Encoding.UTF8.GetBytes(message.CreatedAt.ToString())),
-                    new Header(nameof(OutboxMessage.ParentId), Encoding.UTF8.GetBytes(message.ParentId)),
+                    new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(envelope.MessageId)),
+                    new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(envelope.SenderId)),
+                    new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(envelope.CorrelationId)),
+                    new Header(nameof(MessageEnvelope.CreatedAt), Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString())),
+                    new Header(nameof(MessageEnvelope.ParentId), Encoding.UTF8.GetBytes(envelope.ParentId)),
                 ]
             }
         };
         var result = sut.Parse(consumeResult);
         Assert.NotNull(result);
-        Assert.Equal(message.MessageId, result.MessageId);
-        Assert.Equal(message.SenderId, result.SenderId);
-        Assert.Equal(message.CorrelationId, result.CorrelationId);
-        Assert.Equal(message.CreatedAt, result.CreatedAt, TimeSpan.FromSeconds(2));
-        Assert.Equal(message.ParentId, result.ParentId);
-        Assert.Equal(message.Body.ToArray(), result.Body.ToArray());
-        Assert.Equal(message.MessageType, result.MessageType);
+        Assert.Equal(envelope.MessageId, result.MessageId);
+        Assert.Equal(envelope.SenderId, result.SenderId);
+        Assert.Equal(envelope.CorrelationId, result.CorrelationId);
+        Assert.Equal(envelope.CreatedAt, result.CreatedAt, TimeSpan.FromSeconds(2));
+        Assert.Equal(envelope.ParentId, result.ParentId);
+        Assert.Equal(envelope.Message, result.Message);
+        Assert.Equal(envelope.MessageType, result.MessageType);
     }
 
     [Fact]
@@ -106,7 +111,7 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -130,7 +135,7 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -144,7 +149,7 @@ public class MessageParserTests
             }
         };
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        Assert.Contains(nameof(OutboxMessage.SenderId), ex.Message);
+        Assert.Contains(nameof(MessageEnvelope.SenderId), ex.Message);
     }
 
     [Fact]
@@ -156,7 +161,7 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -165,14 +170,14 @@ public class MessageParserTests
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
-                    new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                 ],
                 Value = Array.Empty<byte>()
             }
         };
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        Assert.Contains(nameof(OutboxMessage.CorrelationId), ex.Message);
+        Assert.Contains(nameof(MessageEnvelope.CorrelationId), ex.Message);
     }
 
     [Fact]
@@ -184,7 +189,7 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -193,27 +198,28 @@ public class MessageParserTests
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
-                    new Header(nameof(OutboxMessage.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(nameof(OutboxMessage.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                 ],
                 Value = Array.Empty<byte>()
             }
         };
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        Assert.Contains(nameof(OutboxMessage.CreatedAt), ex.Message);
+        Assert.Contains(nameof(MessageEnvelope.CreatedAt), ex.Message);
     }
 
     [Fact]
     public void Resolve_should_not_throw_when_ParentId_header_missing()
     {
         var messageTopic = "DummyMessage";
-        var messageType = typeof(DummyMessage);
+        var envelope = DummyMessage.CreateEnvelope();
+        var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        queueReferenceFactory.GetQueueType(messageTopic).Returns(envelope.MessageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -222,11 +228,11 @@ public class MessageParserTests
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
-                    new Header(nameof(OutboxMessage.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(nameof(OutboxMessage.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
-                    new Header(nameof(OutboxMessage.CreatedAt), Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("o"))),
+                    new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
+                    new Header(nameof(MessageEnvelope.CreatedAt), Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("o"))),
                 ],
-                Value = new byte[] {1,2,3}
+                Value = Encoding.UTF8.GetBytes(jsonMessage)
             }
         };
         var message = sut.Parse(consumeResult);
@@ -242,7 +248,7 @@ public class MessageParserTests
         var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
 
-        var sut = new MessageParser(queueReferenceFactory);
+        var sut = CreateSUT(queueReferenceFactory);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {

@@ -14,7 +14,7 @@ public class QueueReferenceFactoryTests
             return new QueueReferences(topicName, topicName + ".dead");
         });
         
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
         var result = sut.Create(message);
         result.Should().NotBeNull();
         result.TopicName.Should().Be("dummymessage");
@@ -32,7 +32,7 @@ public class QueueReferenceFactoryTests
         };
         var sp = NSubstitute.Substitute.For<IServiceProvider>();
         var sut = new QueueReferenceFactory(creator);
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
         var result = sut.Create(message);
         result.Should().NotBeNull();
         result.TopicName.Should().Be("dummymessage");

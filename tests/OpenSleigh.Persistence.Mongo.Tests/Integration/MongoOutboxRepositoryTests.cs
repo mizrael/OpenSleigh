@@ -17,13 +17,13 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         _fixture = fixture;
     }
 
-    private static OutboxMessage CreateMessage()
+    private static MessageEnvelope CreateMessage()
     {
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns("test");
         sysInfo.ClientId.Returns("client");
         sysInfo.Id.Returns("sender");
-        return OutboxMessage.Create(new FakeMessage(), sysInfo, new JsonSerializer());
+        return MessageEnvelope.Create(new FakeMessage(), sysInfo);
     }
 
     private MongoOutboxRepository CreateSut(IDbContext db)
@@ -31,7 +31,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var typeResolver = new TypeResolver();
         typeResolver.Register(typeof(FakeMessage));
 
-        var sut = new MongoOutboxRepository(db, MongoOutboxRepositoryOptions.Default, typeResolver);
+        var sut = new MongoOutboxRepository(db, MongoOutboxRepositoryOptions.Default, typeResolver, new JsonSerializer());
         return sut;
     }
 

@@ -9,7 +9,7 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
     where TM : IMessage
 {
     private readonly IMessageProcessor _messageProcessor;
-    private readonly ChannelReader<OutboxMessage> _reader;
+    private readonly ChannelReader<MessageEnvelope> _reader;
     private readonly ILogger<InMemorySubscriber<TM>> _logger;
     private readonly InMemorySubscriberOptions _options;
     
@@ -18,7 +18,7 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
     private bool disposedValue;
 
     public InMemorySubscriber(IMessageProcessor messageProcessor,
-        ChannelReader<OutboxMessage> reader,
+        ChannelReader<MessageEnvelope> reader,
         ILogger<InMemorySubscriber<TM>> logger,
         InMemorySubscriberOptions? options = null)
     {

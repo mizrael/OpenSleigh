@@ -29,7 +29,7 @@ public interface ISagaExecutionContext
 
     IReadOnlyCollection<ProcessedMessage> ProcessedMessages { get; }
 
-    IReadOnlyCollection<OutboxMessage> Outbox { get; }
+    IReadOnlyCollection<MessageEnvelope> Outbox { get; }
 
     /// <summary>
     /// true if the execution is completed.
@@ -51,7 +51,7 @@ public interface ISagaExecutionContext
         ISagaExecutionService sagaExecutionService, 
         CancellationToken cancellationToken) where TM : IMessage;
 
-    void Publish(OutboxMessage message);
+    void Publish(MessageEnvelope message);
     void ClearOutbox();        
 }
 

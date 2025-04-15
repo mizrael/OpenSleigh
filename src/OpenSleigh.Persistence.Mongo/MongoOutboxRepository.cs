@@ -15,33 +15,36 @@ public class MongoOutboxRepository : IOutboxRepository
     private readonly IDbContext _dbContext;
     private readonly MongoOutboxRepositoryOptions _options;
     private readonly ITypeResolver _typeResolver;
+    private readonly ISerializer _serializer;
 
     public MongoOutboxRepository(
         IDbContext dbContext,
         MongoOutboxRepositoryOptions options,
-        ITypeResolver typeResolver)
+        ITypeResolver typeResolver,
+        ISerializer serializer)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public ValueTask AppendAsync(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken = default)
+    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
 
-    private async ValueTask AppendAsyncCore(IEnumerable<OutboxMessage> messages, CancellationToken cancellationToken)
+    private async ValueTask AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
-        var entities = messages.Select(message => Entities.OutboxMessage.Create(message));
+        var entities = messages.Select(message => Entities.OutboxMessage.Create(message, _serializer));
 
         await _dbContext.OutboxMessages.InsertManyAsync(entities, cancellationToken: cancellationToken)
                                 .ConfigureAwait(false);
     }
 
-    public ValueTask DeleteAsync(OutboxMessage message, string lockId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -51,7 +54,7 @@ public class MongoOutboxRepository : IOutboxRepository
         return DeleteAsyncCore(message, lockId, cancellationToken);
     }
 
-    private async ValueTask DeleteAsyncCore(OutboxMessage message, string lockId, CancellationToken cancellationToken)
+    private async ValueTask DeleteAsyncCore(MessageEnvelope message, string lockId, CancellationToken cancellationToken)
     {
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
@@ -70,14 +73,14 @@ public class MongoOutboxRepository : IOutboxRepository
                                        .ConfigureAwait(false);
     }
 
-    public ValueTask<string> LockAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
         return LockAsyncCore(message, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(OutboxMessage message, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
         var lockId = Guid.NewGuid().ToString();
 
@@ -108,7 +111,7 @@ public class MongoOutboxRepository : IOutboxRepository
         return lockId;
     }
 
-    public async ValueTask<IEnumerable<OutboxMessage>> ReadPendingAsync(CancellationToken cancellationToken = default)
+    public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
 
@@ -122,12 +125,15 @@ public class MongoOutboxRepository : IOutboxRepository
         var entities = await cursor.ToListAsync(cancellationToken)
                                    .ConfigureAwait(false);
         if (entities is null)
-            return Enumerable.Empty<OutboxMessage>();
+            return Enumerable.Empty<MessageEnvelope>();
 
-        var messages = entities.Select(e => e.ToModel(_typeResolver))
-                               .Where(m => m is not null)
-                               .ToArray();
+        var results = new List<MessageEnvelope>(entities.Count);
+        foreach(var entity in entities)
+        {
+            if (entity.TryMap(_typeResolver, _serializer, out var message))
+                results.Add(message);
+        }
 
-        return messages;
+        return results;
     }
 }

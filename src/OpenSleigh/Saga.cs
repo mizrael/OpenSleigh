@@ -1,19 +1,15 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh;
 
 public abstract class Saga : ISaga
 {
-    private readonly ISerializer _serializer;
     private readonly ISagaExecutionContext _context;
 
-    //TODO: I don't like the serializer here
-    protected Saga(ISagaExecutionContext context, ISerializer serializer)
+    protected Saga(ISagaExecutionContext context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
-        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
     protected void Publish<TM>(TM message)
@@ -21,7 +17,7 @@ public abstract class Saga : ISaga
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var outboxMessage = OutboxMessage.Create(message, _serializer, this.Context);
+        var outboxMessage = MessageEnvelope.Create(message, this.Context);
         _context.Publish(outboxMessage);
     }
 
@@ -33,8 +29,8 @@ public abstract class Saga<TS> : Saga, ISaga<TS>
 {
     private readonly ISagaExecutionContext<TS> _context;
 
-    protected Saga(ISagaExecutionContext<TS> context, ISerializer serializer)
-        : base(context, serializer)
+    protected Saga(ISagaExecutionContext<TS> context)
+        : base(context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }

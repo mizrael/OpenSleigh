@@ -96,7 +96,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Assert.Equal(2, processCount);
     }
 
-    private (IPublisher publisher, IMessageSubscriber<FakeSagaStarter> sut) CreateSUT(Action<OutboxMessage>? onMessage = null)
+    private (IPublisher publisher, IMessageSubscriber<FakeSagaStarter> sut) CreateSUT(Action<MessageEnvelope>? onMessage = null)
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -128,12 +128,14 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
                     .Returns(typeof(FakeSagaStarter));
         services.AddSingleton(typeResolver);
 
+        services.AddSingleton<ISerializer>(new JsonSerializer());
+
         var processor = Substitute.For<IMessageProcessor>();
         if(onMessage is not null)
-            processor.When(p => p.ProcessAsync(Arg.Any<OutboxMessage>(), Arg.Any<CancellationToken>()))
+            processor.When(p => p.ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>()))
                 .Do(call =>
                 {
-                    var message = call.Arg<OutboxMessage>();
+                    var message = call.Arg<MessageEnvelope>();
                     onMessage(message);
                 });
         services.AddSingleton(processor);
@@ -145,14 +147,14 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         return (publisher, sut);
     }
 
-    private static OutboxMessage CreateMessage()
+    private static MessageEnvelope CreateMessage()
     {
         var sagaContext = Substitute.For<ISagaExecutionContext>();
         sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
         sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
         var serializer = new JsonSerializer();
-        var message = OutboxMessage.Create(new FakeSagaStarter(), serializer, sagaContext);
+        var message = MessageEnvelope.Create(new FakeSagaStarter(), sagaContext);
         return message;
     }
 }

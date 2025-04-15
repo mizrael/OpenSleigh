@@ -21,16 +21,15 @@ public class TypeResolver : ITypeResolver
 
     public Type? Resolve(string typeName, bool throwOnError = true)
     {
-        Type? dataType = null;
+        if (_typesByName.TryGetValue(typeName.ToLower(), out var dataType))
+            return dataType;
+
         foreach (var assembly in _assemblies)
         {
             dataType = assembly.GetType(typeName, throwOnError: false, ignoreCase: true);
             if (dataType is not null)
                 break;
         }
-
-        if (dataType is null)
-            _typesByName.TryGetValue(typeName.ToLower(), out dataType);
 
         if (dataType is null && throwOnError)
             throw new TypeLoadException($"unable to resolve type '{typeName}'");

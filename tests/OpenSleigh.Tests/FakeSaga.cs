@@ -1,5 +1,4 @@
 ﻿using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.Tests;
 
@@ -8,7 +7,7 @@ internal class FakeSaga :
     IStartedBy<FakeSagaStarter>,
     IHandleMessage<FakeSagaMessage>
 {
-    public FakeSaga(ISagaExecutionContext context, ISerializer serializer) : base(context, serializer)
+    public FakeSaga(ISagaExecutionContext context) : base(context)
     {
     }
 

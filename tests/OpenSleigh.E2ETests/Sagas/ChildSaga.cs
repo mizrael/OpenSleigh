@@ -1,5 +1,4 @@
 ﻿using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.E2ETests;
 
@@ -14,9 +13,7 @@ public class ChildSaga :
     IStartedBy<StartChildSaga>,
     IHandleMessage<ProcessChildSaga>
 {
-    public ChildSaga(
-        ISagaExecutionContext context,
-        ISerializer serializer) : base(context, serializer)
+    public ChildSaga(ISagaExecutionContext context) : base(context)
     {
     }
 

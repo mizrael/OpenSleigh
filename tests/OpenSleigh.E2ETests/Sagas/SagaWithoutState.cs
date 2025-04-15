@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 
 namespace OpenSleigh.E2ETests;
 
@@ -16,13 +15,12 @@ public class SagaWithoutState :
     public SagaWithoutState(
         Action<IMessageContext<SagaCompleted>> onCompleted,
         ILogger<SagaWithoutState> logger,
-        ISagaExecutionContext context,
-        ISerializer serializer
-        ) : base(context, serializer)
+        ISagaExecutionContext context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
     }
+
     public ValueTask HandleAsync(IMessageContext<StartMultipleSagas> context, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("starting saga without state '{InstanceId}'...", this.Context.InstanceId);

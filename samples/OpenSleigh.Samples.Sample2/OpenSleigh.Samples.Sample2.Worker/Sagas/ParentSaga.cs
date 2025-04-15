@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Samples.Sample2.Common.Messages;
 using OpenSleigh.Transport;
-using OpenSleigh.Utils;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,8 +25,7 @@ public class ParentSaga :
     private readonly Random _random = new Random();
 
     public ParentSaga(ILogger<ParentSaga> logger,
-        ISagaExecutionContext<ParentSagaState> context,
-        ISerializer serializer) : base(context, serializer)
+        ISagaExecutionContext<ParentSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

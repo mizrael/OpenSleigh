@@ -4,7 +4,7 @@ namespace OpenSleigh.Transport.Kafka;
 
 public interface IQueueReferenceFactory
 {
-    QueueReferences Create(OutboxMessage message);
+    QueueReferences Create(MessageEnvelope message);
 
     QueueReferences Create<TM>() where TM : IMessage;
 

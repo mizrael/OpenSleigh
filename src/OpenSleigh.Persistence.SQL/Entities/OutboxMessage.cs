@@ -18,16 +18,21 @@ public record OutboxMessage
     public string? ParentId { get; set; }
     public required string SenderId { get; set; }
 
-    public bool TryMapToModel(ITypeResolver typeResolver, [NotNullWhen(true)] out Outbox.OutboxMessage? message)
+    public bool TryMap(
+        ITypeResolver typeResolver, 
+        ISerializer serializer,
+        [NotNullWhen(true)] out Outbox.MessageEnvelope? envelope)
     {
+        ArgumentNullException.ThrowIfNull(typeResolver, nameof(typeResolver));
+
         var type = typeResolver.Resolve(MessageType, false);
         if(type is null)
         {
-            message = null;
+            envelope = null;
             return false;
         }
 
-        return Outbox.OutboxMessage.TryCreate(
+        return Outbox.MessageEnvelope.TryCreate(
             Body,
             messageId: MessageId,
             correlationId: CorrelationId,
@@ -35,14 +40,20 @@ public record OutboxMessage
             type,
             parentId: ParentId,
             senderId: SenderId,
-            out message);
+            serializer,
+            out envelope);
     }
 
-    public static OutboxMessage Create(Outbox.OutboxMessage message)
+    public static OutboxMessage Map(Outbox.MessageEnvelope message, ISerializer serializer)
     {
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(serializer);
+
+        var body = serializer.Serialize(message.Message);
+
         return new OutboxMessage()
         {
-            Body = message.Body.ToArray(),
+            Body = body,
             MessageId = message.MessageId,
             CorrelationId = message.CorrelationId,
             CreatedAt = message.CreatedAt,

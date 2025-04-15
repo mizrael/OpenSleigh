@@ -16,7 +16,8 @@ public class KafkaPublisherTests
         producer ??= NSubstitute.Substitute.For<IProducer<string, byte[]>>();
         factory ??= NSubstitute.Substitute.For<IQueueReferenceFactory>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisher>>();
-        var sut = new KafkaPublisher(factory, producer, logger);
+        var serializer = Substitute.For<Utils.ISerializer>();
+        var sut = new KafkaPublisher(factory, producer, logger, serializer);
         return sut;
     }
 
@@ -26,7 +27,7 @@ public class KafkaPublisherTests
     [InlineData("   ")]
     public async Task PublishAsync_should_throw_when_topic_invalid(string topicName)
     {
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
 
         var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaPublisher>>();
@@ -47,7 +48,7 @@ public class KafkaPublisherTests
     [Fact]
     public async Task PublishAsync_publish_message()
     {
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
         var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
@@ -71,7 +72,7 @@ public class KafkaPublisherTests
     [Fact]
     public async Task PublishAsync_should_throw_when_publish_fails()
     {
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
         var producer = NSubstitute.Substitute.For<IProducer<string, byte[]>>();
@@ -92,7 +93,7 @@ public class KafkaPublisherTests
     [Fact]
     public async Task PublishAsync_should_publish_message()
     {
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
 
         var topicName = "lorem";
 
@@ -121,7 +122,7 @@ public class KafkaPublisherTests
     [Fact]
     public async Task PublishAsync_should_include_additional_headers_when_provided()
     {
-        var message = DummyMessage.CreateOutboxMessage();
+        var message = DummyMessage.CreateEnvelope();
 
         var topicName = "lorem";
 

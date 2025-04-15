@@ -19,7 +19,7 @@ public class QueueReferenceFactory : IQueueReferenceFactory
         });
     }
 
-    public QueueReferences Create(OutboxMessage message)
+    public QueueReferences Create(MessageEnvelope message)
         => _queueReferencesCache.GetOrAdd(message.MessageType, k => _creator(message.MessageType));
 
     public QueueReferences Create<TM>() where TM : IMessage

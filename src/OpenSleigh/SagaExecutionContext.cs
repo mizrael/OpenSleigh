@@ -7,7 +7,7 @@ namespace OpenSleigh;
 public record SagaExecutionContext : ISagaExecutionContext
 {
     private readonly HashSet<ProcessedMessage> _processedMessages = new();
-    private readonly ConcurrentQueue<OutboxMessage> _outbox = new();
+    private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
 
     public SagaExecutionContext(
         string instanceId, 
@@ -63,7 +63,7 @@ public record SagaExecutionContext : ISagaExecutionContext
                                               .ConfigureAwait(false);
     }
 
-    public void Publish(OutboxMessage message)
+    public void Publish(MessageEnvelope message)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -103,7 +103,7 @@ public record SagaExecutionContext : ISagaExecutionContext
     public string LockId { get; private set; }
 
     public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
-    public IReadOnlyCollection<OutboxMessage> Outbox => _outbox;
+    public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
 }
 
 public record SagaExecutionContext<TS> : SagaExecutionContext, ISagaExecutionContext<TS>

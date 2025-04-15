@@ -17,13 +17,13 @@ public abstract class SqlOutboxRepositoryTests
         _fixture = fixture;
     }
 
-    private static OutboxMessage CreateMessage()
+    private static MessageEnvelope CreateMessage()
     {
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns("test");
         sysInfo.ClientId.Returns("client");
         sysInfo.Id.Returns("sender");
-        return OutboxMessage.Create(new FakeMessage(), sysInfo, new JsonSerializer());
+        return MessageEnvelope.Create(new FakeMessage(), sysInfo);
     }
     
     [Fact]
@@ -180,7 +180,7 @@ public abstract class SqlOutboxRepositoryTests
         var typeResolver = new TypeResolver();
         typeResolver.Register(typeof(FakeMessage));
 
-        var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default);
+        var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default, new JsonSerializer());
         return sut;
     }
 }

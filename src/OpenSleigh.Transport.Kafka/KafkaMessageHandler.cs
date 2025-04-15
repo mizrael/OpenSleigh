@@ -28,7 +28,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
 
     public async ValueTask HandleAsync(ConsumeResult<string, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
     {
-        OutboxMessage? message = null;
+        MessageEnvelope? message = null;
         try
         {
             message =  _messageParser.Parse(result);
@@ -42,7 +42,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
             await HandleCoreAsync(message, queueReferences, cancellationToken);
     }
     
-    private async ValueTask HandleCoreAsync(OutboxMessage message, QueueReferences queueReferences, CancellationToken cancellationToken)
+    private async ValueTask HandleCoreAsync(MessageEnvelope message, QueueReferences queueReferences, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
             "client {ClientGroup}/{ClientId} received message '{MessageId}' from Topic '{Topic}'. Processing...", 
@@ -59,7 +59,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         }
     }
 
-    private ValueTask HandleProcessErrors(OutboxMessage message, QueueReferences queueReferences, Exception ex,
+    private ValueTask HandleProcessErrors(MessageEnvelope message, QueueReferences queueReferences, Exception ex,
                                             CancellationToken cancellationToken)
     {
         _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
@@ -68,7 +68,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         return PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
     }
 
-    private async ValueTask PublishToDLQAsync(OutboxMessage message, QueueReferences queueReferences, Exception ex,
+    private async ValueTask PublishToDLQAsync(MessageEnvelope message, QueueReferences queueReferences, Exception ex,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(queueReferences.DeadLetterTopicName))

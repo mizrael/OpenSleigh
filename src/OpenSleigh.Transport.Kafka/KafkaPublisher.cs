@@ -1,6 +1,7 @@
 ﻿using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
+using OpenSleigh.Utils;
 using System.Text;
 
 namespace OpenSleigh.Transport.Kafka;
@@ -10,19 +11,22 @@ public class KafkaPublisher : IPublisher, IKafkaPublisherExecutor
     private readonly IProducer<string, byte[]> _producer;
     private readonly ILogger<KafkaPublisher> _logger;
     private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly ISerializer _serializer;
 
     public KafkaPublisher(
-        IQueueReferenceFactory queueReferenceFactory, 
-        IProducer<string, byte[]> producer, 
-        ILogger<KafkaPublisher> logger)
+        IQueueReferenceFactory queueReferenceFactory,
+        IProducer<string, byte[]> producer,
+        ILogger<KafkaPublisher> logger,
+        ISerializer serializer)
     {
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
-        _producer = producer;
-        _logger = logger;
+        _producer = producer ?? throw new ArgumentNullException(nameof(producer));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
     public async ValueTask PublishAsync(
-        OutboxMessage message, 
+        MessageEnvelope message, 
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message, nameof(message));
@@ -38,7 +42,7 @@ public class KafkaPublisher : IPublisher, IKafkaPublisherExecutor
     }
 
     public ValueTask<DeliveryResult<string, byte[]>> PublishAsync(
-        OutboxMessage message,
+        MessageEnvelope message,
         string topic,
         IEnumerable<Header>? additionalHeaders = null,
         CancellationToken cancellationToken = default)
@@ -53,28 +57,30 @@ public class KafkaPublisher : IPublisher, IKafkaPublisherExecutor
     }
 
     private async ValueTask<DeliveryResult<string, byte[]>> PublishAsyncCore(
-        OutboxMessage message,
+        MessageEnvelope envelope,
         string topic,
         IEnumerable<Header>? additionalHeaders,
         CancellationToken cancellationToken)
     {
         var headers = new Headers
         {
-            { nameof(message.MessageType),  Encoding.UTF8.GetBytes(message.MessageType.FullName) },
-            { nameof(message.ParentId),  Encoding.UTF8.GetBytes(message.ParentId ?? string.Empty) },
-            { nameof(message.SenderId),  Encoding.UTF8.GetBytes(message.SenderId) },
-            { nameof(message.CorrelationId),  Encoding.UTF8.GetBytes(message.CorrelationId) },
-            { nameof(message.CreatedAt),  Encoding.UTF8.GetBytes(message.CreatedAt.ToString()) }
+            { nameof(envelope.MessageType),  Encoding.UTF8.GetBytes(envelope.MessageType.FullName) },
+            { nameof(envelope.ParentId),  Encoding.UTF8.GetBytes(envelope.ParentId ?? string.Empty) },
+            { nameof(envelope.SenderId),  Encoding.UTF8.GetBytes(envelope.SenderId) },
+            { nameof(envelope.CorrelationId),  Encoding.UTF8.GetBytes(envelope.CorrelationId) },
+            { nameof(envelope.CreatedAt),  Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()) }
         };
 
         if (additionalHeaders is not null)
             foreach (var header in additionalHeaders)
                 headers.Add(header);
 
+        var messageBody = _serializer.Serialize(envelope.Message);
+
         var kafkaMessage = new Message<string, byte[]>()
         {
-            Key = message.MessageId,
-            Value = message.Body.ToArray(),
+            Key = envelope.MessageId,
+            Value = messageBody,
             Headers = headers
         };
 

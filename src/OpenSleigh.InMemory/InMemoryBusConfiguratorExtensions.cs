@@ -29,14 +29,14 @@ public static class InMemoryBusConfiguratorExtensions
 
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)
-                                .AddSingleton<Channel<OutboxMessage>>(ctx => Channel.CreateBounded<OutboxMessage>(options.SubscriberMaxMessagesBatchSize))
-                                .AddSingleton<ChannelReader<OutboxMessage>>(ctx =>
+                                .AddSingleton<Channel<MessageEnvelope>>(ctx => Channel.CreateBounded<MessageEnvelope>(options.SubscriberMaxMessagesBatchSize))
+                                .AddSingleton<ChannelReader<MessageEnvelope>>(ctx =>
                                 {
-                                    var channel = ctx.GetRequiredService<Channel<OutboxMessage>>();
+                                    var channel = ctx.GetRequiredService<Channel<MessageEnvelope>>();
                                     return channel.Reader;
-                                }).AddSingleton<ChannelWriter<OutboxMessage>>(ctx =>
+                                }).AddSingleton<ChannelWriter<MessageEnvelope>>(ctx =>
                                 {
-                                    var channel = ctx.GetRequiredService<Channel<OutboxMessage>>();
+                                    var channel = ctx.GetRequiredService<Channel<MessageEnvelope>>();
                                     return channel.Writer;
                                 })
                                 .AddSingleton(typeof(IMessageSubscriber<>), typeof(InMemorySubscriber<>));

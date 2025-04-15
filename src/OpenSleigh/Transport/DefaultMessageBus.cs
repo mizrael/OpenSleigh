@@ -7,20 +7,17 @@ namespace OpenSleigh.Transport;
 internal class DefaultMessageBus : IMessageBus
 {
     private readonly IOutboxRepository _outboxRepository;
-    private readonly ISerializer _serializer;
     private readonly ISystemInfo _systemInfo;
     private readonly ITypeResolver _typeResolver;
     private readonly ILogger<DefaultMessageBus> _logger;
 
     public DefaultMessageBus(
         IOutboxRepository outboxRepository,
-        ISerializer serializer,
         ISystemInfo systemInfo,
         ITypeResolver typeResolver,
         ILogger<DefaultMessageBus> logger)
     {
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
-        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -35,7 +32,7 @@ internal class DefaultMessageBus : IMessageBus
 
         _typeResolver.Register(message.GetType());
 
-        var outboxMessage = OutboxMessage.Create(message, _systemInfo, _serializer);
+        var outboxMessage = MessageEnvelope.Create(message, _systemInfo);
 
         await _outboxRepository.AppendAsync([outboxMessage], cancellationToken)
                                .ConfigureAwait(false);
