@@ -37,7 +37,7 @@ internal record MessageContext<TM> : IMessageContext<TM>
 
     public static IMessageContext<TM> Create(TM message, ISagaExecutionContext executionContext)
         => new MessageContext<TM>(
-            id: Guid.NewGuid().ToString(),
+            id: Guid.CreateVersion7().ToString(),
             correlationId: executionContext.CorrelationId,
             message,
             executionContext.TriggerMessageId,

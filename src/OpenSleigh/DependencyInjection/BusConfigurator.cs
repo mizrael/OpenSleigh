@@ -36,7 +36,8 @@ internal class BusConfigurator : IBusConfigurator
     {
         _sagaDescriptorResolver.Register<TS, TD>();
 
-        this.Services.AddTransient<TD>(_ => default) // this will allow DI container validation at startup
+        // this will allow DI container validation at startup
+        this.Services.AddTransient<TD>(_ => default) 
                      .AddTransient<ISagaExecutionContext<TD>>(_ => default)
                      .AddTransient<TS>();
 
@@ -47,8 +48,9 @@ internal class BusConfigurator : IBusConfigurator
          where TS : class, ISaga
     {
         _sagaDescriptorResolver.Register<TS>();
-        
-        this.Services.AddTransient<TS>();
+
+        this.Services.AddTransient<TS>()
+                     .AddTransient<ISagaExecutionContext>(_ => default);
 
         return this;
     }

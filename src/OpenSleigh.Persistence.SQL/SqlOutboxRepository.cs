@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
