@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+   <TargetFramework>net9.0</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(RunConfiguration)' == 'OpenSleigh.Samples.Sample2.API' " />
+  <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\..\src\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
+    <ProjectReference Include="..\..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
+    <ProjectReference Include="..\OpenSleigh.Samples.ECommerce.Common\OpenSleigh.Samples.ECommerce.Common.csproj" />
+  </ItemGroup>
+
+</Project>
