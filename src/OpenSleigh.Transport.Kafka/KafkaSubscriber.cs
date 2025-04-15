@@ -22,13 +22,12 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
         _consumer = builderFactory.Create<IMessage, string, byte[]>().Build();
 
         _queueRef = queueReferenceFactory.Create<IMessage>();
-        _consumer.Subscribe(_queueRef.TopicName);
     }
 
     public void Dispose()
     {
-        _consumer?.Close();
-        _consumer?.Dispose();
+        _consumer.Close();
+        _consumer.Dispose();
 
         _cts?.Cancel();
         _cts?.Dispose();
@@ -48,6 +47,8 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IDisposab
     {
         if (_cts == null)
             throw new InvalidOperationException("The subscriber has not been started.");
+
+        _consumer.Subscribe(_queueRef.TopicName);
 
         while (!_cts.IsCancellationRequested)
         {

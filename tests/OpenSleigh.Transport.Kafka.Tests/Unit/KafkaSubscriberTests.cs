@@ -9,13 +9,17 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 public class KafkaSubscriberTests
 {
     [Fact]
-    public void Start_should_subscribe_to_topic()
+    public async Task Start_should_subscribe_to_topic()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
         var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
 
         var sut = BuildSUT(queueRefs, consumer);
-        
+
+        await sut.StartAsync(CancellationToken.None);
+
+        await Task.Delay(250);
+
         consumer.Received(1).Subscribe(queueRefs.TopicName);
     }
 
@@ -63,7 +67,9 @@ public class KafkaSubscriberTests
 
         await sut.StartAsync(CancellationToken.None);
         await Task.Delay(200);
+        
         await sut.StopAsync(CancellationToken.None);
+        await Task.Delay(200);
 
         consumer.Received(1).Close();
     }
