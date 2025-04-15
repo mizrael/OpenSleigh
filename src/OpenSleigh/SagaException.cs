@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace OpenSleigh.Transport;
+namespace OpenSleigh;
 
 [ExcludeFromCodeCoverage]
 public class SagaException : Exception

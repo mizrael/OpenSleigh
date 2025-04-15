@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using OpenSleigh.Transport;
 using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
@@ -113,7 +112,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
         }
 
         entity.LockTime = DateTimeOffset.UtcNow;
-        entity.LockId = Guid.NewGuid().ToString();
+        entity.LockId = Guid.CreateVersion7().ToString();
 
         await _dbContext.SaveChangesAsync(cancellationToken)
                         .ConfigureAwait(false);

@@ -31,7 +31,7 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
         Descriptor = descriptor,
         TriggerMessageId = messageContext.Id,
         CorrelationId = messageContext.CorrelationId,
-        InstanceId = Guid.NewGuid().ToString()            
+        InstanceId = Guid.CreateVersion7().ToString()            
     };
 
     public bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage

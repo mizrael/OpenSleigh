@@ -1,0 +1,31 @@
+[
+  {
+    "Name": "Start all services",
+    "Projects": [
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.API\\OpenSleigh.Samples.ECommerce.API.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.InventoryService\\OpenSleigh.Samples.ECommerce.InventoryService.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.NotificationsService\\OpenSleigh.Samples.ECommerce.NotificationsService.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.Orchestrator\\OpenSleigh.Samples.ECommerce.Orchestrator.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.PaymentService\\OpenSleigh.Samples.ECommerce.PaymentService.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "OpenSleigh.Samples.ECommerce.ShippingService\\OpenSleigh.Samples.ECommerce.ShippingService.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

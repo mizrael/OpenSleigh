@@ -34,7 +34,7 @@ internal record SystemInfo : ISystemInfo
         if (string.IsNullOrWhiteSpace(clientGroup))
             clientGroup = AppDomain.CurrentDomain?.FriendlyName;
         if (string.IsNullOrWhiteSpace(clientId))
-            clientId = Guid.NewGuid().ToString();
+            clientId = Guid.CreateVersion7().ToString();
 
         return new SystemInfo(clientGroup: clientGroup, clientId: clientId);
     }
