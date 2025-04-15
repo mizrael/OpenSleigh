@@ -36,8 +36,8 @@ using var scope = host.Services.CreateScope();
 var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
 var message = new StartSaga();
 
-await Task.WhenAll(new[]
-{
+await Task.WhenAll(
+[
     host.RunAsync(),
     bus.PublishAsync(message).AsTask()
-});
+]);
