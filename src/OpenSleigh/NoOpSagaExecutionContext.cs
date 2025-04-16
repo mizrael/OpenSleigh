@@ -41,7 +41,9 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
     {          
     }
 
-    public ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+    public ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository, 
+        CancellationToken cancellationToken)
         => ValueTask.CompletedTask;
 
     public void MarkAsCompleted()

@@ -26,7 +26,7 @@ public class SagaRunnerTests
         await sut.ProcessAsync(messageContext, descriptor);
 
         await sagaExecutionService.Received(1).BeginExecutionContextAsync(messageContext, descriptor);
-        await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(messageContext, null);
+        await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(null, messageContext);
         await sagaExecutionService.DidNotReceiveWithAnyArgs().CommitAsync(null);        
     }
 }

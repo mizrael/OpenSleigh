@@ -29,12 +29,13 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
         messageContext.Id.Returns(Guid.NewGuid().ToString());
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+        messageContext.IdempotencyKey.Returns(Guid.NewGuid().ToString());
         return messageContext;
     }
 
-    private ISagaExecutionContext CreateSagaContext()
+    private ISagaExecutionContext CreateSagaContext<TM>(IMessageContext<TM> messageContext)
+        where TM : IMessage
     {
-        var messageContext = CreateMessageContext<FakeMessage>();
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
 
         var factory = new SagaExecutionContextFactory();
@@ -49,7 +50,9 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
-        var result = await sut.FindAsync(descriptor, "lorem", CancellationToken.None);
+        var messageContext = CreateMessageContext<FakeMessage>();
+
+        var result = await sut.FindAsync(descriptor, messageContext, CancellationToken.None);
         result.Should().BeNull();
     }
 
@@ -59,11 +62,12 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);       
 
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        var result = await sut.FindAsync(sagaContext.Descriptor, sagaContext.CorrelationId, CancellationToken.None);
+        var result = await sut.FindAsync(sagaContext.Descriptor, messageContext, CancellationToken.None);
         result.Should().NotBeNull();
         result.InstanceId.Should().Be(sagaContext.InstanceId);
     }
@@ -74,7 +78,8 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
@@ -93,7 +98,8 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
@@ -108,12 +114,14 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var firstLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
         await Task.Delay(500);
 
+        var messageContext2 = CreateMessageContext<FakeMessage>();
         var secondLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
         secondLockId.Should().NotBeNull()
@@ -127,7 +135,8 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext));
         ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
@@ -140,7 +149,9 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
+
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
         var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
@@ -157,11 +168,11 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         await sagaContext.LockAsync(sut, CancellationToken.None);
 
-        var messageContext = CreateMessageContext<FakeMessage>();
         sagaContext.SetAsProcessed(messageContext);
 
         var messageContext2 = CreateMessageContext<FakeMessage>();

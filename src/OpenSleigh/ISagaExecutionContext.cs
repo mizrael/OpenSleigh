@@ -44,7 +44,10 @@ public interface ISagaExecutionContext
 
     bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage;
 
-    ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken);
+    ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken);
+
     ValueTask ProcessAsync<TM>(
         IMessageHandlerManager messageHandlerManager, 
         IMessageContext<TM> messageContext,

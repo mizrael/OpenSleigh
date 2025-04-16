@@ -37,8 +37,8 @@ public class SagaExecutionService : ISagaExecutionService
     }
 
     public async ValueTask CommitAsync(
-        ISagaExecutionContext context,            
-        CancellationToken cancellationToken = default) 
+        ISagaExecutionContext context,
+        CancellationToken cancellationToken = default)
     {
         // TODO: transaction
 
@@ -55,19 +55,23 @@ public class SagaExecutionService : ISagaExecutionService
     {
         var messageType = messageContext.Message.GetType();
 
-        ISagaExecutionContext? executionContext;
+       // ISagaExecutionContext? executionContext;
         var isInitiator = descriptor.InitiatorType == messageType;
-        if (isInitiator)
-        {
-            executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
-        }
-        else
-        {
-            executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext.CorrelationId, cancellationToken);
-            if (executionContext is null)
-                throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
-        }
+        //if (isInitiator)
+        //{
+        //    executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
+        //}
+        //else
+        //{
+        //    executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext.CorrelationId, cancellationToken);
+        //    if (executionContext is null)
+        //        throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
+        //}
 
-        return executionContext;
+        var executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
+        if(executionContext is null && isInitiator)
+            executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
+
+        return executionContext ?? throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
     }
 }

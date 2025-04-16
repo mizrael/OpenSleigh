@@ -15,8 +15,8 @@ public class MessageHandlerManager : IMessageHandlerManager
     }
 
     public async ValueTask ProcessAsync<TM>(
-        IMessageContext<TM> messageContext,            
         ISagaExecutionContext executionContext,
+        IMessageContext<TM> messageContext,
         CancellationToken cancellationToken = default) where TM : IMessage
     {
         IHandleMessage<TM> handler = _messageHandlerFactory.Create<TM>(executionContext);

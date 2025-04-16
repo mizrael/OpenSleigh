@@ -9,6 +9,6 @@ public interface ISagaExecutionService
         CancellationToken cancellationToken = default) where TM : IMessage;
 
     ValueTask CommitAsync(
-        ISagaExecutionContext context,                      
+        ISagaExecutionContext context,
         CancellationToken cancellationToken = default);
 }

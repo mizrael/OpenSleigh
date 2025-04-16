@@ -126,4 +126,66 @@ public class SagaExecutionContextTests
 
         sut.CanProcess(messageContext).Should().BeFalse();
     }
+
+    [Fact]
+    public void CanProcess_should_return_false_when_same_idempotent_message_already_processed()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+
+        var message = new FakeIdempotentMessage("test key");
+        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+
+        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        sut.SetAsProcessed(messageContext);
+
+        Assert.False(sut.CanProcess(messageContext));
+    }
+
+    [Fact]
+    public void SetAsProcessed_should_throw_when_same_idempotent_message_already_processed()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+
+        var message = new FakeIdempotentMessage("test key");
+        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+
+        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        sut.SetAsProcessed(messageContext);
+
+        Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext));
+    }
+
+    [Fact]
+    public void CanProcess_should_return_false_when_idempotent_message_already_processed()
+    {
+        var idempotencyKey = "test key";
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+
+        var message = new FakeIdempotentMessage(idempotencyKey);
+        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+
+        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        sut.SetAsProcessed(messageContext);
+
+        var message2 = new FakeIdempotentMessage(idempotencyKey);
+        var messageContext2 = FakeMessageContext<FakeIdempotentMessage>.Create(message2);
+        Assert.False(sut.CanProcess(messageContext2));
+    }
+
+    [Fact]
+    public void SetAsProcessed_should_throw_when_idempotent_message_already_processed()
+    {
+        var idempotencyKey = "test key";
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+
+        var message = new FakeIdempotentMessage(idempotencyKey);
+        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+
+        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        sut.SetAsProcessed(messageContext);
+
+        var message2 = new FakeIdempotentMessage(idempotencyKey);
+        var messageContext2 = FakeMessageContext<FakeIdempotentMessage>.Create(message2);
+        Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext2));
+    }
 }

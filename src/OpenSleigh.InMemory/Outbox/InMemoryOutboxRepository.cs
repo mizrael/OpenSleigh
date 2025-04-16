@@ -1,5 +1,4 @@
-﻿using OpenSleigh.Transport;
-using OpenSleigh.Outbox;
+﻿using OpenSleigh.Outbox;
 using System.Collections.Concurrent;
 
 namespace OpenSleigh.InMemory.Outbox;

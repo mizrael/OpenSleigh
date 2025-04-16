@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh.InMemory;
 
@@ -7,9 +8,10 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
     private readonly ConcurrentDictionary<string, (ISagaExecutionContext state, string? lockId)> _statesByDescriptor = new();
     private readonly ConcurrentDictionary<string, (ISagaExecutionContext state, string? lockId)> _statesById = new();
 
-    public ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
+    public ValueTask<ISagaExecutionContext?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
     {
-        string key = BuildKey(descriptor, correlationId);
+        string key = BuildKey(descriptor, messageContext.CorrelationId);
 
         ISagaExecutionContext? state = null;
 
@@ -56,6 +58,6 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
         return ValueTask.CompletedTask;
     }
 
-    private static string BuildKey(SagaDescriptor descriptor, string correlationId)
-        => $"{correlationId}|{descriptor.SagaType.FullName}|{(descriptor.SagaStateType is null ? string.Empty : descriptor.SagaStateType.FullName)}";        
+    private static string BuildKey(SagaDescriptor descriptor, string correlationId) 
+        => $"{correlationId}|{descriptor.SagaType.FullName}|{descriptor.SagaStateType?.FullName ?? string.Empty}";        
 }

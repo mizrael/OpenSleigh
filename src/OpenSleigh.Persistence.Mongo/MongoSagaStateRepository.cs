@@ -40,12 +40,16 @@ public class MongoSagaStateRepository : ISagaStateRepository
                state: state,
                processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                {
+                   IdempotencyKey = e.IdempotencyKey,
                    MessageId = e.MessageId,
                    When = e.When
                }));
 
-    public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
+    public async ValueTask<ISagaExecutionContext?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
     {
+        var correlationId = messageContext.CorrelationId;
+
         var filterBuilder = Builders<Entities.SagaState>.Filter;
 
         var stateTypeFilter =
@@ -74,6 +78,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
                 descriptor: descriptor,
                 processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                 {
+                    IdempotencyKey = e.IdempotencyKey,
                     MessageId = e.MessageId,
                     When = e.When
                 }));
@@ -89,7 +94,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
         return result;
     }
 
-    public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(ISagaExecutionContext state,  CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
@@ -161,6 +166,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
         foreach (var msg in state.ProcessedMessages)
             entity.ProcessedMessages.Add(new Entities.SagaProcessedMessage()
             {
+                IdempotencyKey = msg.IdempotencyKey,
                 InstanceId = state.InstanceId,
                 MessageId = msg.MessageId,
                 When = msg.When, 

@@ -4,20 +4,20 @@ using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 
 namespace OpenSleigh.E2ETests.SqlRabbit;
 
-public class SqlRabbitSimpleSagaScenario : 
-    SimpleSagaScenario,
+public class SqlRabbitIdempotentMessageScenario :
+    IdempotentMessageScenario,
     IClassFixture<SqlServerDbFixture>,
     IClassFixture<RabbitFixture>
 {
-    private readonly RabbitFixture _rabbitFixture;        
+    private readonly RabbitFixture _rabbitFixture;
     private readonly DbFixture _dbFixture;
     private readonly string _exchangeName;
-    
-    public SqlRabbitSimpleSagaScenario(SqlServerDbFixture dbFixture, RabbitFixture rabbitFixture)
+
+    public SqlRabbitIdempotentMessageScenario(SqlServerDbFixture dbFixture, RabbitFixture rabbitFixture)
     {
         _dbFixture = dbFixture;
         _rabbitFixture = rabbitFixture;
-        _exchangeName = "SqlRabbitSimpleSagaScenario-" + Guid.NewGuid().ToString("N");
+        _exchangeName = "SqlRabbitIdempotentMessageScenario-" + Guid.NewGuid().ToString("N");
     }
 
     protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)

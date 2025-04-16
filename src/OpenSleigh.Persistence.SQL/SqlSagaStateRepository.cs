@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
+using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
 
@@ -24,8 +25,11 @@ public class SqlSagaStateRepository : ISagaStateRepository
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
-    {
+    public async ValueTask<ISagaExecutionContext?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
+    { 
+        var correlationId = messageContext.CorrelationId;
+
         var entity = await _dbContext.SagaStates
             .AsNoTracking()
             .FirstOrDefaultAsync(e =>
@@ -49,6 +53,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
                 descriptor: descriptor,
                 processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                 {
+                    IdempotencyKey = e.IdempotencyKey,
                     MessageId = e.MessageId,
                     When = e.When
                 }));
@@ -73,6 +78,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
                state: state,
                processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                {
+                   IdempotencyKey = e.IdempotencyKey,
                    MessageId = e.MessageId,
                    When = e.When
                }));
@@ -121,7 +127,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
     }
 
     public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
-    {
+    {  
         ArgumentNullException.ThrowIfNull(state);
 
         return ReleaseAsyncCore(state, cancellationToken);
@@ -149,6 +155,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
         foreach (var msg in state.ProcessedMessages)
             entity.ProcessedMessages.Add(new SagaProcessedMessage()
             {
+                IdempotencyKey = msg.IdempotencyKey,
                 InstanceId = state.InstanceId,
                 MessageId = msg.MessageId,
                 When = msg.When,

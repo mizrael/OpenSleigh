@@ -7,4 +7,14 @@ public interface IMessageContext<out TM> where TM : IMessage
     string CorrelationId { get; }
     string? ParentId { get; }
     string? SenderId { get; }
+
+    public string IdempotencyKey
+    {
+        get
+        {
+            return this.Message is IHasIdempotencyKey idempotentMessage ?
+                idempotentMessage.IdempotencyKey :
+                this.Id;
+        }
+    }
 }

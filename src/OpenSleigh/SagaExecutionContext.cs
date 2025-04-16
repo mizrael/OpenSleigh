@@ -6,7 +6,7 @@ namespace OpenSleigh;
 
 public record SagaExecutionContext : ISagaExecutionContext
 {
-    private readonly HashSet<ProcessedMessage> _processedMessages = new();
+    private readonly Dictionary<string, ProcessedMessage> _processedMessages = new();
     private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
 
     public SagaExecutionContext(
@@ -27,7 +27,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         
         if(processedMessages is not null)
             foreach(var msg in processedMessages)
-                _processedMessages.Add(msg);
+                _processedMessages.Add(msg.IdempotencyKey, msg);
     }
 
     public bool CanProcess<TM>(IMessageContext<TM> messageContext) 
@@ -39,8 +39,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         if (this.CorrelationId != messageContext.CorrelationId)
             return false;
 
-        //TODO: need to speed up this one
-        if (_processedMessages.Any(m => m.MessageId == messageContext.Id))
+        if (_processedMessages.ContainsKey(messageContext.IdempotencyKey))
             return false;
 
         var messageType = messageContext.Message.GetType();
@@ -52,12 +51,19 @@ public record SagaExecutionContext : ISagaExecutionContext
     }
        
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-        => _processedMessages.Add(ProcessedMessage.Create(messageContext));
+    {
+        if(_processedMessages.ContainsKey(messageContext.IdempotencyKey))
+            throw new InvalidOperationException($"Message with idempotency key {messageContext.IdempotencyKey} has already been processed.");
+
+        _processedMessages.Add(messageContext.IdempotencyKey, ProcessedMessage.Create(messageContext));
+    }
 
     public void MarkAsCompleted()
         => this.IsCompleted = true;
 
-    public async ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+    public async ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken) 
     {
         this.LockId = await sagaStateRepository.LockAsync(this, cancellationToken)
                                               .ConfigureAwait(false);
@@ -79,7 +85,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         ISagaExecutionService sagaExecutionService,
         CancellationToken cancellationToken) where TM : IMessage
     {
-        await messageHandlerManager.ProcessAsync(messageContext, this, cancellationToken)
+        await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                    .ConfigureAwait(false);
 
         this.SetAsProcessed(messageContext);
@@ -102,7 +108,7 @@ public record SagaExecutionContext : ISagaExecutionContext
 
     public string LockId { get; private set; }
 
-    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
+    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages.Values;
     public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
 }
 
