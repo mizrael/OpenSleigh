@@ -23,9 +23,10 @@ public abstract class DbFixture : IAsyncLifetime
 
     protected abstract DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString);
 
-    public (SagaDbContext db, string connStr) CreateDbContext()
+    public (SagaDbContext db, string connStr) CreateDbContext(string? dbName = null)
     {
-        var connectionString = string.Format(_connStrTemplate, Guid.NewGuid());
+        dbName ??= Guid.NewGuid().ToString();
+        var connectionString = string.Format(_connStrTemplate, dbName);
 
         var optionsBuilder = CreateOptionsBuilder(connectionString);
         var options = optionsBuilder.Options;

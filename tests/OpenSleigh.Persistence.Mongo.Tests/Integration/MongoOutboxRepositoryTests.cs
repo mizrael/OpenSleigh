@@ -42,7 +42,8 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
 
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        var result = await sut.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Success, result);
 
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
@@ -53,15 +54,32 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task AppendAsync_should_fail_if_message_already_appended()
+    public async Task AppendAsync_should_fail_if_message_already_appended_same_context()
     {
         var message = CreateMessage();
 
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
-        await Assert.ThrowsAsync<MongoDB.Driver.MongoBulkWriteException<OpenSleigh.Persistence.Mongo.Entities.OutboxMessage>>(async () => await sut.AppendAsync(new[] { message }));
+        var result = await sut.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Duplicate, result);
+    }
+
+    [Fact]
+    public async Task AppendAsync_should_fail_if_message_already_appended_on_different_db_context()
+    {
+        var message = CreateMessage();
+
+        var dbName = Guid.NewGuid().ToString();
+        var db = _fixture.CreateDbContext(dbName);
+        var sut = CreateSut(db);
+        await sut.AppendAsync([message]);
+
+        var db2 = _fixture.CreateDbContext(dbName);
+        var sut2 = CreateSut(db2);
+        var result = await sut2.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Duplicate, result);
     }
 
     [Fact]
@@ -83,7 +101,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, "lorem"));
         ex.Message.Should().Contain($"message '{message.MessageId}' is not locked");
@@ -96,7 +114,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
         await sut.LockAsync(message);
 
         var lockId = Guid.NewGuid().ToString();
@@ -113,7 +131,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
         var lockId = await sut.LockAsync(message);
         await sut.DeleteAsync(message, lockId);
 
@@ -137,7 +155,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var message = CreateMessage();
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var lockId = await sut.LockAsync(message);
 
@@ -154,7 +172,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var message = CreateMessage();
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         await sut.LockAsync(message);
 
@@ -168,7 +186,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
 
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var messages = await sut.ReadPendingAsync();
         messages.Should().NotBeNullOrEmpty();

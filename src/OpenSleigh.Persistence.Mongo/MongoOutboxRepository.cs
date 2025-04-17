@@ -29,19 +29,27 @@ public class MongoOutboxRepository : IOutboxRepository
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
 
-    private async ValueTask AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
+    private async ValueTask<OutboxAppendResult> AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         var entities = messages.Select(message => Entities.OutboxMessage.Create(message, _serializer));
-
-        await _dbContext.OutboxMessages.InsertManyAsync(entities, cancellationToken: cancellationToken)
-                                .ConfigureAwait(false);
+       
+        try
+        {
+            await _dbContext.OutboxMessages.InsertManyAsync(entities, cancellationToken: cancellationToken)
+                                           .ConfigureAwait(false);
+            return OutboxAppendResult.Success;
+        }
+        catch (MongoBulkWriteException ex) when (ex.WriteErrors is not null && ex.WriteErrors.Any(w => w.Category == ServerErrorCategory.DuplicateKey))
+        {
+            return OutboxAppendResult.Duplicate;
+        }        
     }
 
     public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)

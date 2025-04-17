@@ -38,15 +38,15 @@ internal class KafkaInfrastructureCreator<TM> : IInfrastructureCreator
 
         try
         {
-            await adminClient.CreateTopicsAsync(new[]
-            {
+            await adminClient.CreateTopicsAsync(
+            [
                 new TopicSpecification
                 {
                     Name = topicName,
                     ReplicationFactor = 1,
                     NumPartitions = 1
                 }
-            });
+            ]);
         }
         catch (CreateTopicsException ex) when(ex.Error?.Code == ErrorCode.Local_Partial)
         {

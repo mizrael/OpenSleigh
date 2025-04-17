@@ -80,10 +80,10 @@ public class KafkaMessageHandler : IKafkaMessageHandler
                 message.MessageId, queueReferences.DeadLetterTopicName);
 
             await _publisher.PublishAsync(message, queueReferences.DeadLetterTopicName,
-                additionalHeaders: new[]
-                {
+                additionalHeaders:
+                [
                     new Header(HeaderNames.Error, Encoding.UTF8.GetBytes(ex.Message))
-                },
+                ],
                 cancellationToken: cancellationToken);
         }
         catch (Exception dlqEx)

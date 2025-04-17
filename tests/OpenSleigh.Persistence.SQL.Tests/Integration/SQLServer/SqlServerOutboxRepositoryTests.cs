@@ -9,4 +9,10 @@ public class SqlServerOutboxRepositoryTests :
     public SqlServerOutboxRepositoryTests(SqlServerDbFixture fixture) : base(fixture)
     {
     }
+
+    protected override SqlOutboxRepository CreateSut(SagaDbContext db)
+    {
+        DuplicateKeyDetector duplicateKeyDetector = Persistence.SQLServer.SqlBusConfiguratorExtensions.IsDuplicateKeyException;
+        return CreateSut(db, duplicateKeyDetector);
+    }
 }

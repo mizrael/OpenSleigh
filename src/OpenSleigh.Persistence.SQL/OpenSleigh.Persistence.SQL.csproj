@@ -38,6 +38,10 @@
     </None>
   </ItemGroup>
 
+	<ItemGroup>
+		<InternalsVisibleTo Include="OpenSleigh.Persistence.SQL.Tests" />
+	</ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\OpenSleigh\OpenSleigh.csproj" />
   </ItemGroup>

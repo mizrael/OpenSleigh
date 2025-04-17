@@ -1,8 +1,10 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQL.Entities;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
@@ -19,10 +21,34 @@ public static class SqlBusConfiguratorExtensions
             .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseNpgsql(config.ConnectionString);
-            }, contextLifetime: ServiceLifetime.Transient)                   
+            }, contextLifetime: ServiceLifetime.Transient)          
+            .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
             .AddTransient<IOutboxRepository, SqlOutboxRepository>()
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
         
         return busConfigurator;
+    }
+
+    internal static bool IsDuplicateKeyException(Exception ex)
+    => ex switch
+    {
+        DbUpdateException dbEx => IsDuplicateKeyException(dbEx),
+        InvalidOperationException opEx => IsDuplicateKeyException(opEx),
+        _ => false
+    };
+
+    private static bool IsDuplicateKeyException(InvalidOperationException ex)
+    => ex.Source == "Microsoft.EntityFrameworkCore" &&
+            ex.Message.Contains($"The instance of entity type '{nameof(OutboxMessage)}' cannot be tracked because another instance with the key value");
+    
+    private static bool IsDuplicateKeyException(DbUpdateException ex)
+    {
+        if (ex.InnerException is PostgresException pgEx)
+        {
+            // Postgres error code for unique violation
+            return pgEx.SqlState == "23505";
+        }
+
+        return false;
     }
 }

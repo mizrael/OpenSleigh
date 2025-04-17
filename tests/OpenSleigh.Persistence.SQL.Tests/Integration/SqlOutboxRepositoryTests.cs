@@ -1,6 +1,5 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
-using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.ComponentModel;
 
@@ -16,6 +15,8 @@ public abstract class SqlOutboxRepositoryTests
     {
         _fixture = fixture;
     }
+
+    protected abstract SqlOutboxRepository CreateSut(SagaDbContext db);
 
     private static MessageEnvelope CreateMessage()
     {
@@ -43,7 +44,8 @@ public abstract class SqlOutboxRepositoryTests
 
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        var result = await sut.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Success, result);
 
         var appendedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
         appendedMessage.Should().NotBeNull();
@@ -52,15 +54,32 @@ public abstract class SqlOutboxRepositoryTests
     }
 
     [Fact]
-    public async Task AppendAsync_should_fail_if_message_already_appended()
+    public async Task AppendAsync_should_fail_if_message_already_appended_same_context()
     {
         var message = CreateMessage();
 
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
-        await Assert.ThrowsAsync<InvalidOperationException> (async () => await sut.AppendAsync(new[] { message }));
+        var result = await sut.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Duplicate, result);
+    }
+
+    [Fact]
+    public async Task AppendAsync_should_fail_if_message_already_appended_on_different_db_context()
+    {
+        var message = CreateMessage();
+
+        var dbName = Guid.NewGuid().ToString();
+        var (db, _) = _fixture.CreateDbContext(dbName);
+        var sut = CreateSut(db);
+        await sut.AppendAsync([message]);
+
+        var (db2, _) = _fixture.CreateDbContext(dbName);
+        var sut2 = CreateSut(db2);
+        var result = await sut2.AppendAsync([message]);
+        Assert.Equal(OutboxAppendResult.Duplicate, result);
     }
 
     [Fact]
@@ -70,7 +89,7 @@ public abstract class SqlOutboxRepositoryTests
 
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var messages = await sut.ReadPendingAsync();
         messages.Should().NotBeNullOrEmpty();
@@ -83,7 +102,7 @@ public abstract class SqlOutboxRepositoryTests
 
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var lockId = await sut.LockAsync(message);
 
@@ -100,7 +119,7 @@ public abstract class SqlOutboxRepositoryTests
 
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         await sut.LockAsync(message);
 
@@ -137,7 +156,7 @@ public abstract class SqlOutboxRepositoryTests
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
 
         var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, "lorem"));
         ex.Message.Should().Contain($"message '{message.MessageId}' is not locked");
@@ -150,7 +169,7 @@ public abstract class SqlOutboxRepositoryTests
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
         await sut.LockAsync(message);
 
         var lockId = Guid.NewGuid().ToString();
@@ -167,7 +186,7 @@ public abstract class SqlOutboxRepositoryTests
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        await sut.AppendAsync(new[] { message });
+        await sut.AppendAsync([message]);
         var lockId = await sut.LockAsync(message);
         await sut.DeleteAsync(message, lockId);
 
@@ -175,12 +194,12 @@ public abstract class SqlOutboxRepositoryTests
         lockedMessage.Should().BeNull();
     }
 
-    private SqlOutboxRepository CreateSut(SagaDbContext db)
+    protected SqlOutboxRepository CreateSut(SagaDbContext db, DuplicateKeyDetector duplicateKeyDetector)
     {
         var typeResolver = new TypeResolver();
         typeResolver.Register(typeof(FakeMessage));
 
-        var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default, new JsonSerializer());
+        var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default, new JsonSerializer(), duplicateKeyDetector);
         return sut;
     }
 }

@@ -11,39 +11,53 @@ public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly SqlOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
 }
 
+public delegate bool DuplicateKeyDetector(Exception exception);
+
+
 public class SqlOutboxRepository : IOutboxRepository
 {
     private readonly SagaDbContext _dbContext;
     private readonly SqlOutboxRepositoryOptions _options;
     private readonly ITypeResolver _typeResolver;
     private readonly ISerializer _serializer;
+    private readonly DuplicateKeyDetector _duplicateKeyDetector;
 
     public SqlOutboxRepository(
-        SagaDbContext dbContext, 
-        ITypeResolver typeResolver, 
-        SqlOutboxRepositoryOptions options, 
-        ISerializer serializer)
+        SagaDbContext dbContext,
+        ITypeResolver typeResolver,
+        SqlOutboxRepositoryOptions options,
+        ISerializer serializer,
+        DuplicateKeyDetector duplicateKeyDetector)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        _duplicateKeyDetector = duplicateKeyDetector;
     }
 
-    public ValueTask AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
 
-    private async ValueTask AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
+    private async ValueTask<OutboxAppendResult> AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         var entities = messages.Select(message => Entities.OutboxMessage.Map(message, _serializer));
 
-        _dbContext.OutboxMessages.AddRange(entities);
-        await _dbContext.SaveChangesAsync(cancellationToken)
-                        .ConfigureAwait(false);
+        try
+        {
+            _dbContext.OutboxMessages.AddRange(entities);
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                            .ConfigureAwait(false);
+            return OutboxAppendResult.Success;
+        }
+        catch (Exception ex) when (_duplicateKeyDetector(ex))
+        {
+            return OutboxAppendResult.Duplicate;
+        }
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
