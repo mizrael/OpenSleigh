@@ -6,7 +6,6 @@ namespace OpenSleigh.Persistence.SQL.Entities;
 public class SagaProcessedMessage
 {
     public required string InstanceId { get; init; }
-    public required string IdempotencyKey { get; init; }
     public required string MessageId { get; init; }
     public required DateTimeOffset When { get; init; }
 
@@ -19,6 +18,6 @@ internal class SagaProcessedMessageTypeConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("SagaProcessedMessages", Constants.DbSchema);
 
-        builder.HasKey(e => new { e.InstanceId, e.IdempotencyKey });
+        builder.HasKey(e => new { e.InstanceId, e.MessageId });
     }
 }

@@ -2,7 +2,6 @@
 
 public class SagaProcessedMessage
 {
-    public required string IdempotencyKey { get; init; }
     public required string InstanceId { get; init; }
     public required string MessageId { get; init; }
     public required DateTimeOffset When { get; init; }

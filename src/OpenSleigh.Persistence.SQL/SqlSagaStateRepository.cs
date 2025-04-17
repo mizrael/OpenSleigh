@@ -53,7 +53,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
                 descriptor: descriptor,
                 processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                 {
-                    IdempotencyKey = e.IdempotencyKey,
                     MessageId = e.MessageId,
                     When = e.When
                 }));
@@ -78,7 +77,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
                state: state,
                processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
                {
-                   IdempotencyKey = e.IdempotencyKey,
                    MessageId = e.MessageId,
                    When = e.When
                }));
@@ -155,7 +153,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
         foreach (var msg in state.ProcessedMessages)
             entity.ProcessedMessages.Add(new SagaProcessedMessage()
             {
-                IdempotencyKey = msg.IdempotencyKey,
                 InstanceId = state.InstanceId,
                 MessageId = msg.MessageId,
                 When = msg.When,

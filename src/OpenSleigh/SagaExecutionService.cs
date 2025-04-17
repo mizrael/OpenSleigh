@@ -55,22 +55,15 @@ public class SagaExecutionService : ISagaExecutionService
     {
         var messageType = messageContext.Message.GetType();
 
-       // ISagaExecutionContext? executionContext;
-        var isInitiator = descriptor.InitiatorType == messageType;
-        //if (isInitiator)
-        //{
-        //    executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
-        //}
-        //else
-        //{
-        //    executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext.CorrelationId, cancellationToken);
-        //    if (executionContext is null)
-        //        throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
-        //}
-
+        // we need to check if the state is already in the repository
+        // even if the message is the initiator, as it might be a replay
         var executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
-        if(executionContext is null && isInitiator)
-            executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
+        if (executionContext is null)
+        {
+            var isInitiator = descriptor.InitiatorType == messageType;
+            if (isInitiator)
+                executionContext = _sagaExecCtxFactory.CreateState(descriptor, messageContext);
+        }
 
         return executionContext ?? throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
     }

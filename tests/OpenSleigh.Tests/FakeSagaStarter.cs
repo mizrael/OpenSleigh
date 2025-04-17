@@ -6,4 +6,4 @@ public class FakeSagaStarter : IMessage { }
 
 public class FakeSagaMessage : IMessage { }
 
-public record FakeIdempotentMessage(string IdempotencyKey) : IMessage, IHasIdempotencyKey;
+public record FakeIdempotentMessage(string CorrelationId) : IMessage, IHasCorrelationId;

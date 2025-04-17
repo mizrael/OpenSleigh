@@ -176,7 +176,6 @@ public abstract class SqlSagaStateRepositoryTests
         var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
         messageContext.Id.Returns(Guid.NewGuid().ToString());
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
-        messageContext.IdempotencyKey.Returns(Guid.NewGuid().ToString());
         return messageContext;
     }
 

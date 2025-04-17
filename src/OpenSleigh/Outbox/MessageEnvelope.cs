@@ -82,11 +82,16 @@ public class MessageEnvelope
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        var correlationId = message is IHasCorrelationId cm ? 
+            cm.CorrelationId : Guid.CreateVersion7().ToString("N");
+
+        var messageId = $"{message.GetType().Name.ToLower()}-{correlationId}";
+
         return new MessageEnvelope()
         {
-            CorrelationId = Guid.CreateVersion7().ToString(),
+            CorrelationId = correlationId,
             SenderId = systemInfo.Id,
-            MessageId = Guid.CreateVersion7().ToString(),
+            MessageId = messageId,
             Message = message,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -100,11 +105,13 @@ public class MessageEnvelope
 
         ArgumentNullException.ThrowIfNull(executionContext);
 
+        var messageId = $"{message.GetType().Name.ToLower()}-{executionContext.CorrelationId}";
+
         return new MessageEnvelope()
         {
             Message = message,
             CreatedAt = DateTimeOffset.UtcNow,
-            MessageId = Guid.CreateVersion7().ToString(),
+            MessageId = messageId,
             CorrelationId = executionContext.CorrelationId,
             ParentId = executionContext.TriggerMessageId,
             SenderId = executionContext.InstanceId

@@ -27,7 +27,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         
         if(processedMessages is not null)
             foreach(var msg in processedMessages)
-                _processedMessages.Add(msg.IdempotencyKey, msg);
+                _processedMessages.Add(msg.MessageId, msg);
     }
 
     public bool CanProcess<TM>(IMessageContext<TM> messageContext) 
@@ -39,7 +39,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         if (this.CorrelationId != messageContext.CorrelationId)
             return false;
 
-        if (_processedMessages.ContainsKey(messageContext.IdempotencyKey))
+        if (_processedMessages.ContainsKey(messageContext.Id))
             return false;
 
         var messageType = messageContext.Message.GetType();
@@ -52,10 +52,10 @@ public record SagaExecutionContext : ISagaExecutionContext
        
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
     {
-        if(_processedMessages.ContainsKey(messageContext.IdempotencyKey))
-            throw new InvalidOperationException($"Message with idempotency key {messageContext.IdempotencyKey} has already been processed.");
+        if(_processedMessages.ContainsKey(messageContext.Id))
+            throw new InvalidOperationException($"Message with id {messageContext.Id} has already been processed.");
 
-        _processedMessages.Add(messageContext.IdempotencyKey, ProcessedMessage.Create(messageContext));
+        _processedMessages.Add(messageContext.Id, ProcessedMessage.Create(messageContext));
     }
 
     public void MarkAsCompleted()

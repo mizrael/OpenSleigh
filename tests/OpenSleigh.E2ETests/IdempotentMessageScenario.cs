@@ -29,17 +29,17 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         var message = new IdempotentMessage("my idempotency key");
 
         var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100) * hostsCount);
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
         Action<IMessageContext<IdempotentMessage>> onMessage = ctx =>
         {
             Assert.NotNull(ctx.Message);
             Assert.IsType<IdempotentMessage>(ctx.Message);
-            Assert.Equal(message.IdempotencyKey, ctx.IdempotencyKey);
-            Assert.Equal(message.IdempotencyKey, ctx.Message.IdempotencyKey);
+            Assert.Equal(message.CorrelationId, ctx.CorrelationId);
+            Assert.Equal(message.CorrelationId, ctx.Message.CorrelationId);
 
             receivedCount++;
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(20));
+            tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
         };
 
         await RunScenarioAsync(hostsCount,

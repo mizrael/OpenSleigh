@@ -2,7 +2,7 @@
 
 namespace OpenSleigh.E2ETests.Sagas;
 
-public record IdempotentMessage(string IdempotencyKey) : IMessage, IHasIdempotencyKey;
+public record IdempotentMessage(string CorrelationId) : IMessage, IHasCorrelationId;
 
 public class IdempotentSaga :
     Saga,
