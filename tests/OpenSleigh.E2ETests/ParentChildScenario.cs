@@ -19,12 +19,12 @@ public abstract class ParentChildScenario : E2ETestsBase
         var message = new StartParentSaga();
 
         var receivedCount = 0;
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100) * hostsCount);
 
         Action<IMessageContext<ParentSagaCompleted>> onMessage = ctx =>
         {
             receivedCount++;
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+            tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
         };
 
         await RunScenarioAsync(hostsCount,

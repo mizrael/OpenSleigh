@@ -32,7 +32,7 @@ public class SagaRunner : ISagaRunner
             "Saga '{SagaType}/{InstanceId}' is processing message '{MessageId}'...",
             descriptor.SagaType,
             executionContext.InstanceId,
-            messageContext.Id);
+            messageContext.MessageId);
 
         await executionContext.ProcessAsync(_messageHandlerManager, messageContext, _sagaExecutionService, cancellationToken)
                               .ConfigureAwait(false);
@@ -41,7 +41,7 @@ public class SagaRunner : ISagaRunner
             "Saga '{SagaType}/{InstanceId}' has completed processing message '{MessageId}'.",
             descriptor.SagaType,
             executionContext.InstanceId,
-            messageContext.Id);
+            messageContext.MessageId);
     }
 
 }

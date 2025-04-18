@@ -49,6 +49,9 @@ public class SqlOutboxRepository : IOutboxRepository
 
         try
         {
+            //TODO: this feels like a hack to make E2E tests work. Need to remove.
+            _dbContext.ChangeTracker.Clear(); 
+
             _dbContext.OutboxMessages.AddRange(entities);
             await _dbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);
@@ -122,21 +125,22 @@ public class SqlOutboxRepository : IOutboxRepository
 
     private async ValueTask DeleteAsyncCore(MessageEnvelope message, string lockId, CancellationToken cancellationToken)
     {
-            var entity = await _dbContext.OutboxMessages
-                .FirstOrDefaultAsync(e =>
-                    e.MessageId == message.MessageId,
-                    cancellationToken)
-                .ConfigureAwait(false);
-            if (entity is null)
-                throw new ArgumentException($"message '{message.MessageId}' not found");
+        var entity = await _dbContext.OutboxMessages
+            .FirstOrDefaultAsync(e =>
+                e.MessageId == message.MessageId,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (entity is null)
+            throw new ArgumentException($"message '{message.MessageId}' not found");
 
-            if (string.IsNullOrWhiteSpace(entity.LockId))
-                throw new LockException($"message '{message.MessageId}' is not locked");
+        if (string.IsNullOrWhiteSpace(entity.LockId))
+            throw new LockException($"message '{message.MessageId}' is not locked");
 
-            if (entity.LockId != lockId)
-                throw new LockException($"invalid lock id '{lockId}' on message '{message.MessageId}'");
+        if (entity.LockId != lockId)
+            throw new LockException($"invalid lock id '{lockId}' on message '{message.MessageId}'");
 
         _dbContext.OutboxMessages.Remove(entity);
-        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);             
+
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
     }
 }

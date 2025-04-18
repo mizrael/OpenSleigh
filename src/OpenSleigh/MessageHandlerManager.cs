@@ -31,7 +31,7 @@ public class MessageHandlerManager : IMessageHandlerManager
             _logger.LogError(
                 ex,
                 "an error has occurred while processing message '{MessageId}' from Saga '{SagaType}/{InstanceId}' : {Error}",
-                messageContext.Id,
+                messageContext.MessageId,
                 executionContext.Descriptor.SagaType,
                 executionContext.InstanceId,
                 ex.Message
@@ -41,7 +41,7 @@ public class MessageHandlerManager : IMessageHandlerManager
                          .ConfigureAwait(false);
 
             throw new SagaException(
-                $"an error has occurred while processing message '{messageContext.Id}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
+                $"an error has occurred while processing message '{messageContext.MessageId}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
                 ex);
         }
     }

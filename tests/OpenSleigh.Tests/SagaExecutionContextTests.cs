@@ -79,7 +79,7 @@ public class SagaExecutionContextTests
         var messageContext = FakeMessageContext<FakeSagaMessage>.Create(
             new FakeSagaMessage(),
             correlationId: correlationId,
-            parentId: parentMessageContext.Id,
+            parentId: parentMessageContext.MessageId,
             senderId: sut.InstanceId);
 
         sut.CanProcess(messageContext).Should().BeTrue();

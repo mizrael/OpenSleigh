@@ -13,7 +13,7 @@ public record ProcessedMessage
     public static ProcessedMessage Create<TM>(IMessageContext<TM> messageContext) where TM : IMessage
         => new ProcessedMessage()
         {
-            MessageId = messageContext.Id,
+            MessageId = messageContext.MessageId,
             When = DateTimeOffset.UtcNow
         };
 }

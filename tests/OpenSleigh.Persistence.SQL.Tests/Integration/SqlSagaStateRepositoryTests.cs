@@ -159,8 +159,8 @@ public abstract class SqlSagaStateRepositoryTests
         unLockedState.IsCompleted.Should().BeTrue();
         unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
                                        .And.HaveCount(2)
-                                       .And.Contain(m => m.MessageId == messageContext.Id)
-                                       .And.Contain(m => m.MessageId == messageContext2.Id);
+                                       .And.Contain(m => m.MessageId == messageContext.MessageId)
+                                       .And.Contain(m => m.MessageId == messageContext2.MessageId);
     }
 
     private SqlSagaStateRepository CreateSut(SagaDbContext db,
@@ -174,7 +174,7 @@ public abstract class SqlSagaStateRepositoryTests
     private IMessageContext<TM> CreateMessageContext<TM>() where TM: IMessage
     {
         var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
-        messageContext.Id.Returns(Guid.NewGuid().ToString());
+        messageContext.MessageId.Returns(Guid.NewGuid().ToString());
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         return messageContext;
     }

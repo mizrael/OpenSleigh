@@ -38,9 +38,8 @@ public static class SqlBusConfiguratorExtensions
     };
 
     private static bool IsDuplicateKeyException(InvalidOperationException opEx)
-    => (opEx.Source == "Microsoft.EntityFrameworkCore" &&
-                 opEx.Message.Contains($"The instance of entity type '{nameof(OutboxMessage)}' cannot be tracked because another instance with the key value"));
-
+    => opEx.Source == "Microsoft.EntityFrameworkCore" &&
+        opEx.Message.Contains("cannot be tracked because another instance with the");
 
     private static bool IsDuplicateKeyException(DbUpdateException ex)
     {

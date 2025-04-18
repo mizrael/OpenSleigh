@@ -40,6 +40,6 @@ internal class MessageProcessor : IMessageProcessor
     private static IMessageContext<TM> ToContext<TM>(TM message, MessageEnvelope outboxMessage)
         where TM : IMessage
     {
-        return MessageContext<TM>.Create(message, outboxMessage);
+        return DefaultMessageContext<TM>.Create(outboxMessage);
     }
 }

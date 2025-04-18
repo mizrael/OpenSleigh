@@ -39,7 +39,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         if (this.CorrelationId != messageContext.CorrelationId)
             return false;
 
-        if (_processedMessages.ContainsKey(messageContext.Id))
+        if (_processedMessages.ContainsKey(messageContext.MessageId))
             return false;
 
         var messageType = messageContext.Message.GetType();
@@ -52,10 +52,10 @@ public record SagaExecutionContext : ISagaExecutionContext
        
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
     {
-        if(_processedMessages.ContainsKey(messageContext.Id))
-            throw new InvalidOperationException($"Message with id {messageContext.Id} has already been processed.");
+        if(_processedMessages.ContainsKey(messageContext.MessageId))
+            throw new InvalidOperationException($"Message with id {messageContext.MessageId} has already been processed.");
 
-        _processedMessages.Add(messageContext.Id, ProcessedMessage.Create(messageContext));
+        _processedMessages.Add(messageContext.MessageId, ProcessedMessage.Create(messageContext));
     }
 
     public void MarkAsCompleted()

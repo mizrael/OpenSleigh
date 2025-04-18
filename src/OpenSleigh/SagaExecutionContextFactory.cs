@@ -13,7 +13,7 @@ public class SagaExecutionContextFactory : ISagaExecutionContextFactory
         if (descriptor.SagaStateType is null)            
             return new SagaExecutionContext(
                 instanceId: Guid.CreateVersion7().ToString(), 
-                triggerMessageId: messageContext.Id, 
+                triggerMessageId: messageContext.MessageId, 
                 correlationId: messageContext.CorrelationId,
                 descriptor: descriptor);
                     
@@ -28,7 +28,7 @@ public class SagaExecutionContextFactory : ISagaExecutionContextFactory
         where TM : IMessage
         => new SagaExecutionContext<TS>(
             instanceId: Guid.CreateVersion7().ToString(),
-            triggerMessageId: messageContext.Id,
+            triggerMessageId: messageContext.MessageId,
             correlationId: messageContext.CorrelationId,
             descriptor, 
             state);

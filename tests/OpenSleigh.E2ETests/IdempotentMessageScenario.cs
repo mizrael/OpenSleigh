@@ -46,13 +46,28 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
             (ctx, services) => services.AddSingleton(onMessage),
             async bus =>
             {
-                await bus.PublishAsync(message, tokenSource.Token);
-                await bus.PublishAsync(message, tokenSource.Token);
-                await bus.PublishAsync(message, tokenSource.Token);
+                await PublishAsync(bus, message, tokenSource.Token);
+                await PublishAsync(bus, message, tokenSource.Token);
+                await PublishAsync(bus, message, tokenSource.Token);
+                await PublishAsync(bus, message, tokenSource.Token);
+                await PublishAsync(bus, message, tokenSource.Token);
             },
             tokenSource);
 
         Assert.Equal(1, receivedCount);
+    }
+
+    private async ValueTask PublishAsync(
+        IMessageBus bus,
+        IdempotentMessage message,
+        CancellationToken cancellationToken)
+    {
+        var result = await bus.PublishAsync(message, cancellationToken);
+        while(result != Outbox.OutboxAppendResult.Success)
+        {
+            await Task.Delay(100, cancellationToken);
+            result = await bus.PublishAsync(message, cancellationToken);
+        }
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

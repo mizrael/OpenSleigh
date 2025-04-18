@@ -4,22 +4,36 @@ namespace OpenSleigh.Tests;
 
 internal class FakeMessageContext<TM> : IMessageContext<TM> where TM : IMessage
 {
-    public static FakeMessageContext<TM> Create(TM message, string? correlationId = null, string? parentId = null, string? senderId = null)
+    public static FakeMessageContext<TM> Create(
+        TM message, 
+        string? messageId = null,
+        string? correlationId = null, 
+        string? parentId = null, 
+        string? senderId = null)
         => new FakeMessageContext<TM>(){
-            Id = Guid.NewGuid().ToString(),
+            MessageId = messageId ?? Guid.NewGuid().ToString(),
             ParentId = parentId,
-            SenderId = senderId,
+            SenderId = senderId ?? Guid.NewGuid().ToString(),
             CorrelationId = correlationId ?? Guid.NewGuid().ToString(),
+            Message = message,
+        };
+
+    public static FakeMessageContext<TIM> Create<TIM>(TIM message) 
+        where TIM : IMessage, IHasCorrelationId
+        => new FakeMessageContext<TIM>()
+        {
+            MessageId = $"{nameof(TIM)}_{message.CorrelationId}",
+            SenderId = Guid.NewGuid().ToString(),
+            CorrelationId = message.CorrelationId,
             Message = message,
         };
 
     public required TM Message { get; init; }
 
-    public required string Id { get; init; }
+    public required string MessageId { get; init; }
 
     public required string CorrelationId { get; init; }
+    public required string SenderId { get; init; }
 
     public string? ParentId { get; init; }
-
-    public string? SenderId { get; init; }
 }

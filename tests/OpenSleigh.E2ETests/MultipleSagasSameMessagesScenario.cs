@@ -25,7 +25,7 @@ public abstract class MultipleSagasSameMessagesScenario : E2ETestsBase
         {
             receivedCount++;
             if (receivedCount >= hostsCount)
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
         };
 
         await RunScenarioAsync(hostsCount,

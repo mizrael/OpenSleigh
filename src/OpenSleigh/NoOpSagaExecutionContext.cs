@@ -29,7 +29,7 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
     => new NoOpSagaExecutionContext()
     {
         Descriptor = descriptor,
-        TriggerMessageId = messageContext.Id,
+        TriggerMessageId = messageContext.MessageId,
         CorrelationId = messageContext.CorrelationId,
         InstanceId = Guid.CreateVersion7().ToString()            
     };

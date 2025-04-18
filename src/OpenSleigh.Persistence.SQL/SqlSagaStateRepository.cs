@@ -31,6 +31,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
         var correlationId = messageContext.CorrelationId;
 
         var entity = await _dbContext.SagaStates
+            .Include(e => e.ProcessedMessages)
             .AsNoTracking()
             .FirstOrDefaultAsync(e =>
                 e.CorrelationId == correlationId && 
