@@ -92,6 +92,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
     private async ValueTask<string> LockAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
+            .Include(e => e.ProcessedMessages)
             .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -135,6 +136,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
     private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
+             .Include(e => e.ProcessedMessages)
              .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
              .ConfigureAwait(false);
 

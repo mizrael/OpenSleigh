@@ -23,6 +23,7 @@ public class OutboxProcessor : IOutboxProcessor
         IEnumerable<MessageEnvelope> messages;
         try
         {
+            //TODO: this is not working as expected. It should read a batch and lock them atomically.
             messages = await _outboxRepository.ReadPendingAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (Exception ex)
@@ -38,6 +39,7 @@ public class OutboxProcessor : IOutboxProcessor
 
             try
             {
+                // TODO: this needs to be removed. Messages HAVE to be locked when pulled from the outbox and hidden to other producers.
                 string lockId = await _outboxRepository.LockAsync(message, cancellationToken)
                                                        .ConfigureAwait(false);
 
