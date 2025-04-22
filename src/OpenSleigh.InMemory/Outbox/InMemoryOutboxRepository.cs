@@ -1,44 +1,33 @@
 ﻿using OpenSleigh.Outbox;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace OpenSleigh.InMemory.Outbox;
 
 internal class InMemoryOutboxRepository : IOutboxRepository
 {
-    private readonly ConcurrentDictionary<string, (MessageEnvelope message, string? lockId)> _messages = new();
+    private readonly ConcurrentDictionary<string, MessageEnvelope> _messages = new();
 
     public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
 
         foreach (var message in messages)
-            if(!_messages.TryAdd(message.MessageId, (message, null)))
+            if(!_messages.TryAdd(message.MessageId, message))
                 return ValueTask.FromResult(OutboxAppendResult.Duplicate);
 
         return ValueTask.FromResult(OutboxAppendResult.Success);
     }
 
     public ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
-    => ValueTask.FromResult(
-        _messages.Values.Where(m => m.lockId == null)
-                        .Select(m => m.message));
+    => ValueTask.FromResult((IEnumerable<MessageEnvelope>)_messages.Values);
 
-    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        string lockId = Guid.NewGuid().ToString();
-        if (!_messages.TryUpdate(message.MessageId, (message, lockId), (message, null)))
-            throw new LockException($"message '{message.MessageId}' is already locked");
-        return ValueTask.FromResult(lockId);
-    }
+        _messages.Remove(message.MessageId, out _);
 
-    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-
-        if (_messages.TryGetValue(message.MessageId, out var tuple) && tuple.lockId == lockId)
-            _messages.Remove(message.MessageId, out _);
         return ValueTask.CompletedTask;
     }
 }

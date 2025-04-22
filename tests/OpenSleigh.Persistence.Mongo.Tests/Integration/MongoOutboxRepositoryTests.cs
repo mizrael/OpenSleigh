@@ -90,37 +90,8 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message, "lorem"));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
         ex.Message.Should().Contain($"message '{message.MessageId}' not found");
-    }
-
-    [Fact]
-    public async Task DeleteAsync_should_throw_if_message_not_locked()
-    {
-        var message = CreateMessage();
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-
-        await sut.AppendAsync([message]);
-
-        var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, "lorem"));
-        ex.Message.Should().Contain($"message '{message.MessageId}' is not locked");
-    }
-
-    [Fact]
-    public async Task DeleteAsync_should_throw_if_lock_invalid()
-    {
-        var message = CreateMessage();
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-
-        await sut.AppendAsync([message]);
-        await sut.LockAsync(message);
-
-        var lockId = Guid.NewGuid().ToString();
-
-        var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, lockId));
-        ex.Message.Should().Contain($"invalid lock id '{lockId}' on message '{message.MessageId}'");
     }
 
     [Fact]
@@ -132,51 +103,11 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var sut = CreateSut(db);
 
         await sut.AppendAsync([message]);
-        var lockId = await sut.LockAsync(message);
-        await sut.DeleteAsync(message, lockId);
+        await sut.DeleteAsync(message);
 
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
         var lockedMessage = await db.OutboxMessages.FindOneAsync(filter);
         lockedMessage.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task LockAsync_should_throw_if_message_not_found()
-    {
-        var message = CreateMessage();
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
-    }
-
-    [Fact]
-    public async Task LockAsync_should_lock_existing_message()
-    {
-        var message = CreateMessage();
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await sut.AppendAsync([message]);
-
-        var lockId = await sut.LockAsync(message);
-
-        var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
-        var lockedMessage = await db.OutboxMessages.FindOneAsync(filter);
-        lockedMessage.Should().NotBeNull();
-        lockedMessage.LockId.Should().Be(lockId);
-        lockedMessage.LockTime.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task LockAsync_should_throw_if_message_already_locked()
-    {
-        var message = CreateMessage();
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await sut.AppendAsync([message]);
-
-        await sut.LockAsync(message);
-
-        await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
     }
 
     [Fact]

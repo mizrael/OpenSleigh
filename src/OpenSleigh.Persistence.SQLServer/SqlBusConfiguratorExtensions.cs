@@ -4,7 +4,6 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
-using OpenSleigh.Persistence.SQL.Entities;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQLServer;
@@ -21,7 +20,9 @@ public static class SqlBusConfiguratorExtensions
             .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseSqlServer(config.ConnectionString);
+                builder.AddInterceptors(new QueryHintInterceptor());
             }, contextLifetime: ServiceLifetime.Transient)
+            .AddScoped<ITransactionManager, SqlTransactionManager>()
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
             .AddTransient<IOutboxRepository, SqlOutboxRepository>()
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();

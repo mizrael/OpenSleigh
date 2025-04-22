@@ -26,7 +26,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
     }
 
-    public async ValueTask HandleAsync(ConsumeResult<string, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
+    public ValueTask HandleAsync(ConsumeResult<string, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
     {
         MessageEnvelope? message = null;
         try
@@ -38,8 +38,8 @@ public class KafkaMessageHandler : IKafkaMessageHandler
             _logger.LogError(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
         }
 
-        if (message is not null)
-            await HandleCoreAsync(message, queueReferences, cancellationToken);
+        return (message is null) ? ValueTask.CompletedTask :
+            HandleCoreAsync(message, queueReferences, cancellationToken);
     }
     
     private async ValueTask HandleCoreAsync(MessageEnvelope message, QueueReferences queueReferences, CancellationToken cancellationToken)

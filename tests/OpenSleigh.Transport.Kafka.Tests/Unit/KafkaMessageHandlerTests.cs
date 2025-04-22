@@ -1,13 +1,14 @@
-﻿using System;
-using System.Linq;
-using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using Confluent.Kafka;
+﻿using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Outbox;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
@@ -83,8 +84,11 @@ public class KafkaMessageHandlerTests
 
         await sut.HandleAsync(consumeResult, queueRefs);
 
-        await publisher.Received().PublishAsync(expectedMessage, queueRefs.DeadLetterTopicName,
-            Arg.Is((Header[] headers) => headers.Any(h => h.Key == expectedErrorHeader.Key)),
+        await publisher.Received(1)
+            .PublishAsync(
+            expectedMessage,
+            queueRefs.DeadLetterTopicName,
+            Arg.Is((IEnumerable<Header> headers) => headers.Any(h => h.Key == expectedErrorHeader.Key)),
             Arg.Any<CancellationToken>());
     }
 

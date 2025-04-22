@@ -2,13 +2,14 @@
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
+using System.Transactions;
 
 namespace OpenSleigh.Persistence.SQL;
 
 [ExcludeFromCodeCoverage]
-public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration)
+public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration, int MaxMessagesToPull)
 {
-    public static readonly SqlOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
+    public static readonly SqlOutboxRepositoryOptions Default = new (TimeSpan.FromMinutes(1), 10);
 }
 
 public delegate bool DuplicateKeyDetector(Exception exception);
@@ -65,65 +66,30 @@ public class SqlOutboxRepository : IOutboxRepository
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
-        var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
-        var entities = await _dbContext.OutboxMessages.AsNoTracking()
-                .Where(e => e.LockId == null || e.LockTime > maxLockDate)
-                .ToListAsync(cancellationToken)
-                .ConfigureAwait(false);
-
-        if (entities is null)
-            return Array.Empty<MessageEnvelope>();
+        var entities = await _dbContext.OutboxMessages
+           .Take(_options.MaxMessagesToPull)
+           // make sure the QueryHintInterceptor is registered on the DbContext
+           .WithHint(TableHints.UpdLock)
+           .WithHint(TableHints.ReadPast)
+           .ToListAsync(cancellationToken);
 
         var messages = new List<MessageEnvelope>(entities.Count);
         foreach (var entity in entities)
         {
             if (entity.TryMap(_typeResolver, _serializer, out var m))
-                messages.Add(m);    
+                messages.Add(m);
         }
         return messages;
     }
 
-    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        return LockAsyncCore(message, cancellationToken);
+        return DeleteAsyncCore(message, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
-    {
-        var expirationDate = DateTime.UtcNow - _options.LockMaxDuration;
-
-        var entity = await _dbContext.OutboxMessages.FirstOrDefaultAsync(e =>
-                    e.MessageId == message.MessageId,
-                cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-        if (entity is null)
-            throw new ArgumentException($"message '{message.MessageId}' not found");
-
-        if (entity.LockId is not null && entity.LockTime > DateTime.UtcNow - _options.LockMaxDuration)
-            throw new LockException($"message '{message.MessageId}' is already locked");
-
-        entity.LockId = Guid.CreateVersion7().ToString("N");
-        entity.LockTime = DateTimeOffset.UtcNow;            
-
-        await _dbContext.SaveChangesAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        return entity.LockId;
-    }
-
-    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-
-        if (string.IsNullOrWhiteSpace(lockId))           
-            throw new ArgumentException($"'{nameof(lockId)}' cannot be null or whitespace.", nameof(lockId));
-        
-        return DeleteAsyncCore(message, lockId, cancellationToken);
-    }
-
-    private async ValueTask DeleteAsyncCore(MessageEnvelope message, string lockId, CancellationToken cancellationToken)
+    private async ValueTask DeleteAsyncCore(MessageEnvelope message,  CancellationToken cancellationToken)
     {
         var entity = await _dbContext.OutboxMessages
             .FirstOrDefaultAsync(e =>
@@ -132,13 +98,7 @@ public class SqlOutboxRepository : IOutboxRepository
             .ConfigureAwait(false);
         if (entity is null)
             throw new ArgumentException($"message '{message.MessageId}' not found");
-
-        if (string.IsNullOrWhiteSpace(entity.LockId))
-            throw new LockException($"message '{message.MessageId}' is not locked");
-
-        if (entity.LockId != lockId)
-            throw new LockException($"invalid lock id '{lockId}' on message '{message.MessageId}'");
-
+       
         _dbContext.OutboxMessages.Remove(entity);
 
         await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

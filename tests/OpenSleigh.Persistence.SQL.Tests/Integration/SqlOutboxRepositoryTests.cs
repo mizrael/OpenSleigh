@@ -2,6 +2,7 @@
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Utils;
 using System.ComponentModel;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Integration;
 
@@ -25,16 +26,6 @@ public abstract class SqlOutboxRepositoryTests
         sysInfo.ClientId.Returns("client");
         sysInfo.Id.Returns("sender");
         return MessageEnvelope.Create(new FakeMessage(), sysInfo);
-    }
-    
-    [Fact]
-    public async Task LockAsync_should_throw_if_message_not_found()
-    {
-        var message = CreateMessage();
-
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await Assert.ThrowsAsync<ArgumentException>(async () => await sut.LockAsync(message));
     }
 
     [Fact]
@@ -83,7 +74,7 @@ public abstract class SqlOutboxRepositoryTests
     }
 
     [Fact]
-    public async Task ReadMessagesToProcess_should_return_available_messages()
+    public async Task ReadPendingAsync_should_return_available_messages()
     {
         var message = CreateMessage();
 
@@ -92,49 +83,62 @@ public abstract class SqlOutboxRepositoryTests
         await sut.AppendAsync([message]);
 
         var messages = await sut.ReadPendingAsync();
-        messages.Should().NotBeNullOrEmpty();
+        Assert.NotNull(messages);
+        Assert.Single(messages);
+        Assert.Equivalent(message, messages.First());
     }
 
     [Fact]
-    public async Task LockAsync_should_lock_existing_message()
+    public async Task ReadPendingAsync_should_return_only_unlocked_messages()
     {
-        var message = CreateMessage();
+        var serializer = new JsonSerializer();
+        var messages = Enumerable.Range(1, 12)
+            .Select(i => CreateMessage())
+            .Select(m => Entities.OutboxMessage.Map(m, serializer))
+            .ToArray();
 
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await sut.AppendAsync([message]);
+        var dbName = "commitOutboxTest";
 
-        var lockId = await sut.LockAsync(message);
+        var (seedCtx, _) = _fixture.CreateDbContext(dbName);
+        seedCtx.OutboxMessages.AddRange(messages);
+        await seedCtx.SaveChangesAsync();
 
-        var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
-        lockedMessage.Should().NotBeNull();
-        lockedMessage.LockId.Should().Be(lockId);
-        lockedMessage.LockTime.Should().NotBeNull();
-    }
+        // messages are locked inside the transaction
+        var (lockCtx, _) = _fixture.CreateDbContext(dbName);
 
-    [Fact]
-    public async Task LockAsync_should_throw_if_message_already_locked()
-    {
-        var message = CreateMessage();
+        // opening a transaction is mandatory to ensure the lock on the messages is acquired
+        // otherwise other queries would pull the same messages
+        await using var transaction = await lockCtx.BeginTransactionAsync();
 
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        await sut.AppendAsync([message]);
+        var lockSut = CreateSut(lockCtx);
+        var lockedMessages = await lockSut.ReadPendingAsync();
+        Assert.NotNull(lockedMessages);
+        Assert.Equal(10, lockedMessages.Count());
 
-        await sut.LockAsync(message);
+        // this should not return any of the previous results as those messages are still locked inside the first transaction
+        var (secondCtx, _) = _fixture.CreateDbContext(dbName);
+        await using var tr2 = await secondCtx.BeginTransactionAsync();
+        var secondSut = CreateSut(secondCtx);
+        var secondBatch = await secondSut.ReadPendingAsync();
+        Assert.NotNull(secondBatch);
+        Assert.Equal(2, secondBatch.Count());
 
-        await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(message));
-    }
+        foreach (var lockedMsg in lockedMessages)
+            Assert.DoesNotContain(lockedMsg, secondBatch);
 
-    [Fact]
-    public async Task LockAsync_should_throw_if_message_not_existing()
-    {
-        var message = CreateMessage();
+        await lockCtx.SaveChangesAsync();
 
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
+        await transaction.CommitAsync();
+        await tr2.CommitAsync();
 
-        await Assert.ThrowsAsync<ArgumentException>(async () => await sut.LockAsync(message));
+        // now that the previous transactions are done, we should be able to fetch the remaining messages
+        var (pendingMsgsCtx, _) = _fixture.CreateDbContext(dbName);
+        await using var tr3 = await pendingMsgsCtx.BeginTransactionAsync();
+        var pendingMsgsSut = CreateSut(pendingMsgsCtx);
+        var remainingMessages = await pendingMsgsSut.ReadPendingAsync();
+        Assert.NotNull(remainingMessages);
+        Assert.Equal(10, remainingMessages.Count());
+        await tr3.CommitAsync();
     }
 
     [Fact]
@@ -145,37 +149,8 @@ public abstract class SqlOutboxRepositoryTests
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message, "lorem"));
+        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
         ex.Message.Should().Contain($"message '{message.MessageId}' not found");
-    }
-
-    [Fact]
-    public async Task DeleteAsync_should_throw_if_message_not_locked()
-    {
-        var message = CreateMessage();
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-
-        await sut.AppendAsync([message]);
-
-        var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, "lorem"));
-        ex.Message.Should().Contain($"message '{message.MessageId}' is not locked");
-    }
-
-    [Fact]
-    public async Task DeleteAsync_should_throw_if_lock_invalid()
-    {
-        var message = CreateMessage();
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-
-        await sut.AppendAsync([message]);
-        await sut.LockAsync(message);
-
-        var lockId = Guid.NewGuid().ToString();
-
-        var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.DeleteAsync(message, lockId));
-        ex.Message.Should().Contain($"invalid lock id '{lockId}' on message '{message.MessageId}'");
     }
 
     [Fact]
@@ -187,8 +162,7 @@ public abstract class SqlOutboxRepositoryTests
         var sut = CreateSut(db);
 
         await sut.AppendAsync([message]);
-        var lockId = await sut.LockAsync(message);
-        await sut.DeleteAsync(message, lockId);
+        await sut.DeleteAsync(message);
 
         var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
         lockedMessage.Should().BeNull();

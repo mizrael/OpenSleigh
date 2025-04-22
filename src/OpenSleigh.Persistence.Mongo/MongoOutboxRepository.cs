@@ -52,17 +52,14 @@ public class MongoOutboxRepository : IOutboxRepository
         }        
     }
 
-    public ValueTask DeleteAsync(MessageEnvelope message, string lockId, CancellationToken cancellationToken = default)
+    public ValueTask DeleteAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        if (string.IsNullOrWhiteSpace(lockId))
-            throw new ArgumentException($"'{nameof(lockId)}' cannot be null or whitespace.", nameof(lockId));
-
-        return DeleteAsyncCore(message, lockId, cancellationToken);
+        return DeleteAsyncCore(message, cancellationToken);
     }
 
-    private async ValueTask DeleteAsyncCore(MessageEnvelope message, string lockId, CancellationToken cancellationToken)
+    private async ValueTask DeleteAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
@@ -71,52 +68,8 @@ public class MongoOutboxRepository : IOutboxRepository
         if (entity is null)
             throw new ArgumentException($"message '{message.MessageId}' not found");
 
-        if (string.IsNullOrWhiteSpace(entity.LockId))
-            throw new LockException($"message '{message.MessageId}' is not locked");
-
-        if (entity.LockId != lockId)
-            throw new LockException($"invalid lock id '{lockId}' on message '{message.MessageId}'");
-
         await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
                                        .ConfigureAwait(false);
-    }
-
-    public ValueTask<string> LockAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(message);
-
-        return LockAsyncCore(message, cancellationToken);
-    }
-
-    private async ValueTask<string> LockAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
-    {
-        var lockId = Guid.NewGuid().ToString();
-
-        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
-        var filter = filterBuilder.And(
-            filterBuilder.Eq(e => e.MessageId, message.MessageId),
-            filterBuilder.Or(
-                filterBuilder.Eq(e => e.LockId, null),
-                filterBuilder.Lt(e => e.LockTime, DateTime.UtcNow - _options.LockMaxDuration)
-            )
-        );
-        var update = Builders<Entities.OutboxMessage>.Update
-            .Set(e => e.LockId, lockId)
-            .Set(e => e.LockTime, DateTime.UtcNow);
-
-        var options = new FindOneAndUpdateOptions<Entities.OutboxMessage>()
-        {
-            IsUpsert = false,
-            ReturnDocument = ReturnDocument.After
-        };
-
-        var lockedMessage = await _dbContext.OutboxMessages
-            .FindOneAndUpdateAsync(filter, update, options, cancellationToken)
-            .ConfigureAwait(false);
-        if (null == lockedMessage)
-            throw new LockException($"message '{message.MessageId}' is already locked");
-
-        return lockId;
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)

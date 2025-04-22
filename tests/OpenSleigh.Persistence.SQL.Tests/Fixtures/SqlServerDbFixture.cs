@@ -8,6 +8,5 @@ public class SqlServerDbFixture : DbFixture
 
     protected override DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString)
     => new DbContextOptionsBuilder<SagaDbContext>()
-            .UseSqlServer(connectionString)
-            .EnableSensitiveDataLogging();
+            .UseSqlServer(connectionString);
 }
