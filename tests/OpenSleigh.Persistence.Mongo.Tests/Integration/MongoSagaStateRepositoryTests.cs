@@ -32,13 +32,13 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         return messageContext;
     }
 
-    private ISagaExecutionContext CreateSagaContext<TM>(IMessageContext<TM> messageContext)
+    private ISagaInstance CreateSagaContext<TM>(IMessageContext<TM> messageContext)
         where TM : IMessage
     {
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
 
-        var factory = new SagaExecutionContextFactory();
-        var context = factory.CreateState(descriptor, messageContext);
+        var factory = new SagaInstanceFactory();
+        var context = factory.Create(descriptor, messageContext);
 
         return context;
     }
@@ -62,7 +62,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var sut = CreateSut(db);
 
         var messageContext = CreateMessageContext<FakeMessage>();
-        var sagaContext = CreateSagaContext(messageContext);       
+        var sagaContext = CreateSagaContext(messageContext);
 
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
@@ -153,7 +153,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
 
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        var fakeContext = NSubstitute.Substitute.For<ISagaInstance>();
         fakeContext.InstanceId.Returns(sagaContext.InstanceId);
         fakeContext.LockId.Returns("lorem");
 

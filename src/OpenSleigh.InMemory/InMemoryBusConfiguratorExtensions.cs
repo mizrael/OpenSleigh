@@ -6,6 +6,7 @@ using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
+using OpenSleigh.Persistence;
 
 namespace OpenSleigh.InMemory;
 
@@ -29,6 +30,7 @@ public static class InMemoryBusConfiguratorExtensions
 
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)
+                                .AddSingleton<ITransactionManager, InMemoryTransactionManager>()
                                 .AddSingleton<Channel<MessageEnvelope>>(ctx => Channel.CreateBounded<MessageEnvelope>(options.SubscriberMaxMessagesBatchSize))
                                 .AddSingleton<ChannelReader<MessageEnvelope>>(ctx =>
                                 {

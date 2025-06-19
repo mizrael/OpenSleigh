@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using OpenSleigh.Persistence.SQL;
 
-namespace OpenSleigh.Persistence.SQL;
+namespace OpenSleigh.Persistence.SQLServer;
 
 public static class QueryHintsDbContextOptionsBuilderExtensions
 {

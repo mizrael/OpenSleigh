@@ -4,7 +4,7 @@ namespace OpenSleigh;
 
 public interface ISagaStateRepository
 {
-    ValueTask<ISagaExecutionContext?> FindAsync<TM>(
+    ValueTask<ISagaInstance ?> FindAsync<TM>(
         SagaDescriptor descriptor, 
         IMessageContext<TM> messageContext, 
         CancellationToken cancellationToken = default)
@@ -18,7 +18,7 @@ public interface ISagaStateRepository
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     ValueTask<string> LockAsync(
-        ISagaExecutionContext state,
+        ISagaInstance  state,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -28,6 +28,6 @@ public interface ISagaStateRepository
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     ValueTask ReleaseAsync(
-        ISagaExecutionContext state,
+        ISagaInstance  state,
         CancellationToken cancellationToken = default);
 }

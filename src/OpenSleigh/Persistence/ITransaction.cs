@@ -2,6 +2,6 @@
 
 public interface ITransaction : IAsyncDisposable
 {
-    Task CommitAsync(CancellationToken cancellationToken = default);
-    Task RollbackAsync(CancellationToken cancellationToken = default);
+    ValueTask CommitAsync(CancellationToken cancellationToken = default);
+    ValueTask RollbackAsync(CancellationToken cancellationToken = default);
 }

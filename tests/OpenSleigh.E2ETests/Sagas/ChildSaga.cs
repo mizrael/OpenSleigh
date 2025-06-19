@@ -13,7 +13,7 @@ public class ChildSaga :
     IStartedBy<StartChildSaga>,
     IHandleMessage<ProcessChildSaga>
 {
-    public ChildSaga(ISagaExecutionContext context) : base(context)
+    public ChildSaga(ISagaInstance  context) : base(context)
     {
     }
 

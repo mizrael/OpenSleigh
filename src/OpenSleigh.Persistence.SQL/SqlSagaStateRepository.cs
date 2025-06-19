@@ -25,7 +25,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public async ValueTask<ISagaExecutionContext?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+    public async ValueTask<ISagaInstance ?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
         where TM : IMessage
     { 
         var correlationId = messageContext.CorrelationId;
@@ -44,10 +44,10 @@ public class SqlSagaStateRepository : ISagaStateRepository
         if (entity is null)
             return null;
 
-        ISagaExecutionContext? result;
+        ISagaInstance ? result;
 
         if (descriptor.SagaStateType is null)
-            result = new SagaExecutionContext(
+            result = new SagaInstance(
                 instanceId: entity.InstanceId,
                 triggerMessageId: entity.TriggerMessageId,
                 correlationId: entity.CorrelationId,
@@ -82,14 +82,14 @@ public class SqlSagaStateRepository : ISagaStateRepository
                    When = e.When
                }));
 
-    public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
         return LockAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
@@ -126,14 +126,14 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return entity.LockId;
     }
 
-    public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask ReleaseAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {  
         ArgumentNullException.ThrowIfNull(state);
 
         return ReleaseAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+    private async ValueTask ReleaseAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
              .Include(e => e.ProcessedMessages)

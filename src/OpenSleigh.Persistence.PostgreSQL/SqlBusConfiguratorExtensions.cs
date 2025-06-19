@@ -21,7 +21,6 @@ public static class SqlBusConfiguratorExtensions
             .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseNpgsql(config.ConnectionString);
-                builder.AddInterceptors(new QueryHintInterceptor());
             }, contextLifetime: ServiceLifetime.Transient)
             .AddScoped<ITransactionManager, SqlTransactionManager>()
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)

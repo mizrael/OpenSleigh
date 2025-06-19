@@ -38,7 +38,6 @@ public record OutboxMessage
             correlationId: CorrelationId,
             CreatedAt,
             type,
-            parentId: ParentId,
             senderId: SenderId,
             serializer,
             out envelope);
@@ -58,7 +57,6 @@ public record OutboxMessage
             CorrelationId = message.CorrelationId,
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName,
-            ParentId = message.ParentId,
             SenderId = message.SenderId,
         };
     }

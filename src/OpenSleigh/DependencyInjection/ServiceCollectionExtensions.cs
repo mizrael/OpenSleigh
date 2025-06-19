@@ -29,7 +29,7 @@ public static class ServiceCollectionExtensions
 
             .AddTransient<IMessageBus, DefaultMessageBus>()
             .AddTransient<ISagaRunner, SagaRunner>()
-            .AddTransient<ISagaExecutionContextFactory, SagaExecutionContextFactory>()       
+            .AddTransient<ISagaInstanceFactory, SagaInstanceFactory>()       
             .AddTransient<IMessageHandlerManager, MessageHandlerManager>()
             .AddTransient<ISagaExecutionService, SagaExecutionService>()
             .AddTransient<IMessageHandlerFactory, DefaultMessageHandlerFactory>()

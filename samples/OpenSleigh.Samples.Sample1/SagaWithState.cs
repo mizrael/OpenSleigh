@@ -27,7 +27,7 @@ public class SagaWithState :
     public ValueTask HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("starting saga with state '{InstanceId}'...", this.Context.InstanceId);
-
+      
         var message = new ProcessMySaga();
         this.Publish(message);
 

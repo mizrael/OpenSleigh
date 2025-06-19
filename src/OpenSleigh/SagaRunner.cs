@@ -25,23 +25,22 @@ public class SagaRunner : ISagaRunner
         CancellationToken cancellationToken = default)
         where TM : IMessage
     {
-        var executionContext = await _sagaExecutionService.BeginExecutionContextAsync(messageContext, descriptor, cancellationToken)
+        var sagaInstance = await _sagaExecutionService.BeginInstanceAsync(messageContext, descriptor, cancellationToken)
                                                            .ConfigureAwait(false);
-        
+
         _logger.LogInformation(
             "Saga '{SagaType}/{InstanceId}' is processing message '{MessageId}'...",
             descriptor.SagaType,
-            executionContext.InstanceId,
+            sagaInstance.InstanceId,
             messageContext.MessageId);
 
-        await executionContext.ProcessAsync(_messageHandlerManager, messageContext, _sagaExecutionService, cancellationToken)
-                              .ConfigureAwait(false);
+        await sagaInstance.ProcessAsync(_messageHandlerManager, messageContext, _sagaExecutionService, cancellationToken)
+                        .ConfigureAwait(false);
 
         _logger.LogInformation(
             "Saga '{SagaType}/{InstanceId}' has completed processing message '{MessageId}'.",
             descriptor.SagaType,
-            executionContext.InstanceId,
+            sagaInstance.InstanceId,
             messageContext.MessageId);
     }
-
 }

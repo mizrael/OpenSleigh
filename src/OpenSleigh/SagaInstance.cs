@@ -4,12 +4,12 @@ using System.Collections.Concurrent;
 
 namespace OpenSleigh;
 
-public record SagaExecutionContext : ISagaExecutionContext
+public record SagaInstance : ISagaInstance 
 {
     private readonly Dictionary<string, ProcessedMessage> _processedMessages = new();
     private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
 
-    public SagaExecutionContext(
+    public SagaInstance(
         string instanceId, 
         string triggerMessageId, 
         string correlationId,
@@ -112,7 +112,7 @@ public record SagaExecutionContext : ISagaExecutionContext
     public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
 }
 
-public record SagaExecutionContext<TS> : SagaExecutionContext, ISagaExecutionContext<TS>
+public record SagaExecutionContext<TS> : SagaInstance, ISagaExecutionContext<TS>
 {
     public SagaExecutionContext(
         string instanceId, 

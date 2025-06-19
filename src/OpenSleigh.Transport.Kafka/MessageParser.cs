@@ -40,14 +40,12 @@ public class MessageParser : IMessageParser
 
         var createdAt = DateTimeOffset.Parse(consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.CreatedAt)));
 
-        consumeResult.Message.Headers.TryGetHeaderValue(nameof(MessageEnvelope.ParentId), out var parentId);
 
         if (!MessageEnvelope.TryCreate(consumeResult.Message.Value,
                                         messageId: messageId,
                                         correlationId: correlationId,
                                         createdAt, 
                                         messageType,
-                                        parentId: parentId,
                                         senderId: senderId,
                                         _serializer,
                                         out var message))

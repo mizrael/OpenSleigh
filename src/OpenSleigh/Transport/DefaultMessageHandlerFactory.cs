@@ -11,12 +11,12 @@ internal class DefaultMessageHandlerFactory : IMessageHandlerFactory
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
     }
 
-    public IHandleMessage<TM> Create<TM>(ISagaExecutionContext context) 
+    public IHandleMessage<TM> Create<TM>(ISagaInstance context)
         where TM : IMessage
     {
         var instance = ActivatorUtilities.CreateInstance(_serviceProvider, context.Descriptor.SagaType, context);
         if (instance is null)
-            throw new TypeLoadException($"unable to create Saga instance with type '{context.Descriptor.SagaType}'");
+            throw new TypeLoadException($"unable to create Message Handler instance of type '{context.Descriptor.SagaType}'");
 
         var handler = instance as IHandleMessage<TM>;
         if (handler is null)

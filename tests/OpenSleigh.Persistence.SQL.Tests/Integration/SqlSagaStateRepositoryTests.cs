@@ -124,7 +124,7 @@ public abstract class SqlSagaStateRepositoryTests
 
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        var fakeContext = NSubstitute.Substitute.For<ISagaInstance >();
         fakeContext.InstanceId.Returns(sagaContext.InstanceId);
         fakeContext.LockId.Returns("lorem");
 
@@ -179,13 +179,13 @@ public abstract class SqlSagaStateRepositoryTests
         return messageContext;
     }
 
-    private ISagaExecutionContext CreateSagaContext<TM>(IMessageContext<TM> messageContext)
+    private ISagaInstance  CreateSagaContext<TM>(IMessageContext<TM> messageContext)
         where TM : IMessage
     {
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
 
-        var factory = new SagaExecutionContextFactory();
-        var context = factory.CreateState(descriptor, messageContext);
+        var factory = new SagaInstanceFactory();
+        var context = factory.Create(descriptor, messageContext);
 
         return context;
     }

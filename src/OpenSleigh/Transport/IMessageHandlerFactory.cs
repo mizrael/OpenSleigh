@@ -2,5 +2,5 @@
 
 public interface IMessageHandlerFactory
 {
-    IHandleMessage<TM> Create<TM>(ISagaExecutionContext context) where TM : IMessage;
+    IHandleMessage<TM> Create<TM>(ISagaInstance  context) where TM : IMessage;
 }

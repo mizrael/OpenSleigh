@@ -11,11 +11,11 @@ internal sealed class SqlTransaction : ITransaction
         _transaction = transaction ?? throw new ArgumentNullException(nameof(transaction));
     }
 
-    public Task CommitAsync(CancellationToken cancellationToken = default) =>
-        _transaction.CommitAsync(cancellationToken);
+    public ValueTask CommitAsync(CancellationToken cancellationToken = default) =>
+        new ValueTask(_transaction.CommitAsync(cancellationToken));
 
-    public Task RollbackAsync(CancellationToken cancellationToken = default) =>
-        _transaction.RollbackAsync(cancellationToken);
+    public ValueTask RollbackAsync(CancellationToken cancellationToken = default) =>
+        new ValueTask(_transaction.RollbackAsync(cancellationToken));
 
     public ValueTask DisposeAsync()
     => _transaction.DisposeAsync();

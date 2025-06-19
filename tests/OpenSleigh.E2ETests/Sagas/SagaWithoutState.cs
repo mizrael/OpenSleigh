@@ -15,7 +15,7 @@ public class SagaWithoutState :
     public SagaWithoutState(
         Action<IMessageContext<SagaCompleted>> onCompleted,
         ILogger<SagaWithoutState> logger,
-        ISagaExecutionContext context) : base(context)
+        ISagaInstance  context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));

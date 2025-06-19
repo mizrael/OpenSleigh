@@ -13,7 +13,7 @@ public class SagaExecutionContextTests
         
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
 
         sut.CanProcess(messageContext).Should().BeTrue();
     }
@@ -26,7 +26,7 @@ public class SagaExecutionContextTests
         var message = new FakeSagaStarter();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.MarkAsCompleted();
 
         sut.CanProcess(messageContext).Should().BeFalse();
@@ -41,7 +41,7 @@ public class SagaExecutionContextTests
 
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", Guid.NewGuid().ToString(), descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", Guid.NewGuid().ToString(), descriptor);
 
         sut.CanProcess(messageContext).Should().BeFalse();
     }
@@ -55,7 +55,7 @@ public class SagaExecutionContextTests
             new FakeSagaStarter(),
             senderId: Guid.NewGuid().ToString());
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.CanProcess(messageContext).Should().BeTrue();
     }
 
@@ -66,7 +66,7 @@ public class SagaExecutionContextTests
 
         var correlationId = Guid.NewGuid().ToString();
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", correlationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", correlationId, descriptor);
 
         var parentMessageContext = FakeMessageContext<FakeSagaMessage>.Create(                
             new FakeSagaMessage(),
@@ -94,7 +94,7 @@ public class SagaExecutionContextTests
             new FakeSagaMessage(),
             senderId: Guid.NewGuid().ToString());
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", correlationId: Guid.NewGuid().ToString(), descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", correlationId: Guid.NewGuid().ToString(), descriptor);
 
         sut.CanProcess(messageContext).Should().BeFalse();
     }
@@ -108,7 +108,7 @@ public class SagaExecutionContextTests
             new FakeSagaMessage(),
             senderId: Guid.NewGuid().ToString());
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
 
         sut.CanProcess(messageContext).Should().BeTrue();
     }
@@ -121,7 +121,7 @@ public class SagaExecutionContextTests
         var message = new FakeSagaStarter();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
         sut.CanProcess(messageContext).Should().BeFalse();
@@ -135,7 +135,7 @@ public class SagaExecutionContextTests
         var message = new FakeIdempotentMessage("test key");
         var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
         Assert.False(sut.CanProcess(messageContext));
@@ -149,7 +149,7 @@ public class SagaExecutionContextTests
         var message = new FakeIdempotentMessage("test key");
         var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
         Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext));
@@ -164,7 +164,7 @@ public class SagaExecutionContextTests
         var message = new FakeIdempotentMessage(idempotencyKey);
         var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
         var message2 = new FakeIdempotentMessage(idempotencyKey);
@@ -181,7 +181,7 @@ public class SagaExecutionContextTests
         var message = new FakeIdempotentMessage(idempotencyKey);
         var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
 
-        var sut = new SagaExecutionContext("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
         var message2 = new FakeIdempotentMessage(idempotencyKey);

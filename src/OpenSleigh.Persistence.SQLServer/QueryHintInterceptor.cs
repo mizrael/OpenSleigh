@@ -2,7 +2,7 @@
 using System.Data.Common;
 using System.Text.RegularExpressions;
 
-namespace OpenSleigh.Persistence.SQL;
+namespace OpenSleigh.Persistence.SQLServer;
 
 public class QueryHintInterceptor : DbCommandInterceptor
 {

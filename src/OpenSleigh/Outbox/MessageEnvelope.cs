@@ -29,7 +29,6 @@ public class MessageEnvelope
     public required string MessageId { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required string SenderId { get; init; }        
-    public string? ParentId { get; init; }
 
     #region Factory
 
@@ -39,7 +38,6 @@ public class MessageEnvelope
         string correlationId,
         DateTimeOffset createdAt,
         Type messageType,
-        string? parentId,
         string senderId,
         ISerializer serializer,
         [NotNullWhen(true)] out MessageEnvelope? result)
@@ -70,7 +68,6 @@ public class MessageEnvelope
             MessageId = messageId,
             CorrelationId = correlationId,
             CreatedAt = createdAt,
-            ParentId = parentId,
             SenderId = senderId
         };
         return true;
@@ -99,7 +96,7 @@ public class MessageEnvelope
 
     public static MessageEnvelope Create(
         IMessage message,
-        ISagaExecutionContext executionContext)
+        ISagaInstance  executionContext)
     {
         ArgumentNullException.ThrowIfNull(message);
 
@@ -113,7 +110,6 @@ public class MessageEnvelope
             CreatedAt = DateTimeOffset.UtcNow,
             MessageId = messageId,
             CorrelationId = executionContext.CorrelationId,
-            ParentId = executionContext.TriggerMessageId,
             SenderId = executionContext.InstanceId
         };
     }

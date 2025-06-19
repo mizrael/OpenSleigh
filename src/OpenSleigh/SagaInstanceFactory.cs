@@ -2,21 +2,21 @@
 
 namespace OpenSleigh;
 
-public class SagaExecutionContextFactory : ISagaExecutionContextFactory
+public class SagaInstanceFactory : ISagaInstanceFactory
 {
-    public ISagaExecutionContext CreateState<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext)
+    public ISagaInstance Create<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext)
         where TM : IMessage
     {
         ArgumentNullException.ThrowIfNull(descriptor);
         ArgumentNullException.ThrowIfNull(messageContext);
 
-        if (descriptor.SagaStateType is null)            
-            return new SagaExecutionContext(
-                instanceId: Guid.CreateVersion7().ToString(), 
-                triggerMessageId: messageContext.MessageId, 
+        if (descriptor.SagaStateType is null)
+            return new SagaInstance(
+                instanceId: Guid.CreateVersion7().ToString(),
+                triggerMessageId: messageContext.MessageId,
                 correlationId: messageContext.CorrelationId,
                 descriptor: descriptor);
-                    
+
         var instance = Activator.CreateInstance(descriptor.SagaStateType);
         if (instance is null)
             throw new TypeLoadException($"unable to create instance of type '{descriptor.SagaStateType.FullName}'");
@@ -24,12 +24,12 @@ public class SagaExecutionContextFactory : ISagaExecutionContextFactory
         return Create((dynamic)instance, messageContext, descriptor);
     }
 
-    private static ISagaExecutionContext Create<TS, TM>(TS state, IMessageContext<TM> messageContext, SagaDescriptor descriptor)
+    private static ISagaInstance Create<TS, TM>(TS state, IMessageContext<TM> messageContext, SagaDescriptor descriptor)
         where TM : IMessage
         => new SagaExecutionContext<TS>(
             instanceId: Guid.CreateVersion7().ToString(),
             triggerMessageId: messageContext.MessageId,
             correlationId: messageContext.CorrelationId,
-            descriptor, 
+            descriptor,
             state);
 }

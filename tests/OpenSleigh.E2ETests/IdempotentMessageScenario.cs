@@ -29,7 +29,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         var message = new IdempotentMessage("my idempotency key");
 
         var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5) * hostsCount);
 
         Action<IMessageContext<IdempotentMessage>> onMessage = ctx =>
         {
@@ -39,7 +39,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
             Assert.Equal(message.CorrelationId, ctx.Message.CorrelationId);
 
             receivedCount++;
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
+            tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
         };
 
         await RunScenarioAsync(hostsCount,
@@ -62,11 +62,18 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         IdempotentMessage message,
         CancellationToken cancellationToken)
     {
-        var result = await bus.PublishAsync(message, cancellationToken);
+        var result = Outbox.OutboxAppendResult.Undefined; 
         while(result != Outbox.OutboxAppendResult.Success)
         {
-            await Task.Delay(100, cancellationToken);
-            result = await bus.PublishAsync(message, cancellationToken);
+            try
+            {
+                await Task.Delay(100, cancellationToken);
+                result = await bus.PublishAsync(message, cancellationToken);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
         }
     }
 

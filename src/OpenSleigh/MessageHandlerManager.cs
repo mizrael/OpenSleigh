@@ -15,7 +15,7 @@ public class MessageHandlerManager : IMessageHandlerManager
     }
 
     public async ValueTask ProcessAsync<TM>(
-        ISagaExecutionContext executionContext,
+        ISagaInstance  executionContext,
         IMessageContext<TM> messageContext,
         CancellationToken cancellationToken = default) where TM : IMessage
     {

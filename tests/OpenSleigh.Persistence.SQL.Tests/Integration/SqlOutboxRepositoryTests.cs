@@ -167,13 +167,4 @@ public abstract class SqlOutboxRepositoryTests
         var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
         lockedMessage.Should().BeNull();
     }
-
-    protected SqlOutboxRepository CreateSut(SagaDbContext db, DuplicateKeyDetector duplicateKeyDetector)
-    {
-        var typeResolver = new TypeResolver();
-        typeResolver.Register(typeof(FakeMessage));
-
-        var sut = new SqlOutboxRepository(db, typeResolver, SqlOutboxRepositoryOptions.Default, new JsonSerializer(), duplicateKeyDetector);
-        return sut;
-    }
 }

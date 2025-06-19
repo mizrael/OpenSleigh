@@ -29,8 +29,7 @@ public abstract class DbFixture : IAsyncLifetime
         var connectionString = string.Format(_connStrTemplate, dbName);
 
         var optionsBuilder = CreateOptionsBuilder(connectionString);
-        optionsBuilder.EnableSensitiveDataLogging()
-                      .AddInterceptors(new QueryHintInterceptor()); // this is necessary to have the outbox working
+        optionsBuilder.EnableSensitiveDataLogging();
 
         var options = optionsBuilder.Options;
 

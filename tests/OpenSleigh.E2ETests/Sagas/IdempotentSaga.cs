@@ -12,7 +12,7 @@ public class IdempotentSaga :
 
     public IdempotentSaga(
         Action<IMessageContext<IdempotentMessage>> onStart,
-        ISagaExecutionContext context) : base(context)
+        ISagaInstance  context) : base(context)
     {
         _onStart = onStart;
     }

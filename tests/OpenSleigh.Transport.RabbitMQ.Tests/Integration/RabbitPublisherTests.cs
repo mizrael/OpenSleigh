@@ -28,7 +28,7 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
     [Fact]
     public async Task PublishAsync_should_publish_message()
     {
-        var sagaContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        var sagaContext = NSubstitute.Substitute.For<ISagaInstance >();
         sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
         sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
@@ -48,7 +48,6 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         {
             evt.BasicProperties.Headers.Should().NotBeNullOrEmpty();
             evt.BasicProperties.Headers.Should().ContainKeys(
-                nameof(MessageEnvelope.ParentId),
                 nameof(MessageEnvelope.SenderId),                    
                 nameof(MessageEnvelope.CreatedAt),
                 nameof(MessageEnvelope.MessageType)
@@ -57,7 +56,6 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
             evt.BasicProperties.MessageId.Should().Be(envelope.MessageId);
             evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));                
             evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()));
-            evt.BasicProperties.Headers[nameof(MessageEnvelope.ParentId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.ParentId));
             evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.SenderId));
 
             evt.Body.Should().NotBeNull();
