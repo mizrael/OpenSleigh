@@ -146,7 +146,7 @@ public class KafkaPublisherTests
 
         await producer.Received(1)
             .ProduceAsync(topicName,
-                Arg.Is((Message<string, byte[]> km) => km.Headers.Count == 7 &&
+                Arg.Is((Message<string, byte[]> km) => km.Headers.Count == 6 &&
                     km.Headers.Single(h => h.Key == "lorem") != null &&
                     km.Headers.Single(h => h.Key == "dolor") != null &&
                     km.Key == message.MessageId));
