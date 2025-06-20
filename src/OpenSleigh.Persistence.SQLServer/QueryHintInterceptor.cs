@@ -6,8 +6,9 @@ namespace OpenSleigh.Persistence.SQLServer;
 
 public class QueryHintInterceptor : DbCommandInterceptor
 {
-    private static readonly Regex _hintsRegex = new Regex(@"(?:(?:-- Use hint: )(\S+)\s)", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.IgnoreCase);
-    private static readonly Regex _tableAliasRegex = new Regex(@"(FROM[\s\r\n]+\S+(?:[\s\r\n]+AS[\s\r\n]+[^\s\r\n]+)?)", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static readonly TimeSpan _timeout = TimeSpan.FromSeconds(5);
+    private static readonly Regex _hintsRegex = new Regex(@"(?:(?:-- Use hint: )(\S+)\s)", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.IgnoreCase, _timeout);
+    private static readonly Regex _tableAliasRegex = new Regex(@"(FROM[\s\r\n]+\S+(?:[\s\r\n]+AS[\s\r\n]+[^\s\r\n]+)?)", RegexOptions.Compiled | RegexOptions.Multiline | RegexOptions.IgnoreCase, _timeout);
 
     public const string HintTag = "Use hint: ";
 
