@@ -79,10 +79,10 @@ public class MessageEnvelope
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var correlationId = message is IHasCorrelationId cm ? 
+        var correlationId = message is IHasCorrelationId cm ?
             cm.CorrelationId : Guid.CreateVersion7().ToString("N");
-
-        var messageId = $"{message.GetType().Name.ToLower()}-{correlationId}";
+        
+        var messageId = CreateMessageId(message, correlationId);
 
         return new MessageEnvelope()
         {
@@ -99,10 +99,12 @@ public class MessageEnvelope
         ISagaInstance  executionContext)
     {
         ArgumentNullException.ThrowIfNull(message);
-
         ArgumentNullException.ThrowIfNull(executionContext);
 
-        var messageId = $"{message.GetType().Name.ToLower()}-{executionContext.CorrelationId}";
+        var correlationId = message is IHasCorrelationId cm ?
+            cm.CorrelationId : executionContext.CorrelationId;
+
+        var messageId = CreateMessageId(message, correlationId);
 
         return new MessageEnvelope()
         {
@@ -112,6 +114,12 @@ public class MessageEnvelope
             CorrelationId = executionContext.CorrelationId,
             SenderId = executionContext.InstanceId
         };
+    }
+
+    private static string CreateMessageId(IMessage message, string correlationId)
+    {
+        //TODO: this is a temporary solution, we need to come up with a better way to generate message ids and ensure idempotency
+        return $"{message.GetType().Name.ToLower()}-{correlationId}";
     }
 
     #endregion Factory

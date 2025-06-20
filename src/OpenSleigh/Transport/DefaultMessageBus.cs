@@ -4,7 +4,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Transport;
 
-internal class DefaultMessageBus : IMessageBus
+public class DefaultMessageBus : IMessageBus
 {
     private readonly IOutboxRepository _outboxRepository;
     private readonly ISystemInfo _systemInfo;
