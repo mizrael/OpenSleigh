@@ -5,25 +5,23 @@ using System.Diagnostics.CodeAnalysis;
 namespace OpenSleigh.Outbox;
 
 public class MessageEnvelope
-{
-    private Type _messageType;
-
+{   
     private MessageEnvelope() { }
 
-    public required IMessage Message { get; init; }
-
-    public Type MessageType
+    private IMessage _message;
+    public required IMessage Message 
     {
-        get
-        {
-            if(this.Message is null)
-                throw new InvalidOperationException("Message is null. Cannot determine message type.");
-
-            _messageType ??= this.Message.GetType();
-
-            return _messageType;
+        get => _message;
+        init 
+        { 
+            ArgumentNullException.ThrowIfNull(value, nameof(value));
+            _message = value;
+            _messageType = value.GetType();
         }
     }
+
+    private Type _messageType;
+    public Type MessageType => _messageType;
 
     public required string CorrelationId { get; init; }
     public required string MessageId { get; init; }

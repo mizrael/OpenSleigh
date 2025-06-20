@@ -3,7 +3,7 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 
-namespace OpenSleigh.Tests;
+namespace OpenSleigh.Tests.Transport;
 
 public class DefaultMessageBusTests
 {
