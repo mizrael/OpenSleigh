@@ -8,5 +8,5 @@ public interface ISaga
 public interface ISaga<TS> : ISaga
     where TS : new()
 {
-    new ISagaExecutionContext<TS> Context { get; }
+    new ISagaInstance<TS> Context { get; }
 }

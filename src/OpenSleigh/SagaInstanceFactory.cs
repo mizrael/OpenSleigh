@@ -26,7 +26,7 @@ public class SagaInstanceFactory : ISagaInstanceFactory
 
     private static ISagaInstance Create<TS, TM>(TS state, IMessageContext<TM> messageContext, SagaDescriptor descriptor)
         where TM : IMessage
-        => new SagaExecutionContext<TS>(
+        => new SagaInstance<TS>(
             instanceId: Guid.CreateVersion7().ToString(),
             triggerMessageId: messageContext.MessageId,
             correlationId: messageContext.CorrelationId,

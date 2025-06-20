@@ -58,7 +58,7 @@ public interface ISagaInstance
     void ClearOutbox();        
 }
 
-public interface ISagaExecutionContext<TS> : ISagaInstance 
+public interface ISagaInstance<TS> : ISagaInstance 
 {
     /// <summary>
     /// the custom saga state.

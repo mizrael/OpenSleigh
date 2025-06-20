@@ -38,7 +38,7 @@ internal class BusConfigurator : IBusConfigurator
 
         // this will allow DI container validation at startup
         this.Services.AddTransient<TD>(_ => default)
-                     .AddTransient<ISagaExecutionContext<TD>>(_ => default)
+                     .AddTransient<ISagaInstance<TD>>(_ => default)
                      .AddTransient<TS>();
 
         return this;

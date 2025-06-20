@@ -19,7 +19,7 @@ public class SagaWithState :
 
     public SagaWithState(
         ILogger<SagaWithState> logger, 
-        ISagaExecutionContext<MySagaState> context) : base(context)
+        ISagaInstance<MySagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

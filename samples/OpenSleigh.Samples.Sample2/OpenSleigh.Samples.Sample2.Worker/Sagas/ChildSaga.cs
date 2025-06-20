@@ -25,7 +25,7 @@ public class ChildSaga :
 
     public ChildSaga(
         ILogger<ChildSaga> logger,
-        ISagaExecutionContext<ChildSagaState> context) : base(context)
+        ISagaInstance<ChildSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

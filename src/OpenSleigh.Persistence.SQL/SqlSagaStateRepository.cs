@@ -69,8 +69,8 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return result;
     }
 
-    private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
-        => new SagaExecutionContext<TS>(
+    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
+        => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
                correlationId: entity.CorrelationId,
@@ -169,7 +169,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
                     .ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaExecutionContext<TS> state, SagaState entity)
+    private void SetStateData<TS>(ISagaInstance<TS> state, SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
     }

@@ -27,14 +27,14 @@ public abstract class Saga : ISaga
 public abstract class Saga<TS> : Saga, ISaga<TS>
     where TS : new()
 {
-    private readonly ISagaExecutionContext<TS> _context;
+    private readonly ISagaInstance<TS> _context;
 
-    protected Saga(ISagaExecutionContext<TS> context)
+    protected Saga(ISagaInstance<TS> context)
         : base(context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public new ISagaExecutionContext<TS> Context => _context;
+    public new ISagaInstance<TS> Context => _context;
     ISagaInstance ISaga.Context => _context;
 }

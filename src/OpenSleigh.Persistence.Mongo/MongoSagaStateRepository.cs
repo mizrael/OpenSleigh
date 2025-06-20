@@ -28,8 +28,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
         _serializer = serializer;
     }
 
-    private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
-        => new SagaExecutionContext<TS>(
+    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
+        => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
                correlationId: entity.CorrelationId,
@@ -175,7 +175,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
         }).ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaExecutionContext<TS> state, Entities.SagaState entity)
+    private void SetStateData<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
     }

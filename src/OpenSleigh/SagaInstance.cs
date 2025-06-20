@@ -112,9 +112,9 @@ public record SagaInstance : ISagaInstance
     public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
 }
 
-public record SagaExecutionContext<TS> : SagaInstance, ISagaExecutionContext<TS>
+public record SagaInstance<TS> : SagaInstance, ISagaInstance<TS>
 {
-    public SagaExecutionContext(
+    public SagaInstance(
         string instanceId, 
         string triggerMessageId, 
         string correlationId,

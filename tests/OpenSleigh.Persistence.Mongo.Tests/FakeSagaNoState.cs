@@ -19,12 +19,12 @@ public class FakeSagaNoState : ISaga, IStartedBy<FakeMessage>
 
 public class FakeSagaWithState : ISaga<DummyState>, IStartedBy<FakeMessage>
 {
-    public FakeSagaWithState(ISagaExecutionContext<DummyState> context)
+    public FakeSagaWithState(ISagaInstance<DummyState> context)
     {
         this.Context = context;
     }
 
-    public ISagaExecutionContext<DummyState> Context { get; }
+    public ISagaInstance<DummyState> Context { get; }
 
     ISagaInstance  ISaga.Context => throw new System.NotImplementedException();
 
