@@ -23,10 +23,12 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
     [InlineData(5)]
     public async Task run_idempotent_message_scenario(int hostsCount)
     {
-        if ( hostsCount > _maxHostsCount)
+        if (hostsCount > _maxHostsCount)
             return;
 
-        var message = new IdempotentMessage("my idempotency key");
+        var requestId = Guid.CreateVersion7().ToString("N");
+        var correlationId = Guid.CreateVersion7().ToString("N");
+        var message = new IdempotentMessage(requestId, correlationId, hostsCount);
 
         var receivedCount = 0;
         using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5) * hostsCount);
@@ -34,9 +36,9 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         Action<IMessageContext<IdempotentMessage>> onMessage = ctx =>
         {
             Assert.NotNull(ctx.Message);
-            Assert.IsType<IdempotentMessage>(ctx.Message);
             Assert.Equal(message.CorrelationId, ctx.CorrelationId);
             Assert.Equal(message.CorrelationId, ctx.Message.CorrelationId);
+            Assert.Equal(requestId, ctx.Message.RequestId);
 
             receivedCount++;
             tokenSource.CancelAfter(TimeSpan.FromSeconds(2));

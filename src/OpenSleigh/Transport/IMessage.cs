@@ -1,3 +1,34 @@
-﻿namespace OpenSleigh.Transport;
+﻿using System.Text;
 
-public interface IMessage { }
+namespace OpenSleigh.Transport;
+
+public interface IMessage 
+{ 
+    
+}
+
+
+public interface IIdempotentMessage : IMessage, IHasRequestId
+{
+    virtual string GetId()
+    {
+        var sb = new StringBuilder();
+
+        sb.Append(this.RequestId);
+
+        var components = GetIdempotencyComponents();
+        foreach (var component in components)
+        {
+            sb.Append(component);
+        }
+
+        if(this is IHasCorrelationId hasCorrelationId)
+        {
+            sb.Append(hasCorrelationId.CorrelationId);
+        }
+
+        return sb.ToString();
+    }
+
+    IEnumerable<object> GetIdempotencyComponents();
+}
