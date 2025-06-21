@@ -79,8 +79,9 @@ public class MessageEnvelope
 
         var correlationId = message is IHasCorrelationId cm ?
             cm.CorrelationId : Guid.CreateVersion7().ToString("N");
-        
-        var messageId = CreateMessageId(message, correlationId);
+
+        var messageId = message is IIdempotentMessage im ?
+            im.GetId() : Guid.CreateVersion7().ToString("N");
 
         return new MessageEnvelope()
         {
@@ -102,7 +103,8 @@ public class MessageEnvelope
         var correlationId = message is IHasCorrelationId cm ?
             cm.CorrelationId : executionContext.CorrelationId;
 
-        var messageId = CreateMessageId(message, correlationId);
+        var messageId = message is IIdempotentMessage im ?
+            im.GetId() : Guid.CreateVersion7().ToString("N");
 
         return new MessageEnvelope()
         {
@@ -112,12 +114,6 @@ public class MessageEnvelope
             CorrelationId = executionContext.CorrelationId,
             SenderId = executionContext.InstanceId
         };
-    }
-
-    private static string CreateMessageId(IMessage message, string correlationId)
-    {
-        //TODO: this is a temporary solution, we need to come up with a better way to generate message ids and ensure idempotency
-        return $"{message.GetType().Name.ToLower()}-{correlationId}";
     }
 
     #endregion Factory
