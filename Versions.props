@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
-    <PackageVersion>3.0.4</PackageVersion>
+    <PackageVersion>3.0.5</PackageVersion>
     <CSharpLanguageVersion>12</CSharpLanguageVersion>
     <TargetFrameworkVersion>net9.0</TargetFrameworkVersion>
     <RepositoryUrl>https://github.com/mizrael/OpenSleigh</RepositoryUrl>
