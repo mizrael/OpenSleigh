@@ -2,7 +2,9 @@
 ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.InMemory?style=plastic)
 
 ## Description
-In-memory Persistence and Transport library for OpenSleigh
+In-memory Persistence and Transport library for OpenSleigh.
+
+For more details, check the [Official Documentation](https://opensleigh.gitbook.io/).
 
 ## Installation
 This library can be installed from Nuget: https://www.nuget.org/packages/OpenSleigh.InMemory/
