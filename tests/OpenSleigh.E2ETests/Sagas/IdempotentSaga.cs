@@ -14,10 +14,10 @@ public class IdempotentSaga :
     Saga,
     IStartedBy<IdempotentMessage>
 {
-    private readonly Action<IMessageContext<IdempotentMessage>> _onStart;
+    private readonly Action<IMessageContext<IdempotentMessage>, ISagaInstance> _onStart;
 
     public IdempotentSaga(
-        Action<IMessageContext<IdempotentMessage>> onStart,
+        Action<IMessageContext<IdempotentMessage>, ISagaInstance> onStart,
         ISagaInstance  context) : base(context)
     {
         _onStart = onStart;
@@ -25,7 +25,7 @@ public class IdempotentSaga :
 
     public ValueTask HandleAsync(IMessageContext<IdempotentMessage> context, CancellationToken cancellationToken = default)
     {
-        _onStart?.Invoke(context);
+        _onStart?.Invoke(context, this.Context);
         return ValueTask.CompletedTask;
     }
 }

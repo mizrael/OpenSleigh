@@ -2,6 +2,7 @@
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 
 namespace OpenSleigh.Persistence.SQL;
 
@@ -22,6 +23,7 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     
     private readonly DuplicateKeyDetector _duplicateKeyDetector;
 
+    private static SemaphoreSlim _appendSemaphore = new(1, 1);
     public SqlOutboxRepository(
         SqlOutboxRepositoryOptions options,
         SagaDbContext dbContext,
@@ -41,6 +43,8 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(messages);
+        if (!messages.Any())
+            return ValueTask.FromResult(OutboxAppendResult.Success);
 
         return AppendAsyncCore(messages, cancellationToken);
     }
@@ -48,12 +52,13 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     private async ValueTask<OutboxAppendResult> AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         var entities = messages.Select(message => Entities.OutboxMessage.Map(message, _serializer));
-
+        await _appendSemaphore.WaitAsync(cancellationToken);
+       
         try
         {
             //TODO: this feels like a hack to make E2E tests work. Need to remove.
-            //_dbContext.ChangeTracker.Clear(); 
-
+            //DbContext.ChangeTracker.Clear(); 
+            
             DbContext.OutboxMessages.AddRange(entities);
             await DbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);
@@ -62,6 +67,10 @@ public abstract class SqlOutboxRepository : IOutboxRepository
         catch (Exception ex) when (_duplicateKeyDetector(ex))
         {
             return OutboxAppendResult.Duplicate;
+        }
+        finally
+        {
+            _appendSemaphore.Release();
         }
     }
 
@@ -76,16 +85,8 @@ public abstract class SqlOutboxRepository : IOutboxRepository
 
     private async ValueTask DeleteAsyncCore(MessageEnvelope message,  CancellationToken cancellationToken)
     {
-        var entity = await DbContext.OutboxMessages
-            .FirstOrDefaultAsync(e =>
-                e.MessageId == message.MessageId,
-                cancellationToken)
-            .ConfigureAwait(false);
-        if (entity is null)
-            throw new ArgumentException($"message '{message.MessageId}' not found");
-       
-        DbContext.OutboxMessages.Remove(entity);
-
-        await DbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        await DbContext.OutboxMessages.Where(e => e.MessageId == message.MessageId)
+                                    .ExecuteDeleteAsync(cancellationToken)
+                                    .ConfigureAwait(false);
     }
 }

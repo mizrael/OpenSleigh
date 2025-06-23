@@ -19,6 +19,7 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
     public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var entities = await DbContext.OutboxMessages
+           .AsNoTracking()
            .Take(_options.MaxMessagesToPull)
              // make sure the QueryHintInterceptor is registered on the DbContext
              .WithHint(TableHints.UpdLock)

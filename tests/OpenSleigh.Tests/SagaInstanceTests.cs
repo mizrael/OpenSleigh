@@ -1,4 +1,6 @@
 using FluentAssertions;
+using NSubstitute;
+using OpenSleigh.Transport;
 
 namespace OpenSleigh.Tests;
 
@@ -61,6 +63,7 @@ public class SagaInstanceTests
         Assert.Equal("lorem ipsum", sut.State);
     }
 
+    [Fact]
     public void CanProcess_should_return_true_when_message_not_processed()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
@@ -184,12 +187,14 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public void CanProcess_should_return_false_when_same_idempotent_message_already_processed()
+    public void CanProcess_should_return_false_when_idempotent_message_already_processed()
     {
+        var messageId = "test key";
         var descriptor = SagaDescriptor.Create<FakeSaga>();
 
-        var message = new FakeIdempotentMessage("test key");
-        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+        var messageContext = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>();
+        messageContext.MessageId.Returns(messageId);
+        messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
@@ -198,50 +203,40 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public void SetAsProcessed_should_throw_when_same_idempotent_message_already_processed()
-    {
-        var descriptor = SagaDescriptor.Create<FakeSaga>();
-
-        var message = new FakeIdempotentMessage("test key");
-        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
-
-        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
-        sut.SetAsProcessed(messageContext);
-
-        Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext));
-    }
-
-    [Fact]
-    public void CanProcess_should_return_false_when_idempotent_message_already_processed()
-    {
-        var idempotencyKey = "test key";
-        var descriptor = SagaDescriptor.Create<FakeSaga>();
-
-        var message = new FakeIdempotentMessage(idempotencyKey);
-        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
-
-        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
-        sut.SetAsProcessed(messageContext);
-
-        var message2 = new FakeIdempotentMessage(idempotencyKey);
-        var messageContext2 = FakeMessageContext<FakeIdempotentMessage>.Create(message2);
-        Assert.False(sut.CanProcess(messageContext2));
-    }
-
-    [Fact]
     public void SetAsProcessed_should_throw_when_idempotent_message_already_processed()
     {
-        var idempotencyKey = "test key";
+        var messageId = "test key";
         var descriptor = SagaDescriptor.Create<FakeSaga>();
 
-        var message = new FakeIdempotentMessage(idempotencyKey);
-        var messageContext = FakeMessageContext<FakeIdempotentMessage>.Create(message);
+        var messageContext = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>();
+        messageContext.MessageId.Returns(messageId);
+        messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
-        var message2 = new FakeIdempotentMessage(idempotencyKey);
-        var messageContext2 = FakeMessageContext<FakeIdempotentMessage>.Create(message2);
+        var messageContext2 = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>(); 
+        messageContext2.MessageId.Returns(messageId);
         Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext2));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_should_process_message()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var message = new FakeSagaStarter();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
+
+        var handler = NSubstitute.Substitute.For<IMessageHandlerManager>();
+        var executionService = NSubstitute.Substitute.For<ISagaExecutionService>();
+
+        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        await sut.ProcessAsync(handler, messageContext, executionService);
+
+        await handler.Received(1).ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>());
+        await executionService.Received(1).CommitAsync(sut, Arg.Any<CancellationToken>());
+
+        Assert.Empty(sut.LockId);
+        Assert.Contains(sut.ProcessedMessages, pm => pm.MessageId == messageContext.MessageId);
     }
 }

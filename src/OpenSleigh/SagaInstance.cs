@@ -83,8 +83,12 @@ public record SagaInstance : ISagaInstance
         IMessageHandlerManager messageHandlerManager, 
         IMessageContext<TM> messageContext,
         ISagaExecutionService sagaExecutionService,
-        CancellationToken cancellationToken) where TM : IMessage
+        CancellationToken cancellationToken = default) where TM : IMessage
     {
+        ArgumentNullException.ThrowIfNull(messageHandlerManager);
+        ArgumentNullException.ThrowIfNull(messageContext);
+        ArgumentNullException.ThrowIfNull(sagaExecutionService);
+
         await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                    .ConfigureAwait(false);
 
@@ -93,6 +97,7 @@ public record SagaInstance : ISagaInstance
         await sagaExecutionService.CommitAsync(this, cancellationToken)
                                   .ConfigureAwait(false);
 
+        // to be done after Commit, as it will be checked when releasing the state
         this.LockId = string.Empty;
     }
 

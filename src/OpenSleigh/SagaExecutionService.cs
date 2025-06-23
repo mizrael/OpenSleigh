@@ -19,7 +19,7 @@ public class SagaExecutionService : ISagaExecutionService
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
     }
 
-    public async ValueTask<ISagaInstance> BeginInstanceAsync<TM>(
+    public async ValueTask<ISagaInstance> BeginProcessingAsync<TM>(
         IMessageContext<TM> messageContext,
         SagaDescriptor descriptor,
         CancellationToken cancellationToken = default)
@@ -31,7 +31,7 @@ public class SagaExecutionService : ISagaExecutionService
             return NoOpSagaInstance.Create(messageContext, descriptor);
 
         await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
-                            .ConfigureAwait(false);
+                          .ConfigureAwait(false);
 
         return sagaInstance;
     }
@@ -40,15 +40,19 @@ public class SagaExecutionService : ISagaExecutionService
         ISagaInstance context,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(context);
+
         // TODO: transaction
 
+        if (context.Outbox.Any())
+        {
+            await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
+                                   .ConfigureAwait(false);
+            context.ClearOutbox();
+        }
+
         await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
-                                 .ConfigureAwait(false);
-
-        await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
-                               .ConfigureAwait(false);
-
-        context.ClearOutbox();
+                                  .ConfigureAwait(false);
     }
 
     private async Task<ISagaInstance> ResolveInstanceAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) where TM : IMessage
@@ -57,14 +61,14 @@ public class SagaExecutionService : ISagaExecutionService
 
         // we need to check if the state is already in the repository
         // even if the message is the initiator, as it might be a replay
-        var executionContext = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
-        if (executionContext is null)
+        var sagaInstance = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
+        if (sagaInstance is null)
         {
             var isInitiator = descriptor.InitiatorType == messageType;
             if (isInitiator)
-                executionContext = _sagaExecCtxFactory.Create(descriptor, messageContext);
+                sagaInstance = _sagaExecCtxFactory.Create(descriptor, messageContext);
         }
 
-        return executionContext ?? throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
+        return sagaInstance ?? throw new ApplicationException($"unable to locate state for Saga '{descriptor.SagaType}'.");
     }
 }

@@ -10,7 +10,7 @@ public interface IMessage
 
 public interface IIdempotentMessage : IMessage, IHasRequestId
 {
-    virtual string GetId()
+    public virtual string GetId()
     {
         var sb = new StringBuilder();
 

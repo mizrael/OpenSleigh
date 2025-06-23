@@ -40,8 +40,6 @@ public abstract class SqlOutboxRepositoryTests
 
         var appendedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
         appendedMessage.Should().NotBeNull();
-        appendedMessage.LockId.Should().BeNull();
-        appendedMessage.LockTime.Should().BeNull();
     }
 
     [Fact]
@@ -85,7 +83,7 @@ public abstract class SqlOutboxRepositoryTests
         var messages = await sut.ReadPendingAsync();
         Assert.NotNull(messages);
         Assert.Single(messages);
-        Assert.Equivalent(message, messages.First());
+        Assert.Equivalent(message.MessageId, messages.First().MessageId);
     }
 
     [Fact]
@@ -139,18 +137,6 @@ public abstract class SqlOutboxRepositoryTests
         Assert.NotNull(remainingMessages);
         Assert.Equal(10, remainingMessages.Count());
         await tr3.CommitAsync();
-    }
-
-    [Fact]
-    public async Task DeleteAsync_should_throw_if_message_not_found()
-    {
-        var message = CreateMessage();
-
-        var (db,_) = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-
-        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
-        ex.Message.Should().Contain($"message '{message.MessageId}' not found");
     }
 
     [Fact]

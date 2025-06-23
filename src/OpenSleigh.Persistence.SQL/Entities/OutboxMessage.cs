@@ -7,9 +7,6 @@ namespace OpenSleigh.Persistence.SQL.Entities;
 
 public record OutboxMessage
 {
-    public string? LockId { get; set; }
-    public DateTimeOffset? LockTime { get; set; }
-    
     public required string CorrelationId { get; set; }
     public required byte[] Body { get; set; }
     public required string MessageId { get; set; }

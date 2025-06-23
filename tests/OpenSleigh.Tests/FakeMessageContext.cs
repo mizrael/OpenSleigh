@@ -18,16 +18,6 @@ internal class FakeMessageContext<TM> : IMessageContext<TM> where TM : IMessage
             Message = message,
         };
 
-    public static FakeMessageContext<TIM> Create<TIM>(TIM message) 
-        where TIM : IMessage, IHasCorrelationId
-        => new FakeMessageContext<TIM>()
-        {
-            MessageId = $"{nameof(TIM)}_{message.CorrelationId}",
-            SenderId = Guid.NewGuid().ToString(),
-            CorrelationId = message.CorrelationId,
-            Message = message,
-        };
-
     public required TM Message { get; init; }
 
     public required string MessageId { get; init; }

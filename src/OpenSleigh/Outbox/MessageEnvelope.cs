@@ -95,13 +95,13 @@ public class MessageEnvelope
 
     public static MessageEnvelope Create(
         IMessage message,
-        ISagaInstance  executionContext)
+        ISagaInstance sagaInstance)
     {
         ArgumentNullException.ThrowIfNull(message);
-        ArgumentNullException.ThrowIfNull(executionContext);
+        ArgumentNullException.ThrowIfNull(sagaInstance);
 
         var correlationId = message is IHasCorrelationId cm ?
-            cm.CorrelationId : executionContext.CorrelationId;
+            cm.CorrelationId : sagaInstance.CorrelationId;
 
         var messageId = message is IIdempotentMessage im ?
             im.GetId() : Guid.CreateVersion7().ToString("N");
@@ -111,8 +111,8 @@ public class MessageEnvelope
             Message = message,
             CreatedAt = DateTimeOffset.UtcNow,
             MessageId = messageId,
-            CorrelationId = executionContext.CorrelationId,
-            SenderId = executionContext.InstanceId
+            CorrelationId = sagaInstance.CorrelationId,
+            SenderId = sagaInstance.InstanceId
         };
     }
 

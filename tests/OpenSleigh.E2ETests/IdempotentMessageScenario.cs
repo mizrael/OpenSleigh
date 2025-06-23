@@ -28,38 +28,50 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
 
         var requestId = Guid.CreateVersion7().ToString("N");
         var correlationId = Guid.CreateVersion7().ToString("N");
-        var message = new IdempotentMessage(requestId, correlationId, hostsCount);
+        var message1 = new IdempotentMessage(requestId, correlationId, 0);
+        var message2 = new IdempotentMessage(requestId, correlationId, 1);
 
-        var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(5) * hostsCount);
+        var receivedCount = new []{ 0,0 };
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30) * hostsCount);
 
-        Action<IMessageContext<IdempotentMessage>> onMessage = ctx =>
+        Action<IMessageContext<IdempotentMessage>, ISagaInstance> onMessage = (ctx, saga) =>
         {
             Assert.NotNull(ctx.Message);
-            Assert.Equal(message.CorrelationId, ctx.CorrelationId);
-            Assert.Equal(message.CorrelationId, ctx.Message.CorrelationId);
+            Assert.Equal(correlationId, ctx.CorrelationId);
+            Assert.Equal(correlationId, ctx.Message.CorrelationId);
             Assert.Equal(requestId, ctx.Message.RequestId);
 
-            receivedCount++;
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+            receivedCount[ctx.Message.Foo]++;
+            if (receivedCount[ctx.Message.Foo] > 1)
+            {
+                throw new InvalidOperationException($"Message with Foo={ctx.Message.Foo} was received more than once.");
+            }
+
+            if (receivedCount.All(i => i > 0))
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
         };
 
         await RunScenarioAsync(hostsCount,
             (ctx, services) => services.AddSingleton(onMessage),
             async bus =>
             {
-                await PublishAsync(bus, message, tokenSource.Token);
-                await PublishAsync(bus, message, tokenSource.Token);
-                await PublishAsync(bus, message, tokenSource.Token);
-                await PublishAsync(bus, message, tokenSource.Token);
-                await PublishAsync(bus, message, tokenSource.Token);
+                await Task.WhenAll([
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                ]);
             },
             tokenSource);
 
-        Assert.Equal(1, receivedCount);
+        Assert.All(receivedCount, i => Assert.Equal(1, i));
     }
 
-    private async ValueTask PublishAsync(
+    private async Task PublishAsync(
         IMessageBus bus,
         IdempotentMessage message,
         CancellationToken cancellationToken)

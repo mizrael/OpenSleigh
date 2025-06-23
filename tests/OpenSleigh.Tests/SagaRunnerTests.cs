@@ -16,7 +16,7 @@ public class SagaRunnerTests
         var executionContext = Substitute.For<ISagaInstance >();
 
         var sagaExecutionService = Substitute.For<ISagaExecutionService>();
-        sagaExecutionService.BeginInstanceAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
+        sagaExecutionService.BeginProcessingAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
             .Returns(executionContext);
         
         var messageHandlerManager = Substitute.For<IMessageHandlerManager>();
@@ -24,7 +24,7 @@ public class SagaRunnerTests
         
         await sut.ProcessAsync(messageContext, descriptor);
 
-        await sagaExecutionService.Received(1).BeginInstanceAsync(messageContext, descriptor);
+        await sagaExecutionService.Received(1).BeginProcessingAsync(messageContext, descriptor);
         await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(null, messageContext);
         await sagaExecutionService.DidNotReceiveWithAnyArgs().CommitAsync(null);        
     }

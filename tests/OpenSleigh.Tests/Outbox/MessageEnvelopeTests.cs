@@ -203,11 +203,13 @@ public class MessageEnvelopeTests
     {
         // Arrange
         var message = new DummyMessage();
+
         var systemInfo = Substitute.For<ISystemInfo>();
         var systemId = "system-id";
         systemInfo.Id.Returns(systemId);
 
         // Act
+        var now = DateTimeOffset.UtcNow;
         var envelope = MessageEnvelope.Create(message, systemInfo);
 
         // Assert
@@ -215,8 +217,7 @@ public class MessageEnvelopeTests
         Assert.Equal(systemId, envelope.SenderId);
         Assert.NotNull(envelope.CorrelationId);
         Assert.NotNull(envelope.MessageId);
-        Assert.Contains(message.GetType().Name.ToLower(), envelope.MessageId);
-        Assert.Contains(envelope.CorrelationId, envelope.MessageId);
+        Assert.True(envelope.CreatedAt >= now);
     }
 
     [Fact]
@@ -242,15 +243,39 @@ public class MessageEnvelopeTests
         sagaInstance.InstanceId.Returns(instanceId);
 
         // Act
+        var now = DateTimeOffset.UtcNow;
         var envelope = MessageEnvelope.Create(message, sagaInstance);
 
         // Assert
         Assert.Equal(message, envelope.Message);
         Assert.Equal(instanceId, envelope.SenderId);
         Assert.Equal(correlationId, envelope.CorrelationId);
-        Assert.NotNull(envelope.MessageId);
-        Assert.Contains(message.GetType().Name.ToLower(), envelope.MessageId);
-        Assert.Contains(correlationId, envelope.MessageId);
+        Assert.NotEmpty(envelope.MessageId);
+        Assert.True(envelope.CreatedAt >= now);
+    }
+
+    [Fact]
+    public void Create_WithSagaInstance_ShouldSetProperMessageIdWhenMessageIdempotent()
+    {
+        // Arrange
+        var correlationId = Guid.NewGuid().ToString();
+        var instanceId = Guid.NewGuid().ToString();
+
+        var sagaInstance = Substitute.For<ISagaInstance>();
+        sagaInstance.CorrelationId.Returns(correlationId);
+        sagaInstance.InstanceId.Returns(instanceId);
+
+        var requestId = Guid.NewGuid().ToString();
+        var message = new FakeIdempotentMessage(requestId, 42);
+
+        // Act
+        var envelope = MessageEnvelope.Create(message, sagaInstance);
+
+        // Assert
+        Assert.Equal(message, envelope.Message);
+        Assert.Equal(instanceId, envelope.SenderId);
+        Assert.Equal(correlationId, envelope.CorrelationId);
+        Assert.NotEmpty(envelope.MessageId);
     }
 
     [Fact]

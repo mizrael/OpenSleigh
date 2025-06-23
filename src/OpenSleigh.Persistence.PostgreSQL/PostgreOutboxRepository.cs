@@ -24,6 +24,7 @@ internal class PostgreOutboxRepository : SqlOutboxRepository
     {
         var entities = await DbContext.OutboxMessages
            .FromSql(ReadQuery)
+           .AsNoTracking()
            .Take(_options.MaxMessagesToPull)
            .ToListAsync(cancellationToken);
 
