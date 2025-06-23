@@ -19,7 +19,7 @@ public record SagaDescriptor
     }
 
     /// <summary>
-    /// the saga type.
+    /// the saga type.QueryHintInterceptor
     /// </summary>
     public Type SagaType { get; }
 

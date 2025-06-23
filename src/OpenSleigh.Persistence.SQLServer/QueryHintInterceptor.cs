@@ -1,9 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore.Diagnostics;
 using System.Data.Common;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.RegularExpressions;
 
 namespace OpenSleigh.Persistence.SQLServer;
 
+[ExcludeFromCodeCoverage]
 public class QueryHintInterceptor : DbCommandInterceptor
 {
     private static readonly TimeSpan _timeout = TimeSpan.FromSeconds(5);

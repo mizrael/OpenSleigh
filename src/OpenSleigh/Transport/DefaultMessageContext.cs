@@ -1,7 +1,9 @@
 ﻿using OpenSleigh.Outbox;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Transport;
 
+[ExcludeFromCodeCoverage]
 internal record DefaultMessageContext<TM> : IMessageContext<TM>
     where TM : IMessage
 {
