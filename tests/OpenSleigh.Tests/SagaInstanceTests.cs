@@ -1,5 +1,6 @@
 using FluentAssertions;
 using NSubstitute;
+using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 
 namespace OpenSleigh.Tests;
@@ -238,5 +239,38 @@ public class SagaInstanceTests
 
         Assert.Empty(sut.LockId);
         Assert.Contains(sut.ProcessedMessages, pm => pm.MessageId == messageContext.MessageId);
+    }
+
+    [Fact]
+    public void Publish_throws_when_message_is_null()
+    {
+        var sut = new SagaInstance("lorem", "ipsum", "dolor", SagaDescriptor.Create<FakeSaga>());
+        Assert.Throws<ArgumentNullException>(() => sut.Publish(null!));
+    }
+
+    [Fact]
+    public void Publish_should_enqueue_message()
+    {
+        var message = new DummyMessage();
+        var messageEnvelope = DummyMessage.CreateEnvelope();
+
+        var sut = new SagaInstance("lorem", "ipsum", "dolor", SagaDescriptor.Create<FakeSaga>());
+
+        sut.Publish(messageEnvelope);
+        Assert.Single(sut.Outbox);
+        Assert.Equal(message, sut.Outbox.First().Message);
+    }
+
+    [Fact]
+    public void ClearOutbox_should_clear_outbox()
+    {
+        var message = new DummyMessage();
+        var messageEnvelope = DummyMessage.CreateEnvelope();
+        var sut = new SagaInstance("lorem", "ipsum", "dolor", SagaDescriptor.Create<FakeSaga>());
+        sut.Publish(messageEnvelope);
+        Assert.Single(sut.Outbox);
+
+        sut.ClearOutbox();
+        Assert.Empty(sut.Outbox);
     }
 }

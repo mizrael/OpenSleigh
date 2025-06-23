@@ -7,7 +7,7 @@ internal class FakeSaga :
     IStartedBy<FakeSagaStarter>,
     IHandleMessage<FakeSagaMessage>
 {
-    public FakeSaga(ISagaInstance  context) : base(context)
+    public FakeSaga(ISagaInstance context) : base(context)
     {
     }
 

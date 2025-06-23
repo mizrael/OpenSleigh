@@ -4,13 +4,15 @@ namespace OpenSleigh;
 
 public record SagaDescriptor
 {
-    public SagaDescriptor(Type sagaType, Type? sagaStateType = null)
+    private SagaDescriptor(Type sagaType, Type? sagaStateType = null)
     {
-        var initiatorType = sagaType.GetInitiatorMessageType();
-        
+        ArgumentNullException.ThrowIfNull(sagaType);
+
+        if (!sagaType.IsAssignableTo(typeof(ISaga)))
+            throw new ArgumentException($"saga type '{sagaType.FullName}' does not implement {nameof(ISaga)}.", nameof(sagaType));
         SagaType = sagaType ?? throw new ArgumentNullException(nameof(sagaType));
 
-        // TODO: this check could go into a Roslyn analyzer                
+        var initiatorType = sagaType.GetInitiatorMessageType();
         InitiatorType = initiatorType ?? throw new MissingMethodException($"saga type '{sagaType.FullName}' does not implement any initiator.");
         
         SagaStateType = sagaStateType;
@@ -31,11 +33,11 @@ public record SagaDescriptor
     /// </summary>
     public Type? SagaStateType { get; }
 
-    public static SagaDescriptor Create<TS>() where TS : ISaga
-        => new SagaDescriptor(typeof(TS));
+    public static SagaDescriptor Create<TSaga>() where TSaga : ISaga
+        => new SagaDescriptor(typeof(TSaga));
 
-    public static SagaDescriptor Create<TS, TD>()
-        where TS : ISaga<TD>
-        where TD : new()
-        => new SagaDescriptor(typeof(TS), typeof(TD));
+    public static SagaDescriptor Create<TSaga, TState>()
+        where TSaga : ISaga<TState>
+        where TState : new()
+        => new SagaDescriptor(typeof(TSaga), typeof(TState));
 }

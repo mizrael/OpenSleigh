@@ -1,8 +1,10 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh;
 
+[ExcludeFromCodeCoverage]
 internal class NoOpSagaInstance : ISagaInstance
 {
     private NoOpSagaInstance() { }
