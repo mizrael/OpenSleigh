@@ -37,8 +37,7 @@ public class RabbitPublisher : IPublisher
         properties.CorrelationId = envelope.CorrelationId;
         properties.Headers = new Dictionary<string, object?>()
         {
-            { nameof(envelope.MessageType), envelope.MessageType.FullName },                
-            { nameof(envelope.ParentId), envelope.ParentId ?? string.Empty },
+            { nameof(envelope.MessageType), envelope.MessageType.FullName }, 
             { nameof(envelope.SenderId), envelope.SenderId },
             { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString() }
         };

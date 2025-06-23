@@ -16,7 +16,7 @@ internal static class SqlRabbitScenarioUtils
         RabbitFixture rabbitFixture,
         string exchangeName)
     {
-        var (_, connStr) = dbFixture.CreateDbContext();
+        var (_, connStr) = dbFixture.CreateDbContext(exchangeName);
         var sqlCfg = new SqlConfiguration(connStr);
 
         QueueReferencesCreator creator = messageType =>

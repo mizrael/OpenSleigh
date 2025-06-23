@@ -5,9 +5,9 @@ namespace OpenSleigh;
 
 public abstract class Saga : ISaga
 {
-    private readonly ISagaExecutionContext _context;
+    private readonly ISagaInstance _context;
 
-    protected Saga(ISagaExecutionContext context)
+    protected Saga(ISagaInstance context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
@@ -21,20 +21,20 @@ public abstract class Saga : ISaga
         _context.Publish(outboxMessage);
     }
 
-    public ISagaExecutionContext Context => _context;
+    public ISagaInstance Context => _context;
 }
 
 public abstract class Saga<TS> : Saga, ISaga<TS>
     where TS : new()
 {
-    private readonly ISagaExecutionContext<TS> _context;
+    private readonly ISagaInstance<TS> _context;
 
-    protected Saga(ISagaExecutionContext<TS> context)
+    protected Saga(ISagaInstance<TS> context)
         : base(context)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
-    public new ISagaExecutionContext<TS> Context => _context;
-    ISagaExecutionContext ISaga.Context => _context;
+    public new ISagaInstance<TS> Context => _context;
+    ISagaInstance ISaga.Context => _context;
 }

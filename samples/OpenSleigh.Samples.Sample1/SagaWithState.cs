@@ -19,7 +19,7 @@ public class SagaWithState :
 
     public SagaWithState(
         ILogger<SagaWithState> logger, 
-        ISagaExecutionContext<MySagaState> context) : base(context)
+        ISagaInstance<MySagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -27,7 +27,7 @@ public class SagaWithState :
     public ValueTask HandleAsync(IMessageContext<StartSaga> context, CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("starting saga with state '{InstanceId}'...", this.Context.InstanceId);
-
+      
         var message = new ProcessMySaga();
         this.Publish(message);
 

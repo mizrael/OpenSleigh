@@ -8,6 +8,5 @@ public class PostgreSQLDbFixture : DbFixture
 
     protected override DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString)
     => new DbContextOptionsBuilder<SagaDbContext>()
-            .UseNpgsql(connectionString)
-            .EnableSensitiveDataLogging();
+            .UseNpgsql(connectionString);
 }

@@ -4,7 +4,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Transport;
 
-internal class DefaultMessageBus : IMessageBus
+public class DefaultMessageBus : IMessageBus
 {
     private readonly IOutboxRepository _outboxRepository;
     private readonly ISystemInfo _systemInfo;
@@ -23,7 +23,7 @@ internal class DefaultMessageBus : IMessageBus
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public async ValueTask PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) 
+    public async ValueTask<OutboxAppendResult> PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) 
         where TM : IMessage
     {
         ArgumentNullException.ThrowIfNull(message, nameof(message));
@@ -34,9 +34,14 @@ internal class DefaultMessageBus : IMessageBus
 
         var outboxMessage = MessageEnvelope.Create(message, _systemInfo);
 
-        await _outboxRepository.AppendAsync([outboxMessage], cancellationToken)
-                               .ConfigureAwait(false);
+        var appendResult = await _outboxRepository.AppendAsync([outboxMessage], cancellationToken)
+                                                  .ConfigureAwait(false);
 
-        _logger.LogInformation("message '{MessageId}' added to outbox.", outboxMessage.MessageId);
+        if (appendResult == OutboxAppendResult.Duplicate)
+            _logger.LogWarning("message '{MessageId}' is a duplicate of an existing outbox message.", outboxMessage.MessageId);
+        else 
+            _logger.LogInformation("message '{MessageId}' added to outbox.", outboxMessage.MessageId);
+
+        return appendResult;
     }
 }

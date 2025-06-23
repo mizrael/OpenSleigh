@@ -20,6 +20,12 @@ public class SagaDbContext : DbContext
         modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
     }
 
+    public async ValueTask<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var transaction = await this.Database.BeginTransactionAsync(cancellationToken);
+        return new SqlTransaction(transaction);
+    }
+
     public DbSet<SagaState> SagaStates { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
 }

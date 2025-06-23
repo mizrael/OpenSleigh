@@ -4,12 +4,12 @@ namespace OpenSleigh.Persistence.SQL.Tests;
 
 public class FakeSagaNoState : ISaga, IStartedBy<FakeMessage>
 {
-    public FakeSagaNoState(ISagaExecutionContext context)
+    public FakeSagaNoState(ISagaInstance  context)
     {
         this.Context = context;
     }
 
-    public ISagaExecutionContext Context { get; }
+    public ISagaInstance  Context { get; }
 
     public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
     {
@@ -19,14 +19,14 @@ public class FakeSagaNoState : ISaga, IStartedBy<FakeMessage>
 
 public class FakeSagaWithState : ISaga<DummyState>, IStartedBy<FakeMessage>
 {
-    public FakeSagaWithState(ISagaExecutionContext<DummyState> context)
+    public FakeSagaWithState(ISagaInstance<DummyState> context)
     {
         this.Context = context;
     }
 
-    public ISagaExecutionContext<DummyState> Context { get; }
+    public ISagaInstance<DummyState> Context { get; }
 
-    ISagaExecutionContext ISaga.Context => throw new System.NotImplementedException();
+    ISagaInstance  ISaga.Context => throw new System.NotImplementedException();
 
     public ValueTask HandleAsync(IMessageContext<FakeMessage> messageContext, CancellationToken cancellationToken = default)
     {

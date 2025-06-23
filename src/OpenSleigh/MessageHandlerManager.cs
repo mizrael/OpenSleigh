@@ -15,8 +15,8 @@ public class MessageHandlerManager : IMessageHandlerManager
     }
 
     public async ValueTask ProcessAsync<TM>(
-        IMessageContext<TM> messageContext,            
-        ISagaExecutionContext executionContext,
+        ISagaInstance  executionContext,
+        IMessageContext<TM> messageContext,
         CancellationToken cancellationToken = default) where TM : IMessage
     {
         IHandleMessage<TM> handler = _messageHandlerFactory.Create<TM>(executionContext);
@@ -31,7 +31,7 @@ public class MessageHandlerManager : IMessageHandlerManager
             _logger.LogError(
                 ex,
                 "an error has occurred while processing message '{MessageId}' from Saga '{SagaType}/{InstanceId}' : {Error}",
-                messageContext.Id,
+                messageContext.MessageId,
                 executionContext.Descriptor.SagaType,
                 executionContext.InstanceId,
                 ex.Message
@@ -41,7 +41,7 @@ public class MessageHandlerManager : IMessageHandlerManager
                          .ConfigureAwait(false);
 
             throw new SagaException(
-                $"an error has occurred while processing message '{messageContext.Id}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
+                $"an error has occurred while processing message '{messageContext.MessageId}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
                 ex);
         }
     }

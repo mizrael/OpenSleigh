@@ -23,7 +23,7 @@ public class SimpleSaga :
 
     public SimpleSaga(
         ILogger<SimpleSaga> logger,
-        ISagaExecutionContext<SimpleSagaState> context) : base(context)
+        ISagaInstance<SimpleSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

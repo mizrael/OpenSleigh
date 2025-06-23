@@ -1,11 +1,13 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
+using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh;
 
-internal class NoOpSagaExecutionContext : ISagaExecutionContext
+[ExcludeFromCodeCoverage]
+internal class NoOpSagaInstance : ISagaInstance
 {
-    private NoOpSagaExecutionContext() { }
+    private NoOpSagaInstance() { }
 
     public string TriggerMessageId { get; private set; }
 
@@ -15,7 +17,7 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
 
     public SagaDescriptor Descriptor { get; private set; }
 
-    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => 
+    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages =>
         (IReadOnlyCollection<ProcessedMessage>)Enumerable.Empty<ProcessedMessage>();
 
     public bool IsCompleted => true;
@@ -25,41 +27,43 @@ internal class NoOpSagaExecutionContext : ISagaExecutionContext
     public IReadOnlyCollection<MessageEnvelope> Outbox =>
         (IReadOnlyCollection<MessageEnvelope>)Enumerable.Empty<MessageEnvelope>();
 
-    public static ISagaExecutionContext Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
-    => new NoOpSagaExecutionContext()
+    public static ISagaInstance Create<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor) where TM : IMessage
+    => new NoOpSagaInstance()
     {
         Descriptor = descriptor,
-        TriggerMessageId = messageContext.Id,
+        TriggerMessageId = messageContext.MessageId,
         CorrelationId = messageContext.CorrelationId,
-        InstanceId = Guid.CreateVersion7().ToString()            
+        InstanceId = Guid.CreateVersion7().ToString()
     };
 
     public bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage
         => false;
 
     public void ClearOutbox()
-    {          
+    {
     }
 
-    public ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+    public ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken)
         => ValueTask.CompletedTask;
 
     public void MarkAsCompleted()
-    {            
+    {
     }
 
     public ValueTask ProcessAsync<TM>(
-        IMessageHandlerManager messageHandlerManager, 
+        IMessageHandlerManager messageHandlerManager,
         IMessageContext<TM> messageContext,
-        ISagaExecutionService sagaExecutionService, 
+        ISagaExecutionService sagaExecutionService,
         CancellationToken cancellationToken) where TM : IMessage
         => ValueTask.CompletedTask;
 
     public void Publish(MessageEnvelope message)
-    {            
+    {
     }
 
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-    {            
+    {
     }
 }

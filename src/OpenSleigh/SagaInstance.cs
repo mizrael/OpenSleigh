@@ -4,12 +4,12 @@ using System.Collections.Concurrent;
 
 namespace OpenSleigh;
 
-public record SagaExecutionContext : ISagaExecutionContext
+public record SagaInstance : ISagaInstance 
 {
-    private readonly HashSet<ProcessedMessage> _processedMessages = new();
+    private readonly Dictionary<string, ProcessedMessage> _processedMessages = new();
     private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
 
-    public SagaExecutionContext(
+    public SagaInstance(
         string instanceId, 
         string triggerMessageId, 
         string correlationId,
@@ -27,7 +27,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         
         if(processedMessages is not null)
             foreach(var msg in processedMessages)
-                _processedMessages.Add(msg);
+                _processedMessages.Add(msg.MessageId, msg);
     }
 
     public bool CanProcess<TM>(IMessageContext<TM> messageContext) 
@@ -39,8 +39,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         if (this.CorrelationId != messageContext.CorrelationId)
             return false;
 
-        //TODO: need to speed up this one
-        if (_processedMessages.Any(m => m.MessageId == messageContext.Id))
+        if (_processedMessages.ContainsKey(messageContext.MessageId))
             return false;
 
         var messageType = messageContext.Message.GetType();
@@ -52,12 +51,19 @@ public record SagaExecutionContext : ISagaExecutionContext
     }
        
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
-        => _processedMessages.Add(ProcessedMessage.Create(messageContext));
+    {
+        if(_processedMessages.ContainsKey(messageContext.MessageId))
+            throw new InvalidOperationException($"Message with id {messageContext.MessageId} has already been processed.");
+
+        _processedMessages.Add(messageContext.MessageId, ProcessedMessage.Create(messageContext));
+    }
 
     public void MarkAsCompleted()
         => this.IsCompleted = true;
 
-    public async ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken)
+    public async ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken) 
     {
         this.LockId = await sagaStateRepository.LockAsync(this, cancellationToken)
                                               .ConfigureAwait(false);
@@ -77,9 +83,13 @@ public record SagaExecutionContext : ISagaExecutionContext
         IMessageHandlerManager messageHandlerManager, 
         IMessageContext<TM> messageContext,
         ISagaExecutionService sagaExecutionService,
-        CancellationToken cancellationToken) where TM : IMessage
+        CancellationToken cancellationToken = default) where TM : IMessage
     {
-        await messageHandlerManager.ProcessAsync(messageContext, this, cancellationToken)
+        ArgumentNullException.ThrowIfNull(messageHandlerManager);
+        ArgumentNullException.ThrowIfNull(messageContext);
+        ArgumentNullException.ThrowIfNull(sagaExecutionService);
+
+        await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                    .ConfigureAwait(false);
 
         this.SetAsProcessed(messageContext);
@@ -87,6 +97,7 @@ public record SagaExecutionContext : ISagaExecutionContext
         await sagaExecutionService.CommitAsync(this, cancellationToken)
                                   .ConfigureAwait(false);
 
+        // to be done after Commit, as it will be checked when releasing the state
         this.LockId = string.Empty;
     }
 
@@ -102,13 +113,13 @@ public record SagaExecutionContext : ISagaExecutionContext
 
     public string LockId { get; private set; }
 
-    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages;
+    public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages.Values;
     public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
 }
 
-public record SagaExecutionContext<TS> : SagaExecutionContext, ISagaExecutionContext<TS>
+public record SagaInstance<TS> : SagaInstance, ISagaInstance<TS>
 {
-    public SagaExecutionContext(
+    public SagaInstance(
         string instanceId, 
         string triggerMessageId, 
         string correlationId,

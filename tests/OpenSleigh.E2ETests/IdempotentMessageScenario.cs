@@ -1,0 +1,98 @@
+﻿using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.DependencyInjection;
+using OpenSleigh.E2ETests.Sagas;
+using OpenSleigh.Transport;
+using System.ComponentModel;
+
+namespace OpenSleigh.E2ETests;
+
+[Category("E2E")]
+[Trait("Category", "E2E")]
+public abstract class IdempotentMessageScenario : E2ETestsBase
+{
+    private int _maxHostsCount = 10;
+
+    protected IdempotentMessageScenario(int maxHostsCount = 10)
+    {
+        _maxHostsCount = maxHostsCount;
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(5)]
+    public async Task run_idempotent_message_scenario(int hostsCount)
+    {
+        if (hostsCount > _maxHostsCount)
+            return;
+
+        var requestId = Guid.CreateVersion7().ToString("N");
+        var correlationId = Guid.CreateVersion7().ToString("N");
+        var message1 = new IdempotentMessage(requestId, correlationId, 0);
+        var message2 = new IdempotentMessage(requestId, correlationId, 1);
+
+        var receivedCount = new []{ 0,0 };
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30) * hostsCount);
+
+        Action<IMessageContext<IdempotentMessage>, ISagaInstance> onMessage = (ctx, saga) =>
+        {
+            Assert.NotNull(ctx.Message);
+            Assert.Equal(correlationId, ctx.CorrelationId);
+            Assert.Equal(correlationId, ctx.Message.CorrelationId);
+            Assert.Equal(requestId, ctx.Message.RequestId);
+
+            receivedCount[ctx.Message.Foo]++;
+            if (receivedCount[ctx.Message.Foo] > 1)
+            {
+                throw new InvalidOperationException($"Message with Foo={ctx.Message.Foo} was received more than once.");
+            }
+
+            if (receivedCount.All(i => i > 0))
+                tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+        };
+
+        await RunScenarioAsync(hostsCount,
+            (ctx, services) => services.AddSingleton(onMessage),
+            async bus =>
+            {
+                await Task.WhenAll([
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                    PublishAsync(bus, message1, tokenSource.Token),
+                    PublishAsync(bus, message2, tokenSource.Token),
+                ]);
+            },
+            tokenSource);
+
+        Assert.All(receivedCount, i => Assert.Equal(1, i));
+    }
+
+    private async Task PublishAsync(
+        IMessageBus bus,
+        IdempotentMessage message,
+        CancellationToken cancellationToken)
+    {
+        var result = Outbox.OutboxAppendResult.Undefined; 
+        while(result != Outbox.OutboxAppendResult.Success)
+        {
+            try
+            {
+                await Task.Delay(100, cancellationToken);
+                result = await bus.PublishAsync(message, cancellationToken);
+            }
+            catch (TaskCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
+    protected override void RegisterSagas(IBusConfigurator cfg)
+    {
+        cfg.AddSaga<IdempotentSaga>();
+    }
+}

@@ -7,9 +7,6 @@ namespace OpenSleigh.Persistence.SQL.Entities;
 
 public record OutboxMessage
 {
-    public string? LockId { get; set; }
-    public DateTimeOffset? LockTime { get; set; }
-    
     public required string CorrelationId { get; set; }
     public required byte[] Body { get; set; }
     public required string MessageId { get; set; }
@@ -38,7 +35,6 @@ public record OutboxMessage
             correlationId: CorrelationId,
             CreatedAt,
             type,
-            parentId: ParentId,
             senderId: SenderId,
             serializer,
             out envelope);
@@ -58,7 +54,6 @@ public record OutboxMessage
             CorrelationId = message.CorrelationId,
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName,
-            ParentId = message.ParentId,
             SenderId = message.SenderId,
         };
     }

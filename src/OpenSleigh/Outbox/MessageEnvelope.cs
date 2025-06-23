@@ -5,31 +5,28 @@ using System.Diagnostics.CodeAnalysis;
 namespace OpenSleigh.Outbox;
 
 public class MessageEnvelope
-{
-    private Type _messageType;
-
+{   
     private MessageEnvelope() { }
 
-    public required IMessage Message { get; init; }
-
-    public Type MessageType
+    private IMessage _message;
+    public required IMessage Message 
     {
-        get
-        {
-            if(this.Message is null)
-                throw new InvalidOperationException("Message is null. Cannot determine message type.");
-
-            _messageType ??= this.Message.GetType();
-
-            return _messageType;
+        get => _message;
+        init 
+        { 
+            ArgumentNullException.ThrowIfNull(value, nameof(value));
+            _message = value;
+            _messageType = value.GetType();
         }
     }
+
+    private Type _messageType;
+    public Type MessageType => _messageType;
 
     public required string CorrelationId { get; init; }
     public required string MessageId { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
     public required string SenderId { get; init; }        
-    public string? ParentId { get; init; }
 
     #region Factory
 
@@ -39,7 +36,6 @@ public class MessageEnvelope
         string correlationId,
         DateTimeOffset createdAt,
         Type messageType,
-        string? parentId,
         string senderId,
         ISerializer serializer,
         [NotNullWhen(true)] out MessageEnvelope? result)
@@ -70,7 +66,6 @@ public class MessageEnvelope
             MessageId = messageId,
             CorrelationId = correlationId,
             CreatedAt = createdAt,
-            ParentId = parentId,
             SenderId = senderId
         };
         return true;
@@ -82,11 +77,17 @@ public class MessageEnvelope
     {
         ArgumentNullException.ThrowIfNull(message);
 
+        var correlationId = message is IHasCorrelationId cm ?
+            cm.CorrelationId : Guid.CreateVersion7().ToString("N");
+
+        var messageId = message is IIdempotentMessage im ?
+            im.GetId() : Guid.CreateVersion7().ToString("N");
+
         return new MessageEnvelope()
         {
-            CorrelationId = Guid.CreateVersion7().ToString(),
+            CorrelationId = correlationId,
             SenderId = systemInfo.Id,
-            MessageId = Guid.CreateVersion7().ToString(),
+            MessageId = messageId,
             Message = message,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -94,20 +95,24 @@ public class MessageEnvelope
 
     public static MessageEnvelope Create(
         IMessage message,
-        ISagaExecutionContext executionContext)
+        ISagaInstance sagaInstance)
     {
         ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.ThrowIfNull(sagaInstance);
 
-        ArgumentNullException.ThrowIfNull(executionContext);
+        var correlationId = message is IHasCorrelationId cm ?
+            cm.CorrelationId : sagaInstance.CorrelationId;
+
+        var messageId = message is IIdempotentMessage im ?
+            im.GetId() : Guid.CreateVersion7().ToString("N");
 
         return new MessageEnvelope()
         {
             Message = message,
             CreatedAt = DateTimeOffset.UtcNow,
-            MessageId = Guid.CreateVersion7().ToString(),
-            CorrelationId = executionContext.CorrelationId,
-            ParentId = executionContext.TriggerMessageId,
-            SenderId = executionContext.InstanceId
+            MessageId = messageId,
+            CorrelationId = sagaInstance.CorrelationId,
+            SenderId = sagaInstance.InstanceId
         };
     }
 

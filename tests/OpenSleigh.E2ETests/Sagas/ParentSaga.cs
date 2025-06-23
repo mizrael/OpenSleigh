@@ -22,7 +22,7 @@ public class ParentSaga :
     public ParentSaga(
         Action<IMessageContext<ParentSagaCompleted>> onCompleted, 
         ILogger<ParentSaga> logger, 
-        ISagaExecutionContext context) : base(context)
+        ISagaInstance  context) : base(context)
     {
         _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
         _logger = logger;

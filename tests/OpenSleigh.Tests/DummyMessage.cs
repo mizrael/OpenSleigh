@@ -9,7 +9,7 @@ public record DummyMessage : IMessage
     {
         var message = new DummyMessage();
 
-        var context = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        var context = NSubstitute.Substitute.For<ISagaInstance >();
         context.CorrelationId.Returns(Guid.NewGuid().ToString());
         context.TriggerMessageId.Returns(parentId);
         context.InstanceId.Returns(Guid.NewGuid().ToString());

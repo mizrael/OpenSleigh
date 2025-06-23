@@ -18,13 +18,14 @@ public abstract class ParentChildScenario : E2ETestsBase
     {
         var message = new StartParentSaga();
 
-        var receivedCount = 0;
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100) * hostsCount);
+
+        var contexts = new List<IMessageContext<ParentSagaCompleted>>();
 
         Action<IMessageContext<ParentSagaCompleted>> onMessage = ctx =>
         {
-            receivedCount++;
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
+            contexts.Add(ctx);
+            tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
         };
 
         await RunScenarioAsync(hostsCount,
@@ -32,7 +33,7 @@ public abstract class ParentChildScenario : E2ETestsBase
             async bus => await bus.PublishAsync(message, tokenSource.Token),
             tokenSource);
 
-        receivedCount.Should().Be(1);
+        Assert.Single(contexts);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

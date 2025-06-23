@@ -23,9 +23,8 @@ public abstract class SimpleSagaScenario : E2ETestsBase
 
         Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
         {
-            ctx.Id.Should().NotBeNullOrWhiteSpace();
+            ctx.MessageId.Should().NotBeNullOrWhiteSpace();
             ctx.SenderId.Should().NotBeNullOrWhiteSpace();
-            ctx.ParentId.Should().BeNullOrWhiteSpace();
 
             receivedCount++;
             tokenSource.CancelAfter(TimeSpan.FromSeconds(5));

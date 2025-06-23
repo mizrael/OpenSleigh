@@ -23,9 +23,10 @@ public class DbFixture : IAsyncLifetime
         _client = new MongoClient(_connectionString);
     }
 
-    public IDbContext CreateDbContext()
+    public IDbContext CreateDbContext(string? dbSuffix = null)
     {
-        var dbName = $"openSleigh_{Guid.NewGuid()}";
+        dbSuffix ??= Guid.NewGuid().ToString();
+        var dbName = $"openSleigh_{dbSuffix}";
         var db = _client.GetDatabase(dbName);
         var dbContext = new DbContext(db);
         _dbs.Add(db);

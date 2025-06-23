@@ -22,7 +22,9 @@ public abstract class SqlSagaStateRepositoryTests
         var (db,_) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
-        var result = await sut.FindAsync(descriptor, "lorem", CancellationToken.None);
+        var messageContext = CreateMessageContext<FakeMessage>();
+
+        var result = await sut.FindAsync(descriptor, messageContext, CancellationToken.None);
         result.Should().BeNull();
     }
 
@@ -32,11 +34,12 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        var result = await sut.FindAsync(sagaContext.Descriptor, sagaContext.CorrelationId, CancellationToken.None);
+        var result = await sut.FindAsync(sagaContext.Descriptor, messageContext, CancellationToken.None);
         result.Should().NotBeNull();
         result.InstanceId.Should().Be(sagaContext.InstanceId);
     }
@@ -47,7 +50,8 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
@@ -64,7 +68,8 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
@@ -79,12 +84,14 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
-
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
+            
         var firstLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
         await Task.Delay(500);
 
+        var messageContext2 = CreateMessageContext<FakeMessage>();
         var secondLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
         secondLockId.Should().NotBeNull()
@@ -98,7 +105,8 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext));
         ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
@@ -111,10 +119,12 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db, options);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
+
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        var fakeContext = NSubstitute.Substitute.For<ISagaExecutionContext>();
+        var fakeContext = NSubstitute.Substitute.For<ISagaInstance >();
         fakeContext.InstanceId.Returns(sagaContext.InstanceId);
         fakeContext.LockId.Returns("lorem");
 
@@ -128,14 +138,14 @@ public abstract class SqlSagaStateRepositoryTests
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var sagaContext = CreateSagaContext();
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var sagaContext = CreateSagaContext(messageContext);
+
+        var messageContext2 = CreateMessageContext<FakeMessage>();
 
         await sagaContext.LockAsync(sut, CancellationToken.None);
 
-        var messageContext = CreateMessageContext<FakeMessage>();
         sagaContext.SetAsProcessed(messageContext);
-
-        var messageContext2 = CreateMessageContext<FakeMessage>();
         sagaContext.SetAsProcessed(messageContext2);
 
         sagaContext.MarkAsCompleted();
@@ -149,8 +159,8 @@ public abstract class SqlSagaStateRepositoryTests
         unLockedState.IsCompleted.Should().BeTrue();
         unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
                                        .And.HaveCount(2)
-                                       .And.Contain(m => m.MessageId == messageContext.Id)
-                                       .And.Contain(m => m.MessageId == messageContext2.Id);
+                                       .And.Contain(m => m.MessageId == messageContext.MessageId)
+                                       .And.Contain(m => m.MessageId == messageContext2.MessageId);
     }
 
     private SqlSagaStateRepository CreateSut(SagaDbContext db,
@@ -164,18 +174,18 @@ public abstract class SqlSagaStateRepositoryTests
     private IMessageContext<TM> CreateMessageContext<TM>() where TM: IMessage
     {
         var messageContext = NSubstitute.Substitute.For<IMessageContext<TM>>();
-        messageContext.Id.Returns(Guid.NewGuid().ToString());
+        messageContext.MessageId.Returns(Guid.NewGuid().ToString());
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         return messageContext;
     }
 
-    private ISagaExecutionContext CreateSagaContext()
+    private ISagaInstance  CreateSagaContext<TM>(IMessageContext<TM> messageContext)
+        where TM : IMessage
     {
-        var messageContext = CreateMessageContext<FakeMessage>();
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
 
-        var factory = new SagaExecutionContextFactory();
-        var context = factory.CreateState(descriptor, messageContext);
+        var factory = new SagaInstanceFactory();
+        var context = factory.Create(descriptor, messageContext);
 
         return context;
     }

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
@@ -19,10 +20,36 @@ public static class SqlBusConfiguratorExtensions
             .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseSqlServer(config.ConnectionString);
+                builder.AddInterceptors(new QueryHintInterceptor());
             }, contextLifetime: ServiceLifetime.Transient)
-            .AddTransient<IOutboxRepository, SqlOutboxRepository>()
+            .AddScoped<ITransactionManager, SqlTransactionManager>()
+            .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
+            .AddTransient<IOutboxRepository, MSSqlOutboxRepository>()
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
         
         return busConfigurator;
+    }
+
+    internal static bool IsDuplicateKeyException(Exception ex)
+    => ex switch
+    {
+        DbUpdateException dbEx => IsDuplicateKeyException(dbEx),
+        InvalidOperationException opEx => IsDuplicateKeyException(opEx),
+        _ => false
+    };
+
+    private static bool IsDuplicateKeyException(InvalidOperationException opEx)
+    => opEx.Source == "Microsoft.EntityFrameworkCore" &&
+        opEx.Message.Contains("cannot be tracked because another instance with the");
+
+    private static bool IsDuplicateKeyException(DbUpdateException ex)
+    {
+        if (ex.InnerException is SqlException sqlEx)
+        {
+            // SQL Server error codes for duplicate key violations
+            return sqlEx.Number == 2627 || sqlEx.Number == 2601;
+        }
+
+        return false;
     }
 }

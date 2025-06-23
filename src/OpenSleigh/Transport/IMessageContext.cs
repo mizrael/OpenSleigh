@@ -3,8 +3,7 @@
 public interface IMessageContext<out TM> where TM : IMessage
 {
     TM Message { get; }
-    string Id { get; }
+    string MessageId { get; }
     string CorrelationId { get; }
-    string? ParentId { get; }
-    string? SenderId { get; }
+    string SenderId { get; }
 }

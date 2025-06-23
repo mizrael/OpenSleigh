@@ -12,8 +12,8 @@ internal class BusConfigurator : IBusConfigurator
     private readonly SagaDescriptorsResolver _sagaDescriptorResolver;
 
     public BusConfigurator(
-        IServiceCollection services, 
-        SystemInfo systemInfo, 
+        IServiceCollection services,
+        SystemInfo systemInfo,
         SagaDescriptorsResolver sagaDescriptorResolver)
     {
         Services = services ?? throw new ArgumentNullException(nameof(services));
@@ -37,8 +37,8 @@ internal class BusConfigurator : IBusConfigurator
         _sagaDescriptorResolver.Register<TS, TD>();
 
         // this will allow DI container validation at startup
-        this.Services.AddTransient<TD>(_ => default) 
-                     .AddTransient<ISagaExecutionContext<TD>>(_ => default)
+        this.Services.AddTransient<TD>(_ => default)
+                     .AddTransient<ISagaInstance<TD>>(_ => default)
                      .AddTransient<TS>();
 
         return this;
@@ -50,7 +50,7 @@ internal class BusConfigurator : IBusConfigurator
         _sagaDescriptorResolver.Register<TS>();
 
         this.Services.AddTransient<TS>()
-                     .AddTransient<ISagaExecutionContext>(_ => default);
+                     .AddTransient<ISagaInstance>(_ => default);
 
         return this;
     }

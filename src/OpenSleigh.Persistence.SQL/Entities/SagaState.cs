@@ -26,7 +26,8 @@ internal class SagaStateEntityTypeConfiguration : IEntityTypeConfiguration<SagaS
         builder.ToTable("SagaStates", Constants.DbSchema);
         
         builder.HasKey(e => e.InstanceId);
-        builder.HasIndex(e => new { e.CorrelationId, e.SagaType, e.SagaStateType });
+        builder.HasIndex(e => new { e.CorrelationId, e.SagaType }).IsUnique();
+        builder.HasIndex(e => new { e.CorrelationId, e.SagaType, e.SagaStateType }).IsUnique();
 
         builder.HasMany(e => e.ProcessedMessages)
             .WithOne(e => e.SagaState);

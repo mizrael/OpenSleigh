@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
+using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
 
@@ -24,9 +25,13 @@ public class SqlSagaStateRepository : ISagaStateRepository
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
-    public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
-    {
+    public async ValueTask<ISagaInstance ?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
+    { 
+        var correlationId = messageContext.CorrelationId;
+
         var entity = await _dbContext.SagaStates
+            .Include(e => e.ProcessedMessages)
             .AsNoTracking()
             .FirstOrDefaultAsync(e =>
                 e.CorrelationId == correlationId && 
@@ -39,10 +44,10 @@ public class SqlSagaStateRepository : ISagaStateRepository
         if (entity is null)
             return null;
 
-        ISagaExecutionContext? result;
+        ISagaInstance ? result;
 
         if (descriptor.SagaStateType is null)
-            result = new SagaExecutionContext(
+            result = new SagaInstance(
                 instanceId: entity.InstanceId,
                 triggerMessageId: entity.TriggerMessageId,
                 correlationId: entity.CorrelationId,
@@ -64,8 +69,8 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return result;
     }
 
-    private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
-        => new SagaExecutionContext<TS>(
+    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
+        => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
                correlationId: entity.CorrelationId,
@@ -77,16 +82,17 @@ public class SqlSagaStateRepository : ISagaStateRepository
                    When = e.When
                }));
 
-    public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
         return LockAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
+            .Include(e => e.ProcessedMessages)
             .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -120,16 +126,17 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return entity.LockId;
     }
 
-    public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
-    {
+    public ValueTask ReleaseAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
+    {  
         ArgumentNullException.ThrowIfNull(state);
 
         return ReleaseAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask ReleaseAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+    private async ValueTask ReleaseAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
+             .Include(e => e.ProcessedMessages)
              .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
              .ConfigureAwait(false);
 
@@ -162,7 +169,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
                     .ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaExecutionContext<TS> state, SagaState entity)
+    private void SetStateData<TS>(ISagaInstance<TS> state, SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
     }

@@ -95,7 +95,6 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
             ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
 
-            var parentId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.ParentId));
             var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
 
             if (!MessageEnvelope.TryCreate(eventArgs.Body.Span,
@@ -103,7 +102,6 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
                                         correlationId: correlationId,
                                         createdAt, 
                                         messageType!,
-                                        parentId: parentId,
                                         senderId: senderId,
                                         _serializer,
                                         out message))

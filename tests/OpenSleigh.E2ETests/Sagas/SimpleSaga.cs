@@ -16,7 +16,7 @@ public class SimpleSaga :
 
     public SimpleSaga(
         Action<IMessageContext<StartSimpleSaga>> onStart, 
-        ISagaExecutionContext context) :  base(context)
+        ISagaInstance  context) :  base(context)
     {
         _onStart = onStart;
     }

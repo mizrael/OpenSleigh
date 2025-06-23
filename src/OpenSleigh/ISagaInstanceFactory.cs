@@ -2,9 +2,9 @@
 
 namespace OpenSleigh;
 
-public interface ISagaExecutionContextFactory
+public interface ISagaInstanceFactory
 {
-    ISagaExecutionContext CreateState<TM>(
+    ISagaInstance  Create<TM>(
         SagaDescriptor descriptor, 
         IMessageContext<TM> messageContext)
         where TM : IMessage;

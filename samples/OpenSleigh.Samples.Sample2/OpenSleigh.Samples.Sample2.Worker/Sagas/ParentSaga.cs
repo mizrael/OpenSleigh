@@ -25,7 +25,7 @@ public class ParentSaga :
     private readonly Random _random = new Random();
 
     public ParentSaga(ILogger<ParentSaga> logger,
-        ISagaExecutionContext<ParentSagaState> context) : base(context)
+        ISagaInstance<ParentSagaState> context) : base(context)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }

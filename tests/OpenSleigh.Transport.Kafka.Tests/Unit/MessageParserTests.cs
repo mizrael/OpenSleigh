@@ -87,7 +87,6 @@ public class MessageParserTests
                     new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(envelope.SenderId)),
                     new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(envelope.CorrelationId)),
                     new Header(nameof(MessageEnvelope.CreatedAt), Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString())),
-                    new Header(nameof(MessageEnvelope.ParentId), Encoding.UTF8.GetBytes(envelope.ParentId)),
                 ]
             }
         };
@@ -97,7 +96,6 @@ public class MessageParserTests
         Assert.Equal(envelope.SenderId, result.SenderId);
         Assert.Equal(envelope.CorrelationId, result.CorrelationId);
         Assert.Equal(envelope.CreatedAt, result.CreatedAt, TimeSpan.FromSeconds(2));
-        Assert.Equal(envelope.ParentId, result.ParentId);
         Assert.Equal(envelope.Message, result.Message);
         Assert.Equal(envelope.MessageType, result.MessageType);
     }

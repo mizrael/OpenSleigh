@@ -1,5 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using NSubstitute;
 
 namespace OpenSleigh.Tests;
 
@@ -14,10 +13,10 @@ public class SagaRunnerTests
 
         var logger = Substitute.For<ILogger<SagaRunner>>();
                     
-        var executionContext = Substitute.For<ISagaExecutionContext>();
+        var executionContext = Substitute.For<ISagaInstance >();
 
         var sagaExecutionService = Substitute.For<ISagaExecutionService>();
-        sagaExecutionService.BeginExecutionContextAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
+        sagaExecutionService.BeginProcessingAsync<FakeSagaStarter>(messageContext, descriptor, Arg.Any<CancellationToken>())
             .Returns(executionContext);
         
         var messageHandlerManager = Substitute.For<IMessageHandlerManager>();
@@ -25,8 +24,8 @@ public class SagaRunnerTests
         
         await sut.ProcessAsync(messageContext, descriptor);
 
-        await sagaExecutionService.Received(1).BeginExecutionContextAsync(messageContext, descriptor);
-        await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(messageContext, null);
+        await sagaExecutionService.Received(1).BeginProcessingAsync(messageContext, descriptor);
+        await messageHandlerManager.DidNotReceiveWithAnyArgs().ProcessAsync(null, messageContext);
         await sagaExecutionService.DidNotReceiveWithAnyArgs().CommitAsync(null);        
     }
 }

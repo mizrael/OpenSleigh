@@ -29,7 +29,7 @@
     </PropertyGroup>
     
   <ItemGroup>
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.4" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="9.0.6" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,6 +37,10 @@
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
+
+	<ItemGroup>
+		<InternalsVisibleTo Include="OpenSleigh.Persistence.SQL.Tests" />
+	</ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\OpenSleigh\OpenSleigh.csproj" />

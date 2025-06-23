@@ -1,17 +1,19 @@
-﻿using System.Collections.Concurrent;
+﻿using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh.InMemory;
 
 internal class InMemorySagaStateRepository : ISagaStateRepository
 {
-    private readonly ConcurrentDictionary<string, (ISagaExecutionContext state, string? lockId)> _statesByDescriptor = new();
-    private readonly ConcurrentDictionary<string, (ISagaExecutionContext state, string? lockId)> _statesById = new();
+    private readonly ConcurrentDictionary<string, (ISagaInstance  state, string? lockId)> _statesByDescriptor = new();
+    private readonly ConcurrentDictionary<string, (ISagaInstance  state, string? lockId)> _statesById = new();
 
-    public ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
+    public ValueTask<ISagaInstance ?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
     {
-        string key = BuildKey(descriptor, correlationId);
+        string key = BuildKey(descriptor, messageContext.CorrelationId);
 
-        ISagaExecutionContext? state = null;
+        ISagaInstance ? state = null;
 
         if (_statesByDescriptor.TryGetValue(key, out var val))
             state = val.state;
@@ -20,7 +22,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
 
     }
 
-    public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
         string lockId = Guid.NewGuid().ToString();
         
@@ -46,7 +48,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
         return ValueTask.FromResult(lockId);
     }
 
-    public ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask ReleaseAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
         string key = BuildKey(state.Descriptor, state.CorrelationId);
         _statesByDescriptor.AddOrUpdate(key, _ => (state, null), (_, _) => (state, null));
@@ -56,6 +58,6 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
         return ValueTask.CompletedTask;
     }
 
-    private static string BuildKey(SagaDescriptor descriptor, string correlationId)
-        => $"{correlationId}|{descriptor.SagaType.FullName}|{(descriptor.SagaStateType is null ? string.Empty : descriptor.SagaStateType.FullName)}";        
+    private static string BuildKey(SagaDescriptor descriptor, string correlationId) 
+        => $"{correlationId}|{descriptor.SagaType.FullName}|{descriptor.SagaStateType?.FullName ?? string.Empty}";        
 }

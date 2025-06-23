@@ -1,12 +1,12 @@
 ﻿namespace OpenSleigh;
 
-public interface ISaga 
+public interface ISaga
 {
-    ISagaExecutionContext Context { get; }
+    ISagaInstance Context { get; }
 }
 
 public interface ISaga<TS> : ISaga
     where TS : new()
 {
-    new ISagaExecutionContext<TS> Context { get; }
+    new ISagaInstance<TS> Context { get; }
 }

@@ -1,8 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using MongoDB.Bson;
+﻿using MongoDB.Bson;
 using MongoDB.Driver;
-using OpenSleigh.DependencyInjection;
-using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
@@ -22,8 +19,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
     private readonly ISerializer _serializer;
 
     public MongoSagaStateRepository(
-        IDbContext dbContext, 
-        MongoSagaStateRepositoryOptions? options, 
+        IDbContext dbContext,
+        MongoSagaStateRepositoryOptions? options,
         ISerializer serializer)
     {
         _dbContext = dbContext;
@@ -31,8 +28,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
         _serializer = serializer;
     }
 
-    private static ISagaExecutionContext<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
-        => new SagaExecutionContext<TS>(
+    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
+        => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
                correlationId: entity.CorrelationId,
@@ -44,8 +41,11 @@ public class MongoSagaStateRepository : ISagaStateRepository
                    When = e.When
                }));
 
-    public async ValueTask<ISagaExecutionContext?> FindAsync(SagaDescriptor descriptor, string correlationId, CancellationToken cancellationToken = default)
+    public async ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
+        where TM : IMessage
     {
+        var correlationId = messageContext.CorrelationId;
+
         var filterBuilder = Builders<Entities.SagaState>.Filter;
 
         var stateTypeFilter =
@@ -64,10 +64,10 @@ public class MongoSagaStateRepository : ISagaStateRepository
         if (entity is null)
             return null;
 
-        ISagaExecutionContext? result;
+        ISagaInstance? result;
 
         if (descriptor.SagaStateType is null)
-            result = new SagaExecutionContext(
+            result = new SagaInstance(
                 instanceId: entity.InstanceId,
                 triggerMessageId: entity.TriggerMessageId,
                 correlationId: entity.CorrelationId,
@@ -89,14 +89,14 @@ public class MongoSagaStateRepository : ISagaStateRepository
         return result;
     }
 
-    public ValueTask<string> LockAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public ValueTask<string> LockAsync(ISagaInstance state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
         return LockAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(ISagaExecutionContext state, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
         var lockId = Guid.NewGuid().ToString();
 
@@ -133,13 +133,13 @@ public class MongoSagaStateRepository : ISagaStateRepository
 
         await _dbContext.SagaStates.ReplaceOneAsync(filter, entity, new ReplaceOptions()
         {
-            IsUpsert = true,                
+            IsUpsert = true,
         }).ConfigureAwait(false);
 
         return entity.LockId;
     }
 
-    public async ValueTask ReleaseAsync(ISagaExecutionContext state, CancellationToken cancellationToken = default)
+    public async ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
     {
         var filterBuilder = Builders<Entities.SagaState>.Filter;
         var filter = filterBuilder.Eq(e => e.InstanceId, state.InstanceId);
@@ -163,9 +163,9 @@ public class MongoSagaStateRepository : ISagaStateRepository
             {
                 InstanceId = state.InstanceId,
                 MessageId = msg.MessageId,
-                When = msg.When, 
+                When = msg.When,
             });
-        
+
         if (state.GetType().IsGenericType)
             SetStateData((dynamic)state, entity);
 
@@ -175,32 +175,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
         }).ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaExecutionContext<TS> state, Entities.SagaState entity)
+    private void SetStateData<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
-    }
-}
-
-[ExcludeFromCodeCoverage]
-public static class MongoBusConfiguratorExtensions
-{
-    public static IBusConfigurator UseMongoPersistence(
-        this IBusConfigurator busConfigurator, MongoConfiguration config)
-    {
-        busConfigurator.Services
-            .AddSingleton<IMongoClient>(ctx => new MongoClient(connectionString: config.ConnectionString))
-            .AddSingleton(ctx =>
-            {
-                var client = ctx.GetRequiredService<IMongoClient>();
-                var database = client.GetDatabase(config.DbName);
-                return database;
-            })
-            .AddSingleton(config.SagaRepositoryOptions)
-            .AddSingleton(config.OutboxRepositoryOptions)
-
-            .AddScoped<IDbContext, DbContext>()
-            .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
-            .AddTransient<IOutboxRepository, MongoOutboxRepository>();
-        return busConfigurator;
     }
 }

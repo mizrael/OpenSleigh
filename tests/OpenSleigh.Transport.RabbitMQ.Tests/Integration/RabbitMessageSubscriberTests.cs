@@ -149,7 +149,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
     private static MessageEnvelope CreateMessage()
     {
-        var sagaContext = Substitute.For<ISagaExecutionContext>();
+        var sagaContext = Substitute.For<ISagaInstance >();
         sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
         sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());

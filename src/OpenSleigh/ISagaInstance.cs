@@ -3,10 +3,10 @@ using OpenSleigh.Transport;
 
 namespace OpenSleigh;
 
-public interface ISagaExecutionContext
+public interface ISagaInstance 
 {
     /// <summary>
-    /// id of the current message triggering the execution.
+    /// id of the first message that started the saga execution.
     /// </summary>
     string TriggerMessageId { get; }
 
@@ -44,7 +44,10 @@ public interface ISagaExecutionContext
 
     bool CanProcess<TM>(IMessageContext<TM> messageContext) where TM : IMessage;
 
-    ValueTask LockAsync(ISagaStateRepository sagaStateRepository, CancellationToken cancellationToken);
+    ValueTask LockAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken);
+
     ValueTask ProcessAsync<TM>(
         IMessageHandlerManager messageHandlerManager, 
         IMessageContext<TM> messageContext,
@@ -55,7 +58,7 @@ public interface ISagaExecutionContext
     void ClearOutbox();        
 }
 
-public interface ISagaExecutionContext<TS> : ISagaExecutionContext
+public interface ISagaInstance<TS> : ISagaInstance 
 {
     /// <summary>
     /// the custom saga state.
