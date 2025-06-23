@@ -1,5 +1,5 @@
 # OpenSleigh
-[![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Core?style=plastic)](https://www.nuget.org/packages/OpenSleigh.Core/)
+[![Nuget](https://img.shields.io/nuget/v/OpenSleigh?style=plastic)](https://www.nuget.org/packages/OpenSleigh/)
 [![OpenSleigh](https://circleci.com/gh/mizrael/OpenSleigh.svg?style=shield)](https://app.circleci.com/pipelines/github/mizrael/OpenSleigh)
 [![Coverage](https://sonarcloud.io/api/project_badges/measure?project=mizrael_OpenSleigh&metric=coverage)](https://sonarcloud.io/dashboard?id=mizrael_OpenSleigh)
 [![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=mizrael_OpenSleigh&metric=security_rating)](https://sonarcloud.io/dashboard?id=mizrael_OpenSleigh)
