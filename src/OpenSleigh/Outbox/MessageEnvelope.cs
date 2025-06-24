@@ -81,7 +81,7 @@ public class MessageEnvelope
             cm.CorrelationId : Guid.CreateVersion7().ToString("N");
 
         var messageId = message is IIdempotentMessage im ?
-            im.GetId() : Guid.CreateVersion7().ToString("N");
+            im.GetIdempotencyKey() : Guid.CreateVersion7().ToString("N");
 
         return new MessageEnvelope()
         {
@@ -104,7 +104,7 @@ public class MessageEnvelope
             cm.CorrelationId : sagaInstance.CorrelationId;
 
         var messageId = message is IIdempotentMessage im ?
-            im.GetId() : Guid.CreateVersion7().ToString("N");
+            im.GetIdempotencyKey() : Guid.CreateVersion7().ToString("N");
 
         return new MessageEnvelope()
         {
