@@ -31,7 +31,7 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IAsyncDis
         if(_stoppingCts is not null)
             throw new InvalidOperationException("The subscriber has already been started.");
 
-        _stoppingCts = new CancellationTokenSource();
+        _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
         _consumerTask = Task.Run(() => ProcessQueueAsync(), _stoppingCts.Token);
 
@@ -69,6 +69,9 @@ public class KafkaSubscriber<TMessage> : IMessageSubscriber<TMessage>, IAsyncDis
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
+        if (_stoppingCts == null)
+            throw new InvalidOperationException("The subscriber has not been started.");
+            
         try
         {
             if (_stoppingCts is not null)

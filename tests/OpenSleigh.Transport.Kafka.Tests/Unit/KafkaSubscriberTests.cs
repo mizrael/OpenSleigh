@@ -1,3 +1,4 @@
+using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Confluent.Kafka;
@@ -58,6 +59,19 @@ public class KafkaSubscriberTests
     }
 
     [Fact]
+    public async Task Start_should_throw_if_already_started()
+    {
+        var queueRefs = new QueueReferences("lorem", "ipsum");
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
+
+        var sut = BuildSUT(queueRefs, consumer);
+
+        await sut.StartAsync(CancellationToken.None);
+        
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.StartAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task Stop_should_close_consumer()
     {
         var queueRefs = new QueueReferences("lorem", "ipsum");
@@ -74,8 +88,19 @@ public class KafkaSubscriberTests
         consumer.Received(1).Close();
     }
 
+    [Fact]
+    public async Task Stop_should_throw_if_not_started()
+    {
+        var queueRefs = new QueueReferences("lorem", "ipsum");
+        var consumer = NSubstitute.Substitute.For<IConsumer<string, byte[]>>();
+
+        var sut = BuildSUT(queueRefs, consumer);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.StopAsync(CancellationToken.None));
+    }
+
     private static KafkaSubscriber<IMessage> BuildSUT(
-        QueueReferences queueRefs, 
+        QueueReferences queueRefs,
         IConsumer<string, byte[]> consumer,
         IKafkaMessageHandler messageHandler = null)
     {
