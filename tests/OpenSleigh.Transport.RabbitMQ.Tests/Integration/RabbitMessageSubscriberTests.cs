@@ -109,7 +109,11 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         QueueReferencesCreator queueReferencesCreator = messageType =>
         {
+#if NET9_0_OR_GREATER
             var exchangeName = $"{messageType.Name.ToLower()}-{Guid.CreateVersion7().ToString("N")}";
+#else
+            var exchangeName = $"{messageType.Name.ToLower()}-{Guid.NewGuid().ToString("N")}";
+#endif
             var queueName = $"{exchangeName}.workers";
             var dlExchangeName = exchangeName + ".dead";
             var dlQueueName = $"{dlExchangeName}.workers";
@@ -119,8 +123,13 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns("test");
+#if NET9_0_OR_GREATER
         sysInfo.ClientId.Returns(Guid.CreateVersion7().ToString("N"));
         sysInfo.Id.Returns(Guid.CreateVersion7().ToString("N"));
+#else
+        sysInfo.ClientId.Returns(Guid.NewGuid().ToString("N"));
+        sysInfo.Id.Returns(Guid.NewGuid().ToString("N"));
+#endif
         services.AddSingleton(sysInfo);
 
         var typeResolver = Substitute.For<ITypeResolver>();

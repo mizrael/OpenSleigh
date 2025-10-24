@@ -17,7 +17,12 @@ public class SqlKafkaSimpleSagaScenario :
     {
         _dbFixture = dbFixture;
         _kafkaFixture = kafkaFixture;
-        _exchangeName = "SQLKafkaSimpleSagaScenario-" + Guid.CreateVersion7().ToString("N");
+        _exchangeName = "SQLKafkaSimpleSagaScenario-" +
+#if NET9_0_OR_GREATER
+            Guid.CreateVersion7().ToString("N");
+#else
+            Guid.NewGuid().ToString("N");
+#endif
     }
 
     protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)

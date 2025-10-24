@@ -26,8 +26,13 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         if (hostsCount > _maxHostsCount)
             return;
 
+#if NET9_0_OR_GREATER
         var requestId = Guid.CreateVersion7().ToString("N");
         var correlationId = Guid.CreateVersion7().ToString("N");
+#else
+        var requestId = Guid.NewGuid().ToString("N");
+        var correlationId = Guid.NewGuid().ToString("N");
+#endif
         var message1 = new IdempotentMessage(requestId, correlationId, 0);
         var message2 = new IdempotentMessage(requestId, correlationId, 1);
 
