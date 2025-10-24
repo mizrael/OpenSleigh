@@ -77,11 +77,21 @@ public class MessageEnvelope
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        var correlationId = message is IHasCorrelationId cm ?
-            cm.CorrelationId : Guid.CreateVersion7().ToString("N");
+        var correlationId = message is IHasCorrelationId cm
+            ? cm.CorrelationId
+#if NET9_0_OR_GREATER
+            : Guid.CreateVersion7().ToString("N");
+#else
+            : Guid.NewGuid().ToString("N");
+#endif
 
-        var messageId = message is IIdempotentMessage im ?
-            im.GetIdempotencyKey() : Guid.CreateVersion7().ToString("N");
+        var messageId = message is IIdempotentMessage im
+            ? im.GetIdempotencyKey()
+#if NET9_0_OR_GREATER
+            : Guid.CreateVersion7().ToString("N");
+#else
+            : Guid.NewGuid().ToString("N");
+#endif
 
         return new MessageEnvelope()
         {
@@ -103,8 +113,13 @@ public class MessageEnvelope
         var correlationId = message is IHasCorrelationId cm ?
             cm.CorrelationId : sagaInstance.CorrelationId;
 
-        var messageId = message is IIdempotentMessage im ?
-            im.GetIdempotencyKey() : Guid.CreateVersion7().ToString("N");
+        var messageId = message is IIdempotentMessage im
+            ? im.GetIdempotencyKey()
+#if NET9_0_OR_GREATER
+            : Guid.CreateVersion7().ToString("N");
+#else
+            : Guid.NewGuid().ToString("N");
+#endif
 
         return new MessageEnvelope()
         {

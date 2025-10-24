@@ -21,7 +21,11 @@ public class OrdersController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> PostOrder(CancellationToken cancellationToken = default)
     {
+#if NET9_0_OR_GREATER
         var message = new SaveOrder(OrderId: Guid.CreateVersion7());
+#else
+        var message = new SaveOrder(OrderId: Guid.NewGuid());
+#endif
         
         await _bus.PublishAsync(message, cancellationToken);
 

@@ -12,7 +12,11 @@ public class SagaInstanceFactory : ISagaInstanceFactory
 
         if (descriptor.SagaStateType is null)
             return new SagaInstance(
+#if NET9_0_OR_GREATER
                 instanceId: Guid.CreateVersion7().ToString(),
+#else
+                instanceId: Guid.NewGuid().ToString(),
+#endif
                 triggerMessageId: messageContext.MessageId,
                 correlationId: messageContext.CorrelationId,
                 descriptor: descriptor);
@@ -27,7 +31,11 @@ public class SagaInstanceFactory : ISagaInstanceFactory
     private static ISagaInstance Create<TS, TM>(TS state, IMessageContext<TM> messageContext, SagaDescriptor descriptor)
         where TM : IMessage
         => new SagaInstance<TS>(
+#if NET9_0_OR_GREATER
             instanceId: Guid.CreateVersion7().ToString(),
+#else
+            instanceId: Guid.NewGuid().ToString(),
+#endif
             triggerMessageId: messageContext.MessageId,
             correlationId: messageContext.CorrelationId,
             descriptor,

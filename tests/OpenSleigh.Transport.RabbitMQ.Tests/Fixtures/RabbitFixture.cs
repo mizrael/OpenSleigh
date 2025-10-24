@@ -42,7 +42,11 @@ public class RabbitFixture : IAsyncLifetime
 
     private QueueReferences CreateQueueReference()
     {
+#if NET9_0_OR_GREATER
         var queueName = System.Guid.CreateVersion7().ToString("N");
+#else
+        var queueName = System.Guid.NewGuid().ToString("N");
+#endif
         return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
     }
 

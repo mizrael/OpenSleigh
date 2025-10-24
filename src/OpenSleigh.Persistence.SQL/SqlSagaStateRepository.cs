@@ -118,7 +118,11 @@ public class SqlSagaStateRepository : ISagaStateRepository
         }
 
         entity.LockTime = DateTimeOffset.UtcNow;
+#if NET9_0_OR_GREATER
         entity.LockId = Guid.CreateVersion7().ToString();
+#else
+        entity.LockId = Guid.NewGuid().ToString();
+#endif
 
         await _dbContext.SaveChangesAsync(cancellationToken)
                         .ConfigureAwait(false);

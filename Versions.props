@@ -3,7 +3,7 @@
   <PropertyGroup>
     <PackageVersion>3.0.4</PackageVersion>
     <CSharpLanguageVersion>12</CSharpLanguageVersion>
-    <TargetFrameworkVersion>net9.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>net8.0;net9.0</TargetFrameworkVersion>
     <RepositoryUrl>https://github.com/mizrael/OpenSleigh</RepositoryUrl>
     <PackageProjectUrl>https://opensleigh.gitbook.io/</PackageProjectUrl>
   </PropertyGroup>
