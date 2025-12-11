@@ -64,7 +64,7 @@ public class SagaExecutionService : ISagaExecutionService
         var sagaInstance = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
         if (sagaInstance is null)
         {
-            var isInitiator = descriptor.InitiatorType == messageType;
+            var isInitiator = descriptor.InitiatorTypes.Contains(messageType);
             if (isInitiator)
                 sagaInstance = _sagaExecCtxFactory.Create(descriptor, messageContext);
         }

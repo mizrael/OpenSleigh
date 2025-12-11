@@ -1,6 +1,4 @@
 using FluentAssertions;
-using NSubstitute;
-using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 
 namespace OpenSleigh.Tests;
@@ -79,6 +77,25 @@ public class SagaInstanceTests
     }
 
     [Fact]
+    public async Task CanProcess_should_return_true_when_saga_started_and_message_is_starter()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var starter = new FakeSagaStarter();
+        var otherStarter = new OtherFakeSagaStarter();
+        var starterContext = FakeMessageContext<FakeSagaStarter>.Create(starter);
+        var otherStarterContext =
+            FakeMessageContext<OtherFakeSagaStarter>.Create(otherStarter, correlationId: starterContext.CorrelationId);
+
+        var handler = Substitute.For<IMessageHandlerManager>();
+        var executionService = Substitute.For<ISagaExecutionService>();
+
+        var sut = new SagaInstance("lorem", "ipsum", starterContext.CorrelationId, descriptor);
+        await sut.ProcessAsync(handler, starterContext, executionService);
+
+        sut.CanProcess(otherStarterContext).Should().BeTrue();
+    }
+
+    [Fact]
     public void CanProcess_should_return_false_when_saga_completed()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
@@ -93,7 +110,7 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public void CanProcess_should_return_true_when_correlation_different()
+    public void CanProcess_should_return_false_when_correlation_different()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
 
@@ -193,7 +210,7 @@ public class SagaInstanceTests
         var messageId = "test key";
         var descriptor = SagaDescriptor.Create<FakeSaga>();
 
-        var messageContext = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>();
+        var messageContext = Substitute.For<IMessageContext<DummyMessage>>();
         messageContext.MessageId.Returns(messageId);
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
 
@@ -209,36 +226,51 @@ public class SagaInstanceTests
         var messageId = "test key";
         var descriptor = SagaDescriptor.Create<FakeSaga>();
 
-        var messageContext = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>();
+        var messageContext = Substitute.For<IMessageContext<DummyMessage>>();
         messageContext.MessageId.Returns(messageId);
         messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
-        var messageContext2 = NSubstitute.Substitute.For<IMessageContext<DummyMessage>>(); 
+        var messageContext2 = Substitute.For<IMessageContext<DummyMessage>>();
         messageContext2.MessageId.Returns(messageId);
         Assert.ThrowsAny<InvalidOperationException>(() => sut.SetAsProcessed(messageContext2));
     }
 
     [Fact]
-    public async Task ProcessAsync_should_process_message()
+    public async Task ProcessAsync_should_process_any_associated_message()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
-        var message = new FakeSagaStarter();
-        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(message);
+        var starter = new FakeSagaStarter();
+        var otherStarter = new OtherFakeSagaStarter();
+        var message = new FakeSagaMessage();
+        var starterContext = FakeMessageContext<FakeSagaStarter>.Create(starter);
+        var otherStarterContext =
+            FakeMessageContext<OtherFakeSagaStarter>.Create(otherStarter, correlationId: starterContext.CorrelationId);
+        var messageContext =
+            FakeMessageContext<FakeSagaMessage>.Create(message, correlationId: starterContext.CorrelationId);
 
-        var handler = NSubstitute.Substitute.For<IMessageHandlerManager>();
-        var executionService = NSubstitute.Substitute.For<ISagaExecutionService>();
+        var handler = Substitute.For<IMessageHandlerManager>();
+        var executionService = Substitute.For<ISagaExecutionService>();
 
-        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
+        var sut = new SagaInstance("lorem", "ipsum", starterContext.CorrelationId, descriptor);
+        await sut.ProcessAsync(handler, starterContext, executionService);
+        await sut.ProcessAsync(handler, otherStarterContext, executionService);
         await sut.ProcessAsync(handler, messageContext, executionService);
-
+        await handler.Received(1).ProcessAsync(sut, starterContext, Arg.Any<CancellationToken>());
+        await handler.Received(1).ProcessAsync(sut, otherStarterContext, Arg.Any<CancellationToken>());
         await handler.Received(1).ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>());
-        await executionService.Received(1).CommitAsync(sut, Arg.Any<CancellationToken>());
+        await executionService.Received(3).CommitAsync(sut, Arg.Any<CancellationToken>());
 
-        Assert.Empty(sut.LockId);
-        Assert.Contains(sut.ProcessedMessages, pm => pm.MessageId == messageContext.MessageId);
+        sut.LockId.Should().BeEmpty();
+        sut.ProcessedMessages.Should()
+            .OnlyContain(pm => new []
+            {
+                starterContext.MessageId,
+                otherStarterContext.MessageId,
+                messageContext.MessageId
+            }.Contains(pm.MessageId));
     }
 
     [Fact]

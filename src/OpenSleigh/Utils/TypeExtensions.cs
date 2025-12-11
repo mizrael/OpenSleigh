@@ -22,10 +22,12 @@ internal static class TypeExtensions
         }
     }
 
-    public static Type? GetInitiatorMessageType(this Type type)
+    public static ISet<Type> GetInitiatorMessageType(this Type type)
     {
         var initiatorType = typeof(IStartedBy<>).GetGenericTypeDefinition();
         var interfaces = type.GetInterfaces();
+
+        var result = new HashSet<Type>();
         foreach (var i in interfaces)
         {
             if (!i.IsGenericType)
@@ -36,9 +38,9 @@ internal static class TypeExtensions
                 continue;
 
             var messageType = i.GetGenericArguments().First();
-            return messageType;
+            result.Add(messageType);
         }
 
-        return null;
+        return result;
     }
 }
