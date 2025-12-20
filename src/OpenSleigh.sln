@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.4.33103.184
+# Visual Studio Version 18
+VisualStudioVersion = 18.0.11205.157 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OpenSleigh", "OpenSleigh\OpenSleigh.csproj", "{7DB2ACBC-6BE7-49C2-B7EC-50CE6AA8FA35}"
 EndProject
@@ -55,6 +55,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".root", ".root", "{02EA681E
 		..\readme.md = ..\readme.md
 		..\test.runsettings = ..\test.runsettings
 		..\Versions.props = ..\Versions.props
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "infra", "infra", "{981AAE17-1A21-4071-9F05-200CCCDF1678}"
+	ProjectSection(SolutionItems) = preProject
+		..\tests\infra\docker-compose.yml = ..\tests\infra\docker-compose.yml
 	EndProjectSection
 EndProject
 Global
@@ -157,6 +162,7 @@ Global
 		{A4B1DE1A-EEE1-4E69-BDC2-8CADFC6D0130} = {1CA18E27-00EB-4D57-942E-D6EB84F6B530}
 		{233D88D9-887C-4B1E-BE12-2253041CD0CF} = {31938BCE-2623-42CD-9AEF-B27E22DF91F9}
 		{605DE9E9-5DDF-4C5B-938D-D5B4AA872791} = {CFEDF9DA-8557-413C-96CE-6AD2B5D8D1CD}
+		{981AAE17-1A21-4071-9F05-200CCCDF1678} = {02EA681E-C7D8-13C7-8484-4AC65E1B71E8}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {5C347C6E-5B5E-4A71-BF38-48FAD967B0E9}
