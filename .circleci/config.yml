@@ -1,4 +1,6 @@
 version: 2.1
+orbs:
+  sonarcloud: sonarsource/sonarcloud@4.0
 jobs:
   build:
     resource_class: large
@@ -100,22 +102,22 @@ jobs:
     steps:
       - run: apt-get update && apt-get install -y openssh-client
       - checkout
-
-      - run:
-          name: run sonarcloud
-          command: |            
-            export PATH="$PATH:/root/.dotnet/tools" 
-            apt-get update && apt-get install -y default-jdk
-            dotnet tool install --global dotnet-sonarscanner
-            dotnet tool install --global coverlet.console                        
-            dotnet-sonarscanner begin \
-              /k:"mizrael_OpenSleigh" \
-              /o:"mizrael" \
-              /d:sonar.host.url="https://sonarcloud.io" \
-              /d:sonar.login="$SONAR_TOKEN" \
-              /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                                         
-            dotnet test ./src/OpenSleigh.sln --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
-            dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
+      - sonarcloud/scan
+      # - run:
+      #     name: run sonarcloud
+      #     command: |            
+      #       export PATH="$PATH:/root/.dotnet/tools" 
+      #       apt-get update && apt-get install -y default-jdk
+      #       dotnet tool install --global dotnet-sonarscanner
+      #       dotnet tool install --global coverlet.console                        
+      #       dotnet-sonarscanner begin \
+      #         /k:"mizrael_OpenSleigh" \
+      #         /o:"mizrael" \
+      #         /d:sonar.host.url="https://sonarcloud.io" \
+      #         /d:sonar.login="$SONAR_TOKEN" \
+      #         /d:sonar.cs.opencover.reportsPaths="**\coverage.opencover.xml"                                         
+      #       dotnet test ./src/OpenSleigh.sln --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category!=E2E" /p:CollectCoverage=true /p:CoverletOutputFormat=opencover /p:CoverletOutput=coverage.opencover.xml  
+            # dotnet-sonarscanner end /d:sonar.login="$SONAR_TOKEN"
 
 workflows:
   build_and_test:
@@ -124,4 +126,4 @@ workflows:
   sonarscan:
     jobs:
       - sonarscan:
-          context: SonarCloud
+          context: sonarcloud
