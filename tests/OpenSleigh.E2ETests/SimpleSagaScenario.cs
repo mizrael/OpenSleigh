@@ -26,7 +26,7 @@ public abstract class SimpleSagaScenario : E2ETestsBase
             ctx.MessageId.Should().NotBeNullOrWhiteSpace();
             ctx.SenderId.Should().NotBeNullOrWhiteSpace();
 
-            receivedCount++;
+            Interlocked.Increment(ref receivedCount);
             tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
         };
 
@@ -34,6 +34,8 @@ public abstract class SimpleSagaScenario : E2ETestsBase
             (ctx, services) => services.AddSingleton(onMessage),
             async bus => await bus.PublishAsync(message, tokenSource.Token),
             tokenSource);
+
+        await Task.Delay(500);
 
         receivedCount.Should().Be(1);
     }

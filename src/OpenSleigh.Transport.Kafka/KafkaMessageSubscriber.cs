@@ -5,7 +5,7 @@ namespace OpenSleigh.Transport.Kafka;
 
 public record KafkaSubscriberConfig(TimeSpan ConsumeDelay, TimeSpan ConsumeTimeout)
 {
-    public static readonly KafkaSubscriberConfig Default = new (TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+    public static readonly KafkaSubscriberConfig Default = new(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
 }
 
 public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDisposable
@@ -15,8 +15,10 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
     private readonly IKafkaMessageHandler _messageHandler;
     private readonly ILogger<KafkaMessageSubscriber<TM>> _logger;
     private readonly KafkaSubscriberConfig _config;
-    
+
     private readonly IConsumer<string, byte[]> _consumer;
+    private CancellationTokenSource? _stoppingCts;
+    private Task? _consumerTask;
 
     public KafkaMessageSubscriber(
         IConsumerBuilderFactory builderFactory,
@@ -40,7 +42,8 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
 
     public ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
-        Task.Run(async () => await ConsumeMessages(cancellationToken), cancellationToken);
+        _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        _consumerTask = Task.Run(async () => await ConsumeMessages(_stoppingCts.Token), _stoppingCts.Token);
         return ValueTask.CompletedTask;
     }
 
@@ -69,9 +72,9 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         {
             var result = _consumer.Consume((int)_config.ConsumeTimeout.TotalMilliseconds);
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if(canProcess)
+            if (canProcess)
                 await _messageHandler.HandleAsync(result!, _queueReferences, stoppingToken);
-                            
+
             return true;
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
@@ -111,14 +114,29 @@ public sealed class KafkaMessageSubscriber<TM> : IMessageSubscriber<TM>, IDispos
         return false;
     }
 
-    public ValueTask StopAsync(CancellationToken cancellationToken = default)
+    public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
+        _stoppingCts?.Cancel();
+
+        if (_consumerTask is not null)
+        {
+            try
+            {
+                await _consumerTask.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+            }
+        }
+
         _consumer.Close();
-        return ValueTask.CompletedTask;
     }
 
     public void Dispose()
     {
+        _stoppingCts?.Cancel();
+        _stoppingCts?.Dispose();
         _consumer.Close();
         _consumer.Dispose();
     }

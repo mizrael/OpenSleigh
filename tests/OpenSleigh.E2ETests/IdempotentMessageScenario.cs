@@ -36,7 +36,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         var message1 = new IdempotentMessage(requestId, correlationId, 0);
         var message2 = new IdempotentMessage(requestId, correlationId, 1);
 
-        var receivedCount = new []{ 0,0 };
+        var receivedCount = new[] { 0, 0 };
         using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
         Action<IMessageContext<IdempotentMessage>, ISagaInstance> onMessage = (ctx, saga) =>
@@ -46,13 +46,11 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
             Assert.Equal(correlationId, ctx.Message.CorrelationId);
             Assert.Equal(requestId, ctx.Message.RequestId);
 
-            receivedCount[ctx.Message.Foo]++;
-            if (receivedCount[ctx.Message.Foo] > 1)
-            {
+            var newCount = Interlocked.Increment(ref receivedCount[ctx.Message.Foo]);
+            if (newCount > 1)
                 throw new InvalidOperationException($"Message with Foo={ctx.Message.Foo} was received more than once.");
-            }
-
-            if (receivedCount.All(i => i > 0))
+            
+            if (Volatile.Read(ref receivedCount[0]) > 0 && Volatile.Read(ref receivedCount[1]) > 0)
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(2));
         };
 
@@ -81,13 +79,18 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         IdempotentMessage message,
         CancellationToken cancellationToken)
     {
-        var result = Outbox.OutboxAppendResult.Undefined; 
-        while(result != Outbox.OutboxAppendResult.Success)
+        var result = Outbox.OutboxAppendResult.Undefined;
+        while (result != Outbox.OutboxAppendResult.Success &&
+                result != Outbox.OutboxAppendResult.Duplicate)
         {
             try
             {
-                await Task.Delay(100, cancellationToken);
                 result = await bus.PublishAsync(message, cancellationToken);
+                if (result != Outbox.OutboxAppendResult.Success &&
+                    result != Outbox.OutboxAppendResult.Duplicate)
+                {
+                    await Task.Delay(100, cancellationToken);
+                }
             }
             catch (TaskCanceledException)
             {
