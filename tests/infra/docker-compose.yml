@@ -38,6 +38,8 @@ services:
       
   openSleigh.tests.infrastructure.kafka:
     image: 'apache/kafka:latest'
+    hostname: broker
+    container_name: openSleigh.tests.infrastructure.kafka
     restart: always
     ports:
       - '9092:9092'
