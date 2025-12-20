@@ -37,7 +37,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
         var message2 = new IdempotentMessage(requestId, correlationId, 1);
 
         var receivedCount = new []{ 0,0 };
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30) * hostsCount);
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
         Action<IMessageContext<IdempotentMessage>, ISagaInstance> onMessage = (ctx, saga) =>
         {

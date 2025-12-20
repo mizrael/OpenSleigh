@@ -43,7 +43,7 @@ public class SubscribersBackgroundService : BackgroundService
             var subscriber = (IMessageSubscriber)_sp.GetRequiredService(subscriberType);
             _subscribers.Add(subscriber);
             return subscriber.StartAsync(stoppingToken).AsTask();
-        });
+        }).ToArray();
         await Task.WhenAll(subscriberTasks);
     }
 
