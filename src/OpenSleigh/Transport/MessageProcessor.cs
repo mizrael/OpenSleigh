@@ -6,7 +6,7 @@ namespace OpenSleigh.Transport;
 
 internal class MessageProcessor : IMessageProcessor
 {
-    private static readonly ConcurrentDictionary<Type, IMessageHandler> _handlers = new();
+    private static readonly ConcurrentDictionary<Type, IProcessorWrapper> _handlers = new();
 
     private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ISagaRunner _sagaRunner;
@@ -24,13 +24,13 @@ internal class MessageProcessor : IMessageProcessor
     {
         ArgumentNullException.ThrowIfNull(outboxMessage);
 
-        var handler = _handlers.GetOrAdd(outboxMessage.MessageType, CreateHandler);
+        var wrapper = _handlers.GetOrAdd(outboxMessage.MessageType, CreateProcessorWrapper);
 
         var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
         foreach(var descriptor in descriptors) {
             try
             {
-                await handler.ProcessAsync(_sagaRunner, outboxMessage, descriptor, cancellationToken)
+                await wrapper.ProcessAsync(_sagaRunner, outboxMessage, descriptor, cancellationToken)
                         .ConfigureAwait(false);
             }
             catch (SagaException)
@@ -40,18 +40,18 @@ internal class MessageProcessor : IMessageProcessor
         }
     }
 
-    private static IMessageHandler CreateHandler(Type messageType)
+    private static IProcessorWrapper CreateProcessorWrapper(Type messageType)
     {
-        var handlerType = typeof(MessageHandler<>).MakeGenericType(messageType);
-        return (IMessageHandler)Activator.CreateInstance(handlerType)!;
+        var handlerType = typeof(ProcessorWrapper<>).MakeGenericType(messageType);
+        return (IProcessorWrapper)Activator.CreateInstance(handlerType)!;
     }
 
-    private interface IMessageHandler
+    private interface IProcessorWrapper
     {
         ValueTask ProcessAsync(ISagaRunner sagaRunner, MessageEnvelope outboxMessage, SagaDescriptor descriptor, CancellationToken cancellationToken);
     }
 
-    private sealed class MessageHandler<TM> : IMessageHandler where TM : IMessage
+    private sealed class ProcessorWrapper<TM> : IProcessorWrapper where TM : IMessage
     {
         public ValueTask ProcessAsync(ISagaRunner sagaRunner, MessageEnvelope outboxMessage, SagaDescriptor descriptor, CancellationToken cancellationToken)
         {

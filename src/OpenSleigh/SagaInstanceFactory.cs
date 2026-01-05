@@ -24,18 +24,21 @@ public class SagaInstanceFactory : ISagaInstanceFactory
                 correlationId: messageContext.CorrelationId,
                 descriptor: descriptor);
 
-        var instance = Activator.CreateInstance(descriptor.SagaStateType);
-        if (instance is null)
+        var state = Activator.CreateInstance(descriptor.SagaStateType);
+        if (state is null)
             throw new TypeLoadException($"unable to create instance of type '{descriptor.SagaStateType.FullName}'");
 
         var creator = _creators.GetOrAdd(descriptor.SagaStateType, CreateCreator);
-        return creator.Create(instance, messageContext.MessageId, messageContext.CorrelationId, descriptor);
+        return creator.Create(state, messageContext.MessageId, messageContext.CorrelationId, descriptor);
     }
 
     private static ISagaInstanceCreator CreateCreator(Type stateType)
     {
         var creatorType = typeof(SagaInstanceCreator<>).MakeGenericType(stateType);
-        return (ISagaInstanceCreator)Activator.CreateInstance(creatorType)!;
+        var creator = Activator.CreateInstance(creatorType);
+        if(creator is null)
+            throw new InvalidOperationException($"Could not create saga instance for '{stateType.FullName}'.");
+        return (ISagaInstanceCreator)creator;
     }
 
     private interface ISagaInstanceCreator
