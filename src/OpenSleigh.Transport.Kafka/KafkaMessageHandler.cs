@@ -44,15 +44,6 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         {
             message = _messageParser.Parse(result);
         }
-        catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
-        {
-            // noop. seems to be a known issue in the c# Kafka driver
-            // occurring when consumers are started before producers.
-
-            _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
-                queueReferences.TopicName, ex.Message);
-            return true;
-        }
         catch (ObjectDisposedException ex)
         {
             _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call",

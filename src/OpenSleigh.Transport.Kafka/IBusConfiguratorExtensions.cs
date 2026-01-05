@@ -16,7 +16,7 @@ public static class IBusConfiguratorExtensions
     {
         busConfigurator.Services.AddSingleton(config);
 
-        busConfigurator.Services.AddSingleton(_ => new QueueReferenceFactory(config.DefaultQueueReferenceCreator));
+        busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(_ => new QueueReferenceFactory(config.DefaultQueueReferenceCreator));
 
         busConfigurator.Services.AddSingleton(ctx =>
         {
@@ -47,8 +47,8 @@ public static class IBusConfiguratorExtensions
             var builder = ctx.GetRequiredService<ProducerBuilder<string, byte[]>>();
             return builder.Build();
         });
-        busConfigurator.Services.AddTransient<IKafkaPublisherExecutor, KafkaPublisher>();
-        busConfigurator.Services.AddTransient<IPublisher, KafkaPublisher>();
+        busConfigurator.Services.AddSingleton<IKafkaPublisherExecutor, KafkaPublisher>();
+        busConfigurator.Services.AddSingleton<IPublisher, KafkaPublisher>();
 
         busConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
         busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
