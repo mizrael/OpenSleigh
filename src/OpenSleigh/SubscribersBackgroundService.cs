@@ -8,21 +8,17 @@ namespace OpenSleigh;
 public class SubscribersBackgroundService : BackgroundService
 {
     private readonly ISystemInfo _systemInfo;
-    private readonly ISagaDescriptorsResolver _resolver;
-    private readonly IServiceProvider _sp;
     private readonly ILogger<SubscribersBackgroundService> _logger;
-    private readonly List<IMessageSubscriber> _subscribers = new();
+    private readonly IEnumerable<IMessageSubscriber> _subscribers;
 
     public SubscribersBackgroundService(
         ISystemInfo systemInfo,
         ILogger<SubscribersBackgroundService> logger,
-        ISagaDescriptorsResolver resolver,
-        IServiceProvider serviceProvider)
+        IEnumerable<IMessageSubscriber> subscribers)
     {
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _resolver = resolver;
-        _sp = serviceProvider;
+        _subscribers = subscribers;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -35,13 +31,8 @@ public class SubscribersBackgroundService : BackgroundService
 
         _logger.LogInformation($"starting subscribers on client '{_systemInfo.ClientGroup}/{_systemInfo.ClientId}' ...");
 
-        var subscriberTypeBase = typeof(IMessageSubscriber<>);
-        var messageTypes = _resolver.GetRegisteredMessageTypes();
-        var subscriberTasks = messageTypes.Select(messageType =>
+        var subscriberTasks = _subscribers.Select(subscriber =>
         {
-            var subscriberType = subscriberTypeBase.MakeGenericType(messageType);
-            var subscriber = (IMessageSubscriber)_sp.GetRequiredService(subscriberType);
-            _subscribers.Add(subscriber);
             return subscriber.StartAsync(stoppingToken).AsTask();
         }).ToArray();
         await Task.WhenAll(subscriberTasks);

@@ -5,12 +5,11 @@ using System.Threading.Channels;
 
 namespace OpenSleigh.InMemory.Messaging;
 
-public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
-    where TM : IMessage
+public class InMemorySubscriber : IMessageSubscriber, IDisposable
 {
     private readonly IMessageProcessor _messageProcessor;
     private readonly ChannelReader<MessageEnvelope> _reader;
-    private readonly ILogger<InMemorySubscriber<TM>> _logger;
+    private readonly ILogger<InMemorySubscriber> _logger;
     private readonly InMemorySubscriberOptions _options;
     
     private CancellationTokenSource? _stoppingCts;
@@ -19,7 +18,7 @@ public class InMemorySubscriber<TM> : IMessageSubscriber<TM>, IDisposable
 
     public InMemorySubscriber(IMessageProcessor messageProcessor,
         ChannelReader<MessageEnvelope> reader,
-        ILogger<InMemorySubscriber<TM>> logger,
+        ILogger<InMemorySubscriber> logger,
         InMemorySubscriberOptions? options = null)
     {
         _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));

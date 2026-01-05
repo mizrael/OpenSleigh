@@ -4,5 +4,5 @@ namespace OpenSleigh.Transport.Kafka;
 
 public interface IConsumerBuilderFactory
 {
-    ConsumerBuilder<TKey, TValue> Create<TM, TKey, TValue>() where TM : IMessage;
+    ConsumerBuilder<TKey, TValue> Create<TKey, TValue>();
 }

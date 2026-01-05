@@ -10,18 +10,18 @@ public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator
 
 [ExcludeFromCodeCoverage]
 public static class IBusConfiguratorExtensions
-{     
+{
     public static IBusConfigurator UseKafkaTransport(this IBusConfigurator busConfigurator,
         KafkaConfiguration config)
     {
         busConfigurator.Services.AddSingleton(config);
-        
-        busConfigurator.Services.AddSingleton<IQueueReferenceFactory>(_ => new QueueReferenceFactory(config.DefaultQueueReferenceCreator));
+
+        busConfigurator.Services.AddSingleton(_ => new QueueReferenceFactory(config.DefaultQueueReferenceCreator));
 
         busConfigurator.Services.AddSingleton(ctx =>
         {
             var kafkaConfig = ctx.GetRequiredService<KafkaConfiguration>();
-            return new AdminClientConfig() {BootstrapServers = kafkaConfig.ConnectionString};
+            return new AdminClientConfig() { BootstrapServers = kafkaConfig.ConnectionString };
         });
         busConfigurator.Services.AddSingleton(ctx =>
         {
@@ -32,7 +32,7 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton(ctx =>
         {
             var kafkaConfig = ctx.GetRequiredService<KafkaConfiguration>();
-            return new ProducerConfig() {BootstrapServers = kafkaConfig.ConnectionString};
+            return new ProducerConfig() { BootstrapServers = kafkaConfig.ConnectionString };
         });
         busConfigurator.Services.AddSingleton(ctx =>
         {
@@ -50,14 +50,14 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddTransient<IKafkaPublisherExecutor, KafkaPublisher>();
         busConfigurator.Services.AddTransient<IPublisher, KafkaPublisher>();
 
-        busConfigurator.Services.AddTransient<IMessageParser, MessageParser>();
-        busConfigurator.Services.AddTransient<IKafkaMessageHandler, KafkaMessageHandler>();
+        busConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
+        busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
 
         busConfigurator.Services.AddSingleton<IConsumerBuilderFactory, ConsumerBuilderFactory>();
 
-        busConfigurator.Services.AddSingleton(typeof(IMessageSubscriber<>), typeof(KafkaMessageSubscriber<>));
+        busConfigurator.Services.AddSingleton<IMessageSubscriber, KafkaMessageSubscriber>();
 
-       // busConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator), typeof(KafkaInfrastructureCreator<>));
+        // busConfigurator.Services.AddSingleton(typeof(IInfrastructureCreator), typeof(KafkaInfrastructureCreator<>));
 
         return busConfigurator;
     }

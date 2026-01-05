@@ -12,41 +12,83 @@ public class KafkaMessageHandler : IKafkaMessageHandler
     private readonly IKafkaPublisherExecutor _publisher;
     private readonly ILogger<KafkaMessageHandler> _logger;
     private readonly ISystemInfo _systemInfo;
+    private readonly IQueueReferenceFactory _queueReferenceFactory;
 
     public KafkaMessageHandler(IMessageParser messageParser,
                                 IMessageProcessor messageProcessor,
                                 IKafkaPublisherExecutor publisher,
-                                ILogger<KafkaMessageHandler> logger, 
-                                ISystemInfo systemInfo)
+                                ILogger<KafkaMessageHandler> logger,
+                                ISystemInfo systemInfo,
+                                IQueueReferenceFactory queueReferenceFactory)
     {
         _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
         _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+        _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
     }
 
-    public ValueTask HandleAsync(ConsumeResult<string, byte[]> result, QueueReferences queueReferences, CancellationToken cancellationToken = default)
+    public async ValueTask<bool> HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken cancellationToken = default)
     {
+        var queueReferences = _queueReferenceFactory.Get(result.Topic);
+        if (queueReferences is null)
+        {
+            _logger.LogWarning("no queue references found for topic '{Topic}'", result.Topic);
+            return false;
+        }
+
         MessageEnvelope? message = null;
+
         try
         {
-            message =  _messageParser.Parse(result);
+            message = _messageParser.Parse(result);
+        }
+        catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
+        {
+            // noop. seems to be a known issue in the c# Kafka driver
+            // occurring when consumers are started before producers.
+
+            _logger.LogWarning(ex, "Topic '{Topic}' still not available : {Exception}",
+                queueReferences.TopicName, ex.Message);
+            return true;
+        }
+        catch (ObjectDisposedException ex)
+        {
+            _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call",
+                queueReferences.TopicName);
+            return false;
+        }
+        catch (TaskCanceledException ex)
+        {
+            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                queueReferences.TopicName);
+            return false;
+        }
+        catch (OperationCanceledException ex)
+        {
+            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
+                queueReferences.TopicName);
+            return false;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "an exception has occurred while consuming a message: {Exception}", ex.Message);
+            _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
+                queueReferences.TopicName, ex.Message);
         }
 
-        return (message is null) ? ValueTask.CompletedTask :
-            HandleCoreAsync(message, queueReferences, cancellationToken);
+        if (message is null)
+            return false;
+
+        await HandleCoreAsync(message, queueReferences, cancellationToken);
+        return true;
     }
-    
+
     private async ValueTask HandleCoreAsync(MessageEnvelope message, QueueReferences queueReferences, CancellationToken cancellationToken)
     {
         _logger.LogInformation(
-            "client {ClientGroup}/{ClientId} received message '{MessageId}' from Topic '{Topic}'. Processing...", 
-            _systemInfo.ClientGroup, _systemInfo.ClientId, 
+            "client {ClientGroup}/{ClientId} received message '{MessageId}' from Topic '{Topic}'. Processing...",
+            _systemInfo.ClientGroup, _systemInfo.ClientId,
             message.MessageId, queueReferences.TopicName);
         try
         {
@@ -64,7 +106,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
     {
         _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
                            message.MessageId, ex.Message);
-        
+
         return PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
     }
 

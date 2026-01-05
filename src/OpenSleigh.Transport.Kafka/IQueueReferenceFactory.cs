@@ -8,5 +8,9 @@ public interface IQueueReferenceFactory
 
     QueueReferences Create<TM>() where TM : IMessage;
 
+    QueueReferences Create(Type messageType);
+
+    QueueReferences? Get(string topic);
+
     Type GetQueueType(string topic);
 }
