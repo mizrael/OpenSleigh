@@ -145,7 +145,7 @@ Packages are output to `packages/` directory at repo root.
    - Triggers: Push/PR to develop or releases/** branches, affecting src/ or tests/
    - Runs: CodeQL analysis on C# code
    - Command: `cd ./src && dotnet build -c Release`
-   - Uses: .NET 7.0 (may need updating to 9.0)
+   - Uses: .NET 7.0 (note: this is older than the main CI which uses .NET 9.0.203)
 
 2. **nuget.yml** - Package publishing
    - Triggers: Manual or on release/prerelease events
