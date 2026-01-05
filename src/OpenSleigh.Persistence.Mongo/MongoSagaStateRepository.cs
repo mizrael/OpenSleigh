@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace OpenSleigh.Persistence.Mongo;
 
@@ -14,6 +15,12 @@ public record MongoSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
 
 public class MongoSagaStateRepository : ISagaStateRepository
 {
+    private static readonly MethodInfo _createSagaContextMethod = typeof(MongoSagaStateRepository)
+        .GetMethod(nameof(CreateSagaContextGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
+    
+    private static readonly MethodInfo _setStateDataMethod = typeof(MongoSagaStateRepository)
+        .GetMethod(nameof(SetStateDataGeneric), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
     private readonly IDbContext _dbContext;
     private readonly MongoSagaStateRepositoryOptions _options;
     private readonly ISerializer _serializer;
@@ -28,7 +35,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
         _serializer = serializer;
     }
 
-    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
+    private static ISagaInstance<TS> CreateSagaContextGeneric<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
         => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
@@ -80,7 +87,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
         else
         {
             var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            result = CreateSagaContext((dynamic)state, entity, descriptor);
+            var genericMethod = _createSagaContextMethod.MakeGenericMethod(descriptor.SagaStateType);
+            result = (ISagaInstance)genericMethod.Invoke(null, new object[] { state!, entity, descriptor })!;
         }
 
         if (entity.IsCompleted)
@@ -166,8 +174,11 @@ public class MongoSagaStateRepository : ISagaStateRepository
                 When = msg.When,
             });
 
-        if (state.GetType().IsGenericType)
-            SetStateData((dynamic)state, entity);
+        if (state.GetType().IsGenericType && state.Descriptor.SagaStateType is not null)
+        {
+            var genericMethod = _setStateDataMethod.MakeGenericMethod(state.Descriptor.SagaStateType);
+            genericMethod.Invoke(this, new object[] { state, entity });
+        }
 
         await _dbContext.SagaStates.ReplaceOneAsync(filter, entity, new ReplaceOptions()
         {
@@ -175,7 +186,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
         }).ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
+    private void SetStateDataGeneric<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
     }

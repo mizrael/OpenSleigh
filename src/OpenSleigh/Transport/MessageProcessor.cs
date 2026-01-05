@@ -1,5 +1,6 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
+using System.Reflection;
 
 namespace OpenSleigh.Transport;
 
@@ -21,13 +22,14 @@ internal class MessageProcessor : IMessageProcessor
     {
         ArgumentNullException.ThrowIfNull(outboxMessage);
 
-        var messageContext = ToContext((dynamic)outboxMessage.Message, outboxMessage);
+        var messageType = outboxMessage.MessageType;
+        var messageContext = CreateMessageContext(messageType, outboxMessage);
 
         var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
         foreach(var descriptor in descriptors) {
             try
             {
-                await _sagaRunner.ProcessAsync(messageContext, descriptor, cancellationToken)
+                await ProcessSagaAsync(messageContext, messageType, descriptor, cancellationToken)
                         .ConfigureAwait(false);
             }
             catch (SagaException)
@@ -37,9 +39,17 @@ internal class MessageProcessor : IMessageProcessor
         }
     }
 
-    private static IMessageContext<TM> ToContext<TM>(TM message, MessageEnvelope outboxMessage)
-        where TM : IMessage
+    private static object CreateMessageContext(Type messageType, MessageEnvelope outboxMessage)
     {
-        return DefaultMessageContext<TM>.Create(outboxMessage);
+        var contextType = typeof(DefaultMessageContext<>).MakeGenericType(messageType);
+        var createMethod = contextType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
+        return createMethod.Invoke(null, new object[] { outboxMessage })!;
+    }
+
+    private ValueTask ProcessSagaAsync(object messageContext, Type messageType, SagaDescriptor descriptor, CancellationToken cancellationToken)
+    {
+        var processMethod = typeof(ISagaRunner).GetMethod(nameof(ISagaRunner.ProcessAsync))!
+            .MakeGenericMethod(messageType);
+        return (ValueTask)processMethod.Invoke(_sagaRunner, new object[] { messageContext, descriptor, cancellationToken })!;
     }
 }

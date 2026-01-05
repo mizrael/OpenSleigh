@@ -3,6 +3,7 @@ using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 
 namespace OpenSleigh.Persistence.SQL;
 
@@ -14,6 +15,12 @@ public record SqlSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
 
 public class SqlSagaStateRepository : ISagaStateRepository
 {
+    private static readonly MethodInfo _createSagaContextMethod = typeof(SqlSagaStateRepository)
+        .GetMethod(nameof(CreateSagaContextGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
+    
+    private static readonly MethodInfo _setStateDataMethod = typeof(SqlSagaStateRepository)
+        .GetMethod(nameof(SetStateDataGeneric), BindingFlags.NonPublic | BindingFlags.Instance)!;
+
     private readonly SagaDbContext _dbContext;
     private readonly SqlSagaStateRepositoryOptions _options;
     private readonly ISerializer _serializer;
@@ -60,7 +67,8 @@ public class SqlSagaStateRepository : ISagaStateRepository
         else
         {
             var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            result = CreateSagaContext((dynamic)state, entity, descriptor);
+            var genericMethod = _createSagaContextMethod.MakeGenericMethod(descriptor.SagaStateType);
+            result = (ISagaInstance)genericMethod.Invoke(null, new object[] { state!, entity, descriptor })!;
         }
 
         if (entity.IsCompleted)
@@ -69,7 +77,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return result;
     }
 
-    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
+    private static ISagaInstance<TS> CreateSagaContextGeneric<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
         => new SagaInstance<TS>(
                instanceId: entity.InstanceId,
                triggerMessageId: entity.TriggerMessageId,
@@ -166,14 +174,17 @@ public class SqlSagaStateRepository : ISagaStateRepository
                 SagaState = entity
             });
                     
-        if (state.GetType().IsGenericType)
-            SetStateData((dynamic)state, entity);
+        if (state.GetType().IsGenericType && state.Descriptor.SagaStateType is not null)
+        {
+            var genericMethod = _setStateDataMethod.MakeGenericMethod(state.Descriptor.SagaStateType);
+            genericMethod.Invoke(this, new object[] { state, entity });
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken)
                     .ConfigureAwait(false);
     }
 
-    private void SetStateData<TS>(ISagaInstance<TS> state, SagaState entity)
+    private void SetStateDataGeneric<TS>(ISagaInstance<TS> state, SagaState entity)
     {
         entity.StateData = _serializer.Serialize(state.State);
     }
