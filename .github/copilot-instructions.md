@@ -208,6 +208,32 @@ dotnet pack -c Release
 - **License:** Apache 2.0
 - **Versioning:** Current version in `Versions.props`: 3.0.6
 
+## Testing Guidelines
+
+- **Unit Tests:** Located in `tests/OpenSleigh.Tests/` - should not require external dependencies
+- **Integration Tests:** Require Docker infrastructure (MongoDB, RabbitMQ, Kafka, SQL Server, PostgreSQL)
+- **Test Categories:** Use `[Trait("Category", "Integration")]` for integration tests, `[Trait("Category", "E2E")]` for end-to-end tests
+- **Test Framework:** xUnit is used across all test projects
+- **Coverage:** Code coverage reports are generated via `test.runsettings` configuration
+- **When adding tests:** Follow existing test patterns in the same test project; use the Arrange-Act-Assert pattern
+- **Mocking:** Use NSubstitute for mocking dependencies
+
+## Security Practices
+
+- **Nullable Reference Types:** Always enabled - respect nullable annotations to prevent null reference exceptions
+- **Dependency Management:** All dependencies are managed via NuGet; check for known vulnerabilities before adding new packages
+- **Secrets:** Never commit connection strings, passwords, or API keys - use environment variables or user secrets
+- **SQL Injection:** Use parameterized queries; the persistence layer handles this via Entity Framework Core
+- **Input Validation:** Validate all saga message inputs before processing
+
+## Documentation Standards
+
+- **Code Comments:** Use XML documentation comments (`///`) for public APIs and interfaces
+- **README Files:** Keep sample project README files updated with setup and usage instructions
+- **CHANGELOG:** Update `CHANGELOG.md` for user-facing changes (new features, breaking changes, bug fixes)
+- **API Documentation:** Document public APIs with clear summaries, parameter descriptions, and return value explanations
+- **Examples:** Maintain sample projects in `samples/` directory as working examples of library usage
+
 ## Important Notes
 
 1. **ALWAYS run `dotnet restore` before building** - This prevents package resolution issues
