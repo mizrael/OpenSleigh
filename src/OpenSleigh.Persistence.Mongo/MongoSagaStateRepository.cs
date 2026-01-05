@@ -2,8 +2,8 @@
 using MongoDB.Driver;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using System.Reflection;
 
 namespace OpenSleigh.Persistence.Mongo;
 
@@ -15,11 +15,8 @@ public record MongoSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
 
 public class MongoSagaStateRepository : ISagaStateRepository
 {
-    private static readonly MethodInfo _createSagaContextMethod = typeof(MongoSagaStateRepository)
-        .GetMethod(nameof(CreateSagaContextGeneric), BindingFlags.NonPublic | BindingFlags.Static)!;
-    
-    private static readonly MethodInfo _setStateDataMethod = typeof(MongoSagaStateRepository)
-        .GetMethod(nameof(SetStateDataGeneric), BindingFlags.NonPublic | BindingFlags.Instance)!;
+    private static readonly ConcurrentDictionary<Type, ISagaContextFactory> _contextFactories = new();
+    private static readonly ConcurrentDictionary<Type, IStateDataSetter> _stateDataSetters = new();
 
     private readonly IDbContext _dbContext;
     private readonly MongoSagaStateRepositoryOptions _options;
@@ -35,18 +32,17 @@ public class MongoSagaStateRepository : ISagaStateRepository
         _serializer = serializer;
     }
 
-    private static ISagaInstance<TS> CreateSagaContextGeneric<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
-        => new SagaInstance<TS>(
-               instanceId: entity.InstanceId,
-               triggerMessageId: entity.TriggerMessageId,
-               correlationId: entity.CorrelationId,
-               descriptor: descriptor,
-               state: state,
-               processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
-               {
-                   MessageId = e.MessageId,
-                   When = e.When
-               }));
+    private static ISagaContextFactory CreateContextFactory(Type stateType)
+    {
+        var factoryType = typeof(SagaContextFactory<>).MakeGenericType(stateType);
+        return (ISagaContextFactory)Activator.CreateInstance(factoryType)!;
+    }
+
+    private static IStateDataSetter CreateStateDataSetter(Type stateType)
+    {
+        var setterType = typeof(StateDataSetter<>).MakeGenericType(stateType);
+        return (IStateDataSetter)Activator.CreateInstance(setterType)!;
+    }
 
     public async ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
         where TM : IMessage
@@ -87,8 +83,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
         else
         {
             var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            var genericMethod = _createSagaContextMethod.MakeGenericMethod(descriptor.SagaStateType);
-            result = (ISagaInstance)genericMethod.Invoke(null, new object[] { state!, entity, descriptor })!;
+            var factory = _contextFactories.GetOrAdd(descriptor.SagaStateType, CreateContextFactory);
+            result = factory.Create(state!, entity, descriptor);
         }
 
         if (entity.IsCompleted)
@@ -176,8 +172,8 @@ public class MongoSagaStateRepository : ISagaStateRepository
 
         if (state.GetType().IsGenericType && state.Descriptor.SagaStateType is not null)
         {
-            var genericMethod = _setStateDataMethod.MakeGenericMethod(state.Descriptor.SagaStateType);
-            genericMethod.Invoke(this, new object[] { state, entity });
+            var setter = _stateDataSetters.GetOrAdd(state.Descriptor.SagaStateType, CreateStateDataSetter);
+            setter.SetStateData(state, entity, _serializer);
         }
 
         await _dbContext.SagaStates.ReplaceOneAsync(filter, entity, new ReplaceOptions()
@@ -186,8 +182,38 @@ public class MongoSagaStateRepository : ISagaStateRepository
         }).ConfigureAwait(false);
     }
 
-    private void SetStateDataGeneric<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
+    private interface ISagaContextFactory
     {
-        entity.StateData = _serializer.Serialize(state.State);
+        ISagaInstance Create(object state, Entities.SagaState entity, SagaDescriptor descriptor);
+    }
+
+    private sealed class SagaContextFactory<TS> : ISagaContextFactory
+    {
+        public ISagaInstance Create(object state, Entities.SagaState entity, SagaDescriptor descriptor)
+            => new SagaInstance<TS>(
+                   instanceId: entity.InstanceId,
+                   triggerMessageId: entity.TriggerMessageId,
+                   correlationId: entity.CorrelationId,
+                   descriptor: descriptor,
+                   state: (TS)state,
+                   processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
+                   {
+                       MessageId = e.MessageId,
+                       When = e.When
+                   }));
+    }
+
+    private interface IStateDataSetter
+    {
+        void SetStateData(ISagaInstance state, Entities.SagaState entity, ISerializer serializer);
+    }
+
+    private sealed class StateDataSetter<TS> : IStateDataSetter
+    {
+        public void SetStateData(ISagaInstance state, Entities.SagaState entity, ISerializer serializer)
+        {
+            var typedState = (ISagaInstance<TS>)state;
+            entity.StateData = serializer.Serialize(typedState.State);
+        }
     }
 }

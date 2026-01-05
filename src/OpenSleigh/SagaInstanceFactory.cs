@@ -1,12 +1,11 @@
 ﻿using OpenSleigh.Transport;
-using System.Reflection;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh;
 
 public class SagaInstanceFactory : ISagaInstanceFactory
 {
-    private static readonly MethodInfo _createMethod = typeof(SagaInstanceFactory)
-        .GetMethod(nameof(CreateSagaInstance), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly ConcurrentDictionary<Type, ISagaInstanceCreator> _creators = new();
 
     public ISagaInstance Create<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext)
         where TM : IMessage
@@ -29,19 +28,33 @@ public class SagaInstanceFactory : ISagaInstanceFactory
         if (instance is null)
             throw new TypeLoadException($"unable to create instance of type '{descriptor.SagaStateType.FullName}'");
 
-        var genericMethod = _createMethod.MakeGenericMethod(descriptor.SagaStateType);
-        return (ISagaInstance)genericMethod.Invoke(null, new object[] { instance, messageContext.MessageId, messageContext.CorrelationId, descriptor })!;
+        var creator = _creators.GetOrAdd(descriptor.SagaStateType, CreateCreator);
+        return creator.Create(instance, messageContext.MessageId, messageContext.CorrelationId, descriptor);
     }
 
-    private static ISagaInstance CreateSagaInstance<TS>(TS state, string messageId, string correlationId, SagaDescriptor descriptor)
-        => new SagaInstance<TS>(
+    private static ISagaInstanceCreator CreateCreator(Type stateType)
+    {
+        var creatorType = typeof(SagaInstanceCreator<>).MakeGenericType(stateType);
+        return (ISagaInstanceCreator)Activator.CreateInstance(creatorType)!;
+    }
+
+    private interface ISagaInstanceCreator
+    {
+        ISagaInstance Create(object state, string messageId, string correlationId, SagaDescriptor descriptor);
+    }
+
+    private sealed class SagaInstanceCreator<TS> : ISagaInstanceCreator
+    {
+        public ISagaInstance Create(object state, string messageId, string correlationId, SagaDescriptor descriptor)
+            => new SagaInstance<TS>(
 #if NET9_0_OR_GREATER
-            instanceId: Guid.CreateVersion7().ToString(),
+                instanceId: Guid.CreateVersion7().ToString(),
 #else
-            instanceId: Guid.NewGuid().ToString(),
+                instanceId: Guid.NewGuid().ToString(),
 #endif
-            triggerMessageId: messageId,
-            correlationId: correlationId,
-            descriptor,
-            state);
+                triggerMessageId: messageId,
+                correlationId: correlationId,
+                descriptor,
+                (TS)state);
+    }
 }

@@ -1,11 +1,13 @@
 ﻿using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
-using System.Reflection;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh.Transport;
 
 internal class MessageProcessor : IMessageProcessor
 {
+    private static readonly ConcurrentDictionary<Type, IMessageHandler> _handlers = new();
+
     private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ISagaRunner _sagaRunner;
     
@@ -22,14 +24,13 @@ internal class MessageProcessor : IMessageProcessor
     {
         ArgumentNullException.ThrowIfNull(outboxMessage);
 
-        var messageType = outboxMessage.MessageType;
-        var messageContext = CreateMessageContext(messageType, outboxMessage);
+        var handler = _handlers.GetOrAdd(outboxMessage.MessageType, CreateHandler);
 
         var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
         foreach(var descriptor in descriptors) {
             try
             {
-                await ProcessSagaAsync(messageContext, messageType, descriptor, cancellationToken)
+                await handler.ProcessAsync(_sagaRunner, outboxMessage, descriptor, cancellationToken)
                         .ConfigureAwait(false);
             }
             catch (SagaException)
@@ -39,17 +40,23 @@ internal class MessageProcessor : IMessageProcessor
         }
     }
 
-    private static object CreateMessageContext(Type messageType, MessageEnvelope outboxMessage)
+    private static IMessageHandler CreateHandler(Type messageType)
     {
-        var contextType = typeof(DefaultMessageContext<>).MakeGenericType(messageType);
-        var createMethod = contextType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static)!;
-        return createMethod.Invoke(null, new object[] { outboxMessage })!;
+        var handlerType = typeof(MessageHandler<>).MakeGenericType(messageType);
+        return (IMessageHandler)Activator.CreateInstance(handlerType)!;
     }
 
-    private ValueTask ProcessSagaAsync(object messageContext, Type messageType, SagaDescriptor descriptor, CancellationToken cancellationToken)
+    private interface IMessageHandler
     {
-        var processMethod = typeof(ISagaRunner).GetMethod(nameof(ISagaRunner.ProcessAsync))!
-            .MakeGenericMethod(messageType);
-        return (ValueTask)processMethod.Invoke(_sagaRunner, new object[] { messageContext, descriptor, cancellationToken })!;
+        ValueTask ProcessAsync(ISagaRunner sagaRunner, MessageEnvelope outboxMessage, SagaDescriptor descriptor, CancellationToken cancellationToken);
+    }
+
+    private sealed class MessageHandler<TM> : IMessageHandler where TM : IMessage
+    {
+        public ValueTask ProcessAsync(ISagaRunner sagaRunner, MessageEnvelope outboxMessage, SagaDescriptor descriptor, CancellationToken cancellationToken)
+        {
+            var messageContext = DefaultMessageContext<TM>.Create(outboxMessage);
+            return sagaRunner.ProcessAsync(messageContext, descriptor, cancellationToken);
+        }
     }
 }
