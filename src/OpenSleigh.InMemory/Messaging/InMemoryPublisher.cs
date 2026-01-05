@@ -20,7 +20,7 @@ public class InMemoryPublisher : IPublisher
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        return PublishAsyncCore((dynamic)message, cancellationToken);
+        return PublishAsyncCore(message, cancellationToken);
     }
 
     private async ValueTask PublishAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)            
