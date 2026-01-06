@@ -151,6 +151,9 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         var sp = services.BuildServiceProvider();
 
+        var queueRefFactory = sp.GetRequiredService<IQueueReferenceFactory>();
+        queueRefFactory.Create<FakeSagaStarter>();
+
         var sut = sp.GetRequiredService<IMessageSubscriber>();
         var publisher = sp.GetRequiredService<IPublisher>();
         return (publisher, sut);
