@@ -40,7 +40,7 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
         using var channel = await connection.CreateChannelAsync();
 
-        var queueRef = RabbitFixture.CreateQueueReference();
+        var queueRef = _fixture.CreateQueueReference();
 
         var received = false;
         var consumer = new AsyncEventingBasicConsumer(channel);

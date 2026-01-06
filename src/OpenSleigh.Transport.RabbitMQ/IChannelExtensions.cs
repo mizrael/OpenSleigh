@@ -8,8 +8,8 @@ public static class IChannelExtensions
     private static readonly ConcurrentDictionary<string, byte> _initializedExchanges = new();
 
     public static async ValueTask EnsureTopologyAsync(
-        this IChannel channel, 
-        QueueReferences queueReferences, 
+        this IChannel channel,
+        QueueReferences queueReferences,
         RabbitConfiguration rabbitCfg,
         CancellationToken cancellationToken = default)
     {
@@ -55,9 +55,9 @@ public static class IChannelExtensions
     private static async ValueTask EnsureQueuesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
     {
         await channel.QueueDeclareAsync(queue: queueReferences.DeadLetterQueue,
-              durable: true,
+              durable: rabbitCfg.Durable,
               exclusive: false,
-              autoDelete: false,
+              autoDelete: rabbitCfg.AutoDelete,
               arguments: null,
               cancellationToken: cancellationToken);
         await channel.QueueBindAsync(queueReferences.DeadLetterQueue,
@@ -67,9 +67,9 @@ public static class IChannelExtensions
                           cancellationToken: cancellationToken);
 
         await channel.QueueDeclareAsync(queue: queueReferences.RetryQueueName,
-                durable: true,
+                durable: rabbitCfg.Durable,
                 exclusive: false,
-                autoDelete: false,
+                autoDelete: rabbitCfg.AutoDelete,
                 arguments: new Dictionary<string, object?>()
                 {
                     {Headers.XMessageTTL, (int)rabbitCfg.RetryDelay.TotalMilliseconds },
@@ -83,15 +83,15 @@ public static class IChannelExtensions
             cancellationToken: cancellationToken);
 
         await channel.QueueDeclareAsync(queue: queueReferences.QueueName,
-               durable: true,
-               exclusive: false,
-               autoDelete: false,
-               arguments: new Dictionary<string, object?>()
-               {
+                durable: rabbitCfg.Durable,
+                exclusive: false,
+                autoDelete: rabbitCfg.AutoDelete,
+                arguments: new Dictionary<string, object?>()
+                {
                     {Headers.XDeadLetterExchange, queueReferences.DeadLetterExchangeName},
                     {Headers.XDeadLetterRoutingKey, queueReferences.DeadLetterQueue}
-               },
-               cancellationToken: cancellationToken);
+                },
+                cancellationToken: cancellationToken);
 
         await channel.QueueBindAsync(queue: queueReferences.QueueName,
             exchange: queueReferences.ExchangeName,
