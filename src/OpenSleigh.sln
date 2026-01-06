@@ -53,6 +53,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".root", ".root", "{02EA681E
 	ProjectSection(SolutionItems) = preProject
 		..\Directory.Build.props = ..\Directory.Build.props
 		..\readme.md = ..\readme.md
+		..\sonar-project.properties = ..\sonar-project.properties
 		..\test.runsettings = ..\test.runsettings
 		..\Versions.props = ..\Versions.props
 	EndProjectSection
