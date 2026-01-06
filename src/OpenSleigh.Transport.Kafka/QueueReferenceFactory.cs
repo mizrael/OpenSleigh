@@ -27,10 +27,11 @@ public class QueueReferenceFactory : IQueueReferenceFactory
 
     public QueueReferences Create(Type messageType)
     {
-        if (messageType is null)
-            throw new ArgumentNullException(nameof(messageType));
-        if(messageType.IsAssignableTo(typeof(IMessage)) == false)
+        ArgumentNullException.ThrowIfNull(messageType);
+
+        if (messageType.IsAssignableTo(typeof(IMessage)) == false)
             throw new ArgumentException($"type '{messageType.FullName}' does not implement IMessage interface", nameof(messageType));
+
         return _queueReferencesCache.GetOrAdd(messageType, k => _creator(messageType));
     }
 

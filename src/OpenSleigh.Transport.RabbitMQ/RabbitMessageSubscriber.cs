@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
-using OpenSleigh.Utils;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -13,8 +12,8 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     private readonly IQueueReferenceFactory _queueReferenceFactory;
     private readonly RabbitConfiguration _rabbitConfiguration;
     private readonly IServiceProvider _serviceProvider;
-    private readonly ITypeResolver _typeResolver;
-    private readonly ISerializer _serializer;
+    private readonly IRabbitMessageParser _messageParser;
+    private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ILogger<RabbitMessageSubscriber> _logger;
 
     private IChannel? _channel;
@@ -24,17 +23,17 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         IQueueReferenceFactory queueReferenceFactory,
         RabbitConfiguration rabbitConfiguration,
         IServiceProvider serviceProvider,
-        ITypeResolver typeResolver,
-        ILogger<RabbitMessageSubscriber> logger,
-        ISerializer serializer)
+        IRabbitMessageParser messageParser,
+        ISagaDescriptorsResolver sagaDescriptorsResolver,
+        ILogger<RabbitMessageSubscriber> logger)
     {
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         _rabbitConfiguration = rabbitConfiguration;
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
-        _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
-        _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
+        _sagaDescriptorsResolver = sagaDescriptorsResolver ?? throw new ArgumentNullException(nameof(sagaDescriptorsResolver));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     private async ValueTask InitChannelAsync(CancellationToken cancellationToken)
@@ -78,44 +77,9 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         if (channel is null)
             throw new InvalidOperationException("Unable to retrieve channel from consumer.");
 
-        MessageEnvelope? message;
-        try
-        {
-            var messageId = eventArgs.BasicProperties.MessageId;
-            ArgumentException.ThrowIfNullOrWhiteSpace(messageId, nameof(messageId));
-
-            var correlationId = eventArgs.BasicProperties.CorrelationId;
-            ArgumentException.ThrowIfNullOrWhiteSpace(correlationId, nameof(correlationId));
-
-            var messageTypeName = eventArgs.BasicProperties.GetHeaderValue(nameof(message.MessageType));
-            ArgumentException.ThrowIfNullOrWhiteSpace(messageTypeName, nameof(messageTypeName));
-
-            var messageType = _typeResolver.Resolve(messageTypeName, throwOnError: true);
-
-            var senderId = eventArgs.BasicProperties.GetHeaderValue(nameof(message.SenderId));
-            ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
-
-            var createdAt = DateTimeOffset.Parse(eventArgs.BasicProperties.GetHeaderValue(nameof(message.CreatedAt)));
-
-            if (!MessageEnvelope.TryCreate(eventArgs.Body.Span,
-                                        messageId: messageId,
-                                        correlationId: correlationId,
-                                        createdAt,
-                                        messageType!,
-                                        senderId: senderId,
-                                        _serializer,
-                                        out message))
-                throw new ArgumentException("unable to parse outbox message.");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(
-                ex,
-                "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
-                eventArgs.Exchange, ex.Message);
-            await channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false);
+        var message = await _messageParser.ParseMessageAsync(eventArgs, channel);
+        if (message is null)
             return;
-        }
 
         var queueReference = _queueReferenceFactory.Create(message);
 
@@ -174,8 +138,10 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     {
         await InitChannelAsync(cancellationToken);
 
-        foreach (var queueReference in _queueReferenceFactory.RegisteredQueueReferences)
+        var messageTypes = _sagaDescriptorsResolver.GetRegisteredMessageTypes();
+        foreach (var messageType in messageTypes)
         {
+            var queueReference = _queueReferenceFactory.Create(messageType);
             await InitSubscriptionAsync(queueReference, cancellationToken);
         }
     }

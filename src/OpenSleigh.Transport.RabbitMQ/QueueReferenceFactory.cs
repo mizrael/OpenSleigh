@@ -21,8 +21,15 @@ public class QueueReferenceFactory : IQueueReferenceFactory
     public QueueReferences Create<TM>() where TM : IMessage
         => _queueReferencesCache.GetOrAdd(typeof(TM), k => _factory(typeof(TM)));
 
-    public IEnumerable<QueueReferences> RegisteredQueueReferences => _queueReferencesCache.Values;
+    public QueueReferences Create(Type messageType)
+    {
+        ArgumentNullException.ThrowIfNull(messageType);
 
+        if (messageType.IsAssignableTo(typeof(IMessage)) == false)
+            throw new ArgumentException($"type '{messageType.FullName}' does not implement IMessage interface", nameof(messageType));
+
+        return _queueReferencesCache.GetOrAdd(messageType, k => _factory(messageType));
+    }
 
     public static QueueReferencesCreator BuildDefaultCreator(ISystemInfo sysInfo)
     => messageType =>
@@ -35,4 +42,4 @@ public class QueueReferenceFactory : IQueueReferenceFactory
         var dlQueueName = $"{dlExchangeName}.{sysInfo.ClientGroup}.workers";
         return new QueueReferences(exchangeName, queueName, exchangeName, dlExchangeName, dlQueueName);
     };
-}    
+}

@@ -6,6 +6,5 @@ public interface IQueueReferenceFactory
 {
     QueueReferences Create(MessageEnvelope message);
     QueueReferences Create<TM>() where TM : IMessage;
-
-    IEnumerable<QueueReferences> RegisteredQueueReferences { get; }
+    QueueReferences Create(Type messageType);
 }
