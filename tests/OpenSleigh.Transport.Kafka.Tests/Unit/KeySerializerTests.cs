@@ -1,7 +1,5 @@
-﻿using System;
-using System.Text;
+﻿using System.Text;
 using System.Text.Json;
-using FluentAssertions;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 

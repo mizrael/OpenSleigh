@@ -1,6 +1,3 @@
-using FluentAssertions;
-using System;
-
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class QueueReferenceFactoryTests

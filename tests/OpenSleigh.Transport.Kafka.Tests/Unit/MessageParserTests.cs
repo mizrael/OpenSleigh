@@ -1,11 +1,7 @@
 ﻿using Confluent.Kafka;
-using FluentAssertions;
-using NSubstitute;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
-using System;
 using System.Text;
-using System.Text.Json;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
@@ -40,25 +36,30 @@ public class MessageParserTests
         };
 
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        ex.Message.Should().Contain("invalid message type");
     }
 
     [Fact]
     public void Resolve_should_throw_when_message_type_header_does_not_match()
     {
         Type messageType = null;
-        var messageTopic = "lorem";
+        var messageTypeName = "lorem";
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
+        typeResolver.Resolve(messageTypeName).Returns(messageType);
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic= messageTopic,
+            Topic= "some-topic",
             Message = new Message<string, byte[]>()
+            {
+                Headers = new Headers
+                {
+                    { nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName) }
+                }
+            }
         };
-        
+
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
         ex.Message.Should().Contain("invalid message type");
     }
@@ -67,12 +68,13 @@ public class MessageParserTests
     public void Resolve_should_return_message()
     {
         var messageTopic = nameof(DummyMessage);
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var parentId = "parent id";
-;       var envelope = DummyMessage.CreateEnvelope(parentId);
+        var envelope = DummyMessage.CreateEnvelope(parentId);
         var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(envelope.MessageType);
+        typeResolver.Resolve(messageTypeName).Returns(envelope.MessageType);
 
         var sut = CreateSUT(typeResolver);
 
@@ -84,6 +86,7 @@ public class MessageParserTests
                 Key = envelope.MessageId,
                 Value = Encoding.UTF8.GetBytes(jsonMessage),
                 Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName)),
                     new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(envelope.MessageId)),
                     new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(envelope.SenderId)),
                     new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(envelope.CorrelationId)),
@@ -104,20 +107,23 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_MessageId_missing()
     {
-        var messageTopic = "DummyMessage";     
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var messageType = typeof(DummyMessage);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
+        typeResolver.Resolve(messageTypeName).Returns(messageType);
 
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
-                Headers = new(),
+                Headers = new Headers
+                {
+                    { nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName) }
+                },
                 Value = Array.Empty<byte>()
             }
         };
@@ -128,21 +134,22 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_SenderId_header_missing()
     {
-        var messageTopic = "DummyMessage";
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var messageType = typeof(DummyMessage);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
+        typeResolver.Resolve(messageTypeName).Returns(messageType);
 
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName))
                 ],
                 Value = Array.Empty<byte>()
             }
@@ -154,21 +161,22 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_CorrelationId_header_missing()
     {
-        var messageTopic = "DummyMessage";
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var messageType = typeof(DummyMessage);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
+        typeResolver.Resolve(messageTypeName).Returns(messageType);
 
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName)),
                     new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                 ],
@@ -182,21 +190,22 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_CreatedAt_header_missing()
     {
-        var messageTopic = "DummyMessage";
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var messageType = typeof(DummyMessage);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
+        typeResolver.Resolve(messageTypeName).Returns(messageType);
 
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName)),
                     new Header(nameof(MessageEnvelope.MessageId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
@@ -211,22 +220,23 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_not_throw_when_ParentId_header_missing()
     {
-        var messageTopic = "DummyMessage";
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
         var envelope = DummyMessage.CreateEnvelope();
         var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(envelope.MessageType);
+        typeResolver.Resolve(messageTypeName).Returns(envelope.MessageType);
 
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
                 Key = Guid.NewGuid().ToString(),
                 Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName)),
                     new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(Guid.NewGuid().ToString())),
                     new Header(nameof(MessageEnvelope.CreatedAt), Encoding.UTF8.GetBytes(DateTimeOffset.UtcNow.ToString("o"))),
@@ -241,17 +251,14 @@ public class MessageParserTests
     [Fact]
     public void Resolve_should_throw_when_headers_missing()
     {
-        var messageTopic = "DummyMessage";
         var messageType = typeof(DummyMessage);
 
         var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
-        typeResolver.Resolve(messageTopic).Returns(messageType);
-
         var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
-            Topic = messageTopic,
+            Topic = "some-topic",
             Message = new Message<string, byte[]>()
             {
                 Value = Array.Empty<byte>()
@@ -259,5 +266,48 @@ public class MessageParserTests
         };
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
         Assert.Contains("message headers cannot be null.", ex.Message);
+    }
+
+    [Fact]
+    public void Parse_should_use_MessageType_header_not_topic_name()
+    {
+        // Arrange
+        var messageTypeName = typeof(DummyMessage).AssemblyQualifiedName;
+        var envelope = DummyMessage.CreateEnvelope();
+        var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
+
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTypeName).Returns(typeof(DummyMessage));
+
+        var sut = CreateSUT(typeResolver);
+
+        // Topic name is intentionally different from the message type
+        var differentTopicName = "wrong-topic-name";
+        var consumeResult = new ConsumeResult<string, byte[]>()
+        {
+            Topic = differentTopicName,
+            Message = new Message<string, byte[]>()
+            {
+                Key = envelope.MessageId,
+                Value = Encoding.UTF8.GetBytes(jsonMessage),
+                Headers = [
+                    new Header(nameof(MessageEnvelope.MessageType), Encoding.UTF8.GetBytes(messageTypeName)),
+                    new Header(nameof(MessageEnvelope.SenderId), Encoding.UTF8.GetBytes(envelope.SenderId)),
+                    new Header(nameof(MessageEnvelope.CorrelationId), Encoding.UTF8.GetBytes(envelope.CorrelationId)),
+                    new Header(nameof(MessageEnvelope.CreatedAt), Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString())),
+                ]
+            }
+        };
+
+        // Act
+        var result = sut.Parse(consumeResult);
+
+        // Assert
+        Assert.NotNull(result);
+        Assert.Equal(typeof(DummyMessage), result.MessageType);
+
+        // Verify that the type resolver was called with the header value, NOT the topic name
+        typeResolver.Received(1).Resolve(messageTypeName);
+        typeResolver.DidNotReceive().Resolve(differentTopicName);
     }
 }

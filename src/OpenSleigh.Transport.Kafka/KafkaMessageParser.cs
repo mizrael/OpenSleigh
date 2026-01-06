@@ -19,14 +19,14 @@ public class KafkaMessageParser : IKafkaMessageParser
     {
         ArgumentNullException.ThrowIfNull(consumeResult);
 
+        if (consumeResult.Message.Headers is null)
+            throw new ArgumentException("message headers cannot be null.");
+
         var messageTypeName = consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.MessageType));
         ArgumentNullException.ThrowIfNullOrWhiteSpace(messageTypeName);
         var messageType = _typeResolver.Resolve(messageTypeName);
         if(messageType is null) 
             throw new ArgumentException("invalid message type");
-
-        if(consumeResult.Message.Headers is null)
-            throw new ArgumentException("message headers cannot be null.");
 
         var messageId = consumeResult.Message.Key;
         if (string.IsNullOrWhiteSpace(messageId))
@@ -41,7 +41,6 @@ public class KafkaMessageParser : IKafkaMessageParser
             throw new ArgumentException("correlation id cannot be null.");
 
         var createdAt = DateTimeOffset.Parse(consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.CreatedAt)));
-
 
         if (!MessageEnvelope.TryCreate(consumeResult.Message.Value,
                                         messageId: messageId,
