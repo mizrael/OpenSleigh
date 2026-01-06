@@ -7,9 +7,7 @@ namespace OpenSleigh.Transport.RabbitMQ;
 public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 {
     private readonly IBusConnection _connection;
-
     private readonly SemaphoreSlim _semaphore;
-    private readonly RabbitConfiguration _rabbitCfg;
 
     private IChannel? _publishChannel;
     private IChannel? _consumeChannel;
@@ -79,5 +77,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
             _consumeChannel.Dispose();
             _consumeChannel = null;
         }
+
+        _semaphore?.Dispose();
     }
 }

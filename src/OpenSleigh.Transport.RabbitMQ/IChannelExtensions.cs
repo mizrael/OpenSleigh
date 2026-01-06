@@ -110,5 +110,7 @@ public static class IChannelExtensions
 
         await channel.ExchangeDeleteAsync(queueRef.RetryExchangeName);
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
+
+        _initializedExchanges.Remove(queueRef.ExchangeName, out _);
     }
 }

@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
+﻿using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
 
@@ -18,7 +17,7 @@ public class SubscribersBackgroundService : BackgroundService
     {
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _subscribers = subscribers;
+        _subscribers = subscribers ?? Array.Empty<IMessageSubscriber>();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)

@@ -77,9 +77,23 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         if (channel is null)
             throw new InvalidOperationException("Unable to retrieve channel from consumer.");
 
-        var message = await _messageParser.ParseMessageAsync(eventArgs, channel);
-        if (message is null)
+
+        MessageEnvelope message;
+        try
+        {
+            message = await _messageParser.ParseMessageAsync(eventArgs);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(
+                ex,
+                "an exception has occured while decoding queue message from Exchange '{ExchangeName}'. Error: {ExceptionMessage}",
+                eventArgs.Exchange,
+                ex.Message);
+
+            await channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false);
             return;
+        }
 
         var queueReference = _queueReferenceFactory.Create(message);
 
