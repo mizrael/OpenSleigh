@@ -115,8 +115,7 @@ jobs:
               --collect:"XPlat Code Coverage" \
               --results-directory ./coverage \
               --filter "Category!=E2E"
-      - codecov/upload:
-          file: 'src/coverage/**/coverage.cobertura.xml'
+      - codecov/upload
 
 workflows:
   build_and_test:
