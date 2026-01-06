@@ -23,11 +23,13 @@ public class RabbitFixture : IAsyncLifetime
             retryDelayMs = 1000;
 
         this.RabbitConfiguration = new RabbitConfiguration(
-            rabbitSection["HostName"],
-            rabbitSection["VirtualHost"],
-            rabbitSection["UserName"],
-            rabbitSection["Password"],
-            System.TimeSpan.FromMilliseconds(retryDelayMs));
+            hostName: rabbitSection["HostName"],
+            userName: rabbitSection["UserName"],
+            password: rabbitSection["Password"],
+            vhost: rabbitSection["VirtualHost"],
+            retryDelay: System.TimeSpan.FromMilliseconds(retryDelayMs),
+            durable: false,
+            autoDelete: true);
     }
 
     private ConnectionFactory CreateConnectionFactory()

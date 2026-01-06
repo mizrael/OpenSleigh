@@ -20,21 +20,36 @@ public static class IChannelExtensions
         // Declarations are idempotent; cache reduces redundant broker calls.
         if (_initializedExchanges.TryAdd(queueReferences.ExchangeName, 0))
         {
-            await EnsureExchangesAsync(queueReferences, channel, cancellationToken);
+            await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
             await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
             return;
         }
 
         // Best-effort safety: ensure again in case the cache was populated before a complete initialization.
-        await EnsureExchangesAsync(queueReferences, channel, cancellationToken);
+        await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
         await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
     }
 
-    private static async ValueTask EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, CancellationToken cancellationToken)
+    private static async ValueTask EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
     {
-        await channel.ExchangeDeclareAsync(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic, cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(
+            exchange: queueReferences.ExchangeName,
+            type: ExchangeType.Topic,
+            durable: rabbitCfg.Durable,
+            autoDelete: rabbitCfg.AutoDelete,
+            cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(
+           exchange: queueReferences.DeadLetterExchangeName,
+           type: ExchangeType.Topic,
+           durable: rabbitCfg.Durable,
+           autoDelete: rabbitCfg.AutoDelete,
+           cancellationToken: cancellationToken);
+        await channel.ExchangeDeclareAsync(
+           exchange: queueReferences.RetryExchangeName,
+           type: ExchangeType.Topic,
+           durable: rabbitCfg.Durable,
+           autoDelete: rabbitCfg.AutoDelete,
+           cancellationToken: cancellationToken);
     }
 
     private static async ValueTask EnsureQueuesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
