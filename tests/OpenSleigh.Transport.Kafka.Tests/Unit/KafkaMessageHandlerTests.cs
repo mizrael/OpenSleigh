@@ -11,9 +11,12 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 public class KafkaMessageHandlerTests
 {
     [Fact]
-    public async Task StartAsync_should_return_false_when_message_null()
+    public async Task StartAsync_should_return_false_when_message_parsing_fails()
     {
         var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
+        parser.WhenForAnyArgs(p => p.Parse(Arg.Any<ConsumeResult<string, byte[]>>()))
+              .Throw(new Exception("argh"));
+
         var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
         var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
@@ -120,6 +123,8 @@ public class KafkaMessageHandlerTests
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+                       .Returns(queueRefs);
 
         var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
