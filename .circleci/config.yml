@@ -114,7 +114,9 @@ jobs:
             dotnet test --framework $TARGET_FRAMEWORK \
               --collect:"XPlat Code Coverage" \
               --results-directory ./coverage \
-              --filter "Category!=E2E"
+              --settings ../test.runsettings \
+              --filter "Category!=E2E" \
+              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/*Tests.cs"
       - codecov/upload
 
 workflows:
