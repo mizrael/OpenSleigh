@@ -10,136 +10,102 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit;
 public class ChannelFactoryTests
 {
     [Fact]
-    public async Task Get_should_throw_when_input_null()
+    public async Task GetPublishChannel_should_create_channel()
     {
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor");
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
-        var sut = new ChannelFactory(connection, config, logger);
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () => await sut.GetAsync(null, cancellationToken: CancellationToken.None));
+        var connection = Substitute.For<IBusConnection>();
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
+
+        var sut = new ChannelFactory(connection);
+        var result = await sut.GetPublishChannelAsync(CancellationToken.None);
+
+        Assert.Same(channel, result);
+        await connection.Received(1).CreateChannelAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Get_should_create_exchanges()
+    public async Task GetConsumeChannel_should_create_channel()
     {
-        var queueReferences = new QueueReferences("foo", "bar", "baz", "qux"); 
-        
-        var channel = NSubstitute.Substitute.For<IChannel>();
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        connection.CreateChannelAsync().Returns(channel);
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
 
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor");
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
-        
-        var sut = new ChannelFactory(connection, config, logger);
-        await sut.GetAsync(queueReferences); 
-        
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic);
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic);
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic);
+        var connection = Substitute.For<IBusConnection>();
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
+
+        var sut = new ChannelFactory(connection);
+        var result = await sut.GetConsumeChannelAsync(CancellationToken.None);
+
+        Assert.Same(channel, result);
+        await connection.Received(1).CreateChannelAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task Get_should_create_dead_letter_queue()
+    public async Task EnsureTopology_should_create_exchanges_and_queues()
     {
         var queueReferences = new QueueReferences("foo", "bar", "baz", "qux");
 
-        var channel = NSubstitute.Substitute.For<IChannel>();
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        connection.CreateChannelAsync().Returns(channel);
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
 
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor");
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
+        var connection = Substitute.For<IBusConnection>();
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
 
-        var sut = new ChannelFactory(connection, config, logger);
-        await sut.GetAsync(queueReferences);
+        var rabbitCfg = new RabbitConfiguration("localhost", "ipsum", "dolor", retryDelay: TimeSpan.FromSeconds(1));
+
+        var sut = new ChannelFactory(connection);
+        var publishChannel = await sut.GetPublishChannelAsync(CancellationToken.None);
+
+        await publishChannel.EnsureTopologyAsync(queueReferences, rabbitCfg, CancellationToken.None);
+
+        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.DeadLetterQueue,
              durable: true,
              exclusive: false,
              autoDelete: false,
-             arguments: null);
-        channel.Received(1).QueueBindAsync(queueReferences.DeadLetterQueue,
-                          queueReferences.DeadLetterExchangeName,
-                          routingKey: queueReferences.DeadLetterQueue,
-                          arguments: null);
-    }
-
-    [Fact]
-    public async Task Get_should_create_retry_queue()
-    {
-        var queueReferences = new QueueReferences("foo", "bar", "baz", "qux");
-
-        var channel = NSubstitute.Substitute.For<IChannel>();
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        connection.CreateChannelAsync().Returns(channel);
-
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor", retryDelay: TimeSpan.FromSeconds(1));
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
-
-        var sut = new ChannelFactory(connection, config, logger);
-        await sut.GetAsync(queueReferences);
+             arguments: null,
+             cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.RetryQueueName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
-                arguments: Arg.Is<Dictionary<string, object>>(d => 
-                d.ContainsKey(Headers.XMessageTTL) && (int)d[Headers.XMessageTTL] == (int)config.RetryDelay.TotalMilliseconds &&
-                d.ContainsKey(Headers.XDeadLetterExchange) && d[Headers.XDeadLetterExchange] == queueReferences.ExchangeName &&
-                d.ContainsKey(Headers.XDeadLetterRoutingKey) && d[Headers.XDeadLetterRoutingKey] == queueReferences.QueueName));
-        channel.Received(1).QueueBindAsync(queue: queueReferences.RetryQueueName,
-            exchange: queueReferences.RetryExchangeName,
-            routingKey: queueReferences.RoutingKey,
-            arguments: null);
-    }
-
-    [Fact]
-    public async Task Get_should_create_queue()
-    {
-        var queueReferences = new QueueReferences("foo", "bar", "baz", "qux");
-
-        var channel = NSubstitute.Substitute.For<IChannel>();
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        connection.CreateChannelAsync().Returns(channel);
-
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor", retryDelay: TimeSpan.FromSeconds(1));
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
-
-        var sut = new ChannelFactory(connection, config, logger);
-        await sut.GetAsync(queueReferences);
+                arguments: Arg.Is<Dictionary<string, object?>>(d =>
+                    d.ContainsKey(Headers.XMessageTTL) && (int)d[Headers.XMessageTTL]! == (int)rabbitCfg.RetryDelay.TotalMilliseconds &&
+                    d.ContainsKey(Headers.XDeadLetterExchange) && (string)d[Headers.XDeadLetterExchange]! == queueReferences.ExchangeName &&
+                    d.ContainsKey(Headers.XDeadLetterRoutingKey) && (string)d[Headers.XDeadLetterRoutingKey]! == queueReferences.RoutingKey),
+                cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.QueueName,
                 durable: true,
                 exclusive: false,
                 autoDelete: false,
-                arguments: Arg.Is<Dictionary<string, object>>(d =>
-                d.ContainsKey(Headers.XDeadLetterExchange) && d[Headers.XDeadLetterExchange] == queueReferences.DeadLetterExchangeName &&
-                d.ContainsKey(Headers.XDeadLetterRoutingKey) && d[Headers.XDeadLetterRoutingKey] == queueReferences.DeadLetterQueue));
-        channel.Received(1).QueueBindAsync(queue: queueReferences.QueueName,
-            exchange: queueReferences.ExchangeName,
-            routingKey: queueReferences.RoutingKey,
-            arguments: null);
+                arguments: Arg.Is<Dictionary<string, object?>>(d =>
+                    d.ContainsKey(Headers.XDeadLetterExchange) && (string)d[Headers.XDeadLetterExchange]! == queueReferences.DeadLetterExchangeName &&
+                    d.ContainsKey(Headers.XDeadLetterRoutingKey) && (string)d[Headers.XDeadLetterRoutingKey]! == queueReferences.DeadLetterQueue),
+                cancellationToken: Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task Dispose_should_dispose_cached_channels()
     {
-        var queueReferences = new QueueReferences("foo", "bar", "baz", "qux");
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
 
-        var channel = NSubstitute.Substitute.For<IChannel>();
-        var connection = NSubstitute.Substitute.For<IBusConnection>();
-        connection.CreateChannelAsync().Returns(channel);
+        var connection = Substitute.For<IBusConnection>();
+        // both publish + consume will be created with this same substitute instance
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
 
-        var config = new RabbitConfiguration("localhost", "ipsum", "dolor", retryDelay: TimeSpan.FromSeconds(1));
-        var logger = NSubstitute.Substitute.For<Microsoft.Extensions.Logging.ILogger<ChannelFactory>>();
-
-        var sut = new ChannelFactory(connection, config, logger);
-        sut.GetAsync(queueReferences);
+        var sut = new ChannelFactory(connection);
+        await sut.GetPublishChannelAsync();
+        await sut.GetConsumeChannelAsync();
 
         await sut.DisposeAsync();
 
-        channel.Received(1).Dispose();
+        channel.Received().Dispose();
     }
 }

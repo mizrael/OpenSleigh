@@ -9,18 +9,21 @@ namespace OpenSleigh.Transport.RabbitMQ;
 public class RabbitPublisher : IPublisher
 {
     private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly RabbitConfiguration _rabbitConfig;
     private readonly ILogger<RabbitPublisher> _logger;
     private readonly IChannelFactory _channelFactory;
     private readonly ISerializer _serializer;
 
     public RabbitPublisher(
         IQueueReferenceFactory queueReferenceFactory,
+        RabbitConfiguration rabbitConfig,
         IChannelFactory channelFactory,
         ILogger<RabbitPublisher> logger,
         ISerializer serializer)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+        _rabbitConfig = rabbitConfig;
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
@@ -30,14 +33,18 @@ public class RabbitPublisher : IPublisher
         ArgumentNullException.ThrowIfNull(envelope);
 
         var queueRef = _queueReferenceFactory.Create(envelope);
-        var channel = await _channelFactory.GetAsync(queueRef, cancellationToken);
+
+        var channel = await _channelFactory.GetPublishChannelAsync(cancellationToken);
+
+        await channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken);
+
         var properties = new BasicProperties();
         properties.Persistent = true;
         properties.MessageId = envelope.MessageId;
         properties.CorrelationId = envelope.CorrelationId;
         properties.Headers = new Dictionary<string, object?>()
         {
-            { nameof(envelope.MessageType), envelope.MessageType.FullName }, 
+            { nameof(envelope.MessageType), envelope.MessageType.FullName },
             { nameof(envelope.SenderId), envelope.SenderId },
             { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString() }
         };

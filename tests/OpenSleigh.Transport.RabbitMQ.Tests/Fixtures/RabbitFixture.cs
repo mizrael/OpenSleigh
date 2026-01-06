@@ -40,7 +40,7 @@ public class RabbitFixture : IAsyncLifetime
         Port = AmqpTcpEndpoint.UseDefaultPort,
     };
 
-    private QueueReferences CreateQueueReference()
+    public static QueueReferences CreateQueueReference()
     {
 #if NET9_0_OR_GREATER
         var queueName = System.Guid.CreateVersion7().ToString("N");
@@ -52,10 +52,10 @@ public class RabbitFixture : IAsyncLifetime
 
     public async ValueTask<QueueReferences> CreateQueueReferenceAsync(IChannel channel)
     {
-        var queueRef = this.CreateQueueReference();
+        var queueRef = CreateQueueReference();
         _queues.Add(queueRef);
 
-        await channel.ExchangeDeclareAsync(queueRef.ExchangeName, ExchangeType.Topic, false, true);
+        await channel.ExchangeDeclareAsync(queueRef.ExchangeName, ExchangeType.Topic, durable: false, autoDelete: true);
         await channel.QueueDeclareAsync(queue: queueRef.QueueName,
             durable: false,
             exclusive: false,

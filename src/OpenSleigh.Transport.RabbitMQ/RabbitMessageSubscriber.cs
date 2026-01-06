@@ -7,41 +7,41 @@ using RabbitMQ.Client.Events;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
-public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubscriber<TM>
-    where TM : IMessage
+internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscriber
 {
     private readonly IChannelFactory _channelFactory;
-    private readonly QueueReferences _queueReference;
+    private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly RabbitConfiguration _rabbitConfiguration;
     private readonly IServiceProvider _serviceProvider;
     private readonly ITypeResolver _typeResolver;
     private readonly ISerializer _serializer;
-    private readonly ILogger<RabbitMessageSubscriber<TM>> _logger;
+    private readonly ILogger<RabbitMessageSubscriber> _logger;
 
     private IChannel? _channel;
 
     public RabbitMessageSubscriber(
         IChannelFactory channelFactory,
         IQueueReferenceFactory queueReferenceFactory,
+        RabbitConfiguration rabbitConfiguration,
         IServiceProvider serviceProvider,
         ITypeResolver typeResolver,
-        ILogger<RabbitMessageSubscriber<TM>> logger,
+        ILogger<RabbitMessageSubscriber> logger,
         ISerializer serializer)
     {
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
+        _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+        _rabbitConfiguration = rabbitConfiguration;
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
-
-        ArgumentNullException.ThrowIfNull(queueReferenceFactory);
-        _queueReference = queueReferenceFactory.Create<TM>();
     }
 
     private async ValueTask InitChannelAsync(CancellationToken cancellationToken)
     {
         await StopChannelAsync(cancellationToken);
 
-        _channel = await _channelFactory.GetAsync(_queueReference, cancellationToken);
+        _channel = await _channelFactory.GetConsumeChannelAsync(cancellationToken);
         _channel.CallbackExceptionAsync += OnChannelException;
     }
 
@@ -51,15 +51,15 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         return Task.CompletedTask;
     }
 
-    private async ValueTask InitSubscriptionAsync(CancellationToken cancellationToken)
+    private async ValueTask InitSubscriptionAsync(QueueReferences queueReference, CancellationToken cancellationToken)
     {
+        _logger.LogInformation($"initializing subscription on queue '{queueReference.QueueName}' ...");
+
+        await _channel.EnsureTopologyAsync(queueReference, _rabbitConfiguration, cancellationToken);
+
         var consumer = new AsyncEventingBasicConsumer(_channel);
-
         consumer.ReceivedAsync += OnMessageReceivedAsync;
-
-        _logger.LogInformation($"initializing subscription on queue '{_queueReference.QueueName}' ...");
-        
-        await _channel.BasicConsumeAsync(queue: _queueReference.QueueName, autoAck: false, consumer: consumer, cancellationToken);
+        await _channel.BasicConsumeAsync(queue: queueReference.QueueName, autoAck: false, consumer: consumer, cancellationToken);
     }
 
     private ValueTask StopChannelAsync(CancellationToken cancellationToken)
@@ -100,7 +100,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             if (!MessageEnvelope.TryCreate(eventArgs.Body.Span,
                                         messageId: messageId,
                                         correlationId: correlationId,
-                                        createdAt, 
+                                        createdAt,
                                         messageType!,
                                         senderId: senderId,
                                         _serializer,
@@ -117,9 +117,11 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             return;
         }
 
+        var queueReference = _queueReferenceFactory.Create(message);
+
         _logger.LogInformation(
             "received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...",
-            message.MessageId, _queueReference.ExchangeName, _queueReference.QueueName);
+            message.MessageId, queueReference.ExchangeName, queueReference.QueueName);
 
         try
         {
@@ -131,24 +133,24 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
         }
         catch (LockException lockEx)
         {
-            await HandleConsumerException(lockEx, eventArgs, channel, message, true);
+            await HandleConsumerException(lockEx, eventArgs, channel, queueReference, message, true);
         }
         catch (AggregateException aggEx) when (aggEx.InnerExceptions.Any(ex => ex is LockException))
         {
-            await HandleConsumerException(aggEx, eventArgs, channel, message, true);
+            await HandleConsumerException(aggEx, eventArgs, channel, queueReference, message, true);
         }
         catch (Exception ex)
         {
-            await HandleConsumerException(ex, eventArgs, channel, message, false);
+            await HandleConsumerException(ex, eventArgs, channel, queueReference, message, false);
         }
     }
-    
-    private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, MessageEnvelope message, bool requeue)
+
+    private async ValueTask HandleConsumerException(Exception ex, BasicDeliverEventArgs deliveryProps, IChannel channel, QueueReferences queueReference, MessageEnvelope message, bool requeue)
     {
         var errorMsg = "an error has occurred while processing Message '{MessageId}' from Exchange '{ExchangeName}' : {ExceptionMessage} . "
                      + (requeue ? "Reenqueuing..." : "Nacking...");
 
-        _logger.LogWarning(ex, errorMsg, message.MessageId, _queueReference.ExchangeName, ex.Message);
+        _logger.LogWarning(ex, errorMsg, message.MessageId, queueReference.ExchangeName, ex.Message);
 
         if (!requeue)
             await channel.BasicRejectAsync(deliveryProps.DeliveryTag, requeue: false);
@@ -160,7 +162,7 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
             var props = new BasicProperties(deliveryProps.BasicProperties);
             // we publish the message to the retry exchange
             await channel.BasicPublishAsync(
-                exchange: _queueReference.RetryExchangeName,
+                exchange: queueReference.RetryExchangeName,
                 routingKey: deliveryProps.RoutingKey,
                 mandatory: true,
                 basicProperties: props,
@@ -171,7 +173,11 @@ public sealed class RabbitMessageSubscriber<TM> : IAsyncDisposable, IMessageSubs
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         await InitChannelAsync(cancellationToken);
-        await InitSubscriptionAsync(cancellationToken);
+
+        foreach (var queueReference in _queueReferenceFactory.RegisteredQueueReferences)
+        {
+            await InitSubscriptionAsync(queueReference, cancellationToken);
+        }
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)

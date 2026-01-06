@@ -19,10 +19,10 @@ public static class IBusConfiguratorExtensions
                 var sysInfo = ctx.GetRequiredService<ISystemInfo>();
                 return QueueReferenceFactory.BuildDefaultCreator(sysInfo);
             });
-        else 
+        else
             busConfigurator.Services.AddSingleton(queueReferencesCreator);
 
-        busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();            
+        busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();
         busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();
         busConfigurator.Services.AddSingleton<IChannelFactory, ChannelFactory>();
 
@@ -42,7 +42,7 @@ public static class IBusConfiguratorExtensions
         });
 
         busConfigurator.Services.AddSingleton<IBusConnection, RabbitPersistentConnection>();
-        busConfigurator.Services.AddSingleton(typeof(IMessageSubscriber<>), typeof(RabbitMessageSubscriber<>));
+        busConfigurator.Services.AddSingleton<IMessageSubscriber, RabbitMessageSubscriber>();
 
         busConfigurator.Services.AddSingleton(config);
 

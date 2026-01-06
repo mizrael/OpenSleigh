@@ -96,7 +96,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Assert.Equal(2, processCount);
     }
 
-    private (IPublisher publisher, IMessageSubscriber<FakeSagaStarter> sut) CreateSUT(Action<MessageEnvelope>? onMessage = null)
+    private (IPublisher publisher, IMessageSubscriber sut) CreateSUT(Action<MessageEnvelope>? onMessage = null)
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -151,7 +151,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         var sp = services.BuildServiceProvider();
 
-        var sut = sp.GetRequiredService<IMessageSubscriber<FakeSagaStarter>>();
+        var sut = sp.GetRequiredService<IMessageSubscriber>();
         var publisher = sp.GetRequiredService<IPublisher>();
         return (publisher, sut);
     }
