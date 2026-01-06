@@ -100,7 +100,7 @@ jobs:
           CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
     steps:
-      - run: apt-get update && apt-get install -y openssh-client
+      - run: apt-get update && apt-get install -y openssh-client unzip
       - checkout
       - sonarcloud/scan
       # - run:
