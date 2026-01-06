@@ -23,7 +23,7 @@ public class RabbitPublisher : IPublisher
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
-        _rabbitConfig = rabbitConfig;
+        _rabbitConfig = rabbitConfig ?? throw new ArgumentNullException(nameof(rabbitConfig));
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }

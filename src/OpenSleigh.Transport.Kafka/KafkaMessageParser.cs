@@ -4,7 +4,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Transport.Kafka;
 
-public class KafkaMessageParser : IKafkaMessageParser
+internal class KafkaMessageParser : IKafkaMessageParser
 {
     private readonly ITypeResolver _typeResolver;
     private readonly ISerializer _serializer;

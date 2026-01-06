@@ -123,5 +123,6 @@ public static class IChannelExtensions
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
 
         _initialized.TryRemove(queueRef.ExchangeName, out _);
+        _semaphores.TryRemove(queueRef.ExchangeName, out _);
     }
 }

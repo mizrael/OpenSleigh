@@ -31,8 +31,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
 
     public async ValueTask<bool> HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken cancellationToken = default)
     {
-        MessageEnvelope? message = null;
-
+        MessageEnvelope message;
         try
         {
             message = _messageParser.Parse(result);
@@ -56,17 +55,10 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         {
             _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
                 result.Topic, ex.Message);
-        }
-
-        if (message is null)
             return false;
+        }
 
         var queueReferences = _queueReferenceFactory.Create(message);
-        if (queueReferences is null)
-        {
-            _logger.LogWarning("no queue references found for topic '{Topic}'", result.Topic);
-            return false;
-        }
 
         await HandleCoreAsync(message, queueReferences, cancellationToken);
         return true;
