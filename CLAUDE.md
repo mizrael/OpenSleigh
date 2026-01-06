@@ -21,55 +21,46 @@ OpenSleigh is a distributed saga management library for .NET that enables reliab
 ### Standard Development Workflow
 
 ```bash
-# Navigate to source directory (required)
 cd src/
 
-# 1. Restore dependencies (ALWAYS run first)
+# 1. Restore dependencies (ALWAYS run first to avoid package resolution issues)
 dotnet restore
 
 # 2. Build the solution
-dotnet build                    # Debug build
-dotnet build -c Release        # Release build (recommended)
+dotnet build -c Release        # Expect ~174 nullable warnings (acceptable), 0 errors required
 
-# 3. Run unit tests (no infrastructure needed)
+# 3. Run unit tests (~64 tests, no infrastructure needed, ~5-10 seconds)
 dotnet test --framework net9.0 --filter "Category!=E2E&Category!=Integration"
 
-# 4. Check code formatting
+# 4. Run a specific test class or method
+dotnet test --framework net9.0 --filter "FullyQualifiedName~SagaRunnerTests"
+
+# 5. Verify code formatting
 dotnet format --verify-no-changes
 
-# 5. Apply formatting
-dotnet format
-
-# 6. Create NuGet packages (output to repo root packages/ directory)
+# 6. Create NuGet packages (outputs to repo root packages/ directory)
 dotnet pack -c Release
 ```
 
 ### Integration Tests
 
-Integration tests require Docker infrastructure:
+Integration tests require Docker infrastructure (MongoDB, RabbitMQ, Kafka, SQL Server, PostgreSQL):
 
 ```bash
 # From repo root, start infrastructure
 cd tests/infra
-docker-compose up -d
+docker-compose up -d           # Wait 10-15 seconds for services to initialize
 
-# Wait 10-15 seconds for services to initialize
-
-# Return to src/ and run integration tests
+# Return to src/ and run integration tests (~20-30 seconds)
 cd ../../src
 dotnet test --framework net9.0 --filter "FullyQualifiedName!~Cosmos&Category=Integration"
+
+# If tests fail, clean up and restart infrastructure
+cd ../tests/infra
+docker-compose down && docker-compose up -d
 ```
 
-**Infrastructure Services:**
-- MongoDB (27017)
-- RabbitMQ (5672, 15672 management UI)
-- Kafka (9092)
-- SQL Server (1433, password: `Sup3r_p4ssword123`)
-- PostgreSQL (5432, password: `Sup3r_p4ssword123`)
-
-### Known Build Warnings
-
-**Expect ~174 compiler warnings** (mostly nullable reference warnings: CS8602, CS8625, CS8618, CS8604). These are known and acceptable. The build must complete with **0 errors**.
+**Note:** Cosmos tests are excluded (not fully implemented). E2E tests are disabled in CI.
 
 ## High-Level Architecture
 
@@ -138,6 +129,7 @@ dotnet test --framework net9.0 --filter "FullyQualifiedName!~Cosmos&Category=Int
 **Configuration:**
 - `ServiceCollectionExtensions.AddOpenSleigh()`: Single entry point for DI registration (src/OpenSleigh/DependencyInjection/ServiceCollectionExtensions.cs)
 - `BusConfigurator`: Fluent builder for saga registration with `.AddSaga<TSaga>()` or `.AddSaga<TSaga, TState>()` (src/OpenSleigh/DependencyInjection/BusConfigurator.cs)
+- `SetPublishOnly()`: Configures publish-only mode (no message processing, useful for API endpoints that only publish messages)
 
 ### Critical Patterns
 
@@ -169,25 +161,37 @@ dotnet test --framework net9.0 --filter "FullyQualifiedName!~Cosmos&Category=Int
 - `TypeExtensions.GetInitiatorMessageType()` finds the `IStartedBy<>` message
 - `SagaDescriptorsResolver` builds message-to-saga mappings at startup
 
+### Message Lifecycle Flow
+
+Understanding how messages flow through the system:
+
+```
+1. Application publishes message via IMessageBus.PublishAsync()
+   ↓
+2. Message wrapped in MessageEnvelope and stored in IOutboxRepository
+   ↓
+3. OutboxBackgroundService polls outbox at configured interval
+   ↓
+4. MessageProcessor routes message to applicable sagas (multiple sagas can handle same message)
+   ↓
+5. For each saga: SagaRunner → SagaExecutionService.BeginProcessingAsync()
+   ↓
+6. BeginProcessingAsync: fetch/create saga instance → check idempotency → acquire lock
+   ↓
+7. SagaInstance.ProcessAsync() → MessageHandlerManager → IHandleMessage.HandleAsync()
+   ↓
+8. Handler publishes new messages via Saga.Publish() (queued in instance outbox)
+   ↓
+9. SagaExecutionService.CommitAsync() → persist state + outbox messages → release lock
+   ↓
+10. Outbox messages picked up in next poll cycle (back to step 3)
+```
+
 ### Extension Points
 
-When adding new persistence or transport implementations:
+**For Persistence:** Implement `ISagaStateRepository` and `IOutboxRepository`, create `IBusConfigurator` extension method (see `OpenSleigh.Persistence.Mongo` for example)
 
-**For Persistence:**
-1. Implement `ISagaStateRepository` - handles saga state CRUD and locking
-2. Implement `IOutboxRepository` - handles message outbox storage
-3. Create extension method on `IBusConfigurator` (e.g., `UseMongoDbPersistence()`)
-4. Register implementations in DI container
-5. Examples: `OpenSleigh.Persistence.Mongo`, `OpenSleigh.Persistence.PostgreSQL`
-
-**For Transport:**
-1. Implement `IMessageSubscriber` - starts/stops message subscription
-2. Create message parser to convert transport format to `MessageEnvelope`
-3. Use `IMessageProcessor` to route incoming messages
-4. Create extension method on `IBusConfigurator` (e.g., `UseRabbitMQTransport()`)
-5. Examples: `OpenSleigh.Transport.RabbitMQ`, `OpenSleigh.Transport.Kafka`
-
-**Pattern:** Both layers follow provider model with fluent configuration APIs.
+**For Transport:** Implement `IMessageSubscriber` (start/stop subscription), create message parser to `MessageEnvelope`, route via `IMessageProcessor` (see `OpenSleigh.Transport.RabbitMQ` for example)
 
 ## Project Structure
 
@@ -223,96 +227,38 @@ When adding new persistence or transport implementations:
 
 Samples demonstrate various persistence and transport configurations. Use as reference for integration patterns.
 
-## Development Workflow
+## Debugging and Testing
 
-### Typical Development Tasks
+### Debugging Saga Execution Issues
 
-**Adding a new feature to core:**
-1. Read existing abstractions and implementations
-2. Add tests in OpenSleigh.Tests first (TDD approach)
-3. Implement feature in src/OpenSleigh
-4. Run unit tests to verify
-5. Update integration tests if persistence/transport affected
+1. **Check logs** - `SagaRunner` and `MessageProcessor` have extensive logging for message routing and handler invocation
+2. **Verify saga registration** - Ensure saga appears in `SagaDescriptorsResolver` message-to-saga mappings
+3. **Trace correlation IDs** - Follow `CorrelationId` through message flow to identify where saga instance diverges
+4. **Check locks** - Verify `ISagaStateRepository.LockAsync()`/`ReleaseAsync()` calls; stuck locks prevent processing
+5. **Inspect outbox** - Query `IOutboxRepository` for pending messages; background service polls at configured interval
+6. **Verify idempotency** - Check if message already in `ProcessedMessages` dictionary (would return `NoOpSagaInstance`)
 
-**Adding a new persistence provider:**
-1. Create new project: `OpenSleigh.Persistence.[Provider]`
-2. Implement `ISagaStateRepository` and `IOutboxRepository`
-3. Create extension method on `IBusConfigurator`
-4. Create test project with `[Trait("Category", "Integration")]`
-5. Update docker-compose.yml if needed
+### Test Organization
 
-**Adding a new transport provider:**
-1. Create new project: `OpenSleigh.Transport.[Provider]`
-2. Implement `IMessageSubscriber`
-3. Create message parser for provider's message format
-4. Create extension method on `IBusConfigurator`
-5. Create test project with integration tests
+Tests use xUnit with NSubstitute for mocking. Categorize with traits:
+- `[Trait("Category", "Integration")]` - Requires Docker infrastructure
+- `[Trait("Category", "E2E")]` - End-to-end scenarios (currently disabled in CI)
 
-**Debugging saga execution:**
-1. Check logs - extensive logging in `SagaRunner` and `MessageProcessor`
-2. Verify saga registration in `SagaDescriptorsResolver`
-3. Check correlation IDs in message flow
-4. Verify lock acquisition/release in repository
-5. Check outbox for pending messages
+### CI/CD
 
-### Test Categories
+- **CircleCI** (primary): Runs build + unit tests + integration tests on every push; SonarCloud quality scan
+- **GitHub Actions**: CodeQL security scanning (develop/releases branches); NuGet publishing (manual/releases)
 
-Use xUnit traits to categorize tests:
+## Critical Reminders
 
-```csharp
-[Trait("Category", "Integration")]  // Requires Docker infrastructure
-[Trait("Category", "E2E")]           // End-to-end scenario tests
-```
+1. **Multi-targeting requires `--framework net9.0`** when running tests/commands to avoid ambiguity
+2. **Persistence implementations differ** - SQL providers use EF Core with transactions; Mongo uses native driver without EF
+3. **Saga state serialization** - State classes must be serializable (used by persistence layer); avoid circular references
+4. **Lock lifetime** - Locks are held for entire message processing; long-running handlers can create bottlenecks
+5. **Outbox polling interval** - Default configured via `OutboxProcessorOptions.Interval`; balance responsiveness vs. database load
+6. **Message routing is many-to-many** - One message type can trigger multiple sagas; one saga can handle multiple message types
+7. **Correlation ID immutability** - Once set on saga instance, correlation ID never changes; all published messages inherit it
 
-Run specific categories:
-```bash
-# Unit tests only
-dotnet test --filter "Category!=E2E&Category!=Integration"
+## Contributing
 
-# Integration tests only
-dotnet test --filter "Category=Integration"
-
-# Exclude Cosmos tests (not fully implemented)
-dotnet test --filter "FullyQualifiedName!~Cosmos"
-```
-
-### CI/CD Context
-
-**CircleCI (Primary CI):**
-- Runs on every push to any branch
-- Job 1: Build + unit tests + integration tests (with Docker services)
-- Job 2: SonarCloud code quality scan
-- Configuration: `.circleci/config.yml`
-
-**GitHub Actions:**
-- CodeQL security scanning (on develop and releases/** branches)
-- NuGet package publishing (manual trigger or releases)
-- Configuration: `.github/workflows/`
-
-**Important:** E2E tests are currently commented out in CI - do not attempt to run them unless explicitly requested.
-
-## Important Notes
-
-1. **ALWAYS run `dotnet restore` first** - prevents package resolution issues
-2. **Work from `src/` directory** for all build/test operations
-3. **Specify `--framework net9.0`** when running tests to avoid multi-targeting ambiguity
-4. **Fork from `develop` branch** - this is the main development branch, not main/master
-5. **Do not modify version files** (`Versions.props`, `Directory.Build.props`) unless task specifically requires it
-6. **174 compiler warnings are expected** - these are known nullable reference warnings; focus on zero errors
-7. **Integration tests need Docker** - start via `cd tests/infra && docker-compose up -d`
-8. **Multi-targeting affects test runs** - always specify framework to avoid ambiguous references
-9. **Persistence implementations vary** - SQL providers use EF Core, Mongo uses native driver
-10. **Saga state must be serializable** - used by persistence layer for storage
-
-## Contributing Guidelines
-
-From CONTRIBUTING.md:
-- Discuss changes via issue/email before implementing
-- Fork from `develop` branch
-- Add tests for new code
-- Update documentation for API changes
-- Ensure test suite passes
-- Verify code formatting with `dotnet format`
-- Submit PR to `develop` branch
-- Follow Microsoft C# coding conventions
-- Use xUnit for tests, NSubstitute for mocking
+Discuss changes via issue before implementing. Fork from **`develop`** branch (not main). Add tests for new code. Ensure `dotnet format` passes. Submit PR to `develop`.
