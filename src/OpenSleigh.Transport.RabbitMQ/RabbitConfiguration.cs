@@ -5,22 +5,21 @@ namespace OpenSleigh.Transport.RabbitMQ;
 [ExcludeFromCodeCoverage]
 public record RabbitConfiguration
 {
-    public RabbitConfiguration(string hostName, string userName, string password)
-        : this(hostName, userName, password, TimeSpan.FromSeconds(30)) { }
-
-    public RabbitConfiguration(string hostName, string userName, string password, TimeSpan retryDelay)
-        : this(hostName: hostName, vhost: null, userName: userName, password:password, retryDelay) { }
-
-    public RabbitConfiguration(string hostName, string vhost, string userName, string password)
-        : this(hostName, vhost, userName, password, TimeSpan.FromSeconds(30)) { }
-
-    public RabbitConfiguration(string hostName, string vhost, string userName, string password, TimeSpan retryDelay)
+    public RabbitConfiguration(
+        string hostName, 
+        string userName, 
+        string password,
+        string? vhost = null,
+        TimeSpan? retryDelay = null,
+        bool durable = true,
+        bool autoDelete = false)
     {
         HostName = hostName;
         UserName = userName;
         Password = password;
-        RetryDelay = retryDelay;
-
+        RetryDelay = retryDelay ?? TimeSpan.FromSeconds(30);
+        Durable = durable;
+        AutoDelete = autoDelete;
         VirtualHost = string.IsNullOrWhiteSpace(vhost) ? "/" : vhost;
     }
 
@@ -33,4 +32,14 @@ public record RabbitConfiguration
     /// gets the delay for message re-enqueuing.
     /// </summary>
     public TimeSpan RetryDelay { get; }
+
+    /// <summary>
+    /// Gets whether exchanges and queues are durable. Defaults to true.
+    /// </summary>
+    public bool Durable { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether the resource is automatically deleted when no longer in use. Defaults to false.
+    /// </summary>
+    public bool AutoDelete { get; }
 }

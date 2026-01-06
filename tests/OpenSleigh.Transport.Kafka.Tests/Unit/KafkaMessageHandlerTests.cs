@@ -1,11 +1,7 @@
 ﻿using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
-using NSubstitute;
-using NSubstitute.ReturnsExtensions;
 using OpenSleigh.Outbox;
-using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,25 +10,31 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class KafkaMessageHandlerTests
 {
-
     [Fact]
-    public async Task StartAsync_should_parse_incoming_messages()
+    public async Task StartAsync_should_return_false_when_message_parsing_fails()
     {
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
+        parser.WhenForAnyArgs(p => p.Parse(Arg.Any<ConsumeResult<string, byte[]>>()))
+              .Throw(new Exception("argh"));
+
         var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
         var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
-        
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+
+        var consumeResult = new ConsumeResult<string, byte[]>();
         var queueRefs = new QueueReferences("lorem", "ipsum");
-        
-        var consumeResult = new ConsumeResult<string,  byte[]>();
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
+        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
-        await sut.HandleAsync(consumeResult, queueRefs);
+        var result = await sut.HandleAsync(consumeResult);
+        Assert.False(result);
 
         parser.Received().Parse(consumeResult);
+
+        await messageProcessor.DidNotReceiveWithAnyArgs()
+                            .ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -42,7 +44,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
             .Returns(expectedMessage);
 
@@ -51,9 +53,14 @@ public class KafkaMessageHandlerTests
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+            .Returns(queueRefs);
 
-        await sut.HandleAsync(consumeResult, queueRefs);
+        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+
+        var result = await sut.HandleAsync(consumeResult);
+        Assert.True(result);
 
         await messageProcessor.Received().ProcessAsync((dynamic)expectedMessage, Arg.Any<CancellationToken>());
     }
@@ -65,7 +72,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
             .Returns(expectedMessage);
 
@@ -77,12 +84,15 @@ public class KafkaMessageHandlerTests
 
         var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
-        
+
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+           .Returns(queueRefs);
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
+        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
-        await sut.HandleAsync(consumeResult, queueRefs);
+        await sut.HandleAsync(consumeResult);
 
         await publisher.Received(1)
             .PublishAsync(
@@ -99,7 +109,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
               .Returns(expectedMessage);
 
@@ -109,41 +119,20 @@ public class KafkaMessageHandlerTests
 
         var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
-        
+
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+                       .Returns(queueRefs);
 
-        await sut.HandleAsync(consumeResult, queueRefs);
+        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+
+        await sut.HandleAsync(consumeResult);
 
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(Arg.Any<MessageEnvelope>(),
             Arg.Any<string>(),
             null,
             Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task StartAsync_should_hanle_null_messages()
-    {
-        var consumeResult = new ConsumeResult<string, byte[]>();
-        var queueRefs = new QueueReferences("lorem", "ipsum");
-
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
-        parser.Parse(consumeResult)
-            .ReturnsNull();
-
-        var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
-
-        var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
-        var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
-        
-        var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
-
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo);
-
-        await sut.HandleAsync(consumeResult, queueRefs);
-
-        await messageProcessor.DidNotReceiveWithAnyArgs()
-                            .ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>());
     }
 }

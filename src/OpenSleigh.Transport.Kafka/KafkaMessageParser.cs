@@ -4,14 +4,14 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Transport.Kafka;
 
-public class MessageParser : IMessageParser
+internal class KafkaMessageParser : IKafkaMessageParser
 {
-    private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly ITypeResolver _typeResolver;
     private readonly ISerializer _serializer;
 
-    public MessageParser(IQueueReferenceFactory queueReferenceFactory, ISerializer serializer)
+    public KafkaMessageParser(ITypeResolver typeResolver, ISerializer serializer)
     {
-        _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+        _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
@@ -19,12 +19,14 @@ public class MessageParser : IMessageParser
     {
         ArgumentNullException.ThrowIfNull(consumeResult);
 
-        var messageType = _queueReferenceFactory.GetQueueType(consumeResult.Topic);
+        if (consumeResult.Message.Headers is null)
+            throw new ArgumentException("message headers cannot be null.");
+
+        var messageTypeName = consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.MessageType));
+        ArgumentNullException.ThrowIfNullOrWhiteSpace(messageTypeName);
+        var messageType = _typeResolver.Resolve(messageTypeName);
         if(messageType is null) 
             throw new ArgumentException("invalid message type");
-
-        if(consumeResult.Message.Headers is null)
-            throw new ArgumentException("message headers cannot be null.");
 
         var messageId = consumeResult.Message.Key;
         if (string.IsNullOrWhiteSpace(messageId))
@@ -39,7 +41,6 @@ public class MessageParser : IMessageParser
             throw new ArgumentException("correlation id cannot be null.");
 
         var createdAt = DateTimeOffset.Parse(consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.CreatedAt)));
-
 
         if (!MessageEnvelope.TryCreate(consumeResult.Message.Value,
                                         messageId: messageId,

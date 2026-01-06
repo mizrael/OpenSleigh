@@ -23,11 +23,13 @@ public class RabbitFixture : IAsyncLifetime
             retryDelayMs = 1000;
 
         this.RabbitConfiguration = new RabbitConfiguration(
-            rabbitSection["HostName"],
-            rabbitSection["VirtualHost"],
-            rabbitSection["UserName"],
-            rabbitSection["Password"],
-            System.TimeSpan.FromMilliseconds(retryDelayMs));
+            hostName: rabbitSection["HostName"],
+            userName: rabbitSection["UserName"],
+            password: rabbitSection["Password"],
+            vhost: rabbitSection["VirtualHost"],
+            retryDelay: System.TimeSpan.FromMilliseconds(retryDelayMs),
+            durable: false,
+            autoDelete: true);
     }
 
     private ConnectionFactory CreateConnectionFactory()
@@ -40,33 +42,18 @@ public class RabbitFixture : IAsyncLifetime
         Port = AmqpTcpEndpoint.UseDefaultPort,
     };
 
-    private QueueReferences CreateQueueReference()
+    public QueueReferences CreateQueueReference()
     {
 #if NET9_0_OR_GREATER
         var queueName = System.Guid.CreateVersion7().ToString("N");
 #else
         var queueName = System.Guid.NewGuid().ToString("N");
 #endif
-        return new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
-    }
+        var result =  new QueueReferences(queueName, queueName, $"{queueName}.dead", $"{queueName}.dead");
 
-    public async ValueTask<QueueReferences> CreateQueueReferenceAsync(IChannel channel)
-    {
-        var queueRef = this.CreateQueueReference();
-        _queues.Add(queueRef);
+        _queues.Add(result);
 
-        await channel.ExchangeDeclareAsync(queueRef.ExchangeName, ExchangeType.Topic, false, true);
-        await channel.QueueDeclareAsync(queue: queueRef.QueueName,
-            durable: false,
-            exclusive: false,
-            autoDelete: true,
-            arguments: null);
-        await channel.QueueBindAsync(queueRef.QueueName,
-                          queueRef.ExchangeName,
-                          routingKey: queueRef.RoutingKey,
-                          arguments: null);
-
-        return queueRef;
+        return result;
     }
 
     public Task InitializeAsync() => Task.CompletedTask;

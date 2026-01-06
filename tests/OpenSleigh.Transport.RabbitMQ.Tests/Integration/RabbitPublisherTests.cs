@@ -28,33 +28,33 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
     [Fact]
     public async Task PublishAsync_should_publish_message()
     {
-        var sagaContext = NSubstitute.Substitute.For<ISagaInstance >();
+        var sagaContext = Substitute.For<ISagaInstance>();
         sagaContext.CorrelationId.Returns(Guid.NewGuid().ToString());
         sagaContext.TriggerMessageId.Returns(Guid.NewGuid().ToString());
         sagaContext.InstanceId.Returns(Guid.NewGuid().ToString());
 
         var envelope = MessageEnvelope.Create(new FakeSagaStarter(), sagaContext);
 
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
         using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
         using var channel = await connection.CreateChannelAsync();
 
-        var queueRef = await _fixture.CreateQueueReferenceAsync(channel);
+        var queueRef = _fixture.CreateQueueReference();
 
-        bool received = false;
+        var received = false;
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, evt) =>
         {
             evt.BasicProperties.Headers.Should().NotBeNullOrEmpty();
             evt.BasicProperties.Headers.Should().ContainKeys(
-                nameof(MessageEnvelope.SenderId),                    
+                nameof(MessageEnvelope.SenderId),
                 nameof(MessageEnvelope.CreatedAt),
                 nameof(MessageEnvelope.MessageType)
             );
             evt.BasicProperties.CorrelationId.Should().Be(envelope.CorrelationId);
             evt.BasicProperties.MessageId.Should().Be(envelope.MessageId);
-            evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));                
+            evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));
             evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()));
             evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.SenderId));
 
@@ -66,27 +66,35 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
             Assert.Equivalent(envelope.Message, message);
 
             received = true;
-
             tokenSource.Cancel();
         };
-        await channel.BasicConsumeAsync(queue: queueRef.QueueName, autoAck: false, consumer: consumer, cancellationToken: CancellationToken.None);
+
+        await channel.EnsureTopologyAsync(queueRef, _fixture.RabbitConfiguration);
+
+        await channel.BasicConsumeAsync(
+            queue: queueRef.QueueName,
+            autoAck: false,
+            consumerTag: string.Empty,
+            noLocal: false,
+            exclusive: false,
+            arguments: null,
+            consumer: consumer,
+            cancellationToken: CancellationToken.None);
 
         var logger = Substitute.For<ILogger<RabbitPublisher>>();
 
         var channelFactory = Substitute.For<IChannelFactory>();
-        channelFactory.GetAsync(queueRef)
-            .Returns(channel);
+        channelFactory.GetPublishChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
 
         var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
-        queueRefFactory.Create(envelope)
-            .Returns(queueRef);
-
-        var sut = new RabbitPublisher(queueRefFactory, channelFactory, logger, new JsonSerializer());
+        queueRefFactory.Create(envelope).Returns(queueRef);
+        
+        var sut = new RabbitPublisher(queueRefFactory, _fixture.RabbitConfiguration, channelFactory, logger, new JsonSerializer());
         await sut.PublishAsync(envelope);
 
         while (!tokenSource.IsCancellationRequested)
             await Task.Delay(10);
 
-        received.Should().BeTrue(); 
+        received.Should().BeTrue();
     }
 }

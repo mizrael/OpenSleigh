@@ -1,7 +1,4 @@
-﻿using System;
-using FluentAssertions;
-
-namespace OpenSleigh.Transport.Kafka.Tests.Unit;
+﻿namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class GuidDeserializerTests
 {

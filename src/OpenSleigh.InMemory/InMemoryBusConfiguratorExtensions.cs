@@ -41,7 +41,7 @@ public static class InMemoryBusConfiguratorExtensions
                                     var channel = ctx.GetRequiredService<Channel<MessageEnvelope>>();
                                     return channel.Writer;
                                 })
-                                .AddSingleton(typeof(IMessageSubscriber<>), typeof(InMemorySubscriber<>));
+                                .AddSingleton<IMessageSubscriber, InMemorySubscriber>();
 
         return busConfigurator;
     }

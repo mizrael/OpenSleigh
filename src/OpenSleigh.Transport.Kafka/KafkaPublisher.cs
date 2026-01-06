@@ -64,7 +64,7 @@ public class KafkaPublisher : IPublisher, IKafkaPublisherExecutor
     {
         var headers = new Headers
         {
-            { nameof(envelope.MessageType),  Encoding.UTF8.GetBytes(envelope.MessageType.FullName) },
+            { nameof(envelope.MessageType),  Encoding.UTF8.GetBytes(envelope.MessageType.FullName!) },
             { nameof(envelope.SenderId),  Encoding.UTF8.GetBytes(envelope.SenderId) },
             { nameof(envelope.CorrelationId),  Encoding.UTF8.GetBytes(envelope.CorrelationId) },
             { nameof(envelope.CreatedAt),  Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()) }

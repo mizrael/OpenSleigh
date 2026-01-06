@@ -25,13 +25,13 @@ public class QueueReferenceFactory : IQueueReferenceFactory
     public QueueReferences Create<TM>() where TM : IMessage
         => _queueReferencesCache.GetOrAdd(typeof(TM), k => _creator(typeof(TM)));
 
-    public Type GetQueueType(string topic)
+    public QueueReferences Create(Type messageType)
     {
-        if (string.IsNullOrWhiteSpace(topic))
-            throw new ArgumentNullException(topic);
+        ArgumentNullException.ThrowIfNull(messageType);
 
-        var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
-        
-        return queueRef.Key;
+        if (!messageType.IsAssignableTo(typeof(IMessage)))
+            throw new ArgumentException($"type '{messageType.FullName}' does not implement IMessage interface", nameof(messageType));
+
+        return _queueReferencesCache.GetOrAdd(messageType, k => _creator(messageType));
     }
 }

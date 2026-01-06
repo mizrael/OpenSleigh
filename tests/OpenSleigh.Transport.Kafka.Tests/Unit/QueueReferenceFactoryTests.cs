@@ -1,6 +1,3 @@
-using FluentAssertions;
-using System;
-
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class QueueReferenceFactoryTests
@@ -47,36 +44,5 @@ public class QueueReferenceFactoryTests
         result.Should().NotBeNull();
         result.TopicName.Should().Be("dummymessage");
         result.DeadLetterTopicName.Should().Be("dummymessage.dead");
-    }
-
-    [Fact]
-    public void GetQueueType_should_throw_when_input_invalid()
-    {
-        var sut = new QueueReferenceFactory();
-
-        Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(null));
-        Assert.Throws<ArgumentNullException>(() => sut.GetQueueType(""));
-        Assert.Throws<ArgumentNullException>(() => sut.GetQueueType("   "));
-    }
-
-    [Fact]
-    public void GetQueueType_should_return_null_when_type_not_found()
-    {
-        var sut = new QueueReferenceFactory();
-
-        var result = sut.GetQueueType("invalid topic name");
-        result.Should().BeNull();
-    }
-
-    [Fact]
-    public void GetQueueType_should_return_type_when_input_valid()
-    {
-        var sut = new QueueReferenceFactory();
-
-        var queueRef = sut.Create<DummyMessage>();
-        queueRef.Should().NotBeNull();
-        
-        var result = sut.GetQueueType(queueRef.TopicName);
-        result.Should().Be(typeof(DummyMessage));
     }
 }

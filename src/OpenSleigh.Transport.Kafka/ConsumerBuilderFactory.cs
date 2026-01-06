@@ -5,19 +5,21 @@ namespace OpenSleigh.Transport.Kafka;
 public class ConsumerBuilderFactory : IConsumerBuilderFactory
 {
     private readonly KafkaConfiguration _kafkaConfiguration;
-    
-    public ConsumerBuilderFactory(KafkaConfiguration kafkaConfiguration)
+    private readonly ISystemInfo _sysInfo;
+
+    public ConsumerBuilderFactory(
+        KafkaConfiguration kafkaConfiguration, 
+        ISystemInfo sysInfo)
     {
         _kafkaConfiguration = kafkaConfiguration ?? throw new ArgumentNullException(nameof(kafkaConfiguration));
+        _sysInfo = sysInfo;
     }
 
-    public ConsumerBuilder<TKey, TValue> Create<TM, TKey, TValue>() where TM : IMessage
-    {
-        var groupId = typeof(TM).FullName;
-        
+    public ConsumerBuilder<TKey, TValue> Create<TKey, TValue>()
+    {       
         var config = new ConsumerConfig()
         {
-            GroupId = groupId,
+            GroupId = _sysInfo.ClientGroup,
             BootstrapServers = _kafkaConfiguration.ConnectionString,
             AutoOffsetReset = AutoOffsetReset.Earliest,
             EnablePartitionEof = true

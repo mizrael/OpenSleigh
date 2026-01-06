@@ -4,5 +4,7 @@ namespace OpenSleigh.Transport.RabbitMQ;
 
 public interface IChannelFactory
 {
-    ValueTask<IChannel> GetAsync(QueueReferences queueReferences, CancellationToken cancellationToken = default);
+    ValueTask<IChannel> GetPublishChannelAsync(CancellationToken cancellationToken = default);
+
+    ValueTask<IChannel> GetConsumeChannelAsync(CancellationToken cancellationToken = default);
 }
