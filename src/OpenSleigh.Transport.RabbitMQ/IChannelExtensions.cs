@@ -5,7 +5,8 @@ namespace OpenSleigh.Transport.RabbitMQ;
 
 public static class IChannelExtensions
 {
-    private static readonly ConcurrentDictionary<string, byte> _initializedExchanges = new();
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _semaphores = new();
+    private static readonly ConcurrentDictionary<string, byte> _initialized = new();
 
     public static async ValueTask EnsureTopologyAsync(
         this IChannel channel,
@@ -17,17 +18,27 @@ public static class IChannelExtensions
         ArgumentNullException.ThrowIfNull(rabbitCfg);
         ArgumentNullException.ThrowIfNull(channel);
 
-        // Declarations are idempotent; cache reduces redundant broker calls.
-        if (_initializedExchanges.TryAdd(queueReferences.ExchangeName, 0))
+        var exchangeName = queueReferences.ExchangeName;
+        if (_initialized.ContainsKey(exchangeName))
+            return;
+
+        var semaphore = _semaphores.GetOrAdd(exchangeName, _ => new SemaphoreSlim(1, 1));
+
+        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
         {
+            if (_initialized.ContainsKey(exchangeName))
+                return;
+
             await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
             await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
-            return;
-        }
 
-        // Best-effort safety: ensure again in case the cache was populated before a complete initialization.
-        await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
-        await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
+            _initialized.TryAdd(exchangeName, 0);
+        }
+        finally
+        {
+            semaphore.Release();
+        }
     }
 
     private static async ValueTask EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
@@ -111,6 +122,6 @@ public static class IChannelExtensions
         await channel.ExchangeDeleteAsync(queueRef.RetryExchangeName);
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
 
-        _initializedExchanges.Remove(queueRef.ExchangeName, out _);
+        _initialized.TryRemove(queueRef.ExchangeName, out _);
     }
 }
