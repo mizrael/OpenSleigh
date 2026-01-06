@@ -34,23 +34,4 @@ public class QueueReferenceFactory : IQueueReferenceFactory
 
         return _queueReferencesCache.GetOrAdd(messageType, k => _creator(messageType));
     }
-
-    public QueueReferences? Get(string topic)
-    {
-        if (string.IsNullOrWhiteSpace(topic))
-            throw new ArgumentNullException(topic);
-        var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
-        
-        return queueRef.Value;
-    }
-
-    public Type GetQueueType(string topic)
-    {
-        if (string.IsNullOrWhiteSpace(topic))
-            throw new ArgumentNullException(topic);
-
-        var queueRef = _queueReferencesCache.FirstOrDefault(pair => topic.Equals(pair.Value.TopicName, StringComparison.InvariantCultureIgnoreCase));
-
-        return queueRef.Key;
-    }
 }

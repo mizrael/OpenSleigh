@@ -7,14 +7,14 @@ namespace OpenSleigh.Transport.Kafka;
 
 public class KafkaMessageHandler : IKafkaMessageHandler
 {
-    private readonly IMessageParser _messageParser;
+    private readonly IKafkaMessageParser _messageParser;
     private readonly IMessageProcessor _messageProcessor;
     private readonly IKafkaPublisherExecutor _publisher;
     private readonly ILogger<KafkaMessageHandler> _logger;
     private readonly ISystemInfo _systemInfo;
     private readonly IQueueReferenceFactory _queueReferenceFactory;
 
-    public KafkaMessageHandler(IMessageParser messageParser,
+    public KafkaMessageHandler(IKafkaMessageParser messageParser,
                                 IMessageProcessor messageProcessor,
                                 IKafkaPublisherExecutor publisher,
                                 ILogger<KafkaMessageHandler> logger,
@@ -31,13 +31,6 @@ public class KafkaMessageHandler : IKafkaMessageHandler
 
     public async ValueTask<bool> HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken cancellationToken = default)
     {
-        var queueReferences = _queueReferenceFactory.Get(result.Topic);
-        if (queueReferences is null)
-        {
-            _logger.LogWarning("no queue references found for topic '{Topic}'", result.Topic);
-            return false;
-        }
-
         MessageEnvelope? message = null;
 
         try
@@ -46,30 +39,34 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         }
         catch (ObjectDisposedException ex)
         {
-            _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call",
-                queueReferences.TopicName);
+            _logger.LogWarning(ex, "consumer closed on Topic '{Topic}', probably during Dispose() call", result.Topic);
             return false;
         }
         catch (TaskCanceledException ex)
         {
-            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
-                queueReferences.TopicName);
+            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'", result.Topic);
             return false;
         }
         catch (OperationCanceledException ex)
         {
-            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'",
-                queueReferences.TopicName);
+            _logger.LogInformation(ex, "requested consumer cancellation on Topic '{Topic}'", result.Topic);
             return false;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "an error has occurred while consuming messages from Topic '{Topic}': {Exception}",
-                queueReferences.TopicName, ex.Message);
+                result.Topic, ex.Message);
         }
 
         if (message is null)
             return false;
+
+        var queueReferences = _queueReferenceFactory.Create(message);
+        if (queueReferences is null)
+        {
+            _logger.LogWarning("no queue references found for topic '{Topic}'", result.Topic);
+            return false;
+        }
 
         await HandleCoreAsync(message, queueReferences, cancellationToken);
         return true;

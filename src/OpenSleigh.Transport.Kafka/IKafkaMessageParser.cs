@@ -3,7 +3,7 @@ using OpenSleigh.Outbox;
 
 namespace OpenSleigh.Transport.Kafka;
 
-public interface IMessageParser
+public interface IKafkaMessageParser
 {
     MessageEnvelope Parse(ConsumeResult<string, byte[]> consumeResult);
 }

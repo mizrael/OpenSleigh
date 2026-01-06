@@ -139,6 +139,11 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         services.AddSingleton<ISerializer>(new JsonSerializer());
 
+        var sagaDescriptorResolver = Substitute.For<ISagaDescriptorsResolver>();
+        sagaDescriptorResolver.GetRegisteredMessageTypes()
+            .Returns(new[] { typeof(FakeSagaStarter) });
+        services.AddSingleton<ISagaDescriptorsResolver>(sagaDescriptorResolver);
+
         var processor = Substitute.For<IMessageProcessor>();
         if(onMessage is not null)
             processor.When(p => p.ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>()))
@@ -150,9 +155,6 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         services.AddSingleton(processor);
 
         var sp = services.BuildServiceProvider();
-
-        var queueRefFactory = sp.GetRequiredService<IQueueReferenceFactory>();
-        queueRefFactory.Create<FakeSagaStarter>();
 
         var sut = sp.GetRequiredService<IMessageSubscriber>();
         var publisher = sp.GetRequiredService<IPublisher>();

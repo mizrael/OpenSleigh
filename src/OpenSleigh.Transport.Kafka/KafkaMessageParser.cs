@@ -4,14 +4,14 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Transport.Kafka;
 
-public class MessageParser : IMessageParser
+public class KafkaMessageParser : IKafkaMessageParser
 {
-    private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly ITypeResolver _typeResolver;
     private readonly ISerializer _serializer;
 
-    public MessageParser(IQueueReferenceFactory queueReferenceFactory, ISerializer serializer)
+    public KafkaMessageParser(ITypeResolver typeResolver, ISerializer serializer)
     {
-        _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+        _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
     }
 
@@ -19,7 +19,7 @@ public class MessageParser : IMessageParser
     {
         ArgumentNullException.ThrowIfNull(consumeResult);
 
-        var messageType = _queueReferenceFactory.GetQueueType(consumeResult.Topic);
+        var messageType = _typeResolver.Resolve(consumeResult.Topic);
         if(messageType is null) 
             throw new ArgumentException("invalid message type");
 

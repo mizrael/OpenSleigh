@@ -17,17 +17,15 @@ public class KafkaMessageHandlerTests
     [Fact]
     public async Task StartAsync_should_return_false_when_message_null()
     {
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
         var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
         var logger = NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>();
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
 
-        var queueRefs = new QueueReferences("lorem", "ipsum");
-        queueRefFactory.Get(Arg.Any<string>()).Returns(queueRefs);
-
         var consumeResult = new ConsumeResult<string, byte[]>();
+        var queueRefs = new QueueReferences("lorem", "ipsum");
 
         var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
@@ -47,7 +45,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
             .Returns(expectedMessage);
 
@@ -57,7 +55,8 @@ public class KafkaMessageHandlerTests
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueRefFactory.Get(Arg.Any<string>()).Returns(queueRefs);
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+            .Returns(queueRefs);
 
         var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
@@ -74,7 +73,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
             .Returns(expectedMessage);
 
@@ -89,7 +88,8 @@ public class KafkaMessageHandlerTests
 
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueRefFactory.Get(Arg.Any<string>()).Returns(queueRefs);
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>())
+           .Returns(queueRefs);
 
         var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 
@@ -110,7 +110,7 @@ public class KafkaMessageHandlerTests
         var expectedMessage = DummyMessage.CreateEnvelope();
         var queueRefs = new QueueReferences("lorem", "");
 
-        var parser = NSubstitute.Substitute.For<IMessageParser>();
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.Parse(consumeResult)
               .Returns(expectedMessage);
 
@@ -124,7 +124,6 @@ public class KafkaMessageHandlerTests
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
 
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueRefFactory.Get(Arg.Any<string>()).Returns(queueRefs);
 
         var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
 

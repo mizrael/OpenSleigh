@@ -59,21 +59,36 @@ public class ChannelFactoryTests
 
         await publishChannel.EnsureTopologyAsync(queueReferences, rabbitCfg, CancellationToken.None);
 
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.RetryExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.ExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
-        channel.Received(1).ExchangeDeclareAsync(exchange: queueReferences.DeadLetterExchangeName, type: ExchangeType.Topic, cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).ExchangeDeclareAsync(
+            exchange: queueReferences.RetryExchangeName, 
+            type: ExchangeType.Topic, 
+            durable: rabbitCfg.Durable,            
+            autoDelete: rabbitCfg.AutoDelete,
+            cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).ExchangeDeclareAsync(
+            exchange: queueReferences.ExchangeName, 
+            type: ExchangeType.Topic,
+            durable: rabbitCfg.Durable,
+            autoDelete: rabbitCfg.AutoDelete,
+            cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).ExchangeDeclareAsync(
+            exchange: queueReferences.DeadLetterExchangeName,
+            type: ExchangeType.Topic,
+            durable: rabbitCfg.Durable,
+            autoDelete: rabbitCfg.AutoDelete,
+            cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.DeadLetterQueue,
-             durable: true,
+             durable: rabbitCfg.Durable,
              exclusive: false,
-             autoDelete: false,
+             autoDelete: rabbitCfg.AutoDelete,
              arguments: null,
              cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.RetryQueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
+                durable: rabbitCfg.Durable,
+                 exclusive: false,
+                 autoDelete: rabbitCfg.AutoDelete,
                 arguments: Arg.Is<Dictionary<string, object?>>(d =>
                     d.ContainsKey(Headers.XMessageTTL) && (int)d[Headers.XMessageTTL]! == (int)rabbitCfg.RetryDelay.TotalMilliseconds &&
                     d.ContainsKey(Headers.XDeadLetterExchange) && (string)d[Headers.XDeadLetterExchange]! == queueReferences.ExchangeName &&
@@ -81,9 +96,9 @@ public class ChannelFactoryTests
                 cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.QueueName,
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
+               durable: rabbitCfg.Durable,
+                 exclusive: false,
+                 autoDelete: rabbitCfg.AutoDelete,
                 arguments: Arg.Is<Dictionary<string, object?>>(d =>
                     d.ContainsKey(Headers.XDeadLetterExchange) && (string)d[Headers.XDeadLetterExchange]! == queueReferences.DeadLetterExchangeName &&
                     d.ContainsKey(Headers.XDeadLetterRoutingKey) && (string)d[Headers.XDeadLetterRoutingKey]! == queueReferences.DeadLetterQueue),

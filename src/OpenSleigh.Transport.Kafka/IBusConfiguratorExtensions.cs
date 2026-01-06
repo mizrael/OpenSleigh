@@ -50,7 +50,7 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton<IKafkaPublisherExecutor, KafkaPublisher>();
         busConfigurator.Services.AddSingleton<IPublisher, KafkaPublisher>();
 
-        busConfigurator.Services.AddSingleton<IMessageParser, MessageParser>();
+        busConfigurator.Services.AddSingleton<IKafkaMessageParser, KafkaMessageParser>();
         busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
 
         busConfigurator.Services.AddSingleton<IConsumerBuilderFactory, ConsumerBuilderFactory>();

@@ -2,6 +2,7 @@
 using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Outbox;
+using OpenSleigh.Utils;
 using System;
 using System.Text;
 using System.Text.Json;
@@ -10,10 +11,10 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class MessageParserTests
 {
-    private static MessageParser CreateSUT(IQueueReferenceFactory? queueReferenceFactory = null)
+    private static KafkaMessageParser CreateSUT(ITypeResolver? typeResolver = null)
     {
-        queueReferenceFactory ??= NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        var sut = new MessageParser(queueReferenceFactory, new Utils.JsonSerializer());
+        typeResolver ??= NSubstitute.Substitute.For<ITypeResolver>();
+        var sut = new KafkaMessageParser(typeResolver, new Utils.JsonSerializer());
         return sut;
     }
 
@@ -48,9 +49,9 @@ public class MessageParserTests
         Type messageType = null;
         var messageTopic = "lorem";
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
-        var sut = CreateSUT(queueReferenceFactory);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -70,10 +71,10 @@ public class MessageParserTests
 ;       var envelope = DummyMessage.CreateEnvelope(parentId);
         var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(envelope.MessageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(envelope.MessageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -106,10 +107,10 @@ public class MessageParserTests
         var messageTopic = "DummyMessage";     
         var messageType = typeof(DummyMessage);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -130,10 +131,10 @@ public class MessageParserTests
         var messageTopic = "DummyMessage";
         var messageType = typeof(DummyMessage);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -156,10 +157,10 @@ public class MessageParserTests
         var messageTopic = "DummyMessage";
         var messageType = typeof(DummyMessage);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -184,10 +185,10 @@ public class MessageParserTests
         var messageTopic = "DummyMessage";
         var messageType = typeof(DummyMessage);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -214,10 +215,10 @@ public class MessageParserTests
         var envelope = DummyMessage.CreateEnvelope();
         var jsonMessage = Newtonsoft.Json.JsonConvert.SerializeObject(envelope.Message);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(envelope.MessageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(envelope.MessageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
@@ -243,10 +244,10 @@ public class MessageParserTests
         var messageTopic = "DummyMessage";
         var messageType = typeof(DummyMessage);
 
-        var queueReferenceFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.GetQueueType(messageTopic).Returns(messageType);
+        var typeResolver = NSubstitute.Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(messageTopic).Returns(messageType);
 
-        var sut = CreateSUT(queueReferenceFactory);
+        var sut = CreateSUT(typeResolver);
 
         var consumeResult = new ConsumeResult<string, byte[]>()
         {
