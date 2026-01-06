@@ -89,11 +89,11 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return LockAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask<string> LockAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
+    private async ValueTask<string> LockAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
-            .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
+            .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId, cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
@@ -114,7 +114,7 @@ public class SqlSagaStateRepository : ISagaStateRepository
             if (entity.LockId is not null &&
                 entity.LockTime is not null &&
                 entity.LockTime > DateTimeOffset.UtcNow - _options.LockMaxDuration)
-                throw new LockException($"saga state '{state.InstanceId}' is already locked");               
+                throw new LockException($"saga state '{state.InstanceId}' is already locked");
         }
 
         entity.LockTime = DateTimeOffset.UtcNow;
@@ -124,8 +124,25 @@ public class SqlSagaStateRepository : ISagaStateRepository
         entity.LockId = Guid.NewGuid().ToString();
 #endif
 
-        await _dbContext.SaveChangesAsync(cancellationToken)
-                        .ConfigureAwait(false);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        }
+        catch (DbUpdateException)
+        {
+            entity = await _dbContext.SagaStates
+                .Include(e => e.ProcessedMessages)
+                .FirstOrDefaultAsync(e => e.CorrelationId == state.CorrelationId, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (entity != null && entity.InstanceId != state.InstanceId)
+            {
+                throw new OptimisticLockException();
+            }
+
+            throw;
+        }
 
         return entity.LockId;
     }

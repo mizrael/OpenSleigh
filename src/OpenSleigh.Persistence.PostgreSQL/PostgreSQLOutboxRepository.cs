@@ -6,12 +6,12 @@ using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
 
-internal class PostgreOutboxRepository : SqlOutboxRepository
+internal class PostgreSQLOutboxRepository : SqlOutboxRepository
 {
     private const string ReadQueryRaw = $"SELECT * FROM {Constants.DbSchema}.\"OutboxMessages\" FOR UPDATE SKIP LOCKED";
     private readonly static FormattableString ReadQuery = FormattableStringFactory.Create(ReadQueryRaw);
 
-    public PostgreOutboxRepository(
+    public PostgreSQLOutboxRepository(
         SqlOutboxRepositoryOptions options, 
         SagaDbContext dbContext, 
         ITypeResolver typeResolver, 

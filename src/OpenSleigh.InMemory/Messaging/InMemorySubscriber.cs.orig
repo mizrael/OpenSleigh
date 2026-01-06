@@ -9,8 +9,12 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
 {
     private readonly IMessageProcessor _messageProcessor;
     private readonly ChannelReader<MessageEnvelope> _reader;
+<<<<<<< HEAD
     private readonly ILogger<InMemorySubscriber> _logger;
+=======
+    private readonly ILogger<InMemorySubscriber<TM>> _logger;
     private readonly IPublisher _publisher;
+>>>>>>> fa1ad4e (E2E tests for optimistic concurrency)
     private readonly InMemorySubscriberOptions _options;
     
     private CancellationTokenSource? _stoppingCts;
@@ -19,8 +23,12 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
 
     public InMemorySubscriber(IMessageProcessor messageProcessor,
         ChannelReader<MessageEnvelope> reader,
+<<<<<<< HEAD
         ILogger<InMemorySubscriber> logger,
+=======
+        ILogger<InMemorySubscriber<TM>> logger,
         IPublisher publisher,
+>>>>>>> fa1ad4e (E2E tests for optimistic concurrency)
         InMemorySubscriberOptions? options = null)
     {
         _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));

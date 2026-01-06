@@ -4,14 +4,17 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
 using System.ComponentModel;
 using Bogus;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests;
 
 [Category("E2E")]
 [Trait("Category", "E2E")]
-public abstract class SimpleMultiStartSagaScenario : E2ETestsBase
+public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
 {
     private static readonly Faker Faker = new();
+
+    public SequentialMultiStartSagaScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
     [InlineData(1)]
@@ -23,8 +26,8 @@ public abstract class SimpleMultiStartSagaScenario : E2ETestsBase
         var foo = Faker.Random.Int();
         var bar = Faker.Lorem.Slug(5);
 
-        var start = new StartSimpleMultiStartSaga(foo, correlationId);
-        var alsoStart = new AlsoStartSimpleMultiStartSaga(bar, correlationId);
+        var start = new StartMultiStartSaga(foo, correlationId);
+        var alsoStart = new AlsoStartMultiStartSaga(bar, correlationId);
 
         IMessage first = Faker.Random.Bool() ? start : alsoStart;
         IMessage last = ReferenceEquals(first, start) ? alsoStart : start;
@@ -32,34 +35,35 @@ public abstract class SimpleMultiStartSagaScenario : E2ETestsBase
         var receivedCount = 0;
         using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
-        SimpleMultiStartSagaState state = null!;
+        MultiStartSagaState state = null!;
         var handled = false;
 
-        Action<IMessageContext<StartSimpleMultiStartSaga>, SimpleMultiStartSagaState> onStart = (ctx, st) =>
+        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (_, inst) =>
         {
-            ctx.MessageId.Should().NotBeNullOrWhiteSpace();
-            ctx.SenderId.Should().NotBeNullOrWhiteSpace();
-
-            state = st;
             receivedCount++;
             handled = true;
             if (ReferenceEquals(last, start))
+            {
+                state = inst.State;
+                // ReSharper disable once AccessToDisposedClosure
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+            }
         };
 
-        Action<IMessageContext<AlsoStartSimpleMultiStartSaga>> onAlsoStart = ctx =>
+        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, inst) =>
         {
-            ctx.MessageId.Should().NotBeNullOrWhiteSpace();
-            ctx.SenderId.Should().NotBeNullOrWhiteSpace();
-
             receivedCount++;
             handled = true;
             if (ReferenceEquals(last, alsoStart))
+            {
+                state = inst.State;
+                // ReSharper disable once AccessToDisposedClosure
                 tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+            }
         };
 
         await RunScenarioAsync(hostsCount,
-            (ctx, services) =>
+            (_, services) =>
             {
                 services.AddSingleton(onStart);
                 services.AddSingleton(onAlsoStart);
@@ -89,6 +93,6 @@ public abstract class SimpleMultiStartSagaScenario : E2ETestsBase
 
     protected override void RegisterSagas(IBusConfigurator cfg)
     {
-        cfg.AddSaga<SimpleMultiStartSaga, SimpleMultiStartSagaState>();
+        cfg.AddSaga<MultiStartSaga, MultiStartSagaState>();
     }
 }

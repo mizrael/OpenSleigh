@@ -1,11 +1,12 @@
 ﻿using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
 public class InMemoryIdempotentMessageScenario : IdempotentMessageScenario
 {
-    public InMemoryIdempotentMessageScenario() : base(1)
+    public InMemoryIdempotentMessageScenario(ITestOutputHelper console) : base(console, 1)
     {
     }
 

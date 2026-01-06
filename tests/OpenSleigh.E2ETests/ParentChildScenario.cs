@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
 using System.ComponentModel;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests;
 
@@ -10,6 +11,8 @@ namespace OpenSleigh.E2ETests;
 [Trait("Category", "E2E")]
 public abstract class ParentChildScenario : E2ETestsBase
 {
+    public ParentChildScenario(ITestOutputHelper console) : base(console) { }
+
     [Theory]
     [InlineData(1)]
     [InlineData(2)]

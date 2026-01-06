@@ -113,7 +113,11 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         {
             await HandleConsumerException(lockEx, eventArgs, channel, queueReference, message, true);
         }
-        catch (AggregateException aggEx) when (aggEx.InnerExceptions.Any(ex => ex is LockException))
+        catch (OptimisticLockException lockEx)
+        {
+            await HandleConsumerException(lockEx, eventArgs, channel, queueReference, message, true);
+        }
+        catch (AggregateException aggEx) when (aggEx.InnerExceptions.Any(ex => ex is LockException or OptimisticLockException))
         {
             await HandleConsumerException(aggEx, eventArgs, channel, queueReference, message, true);
         }

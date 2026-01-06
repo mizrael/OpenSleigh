@@ -30,8 +30,24 @@ public class SagaExecutionService : ISagaExecutionService
         if (!sagaInstance.CanProcess(messageContext))
             return NoOpSagaInstance.Create(messageContext, descriptor);
 
-        await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
-                          .ConfigureAwait(false);
+        try
+        {
+            await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
+                              .ConfigureAwait(false);
+        }
+        catch (OptimisticLockException ole)
+        {
+            try
+            {
+                sagaInstance = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
+                await sagaInstance!.LockAsync(_sagaStateRepository, cancellationToken)
+                                   .ConfigureAwait(false);
+            }
+            catch // couldn't lock the saga state on retry for whatever reason
+            {
+                throw ole;
+            }
+        }
 
         return sagaInstance;
     }

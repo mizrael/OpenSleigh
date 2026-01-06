@@ -18,7 +18,7 @@ public class PostgreSQLOutboxRepositoryTests :
         var typeResolver = new TypeResolver();
         typeResolver.Register(typeof(FakeMessage));
 
-        var sut = new PostgreOutboxRepository(SqlOutboxRepositoryOptions.Default, db, typeResolver, new JsonSerializer(), duplicateKeyDetector);
+        var sut = new PostgreSQLOutboxRepository(SqlOutboxRepositoryOptions.Default, db, typeResolver, new JsonSerializer(), duplicateKeyDetector);
         return sut;
     }
 }

@@ -1,10 +1,15 @@
 ﻿using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
-public class InMemorySimpleMultiStartSagaScenario : SimpleMultiStartSagaScenario
+public class InMemoryParallelMultiStartSagaScenario : ParallelMultiStartSagaScenario
 {
+    public InMemoryParallelMultiStartSagaScenario(ITestOutputHelper console) : base(console)
+    {
+    }
+
     protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
     {
         cfg.UseInMemoryPersistence()
