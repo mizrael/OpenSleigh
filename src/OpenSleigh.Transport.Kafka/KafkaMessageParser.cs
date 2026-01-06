@@ -19,7 +19,9 @@ public class KafkaMessageParser : IKafkaMessageParser
     {
         ArgumentNullException.ThrowIfNull(consumeResult);
 
-        var messageType = _typeResolver.Resolve(consumeResult.Topic);
+        var messageTypeName = consumeResult.Message.Headers.GetHeaderValue(nameof(MessageEnvelope.MessageType));
+        ArgumentNullException.ThrowIfNullOrWhiteSpace(messageTypeName);
+        var messageType = _typeResolver.Resolve(messageTypeName);
         if(messageType is null) 
             throw new ArgumentException("invalid message type");
 

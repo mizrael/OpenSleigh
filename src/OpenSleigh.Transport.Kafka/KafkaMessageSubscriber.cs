@@ -51,9 +51,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
         while (!stoppingToken.IsCancellationRequested)
         {
-            var canContinue = await ConsumeMessageAsync(stoppingToken);
-        //    if (!canContinue)
-        //        break;
+            await ConsumeMessageAsync(stoppingToken);
 
             // TODO: check if it's possible to get rid of this
             await Task.Delay(_config.ConsumeDelay, stoppingToken);
@@ -64,22 +62,19 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     /// consumes a single message 
     /// </summary>
     /// <returns>false if consumer loop should be stopped</returns>
-    private async ValueTask<bool> ConsumeMessageAsync(CancellationToken stoppingToken)
+    private async ValueTask ConsumeMessageAsync(CancellationToken stoppingToken)
     {
         try
         {
             var result = _consumer.Consume((int)_config.ConsumeTimeout.TotalMilliseconds);
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if (!canProcess)
-                return false;
-
-            return await _messageHandler.HandleAsync(result!, stoppingToken);
+            if (canProcess)
+                await _messageHandler.HandleAsync(result!, stoppingToken);
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
         {
             // noop. seems to be a known issue in the c# Kafka driver
             // occurring when consumers are started before producers.
-            return true;
         }      
     }
 
