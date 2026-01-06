@@ -69,7 +69,7 @@ jobs:
       TARGET_FRAMEWORK: net9.0
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:9.0.203
-      - image: 'mongo:latest'        
+      - image: 'mongo:latest'
       - image: 'rabbitmq:3-management-alpine'
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh-tests"
@@ -100,9 +100,23 @@ jobs:
           CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
 
     steps:
-      - run: apt-get update && apt-get install -y openssh-client unzip
+      - run: apt-get update && apt-get install -y openssh-client gpg
       - checkout
-      - codecov/upload
+      - run:
+          name: Build
+          command: |
+            cd ./src
+            dotnet build
+      - run:
+          name: Run tests with coverage
+          command: |
+            cd ./src
+            dotnet test --framework $TARGET_FRAMEWORK \
+              --collect:"XPlat Code Coverage" \
+              --results-directory ./coverage \
+              --filter "Category!=E2E"
+      - codecov/upload:
+          file: 'src/coverage/**/coverage.cobertura.xml'
 
 workflows:
   build_and_test:
