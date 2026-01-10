@@ -1,19 +1,20 @@
 ﻿using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport.Kafka.Tests.Fixtures;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.SqlKafka;
 
 public class SqlKafkaSimpleSagaScenario : 
     SimpleSagaScenario,
-    IClassFixture<SqlServerDbFixture>,
+    IClassFixture<PostgreSQLDbFixture>,
     IClassFixture<KafkaFixture>
 {
     private readonly KafkaFixture _kafkaFixture;        
     private readonly DbFixture _dbFixture;
     private readonly string _exchangeName;
     
-    public SqlKafkaSimpleSagaScenario(SqlServerDbFixture dbFixture, KafkaFixture kafkaFixture)
+    public SqlKafkaSimpleSagaScenario(PostgreSQLDbFixture dbFixture, KafkaFixture kafkaFixture, ITestOutputHelper console) : base(console)
     {
         _dbFixture = dbFixture;
         _kafkaFixture = kafkaFixture;

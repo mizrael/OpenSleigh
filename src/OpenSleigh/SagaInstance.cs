@@ -43,10 +43,10 @@ public record SagaInstance : ISagaInstance
             return false;
 
         var messageType = messageContext.Message.GetType();
-        var isInitiator = this.Descriptor.InitiatorType == messageType;
+        var isInitiator = this.Descriptor.InitiatorTypes.Contains(messageType);
         if (isInitiator)
-            return true;            
-        
+            return true;
+
         return true;
     }
        

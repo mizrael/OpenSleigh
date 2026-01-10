@@ -12,9 +12,10 @@ public record SagaDescriptor
             throw new ArgumentException($"saga type '{sagaType.FullName}' does not implement {nameof(ISaga)}.", nameof(sagaType));
         SagaType = sagaType ?? throw new ArgumentNullException(nameof(sagaType));
 
-        var initiatorType = sagaType.GetInitiatorMessageType();
-        InitiatorType = initiatorType ?? throw new MissingMethodException($"saga type '{sagaType.FullName}' does not implement any initiator.");
-        
+        InitiatorTypes = sagaType.GetInitiatorMessageType();
+        if (!InitiatorTypes.Any())
+            throw new MissingMethodException($"saga type '{sagaType.FullName}' does not implement any initiator.");
+
         SagaStateType = sagaStateType;
     }
 
@@ -26,7 +27,7 @@ public record SagaDescriptor
     /// <summary>
     /// type of the message that can start this saga.
     /// </summary>
-    public Type InitiatorType { get; }
+    public ISet<Type> InitiatorTypes { get; }
 
     /// <summary>
     /// optional. type of the custom saga state.

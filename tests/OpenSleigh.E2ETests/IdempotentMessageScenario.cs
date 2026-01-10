@@ -3,6 +3,7 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.E2ETests.Sagas;
 using OpenSleigh.Transport;
 using System.ComponentModel;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests;
 
@@ -12,7 +13,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
 {
     private int _maxHostsCount = 10;
 
-    protected IdempotentMessageScenario(int maxHostsCount = 10)
+    protected IdempotentMessageScenario(ITestOutputHelper console, int maxHostsCount = 10) : base(console)
     {
         _maxHostsCount = maxHostsCount;
     }

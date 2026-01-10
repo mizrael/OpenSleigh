@@ -10,6 +10,7 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
     private readonly IMessageProcessor _messageProcessor;
     private readonly ChannelReader<MessageEnvelope> _reader;
     private readonly ILogger<InMemorySubscriber> _logger;
+    private readonly IPublisher _publisher;
     private readonly InMemorySubscriberOptions _options;
     
     private CancellationTokenSource? _stoppingCts;
@@ -19,11 +20,13 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
     public InMemorySubscriber(IMessageProcessor messageProcessor,
         ChannelReader<MessageEnvelope> reader,
         ILogger<InMemorySubscriber> logger,
+        IPublisher publisher,
         InMemorySubscriberOptions? options = null)
     {
         _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options ?? InMemorySubscriberOptions.Defaults;
     }
 
@@ -55,6 +58,10 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
                         "an exception has occurred while processing message '{MessageId}': {Error}",
                         outboxMessage.MessageId,
                         e.Message);
+                    if (e is LockException or OptimisticLockException)
+                        await Task.Delay(100, cancellationToken)
+                            .ContinueWith(_ => _publisher.PublishAsync(outboxMessage, cancellationToken), cancellationToken)
+                            .ConfigureAwait(false);
                 }
             }).ToArray();
 

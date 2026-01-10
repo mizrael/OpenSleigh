@@ -4,6 +4,8 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using System.ComponentModel;
+using Microsoft.Extensions.Logging;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests;
 
@@ -11,6 +13,18 @@ namespace OpenSleigh.E2ETests;
 [Trait("Category", "E2E")]
 public abstract class E2ETestsBase
 {
+    protected readonly ITestOutputHelper? Console;
+
+    protected E2ETestsBase(ITestOutputHelper console)
+    {
+        Console = console;
+    }
+
+    protected E2ETestsBase()
+    {
+        Console = null!;
+    }
+
     protected async ValueTask<IHost> SetupHost(Action<HostBuilderContext, IServiceCollection> servicesBuilder)
     {
         var hostBuilder = CreateHostBuilder();
@@ -81,8 +95,45 @@ public abstract class E2ETestsBase
 
                     RegisterSagas(cfg);
                 });
+
+                if (Console != null)
+                {
+                    services.AddLogging(b => b.ClearProviders().AddProvider(new OutputLoggerProvider(Console)));
+                }
             });
 
     protected abstract void ConfigureTransportAndPersistence(IBusConfigurator cfg);
     protected abstract void RegisterSagas(IBusConfigurator cfg);
+
+    private class OutputLoggerProvider(ITestOutputHelper output) : ILoggerProvider
+    {
+        public void Dispose() { }
+
+        public ILogger CreateLogger(string categoryName) => new XUnitLogger(output, categoryName);
+    }
+
+    private class XUnitLogger(ITestOutputHelper testOutputHelper, string categoryName) : ILogger
+    {
+        public bool IsEnabled(LogLevel logLevel) => logLevel != LogLevel.None;
+
+        public IDisposable BeginScope<TState>(TState state) where TState : notnull => new Disposable();
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+            Func<TState, Exception?, string> formatter)
+        {
+            testOutputHelper.WriteLine($"{categoryName}/{logLevel}: {formatter(state, exception)}");
+
+            if (exception != null)
+            {
+                testOutputHelper.WriteLine(exception.ToString());
+            }
+        }
+
+        private class Disposable : IDisposable
+        {
+            public void Dispose()
+            {
+            }
+        }
+    }
 }

@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
+using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
-using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Transport.Kafka;
 using OpenSleigh.Transport.Kafka.Tests.Fixtures;
 
@@ -28,7 +28,7 @@ internal static class SqlKafkaScenarioUtils
 
         var kafkaConfig = kafkaFixture.BuildKafkaConfiguration(exchangeName);
 
-        cfg.UseSqlServerPersistence(sqlCfg)
+        cfg.UsePostgreSqlPersistence(sqlCfg)
             .UseKafkaTransport(kafkaConfig);
     }
 }

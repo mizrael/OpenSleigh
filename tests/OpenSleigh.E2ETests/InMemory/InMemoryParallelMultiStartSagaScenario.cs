@@ -4,9 +4,11 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
-public class InMemorySimpleSagaScenario : SimpleSagaScenario
+public class InMemoryParallelMultiStartSagaScenario : ParallelMultiStartSagaScenario
 {
-    public InMemorySimpleSagaScenario(ITestOutputHelper console) : base(console) { }
+    public InMemoryParallelMultiStartSagaScenario(ITestOutputHelper console) : base(console)
+    {
+    }
 
     protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)
     {

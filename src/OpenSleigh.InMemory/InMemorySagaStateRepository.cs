@@ -31,7 +31,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
             (k, v) =>
             {
                 if (v.lockId is not null)
-                    throw new ApplicationException($"saga '{state.InstanceId}' is already locked");
+                    throw new LockException($"saga '{state.InstanceId}' is already locked");
                 return (state, lockId);
             });
 
@@ -41,7 +41,10 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
            (k, v) =>
            {
                if (v.lockId is not null)
-                   throw new ApplicationException($"saga '{state.InstanceId}' is already locked");
+               {
+                   _statesById.TryRemove(state.InstanceId, out _);
+                   throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
+               }
                return (state, lockId);
            });
 

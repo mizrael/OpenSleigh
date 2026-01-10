@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
+using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
-using OpenSleigh.Persistence.SQLServer;
 using OpenSleigh.Transport.RabbitMQ;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 
@@ -28,7 +28,7 @@ internal static class SqlRabbitScenarioUtils
         };
         cfg.Services.AddSingleton(creator);
 
-        cfg.UseSqlServerPersistence(sqlCfg)
+        cfg.UsePostgreSqlPersistence(sqlCfg)
             .UseRabbitMQTransport(rabbitFixture.RabbitConfiguration);
     }
 }

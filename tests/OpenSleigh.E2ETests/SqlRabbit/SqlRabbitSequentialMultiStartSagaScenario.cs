@@ -5,8 +5,8 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.SqlRabbit;
 
-public class SqlRabbitSimpleSagaScenario : 
-    SimpleSagaScenario,
+public class SqlRabbitSequentialMultiStartSagaScenario :
+    SequentialMultiStartSagaScenario,
     IClassFixture<PostgreSQLDbFixture>,
     IClassFixture<RabbitFixture>
 {
@@ -14,11 +14,11 @@ public class SqlRabbitSimpleSagaScenario :
     private readonly DbFixture _dbFixture;
     private readonly string _exchangeName;
     
-    public SqlRabbitSimpleSagaScenario(PostgreSQLDbFixture dbFixture, RabbitFixture rabbitFixture, ITestOutputHelper console) : base(console)
+    public SqlRabbitSequentialMultiStartSagaScenario(PostgreSQLDbFixture dbFixture, RabbitFixture rabbitFixture, ITestOutputHelper console) : base(console)
     {
         _dbFixture = dbFixture;
         _rabbitFixture = rabbitFixture;
-        _exchangeName = "SqlRabbitSimpleSagaScenario-" + Guid.NewGuid().ToString("N");
+        _exchangeName = "SqlRabbitSequentialMultiStartSagaScenario-" + Guid.NewGuid().ToString("N");
     }
 
     protected override void ConfigureTransportAndPersistence(IBusConfigurator cfg)

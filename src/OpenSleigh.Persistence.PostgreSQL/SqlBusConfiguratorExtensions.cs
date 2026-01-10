@@ -24,7 +24,7 @@ public static class SqlBusConfiguratorExtensions
             }, contextLifetime: ServiceLifetime.Transient)
             .AddScoped<ITransactionManager, SqlTransactionManager>()
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
-            .AddTransient<IOutboxRepository, SqlOutboxRepository>()
+            .AddTransient<IOutboxRepository, PostgreSQLOutboxRepository>()
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
         
         return busConfigurator;
