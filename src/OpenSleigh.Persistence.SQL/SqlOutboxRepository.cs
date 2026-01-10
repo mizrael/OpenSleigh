@@ -24,6 +24,7 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     private readonly DuplicateKeyDetector _duplicateKeyDetector;
 
     private static SemaphoreSlim _appendSemaphore = new(1, 1);
+
     public SqlOutboxRepository(
         SqlOutboxRepositoryOptions options,
         SagaDbContext dbContext,

@@ -25,23 +25,17 @@ public class SagaExecutionService : ISagaExecutionService
         CancellationToken cancellationToken = default)
         where TM : IMessage
     {
-        var sagaInstance = await ResolveInstanceAsync(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
-
-        if (!sagaInstance.CanProcess(messageContext))
-            return NoOpSagaInstance.Create(messageContext, descriptor);
-
+        ISagaInstance sagaInstance;
+        
         try
         {
-            await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
-                              .ConfigureAwait(false);
+            sagaInstance = await BeginProcessingCore(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
         }
         catch (OptimisticLockException ole)
         {
             try
             {
-                sagaInstance = await _sagaStateRepository.FindAsync(descriptor, messageContext, cancellationToken);
-                await sagaInstance!.LockAsync(_sagaStateRepository, cancellationToken)
-                                   .ConfigureAwait(false);
+                sagaInstance = await BeginProcessingCore(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception retryException)
             {
@@ -53,6 +47,20 @@ public class SagaExecutionService : ISagaExecutionService
                     retryException);
             }
         }
+
+        return sagaInstance;
+    }
+
+    private async Task<ISagaInstance> BeginProcessingCore<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) 
+        where TM : IMessage
+    {
+        var sagaInstance = await ResolveInstanceAsync(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
+
+        if (!sagaInstance.CanProcess(messageContext))
+            return NoOpSagaInstance.Create(messageContext, descriptor);
+
+        await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
+                          .ConfigureAwait(false);
 
         return sagaInstance;
     }

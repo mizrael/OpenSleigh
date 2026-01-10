@@ -63,7 +63,6 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
 
         _connection.ConnectionShutdownAsync += async (s, e) => await TryConnectAsync();
         _connection.CallbackExceptionAsync += async (s, e) => await TryConnectAsync();
-        _connection.ConnectionShutdownAsync += async (s, e) => await TryConnectAsync();
     }
 
     public async Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken = default)

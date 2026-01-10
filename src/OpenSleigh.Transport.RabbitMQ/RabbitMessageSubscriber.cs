@@ -15,7 +15,8 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     private readonly IRabbitMessageParser _messageParser;
     private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ILogger<RabbitMessageSubscriber> _logger;
-
+    
+    private CancellationTokenSource? _linkedCts;
     private IChannel? _channel;
 
     public RabbitMessageSubscriber(
@@ -29,7 +30,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     {
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
-        _rabbitConfiguration = rabbitConfiguration;
+        _rabbitConfiguration = rabbitConfiguration ?? throw new ArgumentNullException(nameof(rabbitConfiguration));
         _serviceProvider = serviceProvider ?? throw new ArgumentNullException(nameof(serviceProvider));
         _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
         _sagaDescriptorsResolver = sagaDescriptorsResolver ?? throw new ArgumentNullException(nameof(sagaDescriptorsResolver));
@@ -54,11 +55,11 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     {
         _logger.LogInformation($"initializing subscription on queue '{queueReference.QueueName}' ...");
 
-        await _channel.EnsureTopologyAsync(queueReference, _rabbitConfiguration, cancellationToken);
+        await _channel!.EnsureTopologyAsync(queueReference, _rabbitConfiguration, cancellationToken);
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
+        var consumer = new AsyncEventingBasicConsumer(_channel!);
         consumer.ReceivedAsync += OnMessageReceivedAsync;
-        await _channel.BasicConsumeAsync(queue: queueReference.QueueName, autoAck: false, consumer: consumer, cancellationToken);
+        await _channel!.BasicConsumeAsync(queue: queueReference.QueueName, autoAck: false, consumer: consumer, cancellationToken);
     }
 
     private ValueTask StopChannelAsync(CancellationToken cancellationToken)
@@ -68,7 +69,6 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         return ValueTask.CompletedTask;
     }
 
-    //TODO: figure out how to pass a cancellation token
     private async Task OnMessageReceivedAsync(object sender, BasicDeliverEventArgs eventArgs)
     {
         var consumer = sender as IAsyncBasicConsumer;
@@ -105,7 +105,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         {
             using var scope = _serviceProvider.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
-            await processor.ProcessAsync(message, CancellationToken.None);
+            await processor.ProcessAsync(message, _linkedCts?.Token ?? CancellationToken.None);
 
             await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false);
         }
@@ -154,6 +154,8 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
 
     public async ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
+        _linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
         await InitChannelAsync(cancellationToken);
 
         var messageTypes = _sagaDescriptorsResolver.GetRegisteredMessageTypes();
@@ -172,5 +174,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     public async ValueTask DisposeAsync()
     {
         await StopChannelAsync(CancellationToken.None);
+
+        _linkedCts?.Dispose();
     }
 }
