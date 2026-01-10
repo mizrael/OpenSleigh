@@ -93,7 +93,12 @@ public class SqlSagaStateRepository : ISagaStateRepository
     {
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
-            .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId, cancellationToken)
+            .FirstOrDefaultAsync(e =>
+                (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
+                e.SagaType == state.Descriptor.SagaType.FullName &&
+                ((state.Descriptor.SagaStateType == null && e.SagaStateType == null) ||
+                 (state.Descriptor.SagaStateType != null && e.SagaStateType == state.Descriptor.SagaStateType.FullName)),
+                cancellationToken)
             .ConfigureAwait(false);
 
         if (entity is null)
@@ -133,7 +138,12 @@ public class SqlSagaStateRepository : ISagaStateRepository
         {
             entity = await _dbContext.SagaStates
                 .Include(e => e.ProcessedMessages)
-                .FirstOrDefaultAsync(e => e.CorrelationId == state.CorrelationId, cancellationToken)
+                .FirstOrDefaultAsync(e =>
+                    e.CorrelationId == state.CorrelationId &&
+                    e.SagaType == state.Descriptor.SagaType.FullName &&
+                    ((state.Descriptor.SagaStateType == null && e.SagaStateType == null) ||
+                     (state.Descriptor.SagaStateType != null && e.SagaStateType == state.Descriptor.SagaStateType.FullName)),
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             if (entity != null && entity.InstanceId != state.InstanceId)

@@ -43,6 +43,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository
                if (v.lockId is not null)
                {
                    _statesById.TryRemove(state.InstanceId, out _);
+                   _statesByDescriptor.TryRemove(key, out _);
                    throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
                }
                return (state, lockId);

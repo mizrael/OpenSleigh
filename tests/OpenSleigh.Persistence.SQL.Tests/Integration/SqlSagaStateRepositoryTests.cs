@@ -99,6 +99,54 @@ public abstract class SqlSagaStateRepositoryTests
     }
 
     [Fact]
+    public async Task LockAsync_should_handle_multiple_saga_types_with_same_correlation_id()
+    {
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        // Use the same correlation ID for both sagas
+        var sharedCorrelationId = Guid.NewGuid().ToString();
+
+        // Create and lock first saga type (FakeSagaNoState) with shared correlation ID
+        var messageContext1 = NSubstitute.Substitute.For<IMessageContext<FakeMessage>>();
+        messageContext1.MessageId.Returns(Guid.NewGuid().ToString());
+        messageContext1.CorrelationId.Returns(sharedCorrelationId);
+
+        var descriptor1 = SagaDescriptor.Create<FakeSagaNoState>();
+        var factory = new SagaInstanceFactory();
+        var saga1 = factory.Create(descriptor1, messageContext1);
+
+        var lockId1 = await sut.LockAsync(saga1, CancellationToken.None);
+        lockId1.Should().NotBeNullOrEmpty();
+
+        // Create and lock second saga type (FakeSagaWithState) with SAME correlation ID
+        var messageContext2 = NSubstitute.Substitute.For<IMessageContext<FakeMessage>>();
+        messageContext2.MessageId.Returns(Guid.NewGuid().ToString());
+        messageContext2.CorrelationId.Returns(sharedCorrelationId);
+
+        var descriptor2 = SagaDescriptor.Create<FakeSagaWithState>();
+        var saga2 = factory.Create(descriptor2, messageContext2);
+
+        // This should succeed - different saga types can share correlation IDs
+        // But will fail with current implementation because line 96 doesn't filter by saga type
+        var lockId2 = await sut.LockAsync(saga2, CancellationToken.None);
+        lockId2.Should().NotBeNullOrEmpty();
+
+        // Verify both sagas were created with different instance IDs
+        saga1.InstanceId.Should().NotBe(saga2.InstanceId);
+
+        // Verify both sagas exist in database with same correlation ID but different saga types
+        var saga1Entity = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == saga1.InstanceId);
+        var saga2Entity = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == saga2.InstanceId);
+
+        saga1Entity.Should().NotBeNull();
+        saga2Entity.Should().NotBeNull();
+        saga1Entity!.CorrelationId.Should().Be(sharedCorrelationId);
+        saga2Entity!.CorrelationId.Should().Be(sharedCorrelationId);
+        saga1Entity.SagaType.Should().NotBe(saga2Entity.SagaType);
+    }
+
+    [Fact]
     public async Task ReleaseLockAsync_should_throw_when_state_not_found()
     {
         var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);

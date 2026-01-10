@@ -5,7 +5,10 @@
       "Bash(ls:*)",
       "Bash(git push:*)",
       "Bash(grep:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "WebFetch(domain:github.com)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet build:*)"
     ]
   }
 }

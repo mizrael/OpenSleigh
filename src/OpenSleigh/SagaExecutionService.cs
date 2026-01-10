@@ -43,9 +43,14 @@ public class SagaExecutionService : ISagaExecutionService
                 await sagaInstance!.LockAsync(_sagaStateRepository, cancellationToken)
                                    .ConfigureAwait(false);
             }
-            catch // couldn't lock the saga state on retry for whatever reason
+            catch (Exception retryException)
             {
-                throw ole;
+                // Preserve both the original OptimisticLockException and the retry failure exception
+                // This ensures debugging information is not lost in production
+                throw new AggregateException(
+                    "Failed to lock saga after optimistic lock conflict. Original exception and retry failure included.",
+                    ole,
+                    retryException);
             }
         }
 
