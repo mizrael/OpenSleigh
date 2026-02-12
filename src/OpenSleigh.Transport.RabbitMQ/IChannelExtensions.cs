@@ -18,22 +18,22 @@ public static class IChannelExtensions
         ArgumentNullException.ThrowIfNull(rabbitCfg);
         ArgumentNullException.ThrowIfNull(channel);
 
-        var exchangeName = queueReferences.ExchangeName;
-        if (_initialized.ContainsKey(exchangeName))
+        var topologyKey = $"{queueReferences.ExchangeName}|{queueReferences.QueueName}";
+        if (_initialized.ContainsKey(topologyKey))
             return;
 
-        var semaphore = _semaphores.GetOrAdd(exchangeName, _ => new SemaphoreSlim(1, 1));
+        var semaphore = _semaphores.GetOrAdd(topologyKey, _ => new SemaphoreSlim(1, 1));
 
         await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            if (_initialized.ContainsKey(exchangeName))
+            if (_initialized.ContainsKey(topologyKey))
                 return;
 
             await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
             await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
 
-            _initialized.TryAdd(exchangeName, 0);
+            _initialized.TryAdd(topologyKey, 0);
         }
         finally
         {
@@ -122,7 +122,8 @@ public static class IChannelExtensions
         await channel.ExchangeDeleteAsync(queueRef.RetryExchangeName);
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
 
-        _initialized.TryRemove(queueRef.ExchangeName, out _);
-        _semaphores.TryRemove(queueRef.ExchangeName, out _);
+        var topologyKey = $"{queueRef.ExchangeName}|{queueRef.QueueName}";
+        _initialized.TryRemove(topologyKey, out _);
+        _semaphores.TryRemove(topologyKey, out _);
     }
 }

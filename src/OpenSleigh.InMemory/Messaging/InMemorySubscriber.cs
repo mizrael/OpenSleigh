@@ -52,16 +52,15 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
                     await _messageProcessor.ProcessAsync(outboxMessage, cancellationToken)
                                            .ConfigureAwait(false);
                 }
-                catch (Exception e)
+                catch (Exception e) when (e is not OperationCanceledException)
                 {
                     _logger.LogError(e,
                         "an exception has occurred while processing message '{MessageId}': {Error}",
                         outboxMessage.MessageId,
                         e.Message);
-                    if (e is LockException or OptimisticLockException)
-                        await Task.Delay(100, cancellationToken)
-                            .ContinueWith(_ => _publisher.PublishAsync(outboxMessage, cancellationToken), cancellationToken)
-                            .ConfigureAwait(false);
+                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+                    await _publisher.PublishAsync(outboxMessage, cancellationToken)
+                                    .ConfigureAwait(false);
                 }
             }).ToArray();
 

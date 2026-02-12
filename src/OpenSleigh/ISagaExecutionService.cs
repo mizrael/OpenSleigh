@@ -26,4 +26,11 @@ public interface ISagaExecutionService
     ValueTask CommitAsync(
         ISagaInstance context,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// releases the lock on the saga instance without persisting state changes.
+    /// </summary>
+    ValueTask ReleaseAsync(
+        ISagaInstance context,
+        CancellationToken cancellationToken = default);
 }

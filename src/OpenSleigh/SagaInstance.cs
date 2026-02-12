@@ -80,7 +80,7 @@ public record SagaInstance : ISagaInstance
         => _outbox.Clear();
 
     public async ValueTask ProcessAsync<TM>(
-        IMessageHandlerManager messageHandlerManager, 
+        IMessageHandlerManager messageHandlerManager,
         IMessageContext<TM> messageContext,
         ISagaExecutionService sagaExecutionService,
         CancellationToken cancellationToken = default) where TM : IMessage
@@ -89,16 +89,36 @@ public record SagaInstance : ISagaInstance
         ArgumentNullException.ThrowIfNull(messageContext);
         ArgumentNullException.ThrowIfNull(sagaExecutionService);
 
-        await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
-                                   .ConfigureAwait(false);
+        try
+        {
+            await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
+                                       .ConfigureAwait(false);
 
-        this.SetAsProcessed(messageContext);
+            this.SetAsProcessed(messageContext);
 
-        await sagaExecutionService.CommitAsync(this, cancellationToken)
-                                  .ConfigureAwait(false);
+            await sagaExecutionService.CommitAsync(this, cancellationToken)
+                                      .ConfigureAwait(false);
 
-        // to be done after Commit, as it will be checked when releasing the state
-        this.LockId = string.Empty;
+            // to be done after Commit, as it will be checked when releasing the state
+            this.LockId = string.Empty;
+        }
+        catch
+        {
+            if (!string.IsNullOrEmpty(this.LockId))
+            {
+                try
+                {
+                    await sagaExecutionService.ReleaseAsync(this, CancellationToken.None)
+                                              .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // best effort: lock will expire via LockMaxDuration for SQL/Mongo
+                }
+                this.LockId = string.Empty;
+            }
+            throw;
+        }
     }
 
     public string TriggerMessageId { get; }

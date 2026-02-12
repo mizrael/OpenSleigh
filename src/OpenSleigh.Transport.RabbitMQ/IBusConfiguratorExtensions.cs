@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.DependencyInjection;
 using RabbitMQ.Client;
 using System.Diagnostics.CodeAnalysis;
@@ -14,7 +15,7 @@ public static class IBusConfiguratorExtensions
         QueueReferencesCreator? queueReferencesCreator = null)
     {
         if (queueReferencesCreator is null)
-            busConfigurator.Services.AddSingleton(ctx =>
+            busConfigurator.Services.TryAddSingleton(ctx =>
             {
                 var sysInfo = ctx.GetRequiredService<ISystemInfo>();
                 return QueueReferenceFactory.BuildDefaultCreator(sysInfo);

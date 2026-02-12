@@ -134,6 +134,10 @@ public class SqlSagaStateRepository : ISagaStateRepository
             await _dbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);
         }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw new LockException($"saga state '{state.InstanceId}' is already locked");
+        }
         catch (DbUpdateException)
         {
             entity = await _dbContext.SagaStates

@@ -53,6 +53,56 @@ public class InMemorySagaStateRepositoryTests
     }
 
     [Fact]
+    public async Task ReleaseAsync_should_throw_when_lock_id_does_not_match()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var instance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            descriptor);
+
+        var sagaStateRepo = Substitute.For<ISagaStateRepository>();
+
+        // Lock via repository to store the lock
+        await repository.LockAsync(instance, CancellationToken.None);
+
+        // Simulate a different lock ID on the instance (as if another host took the lock)
+        sagaStateRepo.LockAsync(instance, Arg.Any<CancellationToken>()).Returns("wrong-lock-id");
+        await instance.LockAsync(sagaStateRepo, CancellationToken.None);
+
+        // Release with mismatched lock ID should throw
+        await Assert.ThrowsAsync<LockException>(
+            () => repository.ReleaseAsync(instance, CancellationToken.None).AsTask());
+    }
+
+    [Fact]
+    public async Task LockAsync_should_throw_optimistic_lock_when_different_instance_same_descriptor_locked()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var correlationId = Guid.NewGuid().ToString();
+
+        var instance1 = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            correlationId,
+            descriptor);
+
+        var instance2 = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            correlationId,
+            descriptor);
+
+        await repository.LockAsync(instance1, CancellationToken.None);
+
+        await Assert.ThrowsAsync<OptimisticLockException>(
+            () => repository.LockAsync(instance2, CancellationToken.None).AsTask());
+    }
+
+    [Fact]
     public async Task ReleaseAsync_should_unlock_instance()
     {
         // Arrange

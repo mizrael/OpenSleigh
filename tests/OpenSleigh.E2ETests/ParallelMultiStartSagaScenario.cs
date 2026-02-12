@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
@@ -43,7 +44,7 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
 
         MultiStartSagaState state = null!;
 
-        HashSet<string> instanceIds = [];
+        ConcurrentBag<string> instanceIds = [];
 
         Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (ctx, inst) =>
         {
@@ -52,7 +53,7 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
             Assert.False(string.IsNullOrWhiteSpace(ctx.SenderId));
 
             instanceIds.Add(inst.InstanceId);
-            receivedCount++;
+            Interlocked.Increment(ref receivedCount);
             if (ReferenceEquals(last, start))
             {
                 state = inst.State;
@@ -65,7 +66,7 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
         {
             Console.WriteLine($"Handled AlsoStart message {JsonSerializer.Serialize(ctx.Message, new JsonSerializerOptions { WriteIndented = true })}");
             instanceIds.Add(inst.InstanceId);
-            receivedCount++;
+            Interlocked.Increment(ref receivedCount);
             if (ReferenceEquals(last, alsoStart))
             {
                 state = inst.State;
@@ -93,7 +94,7 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
         );
 
         Assert.Equal(2, receivedCount);
-        Assert.Single(instanceIds);
+        Assert.Single(instanceIds.Distinct());
 
         // These work correctly for in-memory scenarios because the object is always the same
         // Not having access to the host's container, I'm not sure if there's an appropriate way to get at the

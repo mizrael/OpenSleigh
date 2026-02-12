@@ -102,6 +102,65 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task BeginProcessingAsync_should_return_noop_and_release_lock_when_CanProcess_false_after_lock()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxRepository = Substitute.For<IOutboxRepository>();
+        var sagaInstanceFactory = Substitute.For<ISagaInstanceFactory>();
+
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            messageContext.MessageId,
+            messageContext.CorrelationId,
+            descriptor);
+
+        sagaStateRepository.FindAsync(descriptor, messageContext, Arg.Any<CancellationToken>())
+            .Returns(sagaInstance);
+
+        // First CanProcess call (before lock) returns true because message not processed.
+        // LockAsync succeeds, then we simulate the TOCTOU condition:
+        // another thread processed the message between initial check and lock, so
+        // mark the message as processed when LockAsync is called.
+        sagaStateRepository.LockAsync(sagaInstance, Arg.Any<CancellationToken>())
+            .Returns(callInfo =>
+            {
+                sagaInstance.SetAsProcessed(messageContext);
+                return "lock-id";
+            });
+
+        var sut = new SagaExecutionService(sagaInstanceFactory, sagaStateRepository, outboxRepository);
+
+        var result = await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
+
+        Assert.IsType<NoOpSagaInstance>(result);
+        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_delegate_to_repository()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxRepository = Substitute.For<IOutboxRepository>();
+        var sagaInstanceFactory = Substitute.For<ISagaInstanceFactory>();
+
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            descriptor);
+
+        var sut = new SagaExecutionService(sagaInstanceFactory, sagaStateRepository, outboxRepository);
+
+        await sut.ReleaseAsync(sagaInstance, CancellationToken.None);
+
+        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task CommitAsync_should_append_outbox_and_release_lock()
     {
         // Arrange

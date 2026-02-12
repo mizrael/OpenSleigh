@@ -29,6 +29,8 @@ internal class SagaStateEntityTypeConfiguration : IEntityTypeConfiguration<SagaS
         builder.HasIndex(e => new { e.CorrelationId, e.SagaType }).IsUnique();
         builder.HasIndex(e => new { e.CorrelationId, e.SagaType, e.SagaStateType }).IsUnique();
 
+        builder.Property(e => e.LockId).IsConcurrencyToken();
+
         builder.HasMany(e => e.ProcessedMessages)
             .WithOne(e => e.SagaState);
     }
