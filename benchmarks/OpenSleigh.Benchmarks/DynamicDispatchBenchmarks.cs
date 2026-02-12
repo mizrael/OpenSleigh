@@ -6,99 +6,101 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Benchmarks;
 
+/// <summary>
+/// Measures pure dispatch overhead with zero allocations.
+/// Each method accesses a typed property through a different dispatch mechanism,
+/// then calls a no-op serializer. No object construction, no GC pressure.
+/// </summary>
 [MemoryDiagnoser]
 [Config(typeof(BenchmarkConfig))]
-public class DynamicDispatchBenchmarks
+public class DispatchOverheadBenchmarks
+{
+    private ISagaInstance<BenchmarkState> _typedInstance = null!;
+    private ISerializer _serializer = null!;
+    private ISagaStateExtractor _extractor = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        var descriptor = SagaDescriptor.Create<BenchmarkSaga, BenchmarkState>();
+        _serializer = new NoOpSerializer();
+
+        _typedInstance = new SagaInstance<BenchmarkState>(
+            instanceId: Guid.NewGuid().ToString(),
+            triggerMessageId: Guid.NewGuid().ToString(),
+            correlationId: Guid.NewGuid().ToString(),
+            descriptor: descriptor,
+            state: new BenchmarkState());
+
+        _extractor = (ISagaStateExtractor)Activator.CreateInstance(
+            typeof(SagaStateExtractor<>).MakeGenericType(descriptor.SagaStateType!))!;
+    }
+
+    [Benchmark(Baseline = true, Description = "Direct")]
+    public byte[] Direct()
+        => _serializer.Serialize(_typedInstance.State);
+
+    [Benchmark(Description = "Dynamic")]
+    public byte[] Dynamic()
+        => ExtractDynamic((dynamic)_typedInstance, _serializer);
+
+    [Benchmark(Description = "Wrapper")]
+    public byte[] Wrapper()
+        => _extractor.Extract(_typedInstance, _serializer);
+
+    private static byte[] ExtractDynamic<TS>(ISagaInstance<TS> state, ISerializer serializer)
+        => serializer.Serialize(state.State);
+}
+
+/// <summary>
+/// Measures end-to-end saga instance creation including object construction.
+/// SagaInstance allocates ~1000B (record + Dictionary + ConcurrentQueue),
+/// which dominates the measurement. Dispatch overhead is a small fraction.
+/// </summary>
+[MemoryDiagnoser]
+[Config(typeof(BenchmarkConfig))]
+public class SagaInstanceCreationBenchmarks
 {
     private SagaDescriptor _descriptor = null!;
     private object _stateAsObject = null!;
-    private ISagaInstance<BenchmarkState> _typedInstance = null!;
-    private ISerializer _serializer = null!;
-
     private string _instanceId = null!;
     private string _triggerMessageId = null!;
     private string _correlationId = null!;
-
-    // Pre-warmed wrapper instances (not behind ConcurrentDictionary — measures pure dispatch)
     private ISagaStateInstanceCreator _creator = null!;
-    private ISagaStateExtractor _extractor = null!;
 
     [GlobalSetup]
     public void Setup()
     {
         _descriptor = SagaDescriptor.Create<BenchmarkSaga, BenchmarkState>();
         _stateAsObject = new BenchmarkState();
-        _serializer = new NoOpSerializer();
-
         _instanceId = Guid.NewGuid().ToString();
         _triggerMessageId = Guid.NewGuid().ToString();
         _correlationId = Guid.NewGuid().ToString();
 
-        _typedInstance = new SagaInstance<BenchmarkState>(
-            instanceId: _instanceId,
-            triggerMessageId: _triggerMessageId,
-            correlationId: _correlationId,
-            descriptor: _descriptor,
-            state: new BenchmarkState());
-
         _creator = (ISagaStateInstanceCreator)Activator.CreateInstance(
             typeof(SagaStateInstanceCreator<>).MakeGenericType(_descriptor.SagaStateType!))!;
-        _extractor = (ISagaStateExtractor)Activator.CreateInstance(
-            typeof(SagaStateExtractor<>).MakeGenericType(_descriptor.SagaStateType!))!;
     }
 
-    // --- Saga Instance Creation ---
-    // All three use pre-generated strings — zero Guid noise, pure dispatch overhead.
-
-    [Benchmark(Baseline = true, Description = "SagaInstance_Direct")]
-    public ISagaInstance SagaInstanceCreation_Direct()
-    {
-        return new SagaInstance<BenchmarkState>(
+    [Benchmark(Baseline = true, Description = "Direct")]
+    public ISagaInstance Direct()
+        => new SagaInstance<BenchmarkState>(
             instanceId: _instanceId,
             triggerMessageId: _triggerMessageId,
             correlationId: _correlationId,
             descriptor: _descriptor,
             state: (BenchmarkState)_stateAsObject);
-    }
 
-    [Benchmark(Description = "SagaInstance_Dynamic")]
-    public ISagaInstance SagaInstanceCreation_Dynamic()
-    {
-        return CreateDynamic(
+    [Benchmark(Description = "Dynamic")]
+    public ISagaInstance Dynamic()
+        => CreateDynamic(
             (dynamic)_stateAsObject, _instanceId,
             _triggerMessageId, _correlationId, _descriptor);
-    }
 
-    [Benchmark(Description = "SagaInstance_Wrapper")]
-    public ISagaInstance SagaInstanceCreation_Wrapper()
-    {
-        return _creator.Create(
+    [Benchmark(Description = "Wrapper")]
+    public ISagaInstance Wrapper()
+        => _creator.Create(
             _stateAsObject, _instanceId,
             _triggerMessageId, _correlationId, _descriptor);
-    }
-
-    // --- State Extraction ---
-    // Pure dispatch overhead: no allocations in any path (NoOpSerializer returns empty array)
-
-    [Benchmark(Description = "StateExtract_Direct")]
-    public byte[] StateExtraction_Direct()
-    {
-        return _serializer.Serialize(_typedInstance.State);
-    }
-
-    [Benchmark(Description = "StateExtract_Dynamic")]
-    public byte[] StateExtraction_Dynamic()
-    {
-        return ExtractDynamic((dynamic)_typedInstance, _serializer);
-    }
-
-    [Benchmark(Description = "StateExtract_Wrapper")]
-    public byte[] StateExtraction_Wrapper()
-    {
-        return _extractor.Extract(_typedInstance, _serializer);
-    }
-
-    // --- Dynamic helpers (replicating current codebase behavior) ---
 
     private static ISagaInstance CreateDynamic<TS>(
         TS state, string instanceId, string triggerMessageId,
@@ -109,9 +111,6 @@ public class DynamicDispatchBenchmarks
             correlationId: correlationId,
             descriptor: descriptor,
             state: state);
-
-    private static byte[] ExtractDynamic<TS>(ISagaInstance<TS> state, ISerializer serializer)
-        => serializer.Serialize(state.State);
 }
 
 // --- Benchmark support types ---

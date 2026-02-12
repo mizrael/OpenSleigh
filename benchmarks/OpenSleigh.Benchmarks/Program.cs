@@ -1,4 +1,7 @@
 using BenchmarkDotNet.Running;
 using OpenSleigh.Benchmarks;
 
-BenchmarkRunner.Run<DynamicDispatchBenchmarks>();
+BenchmarkRunner.Run([
+    typeof(DispatchOverheadBenchmarks),
+    typeof(SagaInstanceCreationBenchmarks)
+]);
