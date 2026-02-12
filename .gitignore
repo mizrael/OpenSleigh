@@ -8,3 +8,4 @@ TestResults/
 .DS_Store
 .idea/
 coverage*/
+BenchmarkDotNet.Artifacts/

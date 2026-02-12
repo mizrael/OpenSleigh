@@ -2,6 +2,7 @@
 using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.SQL;
@@ -17,6 +18,9 @@ public class SqlSagaStateRepository : ISagaStateRepository
     private readonly SagaDbContext _dbContext;
     private readonly SqlSagaStateRepositoryOptions _options;
     private readonly ISerializer _serializer;
+
+    private static readonly ConcurrentDictionary<Type, ISagaContextFactory> _contextFactories = new();
+    private static readonly ConcurrentDictionary<Type, ISagaStateExtractor> _stateExtractors = new();
 
     public SqlSagaStateRepository(SagaDbContext dbContext, SqlSagaStateRepositoryOptions options, ISerializer serializer)
     {
@@ -60,7 +64,10 @@ public class SqlSagaStateRepository : ISagaStateRepository
         else
         {
             var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            result = CreateSagaContext((dynamic)state, entity, descriptor);
+            var factory = _contextFactories.GetOrAdd(descriptor.SagaStateType!, static t =>
+                (ISagaContextFactory)Activator.CreateInstance(
+                    typeof(SagaContextFactory<>).MakeGenericType(t))!);
+            result = factory.Create(state!, entity, descriptor);
         }
 
         if (entity.IsCompleted)
@@ -68,19 +75,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
 
         return result;
     }
-
-    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, SagaState entity, SagaDescriptor descriptor)
-        => new SagaInstance<TS>(
-               instanceId: entity.InstanceId,
-               triggerMessageId: entity.TriggerMessageId,
-               correlationId: entity.CorrelationId,
-               descriptor: descriptor,
-               state: state,
-               processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
-               {
-                   MessageId = e.MessageId,
-                   When = e.When
-               }));
 
     public ValueTask<string> LockAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
@@ -197,15 +191,15 @@ public class SqlSagaStateRepository : ISagaStateRepository
                 SagaState = entity
             });
                     
-        if (state.GetType().IsGenericType)
-            SetStateData((dynamic)state, entity);
+        if (state.Descriptor.SagaStateType is not null)
+        {
+            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
+                (ISagaStateExtractor)Activator.CreateInstance(
+                    typeof(SagaStateExtractor<>).MakeGenericType(t))!);
+            entity.StateData = extractor.Extract(state, _serializer);
+        }
 
         await _dbContext.SaveChangesAsync(cancellationToken)
                     .ConfigureAwait(false);
-    }
-
-    private void SetStateData<TS>(ISagaInstance<TS> state, SagaState entity)
-    {
-        entity.StateData = _serializer.Serialize(state.State);
     }
 }

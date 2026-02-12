@@ -1,15 +1,18 @@
-﻿using OpenSleigh.Outbox;
+using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh.Transport;
 
 internal class MessageProcessor : IMessageProcessor
 {
+    private static readonly ConcurrentDictionary<Type, IMessageDispatcher> _dispatchers = new();
+
     private readonly ISagaDescriptorsResolver _sagaDescriptorsResolver;
     private readonly ISagaRunner _sagaRunner;
-    
+
     public MessageProcessor(
-        ISagaRunner sagaRunner, 
+        ISagaRunner sagaRunner,
         ISagaDescriptorsResolver sagaDescriptorsResolver,
         ISerializer serializer)
     {
@@ -21,25 +24,22 @@ internal class MessageProcessor : IMessageProcessor
     {
         ArgumentNullException.ThrowIfNull(outboxMessage);
 
-        var messageContext = ToContext((dynamic)outboxMessage.Message, outboxMessage);
+        var dispatcher = _dispatchers.GetOrAdd(outboxMessage.MessageType, static t =>
+            (IMessageDispatcher)Activator.CreateInstance(
+                typeof(MessageDispatcher<>).MakeGenericType(t))!);
 
         var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
-        foreach(var descriptor in descriptors) {
+        foreach (var descriptor in descriptors)
+        {
             try
             {
-                await _sagaRunner.ProcessAsync(messageContext, descriptor, cancellationToken)
-                        .ConfigureAwait(false);
+                await dispatcher.DispatchAsync(outboxMessage, _sagaRunner, descriptor, cancellationToken)
+                                .ConfigureAwait(false);
             }
             catch (SagaException)
             {
-                // TODO: send outboxMessage + descriptor to deadletter   
-            }            
+                // TODO: send outboxMessage + descriptor to deadletter
+            }
         }
-    }
-
-    private static IMessageContext<TM> ToContext<TM>(TM message, MessageEnvelope outboxMessage)
-        where TM : IMessage
-    {
-        return DefaultMessageContext<TM>.Create(outboxMessage);
     }
 }
