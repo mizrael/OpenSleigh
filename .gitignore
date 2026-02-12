@@ -7,3 +7,4 @@ packages/
 TestResults/
 .DS_Store
 .idea/
+coverage*/

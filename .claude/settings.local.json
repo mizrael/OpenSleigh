@@ -9,7 +9,10 @@
       "WebFetch(domain:github.com)",
       "Bash(dotnet test:*)",
       "Bash(dotnet build:*)",
-      "Bash(dotnet restore:*)"
+      "Bash(dotnet restore:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:app.circleci.com)",
+      "WebFetch(domain:circleci.com)"
     ]
   }
 }

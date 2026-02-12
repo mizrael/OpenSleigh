@@ -116,7 +116,7 @@ jobs:
               --results-directory ./coverage \
               --settings ../test.runsettings \
               --filter "Category!=E2E" \
-              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/*Tests.cs"
+              -- RunConfiguration.TreatNoTestsAsError=false DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.ExcludeByFile="**/*Tests.cs"
       - codecov/upload
 
 workflows:
