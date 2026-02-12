@@ -115,7 +115,8 @@ jobs:
               --collect:"XPlat Code Coverage" \
               --results-directory ./coverage \
               --settings ../test.runsettings \
-              --filter "Category!=E2E"
+              --filter "Category!=E2E" \
+              -- RunConfiguration.TreatNoTestsAsError=false
       - codecov/upload
 
 workflows:

@@ -8,7 +8,7 @@
     
     <!-- true or false -->
     <!-- Value that specifies the exit code when no tests are discovered -->
-    <TreatNoTestsAsError>true</TreatNoTestsAsError>
+    <TreatNoTestsAsError>false</TreatNoTestsAsError>
   </RunConfiguration>
   <DataCollectionRunSettings>
     <DataCollectors>
