@@ -9,15 +9,15 @@ public class SagaStateInstanceCreatorTests
         var state = 42;
 
         var sut = new SagaStateInstanceCreator<int>();
-        var result = sut.Create(state, "trigger-1", "corr-1", descriptor);
+        var result = sut.Create(state, "instance-1", "trigger-1", "corr-1", descriptor);
 
         Assert.NotNull(result);
         var typed = Assert.IsType<SagaInstance<int>>(result);
         Assert.Equal(42, typed.State);
+        Assert.Equal("instance-1", typed.InstanceId);
         Assert.Equal("trigger-1", typed.TriggerMessageId);
         Assert.Equal("corr-1", typed.CorrelationId);
         Assert.Equal(descriptor, typed.Descriptor);
-        Assert.NotEmpty(typed.InstanceId);
     }
 
     [Fact]
@@ -27,7 +27,7 @@ public class SagaStateInstanceCreatorTests
         object state = 99;
 
         var sut = new SagaStateInstanceCreator<int>();
-        var result = sut.Create(state, "trigger-2", "corr-2", descriptor);
+        var result = sut.Create(state, "instance-2", "trigger-2", "corr-2", descriptor);
 
         var typed = Assert.IsType<SagaInstance<int>>(result);
         Assert.Equal(99, typed.State);
@@ -42,6 +42,6 @@ public class SagaStateInstanceCreatorTests
         var sut = new SagaStateInstanceCreator<int>();
 
         Assert.Throws<InvalidCastException>(() =>
-            sut.Create(state, "trigger-3", "corr-3", descriptor));
+            sut.Create(state, "instance-3", "trigger-3", "corr-3", descriptor));
     }
 }

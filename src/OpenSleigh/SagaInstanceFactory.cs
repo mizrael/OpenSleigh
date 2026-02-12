@@ -34,6 +34,11 @@ public class SagaInstanceFactory : ISagaInstanceFactory
 
         return creator.Create(
             instance,
+#if NET9_0_OR_GREATER
+            Guid.CreateVersion7().ToString(),
+#else
+            Guid.NewGuid().ToString(),
+#endif
             messageContext.MessageId,
             messageContext.CorrelationId,
             descriptor);

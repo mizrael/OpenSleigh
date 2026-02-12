@@ -8,11 +8,11 @@ BenchmarkDotNet v0.14.0, Windows 11 (10.0.26200.7781)
 
 
 ```
-| Method               | Mean        | Error      | StdDev      | Median      | Ratio | RatioSD | Gen0   | Gen1   | Allocated | Alloc Ratio |
-|--------------------- |------------:|-----------:|------------:|------------:|------:|--------:|-------:|-------:|----------:|------------:|
-| SagaInstance_Dynamic | 398.9376 ns | 30.2533 ns |  86.8023 ns | 380.2075 ns | 0.952 |    0.32 | 0.2050 | 0.0005 |    1288 B |        1.00 |
-| SagaInstance_Wrapper | 403.4731 ns | 36.0994 ns | 102.4079 ns | 367.1741 ns | 0.963 |    0.35 | 0.2050 |      - |    1288 B |        1.00 |
-| SagaInstance_Direct  | 452.2120 ns | 47.9645 ns | 138.3886 ns | 403.1934 ns | 1.080 |    0.43 | 0.2050 |      - |    1288 B |        1.00 |
-| StateExtract_Dynamic |  10.5872 ns |  0.9976 ns |   2.8623 ns |   9.3178 ns | 0.025 |    0.01 |      - |      - |         - |        0.00 |
-| StateExtract_Wrapper |  11.0169 ns |  0.8391 ns |   2.3666 ns |  10.0000 ns | 0.026 |    0.01 |      - |      - |         - |        0.00 |
-| StateExtract_Direct  |   0.4598 ns |  0.1438 ns |   0.4171 ns |   0.2929 ns | 0.001 |    0.00 |      - |      - |         - |        0.00 |
+| Method               | Mean        | Error      | StdDev     | Median      | Ratio | RatioSD | Gen0   | Gen1   | Allocated | Alloc Ratio |
+|--------------------- |------------:|-----------:|-----------:|------------:|------:|--------:|-------:|-------:|----------:|------------:|
+| SagaInstance_Direct  | 145.2719 ns | 19.7221 ns | 56.9028 ns | 122.8624 ns | 1.129 |    0.58 | 0.1594 | 0.0004 |    1000 B |        1.00 |
+| SagaInstance_Dynamic | 223.3149 ns | 29.3239 ns | 86.4621 ns | 235.1741 ns | 1.736 |    0.88 | 0.1593 |      - |    1000 B |        1.00 |
+| SagaInstance_Wrapper | 134.7151 ns | 21.8173 ns | 61.8920 ns | 110.7623 ns | 1.047 |    0.60 | 0.1593 | 0.0002 |    1000 B |        1.00 |
+| StateExtract_Direct  |   0.5388 ns |  0.2345 ns |  0.6691 ns |   0.2991 ns | 0.004 |    0.01 |      - |      - |         - |        0.00 |
+| StateExtract_Dynamic |  10.1973 ns |  0.5835 ns |  1.7204 ns |   9.5943 ns | 0.079 |    0.03 |      - |      - |         - |        0.00 |
+| StateExtract_Wrapper |   2.2152 ns |  0.4858 ns |  1.3939 ns |   1.7580 ns | 0.017 |    0.01 |      - |      - |         - |        0.00 |

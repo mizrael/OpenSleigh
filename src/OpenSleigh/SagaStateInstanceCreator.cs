@@ -4,6 +4,7 @@ internal interface ISagaStateInstanceCreator
 {
     ISagaInstance Create(
         object state,
+        string instanceId,
         string triggerMessageId,
         string correlationId,
         SagaDescriptor descriptor);
@@ -13,15 +14,12 @@ internal sealed class SagaStateInstanceCreator<TS> : ISagaStateInstanceCreator
 {
     public ISagaInstance Create(
         object state,
+        string instanceId,
         string triggerMessageId,
         string correlationId,
         SagaDescriptor descriptor)
         => new SagaInstance<TS>(
-#if NET9_0_OR_GREATER
-            instanceId: Guid.CreateVersion7().ToString(),
-#else
-            instanceId: Guid.NewGuid().ToString(),
-#endif
+            instanceId: instanceId,
             triggerMessageId: triggerMessageId,
             correlationId: correlationId,
             descriptor: descriptor,
