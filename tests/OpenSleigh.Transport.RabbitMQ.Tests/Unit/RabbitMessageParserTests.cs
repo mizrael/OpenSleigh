@@ -1,4 +1,3 @@
-using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
@@ -48,11 +47,11 @@ public class RabbitMessageParserTests
 
         var result = await sut.ParseMessageAsync(eventArgs);
 
-        result.Should().NotBeNull();
-        result!.MessageId.Should().Be(messageId);
-        result.CorrelationId.Should().Be(correlationId);
-        result.SenderId.Should().Be(senderId);
-        result.MessageType.Should().Be(typeof(FakeSagaStarter));
+        Assert.NotNull(result);
+        Assert.Equal(messageId, result!.MessageId);
+        Assert.Equal(correlationId, result.CorrelationId);
+        Assert.Equal(senderId, result.SenderId);
+        Assert.Equal(typeof(FakeSagaStarter), result.MessageType);
     }
 
     [Fact]

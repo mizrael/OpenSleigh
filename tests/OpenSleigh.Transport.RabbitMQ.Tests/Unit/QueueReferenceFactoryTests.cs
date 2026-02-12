@@ -1,4 +1,3 @@
-using FluentAssertions;
 using NSubstitute;
 using OpenSleigh.Outbox;
 using System;
@@ -13,7 +12,7 @@ public class QueueReferenceFactoryTests
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns("test");
         sysInfo.ClientId.Returns("client");
-        
+
         var sut = new QueueReferenceFactory(messageType =>
         {
             var exchangeName = messageType.Name.ToLower();
@@ -23,17 +22,17 @@ public class QueueReferenceFactoryTests
             var dlQueueName = dlExchangeName + ".c";
             return new QueueReferences(exchangeName, queueName, routingKey, dlExchangeName, dlQueueName);
         });
-        
+
         var message = MessageEnvelope.Create(new FakeSagaStarter(), sysInfo);
         var result = sut.Create(message);
-        result.Should().NotBeNull();
-        result.ExchangeName.Should().Be("fakesagastarter");
-        result.QueueName.Should().Be("fakesagastarter.a");
-        result.RoutingKey.Should().Be("fakesagastarter.a");
-        result.DeadLetterExchangeName.Should().Be("fakesagastarter.b");
-        result.DeadLetterQueue.Should().Be("fakesagastarter.b.c");
-        result.RetryExchangeName.Should().Be("fakesagastarter.retry");
-        result.RetryQueueName.Should().Be("fakesagastarter.a.retry");
+        Assert.NotNull(result);
+        Assert.Equal("fakesagastarter", result.ExchangeName);
+        Assert.Equal("fakesagastarter.a", result.QueueName);
+        Assert.Equal("fakesagastarter.a", result.RoutingKey);
+        Assert.Equal("fakesagastarter.b", result.DeadLetterExchangeName);
+        Assert.Equal("fakesagastarter.b.c", result.DeadLetterQueue);
+        Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
+        Assert.Equal("fakesagastarter.a.retry", result.RetryQueueName);
     }
 
     [Fact]
@@ -44,12 +43,12 @@ public class QueueReferenceFactoryTests
         sysInfo.ClientId.Returns("client");
         var sut = QueueReferenceFactory.BuildDefaultCreator(sysInfo);
         var result = sut(typeof(FakeSagaStarter));
-        result.Should().NotBeNull();
-        result.ExchangeName.Should().Be("fakesagastarter");
-        result.QueueName.Should().Be("fakesagastarter.test.workers");
-        result.RoutingKey.Should().Be("fakesagastarter");
-        result.DeadLetterExchangeName.Should().Be("fakesagastarter.dead");
-        result.DeadLetterQueue.Should().Be("fakesagastarter.dead.test.workers");
+        Assert.NotNull(result);
+        Assert.Equal("fakesagastarter", result.ExchangeName);
+        Assert.Equal("fakesagastarter.test.workers", result.QueueName);
+        Assert.Equal("fakesagastarter", result.RoutingKey);
+        Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
+        Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
     }
 
     [Fact]
@@ -63,14 +62,14 @@ public class QueueReferenceFactoryTests
         var sut = new QueueReferenceFactory(creator);
         var message = MessageEnvelope.Create(new FakeSagaStarter(), sysInfo);
         var result = sut.Create(message);
-        result.Should().NotBeNull();
-        result.ExchangeName.Should().Be("fakesagastarter");
-        result.QueueName.Should().Be("fakesagastarter.test.workers");
-        result.RoutingKey.Should().Be("fakesagastarter");
-        result.DeadLetterExchangeName.Should().Be("fakesagastarter.dead");
-        result.DeadLetterQueue.Should().Be("fakesagastarter.dead.test.workers");
-        result.RetryExchangeName.Should().Be("fakesagastarter.retry");
-        result.RetryQueueName.Should().Be("fakesagastarter.test.workers.retry");
+        Assert.NotNull(result);
+        Assert.Equal("fakesagastarter", result.ExchangeName);
+        Assert.Equal("fakesagastarter.test.workers", result.QueueName);
+        Assert.Equal("fakesagastarter", result.RoutingKey);
+        Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
+        Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
+        Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
+        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
     }
 
     [Fact]
@@ -83,14 +82,14 @@ public class QueueReferenceFactoryTests
         var creator = QueueReferenceFactory.BuildDefaultCreator(sysInfo);
         var sut = new QueueReferenceFactory(creator);
         var result = sut.Create<FakeSagaStarter>();
-        result.Should().NotBeNull();
-        result.ExchangeName.Should().Be("fakesagastarter");
-        result.QueueName.Should().Be("fakesagastarter.test.workers");
-        result.RoutingKey.Should().Be("fakesagastarter");
-        result.DeadLetterExchangeName.Should().Be("fakesagastarter.dead");
-        result.DeadLetterQueue.Should().Be("fakesagastarter.dead.test.workers");
-        result.RetryExchangeName.Should().Be("fakesagastarter.retry");
-        result.RetryQueueName.Should().Be("fakesagastarter.test.workers.retry");
+        Assert.NotNull(result);
+        Assert.Equal("fakesagastarter", result.ExchangeName);
+        Assert.Equal("fakesagastarter.test.workers", result.QueueName);
+        Assert.Equal("fakesagastarter", result.RoutingKey);
+        Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
+        Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
+        Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
+        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
     }
 
     [Fact]
@@ -121,8 +120,8 @@ public class QueueReferenceFactoryTests
         var sut = new QueueReferenceFactory(creator);
 
         var ex = Assert.Throws<ArgumentException>(() => sut.Create(typeof(string)));
-        ex.Message.Should().Contain("does not implement IMessage interface");
-        ex.ParamName.Should().Be("messageType");
+        Assert.Contains("does not implement IMessage interface", ex.Message);
+        Assert.Equal("messageType", ex.ParamName);
     }
 
     [Fact]
@@ -136,14 +135,14 @@ public class QueueReferenceFactoryTests
         var sut = new QueueReferenceFactory(creator);
         var result = sut.Create(typeof(FakeSagaStarter));
 
-        result.Should().NotBeNull();
-        result.ExchangeName.Should().Be("fakesagastarter");
-        result.QueueName.Should().Be("fakesagastarter.test.workers");
-        result.RoutingKey.Should().Be("fakesagastarter");
-        result.DeadLetterExchangeName.Should().Be("fakesagastarter.dead");
-        result.DeadLetterQueue.Should().Be("fakesagastarter.dead.test.workers");
-        result.RetryExchangeName.Should().Be("fakesagastarter.retry");
-        result.RetryQueueName.Should().Be("fakesagastarter.test.workers.retry");
+        Assert.NotNull(result);
+        Assert.Equal("fakesagastarter", result.ExchangeName);
+        Assert.Equal("fakesagastarter.test.workers", result.QueueName);
+        Assert.Equal("fakesagastarter", result.RoutingKey);
+        Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
+        Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
+        Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
+        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
     }
 
     [Fact]
@@ -162,7 +161,7 @@ public class QueueReferenceFactoryTests
         var result1 = sut.Create(typeof(FakeSagaStarter));
         var result2 = sut.Create(typeof(FakeSagaStarter));
 
-        callCount.Should().Be(1);
-        result1.Should().BeSameAs(result2);
+        Assert.Equal(1, callCount);
+        Assert.Same(result1, result2);
     }
 }

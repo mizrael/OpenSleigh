@@ -1,4 +1,4 @@
-﻿namespace OpenSleigh.Transport.Kafka.Tests.Unit;
+namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class ConsumerBuilderFactoryTests
 {
@@ -8,7 +8,7 @@ public class ConsumerBuilderFactoryTests
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         Assert.Throws<ArgumentNullException>( () => new ConsumerBuilderFactory(null!, sysInfo));
     }
-    
+
     [Fact]
     public void Create_should_return_valid_instance()
     {
@@ -16,7 +16,6 @@ public class ConsumerBuilderFactoryTests
         var config = new KafkaConfiguration("lorem");
         var sut = new ConsumerBuilderFactory(config, sysInfo);
         var result = sut.Create<string, byte[]>();
-        result.Should().NotBeNull();
- 
+        Assert.NotNull(result);
     }
 }

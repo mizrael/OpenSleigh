@@ -1,0 +1,89 @@
+OpenSleigh v3.1.0 - Release Notes
+=====================================
+
+Release Date: January 10, 2026
+
+NEW FEATURES
+------------
+✨ Multiple Saga Starters Support (#101)
+   - Sagas can now be initiated by multiple message types
+   - Optimistic concurrency prevents duplicate saga creation
+   - Full E2E test coverage for sequential/parallel scenarios
+
+CRITICAL BUG FIXES
+------------------
+🔥 SqlSagaStateRepository: Fixed missing saga type filter in lock queries
+   - Prevented wrong saga retrieval in multi-saga workflows
+   - Added comprehensive filtering to match FindAsync behavior
+
+🔥 SagaExecutionService: Fixed exception masking in retry logic
+   - Retry failures now preserve both original and retry exceptions
+   - Vastly improved production debugging capabilities
+
+🔥 RabbitPersistentConnection: Removed duplicate event handler
+   - Eliminated race conditions in reconnection logic
+
+🔥 SqlOutboxRepository: Fixed static semaphore bottleneck
+   - Removed global serialization of outbox operations
+   - Significant performance improvement under load
+
+IMPROVEMENTS
+------------
+🚀 RabbitMessageSubscriber: Proper cancellation token propagation
+   - Enables graceful shutdown of long-running handlers
+
+🚀 RabbitMessageSubscriber: Added null check for configuration
+   - Better error messages on initialization failures
+
+TEST COVERAGE
+-------------
+✅ 8 new unit tests added
+✅ 1 new integration test added
+✅ 116 total unit tests passing
+✅ Zero regressions
+
+BREAKING CHANGES
+----------------
+❌ None for standard usage - fully backward compatible
+
+⚠️  Internal API changes (if extending OpenSleigh):
+   - SagaDescriptor.InitiatorType → InitiatorTypes (now ISet<Type>)
+   - TypeExtensions.GetInitiatorMessageType() returns ISet<Type>
+
+MIGRATION
+---------
+Update package references:
+  <PackageReference Include="OpenSleigh" Version="3.1.0" />
+
+No code changes required for existing single-starter sagas.
+
+USAGE EXAMPLE
+-------------
+// Multiple saga starters
+public class OrderSaga : Saga<OrderState>,
+    IStartedBy<OrderCreatedEvent>,
+    IStartedBy<PaymentReceivedEvent>
+{
+    // Either message can now start the saga
+}
+
+CONTRIBUTORS
+------------
+@arootbeer - Multiple saga starters implementation
+@mizrael - Bug fixes and testing
+
+LINKS
+-----
+Full Changelog: CHANGELOG-3.1.0.md
+Documentation: https://opensleigh.gitbook.io/
+GitHub: https://github.com/mizrael/OpenSleigh
+Issues: https://github.com/mizrael/OpenSleigh/issues
+
+UPGRADE CHECKLIST
+-----------------
+☐ Update all OpenSleigh packages to 3.1.0
+☐ Run full test suite
+☐ Test graceful shutdown behavior
+☐ Monitor SQL outbox performance improvements
+
+Questions? Open an issue or discussion on GitHub!

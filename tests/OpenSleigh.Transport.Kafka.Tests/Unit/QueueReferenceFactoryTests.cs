@@ -10,12 +10,12 @@ public class QueueReferenceFactoryTests
             var topicName = messageType.Name.ToLower();
             return new QueueReferences(topicName, topicName + ".dead");
         });
-        
+
         var message = DummyMessage.CreateEnvelope();
         var result = sut.Create(message);
-        result.Should().NotBeNull();
-        result.TopicName.Should().Be("dummymessage");
-        result.DeadLetterTopicName.Should().Be("dummymessage.dead");
+        Assert.NotNull(result);
+        Assert.Equal("dummymessage", result.TopicName);
+        Assert.Equal("dummymessage.dead", result.DeadLetterTopicName);
     }
 
     [Fact]
@@ -31,9 +31,9 @@ public class QueueReferenceFactoryTests
         var sut = new QueueReferenceFactory(creator);
         var message = DummyMessage.CreateEnvelope();
         var result = sut.Create(message);
-        result.Should().NotBeNull();
-        result.TopicName.Should().Be("dummymessage");
-        result.DeadLetterTopicName.Should().Be("dummymessage.dead");
+        Assert.NotNull(result);
+        Assert.Equal("dummymessage", result.TopicName);
+        Assert.Equal("dummymessage.dead", result.DeadLetterTopicName);
     }
 
     [Fact]
@@ -41,8 +41,8 @@ public class QueueReferenceFactoryTests
     {
         var sut = new QueueReferenceFactory();
         var result = sut.Create<DummyMessage>();
-        result.Should().NotBeNull();
-        result.TopicName.Should().Be("dummymessage");
-        result.DeadLetterTopicName.Should().Be("dummymessage.dead");
+        Assert.NotNull(result);
+        Assert.Equal("dummymessage", result.TopicName);
+        Assert.Equal("dummymessage.dead", result.DeadLetterTopicName);
     }
 }

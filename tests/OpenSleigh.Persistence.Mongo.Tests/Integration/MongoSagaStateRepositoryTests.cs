@@ -1,4 +1,4 @@
-﻿using MongoDB.Driver;
+using MongoDB.Driver;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport;
 using System.ComponentModel;
@@ -52,7 +52,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var messageContext = CreateMessageContext<FakeMessage>();
 
         var result = await sut.FindAsync(descriptor, messageContext, CancellationToken.None);
-        result.Should().BeNull();
+        Assert.Null(result);
     }
 
     [Fact]
@@ -67,8 +67,8 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         await sut.LockAsync(sagaContext, CancellationToken.None);
 
         var result = await sut.FindAsync(sagaContext.Descriptor, messageContext, CancellationToken.None);
-        result.Should().NotBeNull();
-        result.InstanceId.Should().Be(sagaContext.InstanceId);
+        Assert.NotNull(result);
+        Assert.Equal(sagaContext.InstanceId, result.InstanceId);
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
             filterBuilder.Eq(e => e.InstanceId, sagaContext.InstanceId),
             filterBuilder.Eq(e => e.CorrelationId, sagaContext.CorrelationId));
         var lockedState = await db.SagaStates.FindOneAsync(filter);
-        lockedState.Should().NotBeNull();
+        Assert.NotNull(lockedState);
     }
 
     [Fact]
@@ -103,7 +103,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var lockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
         var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.LockAsync(sagaContext, CancellationToken.None));
-        ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' is already locked");
+        Assert.Contains($"saga state '{sagaContext.InstanceId}' is already locked", ex.Message);
     }
 
     [Fact]
@@ -123,8 +123,8 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var messageContext2 = CreateMessageContext<FakeMessage>();
         var secondLockId = await sut.LockAsync(sagaContext, CancellationToken.None);
 
-        secondLockId.Should().NotBeNull()
-            .And.NotBe(firstLockId);
+        Assert.NotNull(secondLockId);
+        Assert.NotEqual(firstLockId, secondLockId);
     }
 
     [Fact]
@@ -138,7 +138,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var sagaContext = CreateSagaContext(messageContext);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.ReleaseAsync(sagaContext));
-        ex.Message.Should().Contain($"saga state '{sagaContext.InstanceId}' not found");
+        Assert.Contains($"saga state '{sagaContext.InstanceId}' not found", ex.Message);
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         fakeContext.LockId.Returns("lorem");
 
         var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(fakeContext));
-        ex.Message.Should().Contain($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'");
+        Assert.Contains($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'", ex.Message);
     }
 
     [Fact]
@@ -184,13 +184,14 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var filterBuilder = Builders<Entities.SagaState>.Filter;
         var filter = filterBuilder.Eq(e => e.InstanceId, sagaContext.InstanceId);
         var unLockedState = await db.SagaStates.FindOneAsync(filter);
-        unLockedState.Should().NotBeNull();
-        unLockedState.LockId.Should().BeNull();
-        unLockedState.LockTime.Should().BeNull();
-        unLockedState.IsCompleted.Should().BeTrue();
-        unLockedState.ProcessedMessages.Should().NotBeNullOrEmpty()
-                                       .And.HaveCount(2)
-                                       .And.Contain(m => m.MessageId == messageContext.MessageId)
-                                       .And.Contain(m => m.MessageId == messageContext2.MessageId);
+        Assert.NotNull(unLockedState);
+        Assert.Null(unLockedState.LockId);
+        Assert.Null(unLockedState.LockTime);
+        Assert.True(unLockedState.IsCompleted);
+        Assert.NotNull(unLockedState.ProcessedMessages);
+        Assert.NotEmpty(unLockedState.ProcessedMessages);
+        Assert.Equal(2, unLockedState.ProcessedMessages.Count);
+        Assert.Contains(unLockedState.ProcessedMessages, m => m.MessageId == messageContext.MessageId);
+        Assert.Contains(unLockedState.ProcessedMessages, m => m.MessageId == messageContext2.MessageId);
     }
 }

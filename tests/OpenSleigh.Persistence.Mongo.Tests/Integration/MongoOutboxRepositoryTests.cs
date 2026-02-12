@@ -1,4 +1,4 @@
-﻿using MongoDB.Driver;
+using MongoDB.Driver;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport;
@@ -48,9 +48,9 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
         var appendedMessage = await db.OutboxMessages.FindOneAsync(filter);
-        appendedMessage.Should().NotBeNull();
-        appendedMessage.LockId.Should().BeNull();
-        appendedMessage.LockTime.Should().BeNull();
+        Assert.NotNull(appendedMessage);
+        Assert.Null(appendedMessage.LockId);
+        Assert.Null(appendedMessage.LockTime);
     }
 
     [Fact]
@@ -91,7 +91,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var sut = CreateSut(db);
 
         var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
-        ex.Message.Should().Contain($"message '{message.MessageId}' not found");
+        Assert.Contains($"message '{message.MessageId}' not found", ex.Message);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
 
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
         var lockedMessage = await db.OutboxMessages.FindOneAsync(filter);
-        lockedMessage.Should().BeNull();
+        Assert.Null(lockedMessage);
     }
 
     [Fact]
@@ -120,6 +120,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         await sut.AppendAsync([message]);
 
         var messages = await sut.ReadPendingAsync();
-        messages.Should().NotBeNullOrEmpty();
+        Assert.NotNull(messages);
+        Assert.NotEmpty(messages);
     }
 }

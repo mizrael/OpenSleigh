@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 
 namespace OpenSleigh.Transport.Kafka.Tests.Unit;
@@ -12,7 +12,7 @@ public class KeySerializerTests
 
         var expectedGuid = Guid.NewGuid();
         var result = sut.Serialize(expectedGuid, default);
-        result.Should().BeEquivalentTo(expectedGuid.ToByteArray());
+        Assert.Equal(expectedGuid.ToByteArray(), result);
     }
 
     [Fact]
@@ -22,9 +22,9 @@ public class KeySerializerTests
 
         var message = new DummyMessage();
         var jsonMessage = JsonSerializer.Serialize(message);
-        var expectedData = Encoding.UTF8.GetBytes(jsonMessage); 
-        
+        var expectedData = Encoding.UTF8.GetBytes(jsonMessage);
+
         var result = sut.Serialize(message, default);
-        result.Should().BeEquivalentTo(expectedData);
+        Assert.Equal(expectedData, result);
     }
 }

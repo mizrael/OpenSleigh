@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using OpenSleigh.Outbox;
@@ -46,19 +45,18 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         var consumer = new AsyncEventingBasicConsumer(channel);
         consumer.ReceivedAsync += async (_, evt) =>
         {
-            evt.BasicProperties.Headers.Should().NotBeNullOrEmpty();
-            evt.BasicProperties.Headers.Should().ContainKeys(
-                nameof(MessageEnvelope.SenderId),
-                nameof(MessageEnvelope.CreatedAt),
-                nameof(MessageEnvelope.MessageType)
-            );
-            evt.BasicProperties.CorrelationId.Should().Be(envelope.CorrelationId);
-            evt.BasicProperties.MessageId.Should().Be(envelope.MessageId);
-            evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName));
-            evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()));
-            evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)].Should().BeEquivalentTo(Encoding.UTF8.GetBytes(envelope.SenderId));
+            Assert.NotNull(evt.BasicProperties.Headers);
+            Assert.NotEmpty(evt.BasicProperties.Headers);
+            Assert.True(evt.BasicProperties.Headers.ContainsKey(nameof(MessageEnvelope.SenderId)));
+            Assert.True(evt.BasicProperties.Headers.ContainsKey(nameof(MessageEnvelope.CreatedAt)));
+            Assert.True(evt.BasicProperties.Headers.ContainsKey(nameof(MessageEnvelope.MessageType)));
+            Assert.Equal(envelope.CorrelationId, evt.BasicProperties.CorrelationId);
+            Assert.Equal(envelope.MessageId, evt.BasicProperties.MessageId);
+            Assert.Equal(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)]);
+            Assert.Equal(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)]);
+            Assert.Equal(Encoding.UTF8.GetBytes(envelope.SenderId), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)]);
 
-            evt.Body.Should().NotBeNull();
+            Assert.False(evt.Body.IsEmpty);
 
             var serializer = new JsonSerializer();
             var message = serializer.Deserialize<FakeSagaStarter>(evt.Body.Span);
@@ -88,13 +86,13 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
 
         var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
         queueRefFactory.Create(envelope).Returns(queueRef);
-        
+
         var sut = new RabbitPublisher(queueRefFactory, _fixture.RabbitConfiguration, channelFactory, logger, new JsonSerializer());
         await sut.PublishAsync(envelope);
 
         while (!tokenSource.IsCancellationRequested)
             await Task.Delay(10);
 
-        received.Should().BeTrue();
+        Assert.True(received);
     }
 }

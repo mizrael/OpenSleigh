@@ -1,4 +1,4 @@
-﻿namespace OpenSleigh.Transport.Kafka.Tests.Unit;
+namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class GuidDeserializerTests
 {
@@ -10,6 +10,6 @@ public class GuidDeserializerTests
         var data = expectedGuid.ToByteArray();
         var sut = new GuidDeserializer();
         var result = sut.Deserialize(data, false, default);
-        result.Should().Be(expectedGuid);
+        Assert.Equal(expectedGuid, result);
     }
 }

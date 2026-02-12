@@ -1,4 +1,4 @@
-﻿using OpenSleigh.Outbox;
+using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Utils;
 using System.ComponentModel;
@@ -8,7 +8,7 @@ namespace OpenSleigh.Persistence.SQL.Tests.Integration;
 
 [Category("Integration")]
 [Trait("Category", "Integration")]
-public abstract class SqlOutboxRepositoryTests 
+public abstract class SqlOutboxRepositoryTests
 {
     private readonly DbFixture _fixture;
 
@@ -39,7 +39,7 @@ public abstract class SqlOutboxRepositoryTests
         Assert.Equal(OutboxAppendResult.Success, result);
 
         var appendedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
-        appendedMessage.Should().NotBeNull();
+        Assert.NotNull(appendedMessage);
     }
 
     [Fact]
@@ -151,6 +151,6 @@ public abstract class SqlOutboxRepositoryTests
         await sut.DeleteAsync(message);
 
         var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
-        lockedMessage.Should().BeNull();
+        Assert.Null(lockedMessage);
     }
 }

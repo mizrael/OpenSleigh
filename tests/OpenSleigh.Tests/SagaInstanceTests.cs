@@ -1,4 +1,3 @@
-using FluentAssertions;
 using OpenSleigh.Transport;
 
 namespace OpenSleigh.Tests;
@@ -15,17 +14,19 @@ public class SagaInstanceTests
         };
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var sut = new SagaInstance("lorem", "ipsum", "dolor", descriptor, processedMessages);
-        sut.InstanceId.Should().Be("lorem");
-        sut.CorrelationId.Should().Be("dolor");
-        sut.Descriptor.Should().Be(descriptor);
-        sut.ProcessedMessages.Should().BeEquivalentTo(processedMessages);
+        Assert.Equal("lorem", sut.InstanceId);
+        Assert.Equal("dolor", sut.CorrelationId);
+        Assert.Equal(descriptor, sut.Descriptor);
+        Assert.Equal(processedMessages.Length, sut.ProcessedMessages.Count);
+        Assert.All(processedMessages, pm =>
+            Assert.Contains(sut.ProcessedMessages, p => p.MessageId == pm.MessageId));
     }
 
     [Fact]
     public void Constructor_should_throw_when_descriptor_is_null()
     {
         var ex = Assert.Throws<ArgumentNullException>(() => new SagaInstance("lorem", "ipsum", "dolor", null!));
-        ex.ParamName.Should().Be("descriptor");
+        Assert.Equal("descriptor", ex.ParamName);
     }
 
     [Theory]
@@ -35,7 +36,7 @@ public class SagaInstanceTests
     public void Constructor_should_throw_when_instance_id_is_null_or_empty(string instanceId)
     {
         var ex = Assert.ThrowsAny<ArgumentException>(() => new SagaInstance(instanceId, "ipsum", "dolor", SagaDescriptor.Create<FakeSaga>()));
-        ex.ParamName.Should().Be("instanceId");
+        Assert.Equal("instanceId", ex.ParamName);
     }
 
     [Theory]
@@ -45,7 +46,7 @@ public class SagaInstanceTests
     public void Constructor_should_throw_when_correlation_id_is_null_or_empty(string correlationId)
     {
         var ex = Assert.ThrowsAny<ArgumentException>(() => new SagaInstance("baz", "ipsum", correlationId, SagaDescriptor.Create<FakeSaga>()));
-        ex.ParamName.Should().Be("correlationId");
+        Assert.Equal("correlationId", ex.ParamName);
     }
 
     [Fact]
@@ -73,7 +74,7 @@ public class SagaInstanceTests
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
 
-        sut.CanProcess(messageContext).Should().BeTrue();
+        Assert.True(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public class SagaInstanceTests
         var sut = new SagaInstance("lorem", "ipsum", starterContext.CorrelationId, descriptor);
         await sut.ProcessAsync(handler, starterContext, executionService);
 
-        sut.CanProcess(otherStarterContext).Should().BeTrue();
+        Assert.True(sut.CanProcess(otherStarterContext));
     }
 
     [Fact]
@@ -106,7 +107,7 @@ public class SagaInstanceTests
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.MarkAsCompleted();
 
-        sut.CanProcess(messageContext).Should().BeFalse();
+        Assert.False(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -120,7 +121,7 @@ public class SagaInstanceTests
 
         var sut = new SagaInstance("lorem", "ipsum", Guid.NewGuid().ToString(), descriptor);
 
-        sut.CanProcess(messageContext).Should().BeFalse();
+        Assert.False(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -133,7 +134,7 @@ public class SagaInstanceTests
             senderId: Guid.NewGuid().ToString());
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
-        sut.CanProcess(messageContext).Should().BeTrue();
+        Assert.True(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -159,7 +160,7 @@ public class SagaInstanceTests
             parentId: parentMessageContext.MessageId,
             senderId: sut.InstanceId);
 
-        sut.CanProcess(messageContext).Should().BeTrue();
+        Assert.True(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -173,7 +174,7 @@ public class SagaInstanceTests
 
         var sut = new SagaInstance("lorem", "ipsum", correlationId: Guid.NewGuid().ToString(), descriptor);
 
-        sut.CanProcess(messageContext).Should().BeFalse();
+        Assert.False(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -187,7 +188,7 @@ public class SagaInstanceTests
 
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
 
-        sut.CanProcess(messageContext).Should().BeTrue();
+        Assert.True(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -201,7 +202,7 @@ public class SagaInstanceTests
         var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
         sut.SetAsProcessed(messageContext);
 
-        sut.CanProcess(messageContext).Should().BeFalse();
+        Assert.False(sut.CanProcess(messageContext));
     }
 
     [Fact]
@@ -263,14 +264,11 @@ public class SagaInstanceTests
         await handler.Received(1).ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>());
         await executionService.Received(3).CommitAsync(sut, Arg.Any<CancellationToken>());
 
-        sut.LockId.Should().BeEmpty();
-        sut.ProcessedMessages.Should()
-            .OnlyContain(pm => new []
-            {
-                starterContext.MessageId,
-                otherStarterContext.MessageId,
-                messageContext.MessageId
-            }.Contains(pm.MessageId));
+        Assert.Empty(sut.LockId);
+        var expectedIds = new[] { starterContext.MessageId, otherStarterContext.MessageId, messageContext.MessageId };
+        Assert.Equal(expectedIds.Length, sut.ProcessedMessages.Count);
+        Assert.All(sut.ProcessedMessages, pm =>
+            Assert.Contains(pm.MessageId, expectedIds));
     }
 
     [Fact]

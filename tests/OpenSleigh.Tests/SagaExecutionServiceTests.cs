@@ -1,4 +1,3 @@
-using FluentAssertions;
 using OpenSleigh.Outbox;
 
 namespace OpenSleigh.Tests;
@@ -50,13 +49,13 @@ public class SagaExecutionServiceTests
         // After fix, should throw AggregateException containing both exceptions
         var act = async () => await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
 
-        var exception = await act.Should().ThrowAsync<AggregateException>();
+        var exception = await Assert.ThrowsAsync<AggregateException>(act);
 
         // Should contain both the original OptimisticLockException and the retry failure exception
-        exception.Which.InnerExceptions.Should().HaveCount(2);
-        exception.Which.InnerExceptions.Should().Contain(e => e is OptimisticLockException);
-        exception.Which.InnerExceptions.Should().Contain(e => e.Message == "Database connection failed");
-        exception.Which.Message.Should().Contain("Failed to lock saga after optimistic lock conflict");
+        Assert.Equal(2, exception.InnerExceptions.Count);
+        Assert.Contains(exception.InnerExceptions, e => e is OptimisticLockException);
+        Assert.Contains(exception.InnerExceptions, e => e.Message == "Database connection failed");
+        Assert.Contains("Failed to lock saga after optimistic lock conflict", exception.Message);
     }
 
     [Fact]
@@ -97,8 +96,8 @@ public class SagaExecutionServiceTests
         var result = await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
 
         // Assert
-        result.Should().NotBeNull();
-        result.InstanceId.Should().Be(sagaInstance.InstanceId);
+        Assert.NotNull(result);
+        Assert.Equal(sagaInstance.InstanceId, result.InstanceId);
         await sagaStateRepository.Received(2).LockAsync(sagaInstance, Arg.Any<CancellationToken>());
     }
 

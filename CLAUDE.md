@@ -29,7 +29,7 @@ dotnet restore
 # 2. Build the solution
 dotnet build -c Release        # Expect ~174 nullable warnings (acceptable), 0 errors required
 
-# 3. Run unit tests (~64 tests, no infrastructure needed, ~5-10 seconds)
+# 3. Run unit tests (~105 tests, no infrastructure needed, ~5-10 seconds)
 dotnet test --framework net9.0 --filter "Category!=E2E&Category!=Integration"
 
 # 4. Run a specific test class or method
@@ -59,6 +59,11 @@ dotnet test --framework net9.0 --filter "FullyQualifiedName!~Cosmos&Category=Int
 cd ../tests/infra
 docker-compose down && docker-compose up -d
 ```
+
+**Docker credentials** (for debugging connection issues):
+- SQL Server: `SA_PASSWORD=Sup3r_p4ssword123`
+- PostgreSQL: `POSTGRES_PASSWORD=Sup3r_p4ssword123`
+- RabbitMQ vhost: `/opensleigh-tests`
 
 **Note:** Cosmos tests are excluded (not fully implemented). E2E tests are disabled in CI.
 
@@ -244,6 +249,10 @@ Tests use xUnit with NSubstitute for mocking. Categorize with traits:
 - `[Trait("Category", "Integration")]` - Requires Docker infrastructure
 - `[Trait("Category", "E2E")]` - End-to-end scenarios (currently disabled in CI)
 
+### Code Coverage
+
+Enforced via codecov.yaml: **70% minimum** for both project and patch coverage, with 1% threshold.
+
 ### CI/CD
 
 - **CircleCI** (primary): Runs build + unit tests + integration tests on every push; SonarCloud quality scan
@@ -258,7 +267,31 @@ Tests use xUnit with NSubstitute for mocking. Categorize with traits:
 5. **Outbox polling interval** - Default configured via `OutboxProcessorOptions.Interval`; balance responsiveness vs. database load
 6. **Message routing is many-to-many** - One message type can trigger multiple sagas; one saga can handle multiple message types
 7. **Correlation ID immutability** - Once set on saga instance, correlation ID never changes; all published messages inherit it
+8. **Do not modify** `Versions.props`, `Directory.Build.props`, or `test.runsettings` unless the task specifically requires it
 
 ## Contributing
 
 Discuss changes via issue before implementing. Fork from **`develop`** branch (not main). Add tests for new code. Ensure `dotnet format` passes. Submit PR to `develop`.
+
+## Git Workflow
+- Every new implementation MUST happen in a feature branch
+- Never commit new features directly to main
+- If already on a feature branch, ask the user whether a sub-feature branch is needed before starting new work
+- NEVER commit changes - the user will commit manually after code review
+- **MANDATORY: Always create a Pull Request to merge into main** - never merge directly to main, even locally
+
+## Code Review
+- After completing any implementation, run the `superpowers:requesting-code-review` skill to review the changes
+- When writing implementation plans, include a final task for code review using the `superpowers:code-reviewer` subagent
+- Code review should check: plan compliance, code quality, architecture, and codebase conventions
+- Address Critical and Important issues before considering work complete
+
+## Coding Conventions
+- write comments only when strictly necessary (eg. the implementation is not obvious and the code is not self-explanatory)
+- prefer clear and descriptive names for classes, methods, variables
+- organize code into small, single-responsibility methods
+- use consistent formatting and indentation
+- follow SOLID principles and best practices
+- classes should be small and focused on a single responsibility
+- avoid magic strings; use `const string`, `nameof()`, or similar approaches instead
+- favor interfaces over concrete implementations (e.g., `IEnumerable<T>` over `List<T>`, `IReadOnlyList<T>` over arrays)

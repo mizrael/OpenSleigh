@@ -1,4 +1,3 @@
-using FluentAssertions;
 using OpenSleigh.InMemory;
 using OpenSleigh.Transport;
 
@@ -23,7 +22,7 @@ public class InMemorySagaStateRepositoryTests
 
         // Act & Assert - Try to lock same instance again, should throw LockException
         var act = async () => await repository.LockAsync(instance, CancellationToken.None);
-        await act.Should().ThrowAsync<LockException>();
+        await Assert.ThrowsAsync<LockException>(act);
     }
 
     [Fact]
@@ -48,9 +47,9 @@ public class InMemorySagaStateRepositoryTests
 
         // Assert - Should be able to find it by correlation ID
         var found = await repository.FindAsync(descriptor, messageContext, CancellationToken.None);
-        found.Should().NotBeNull();
-        found!.CorrelationId.Should().Be(correlationId);
-        found.InstanceId.Should().Be(instance.InstanceId);
+        Assert.NotNull(found);
+        Assert.Equal(correlationId, found!.CorrelationId);
+        Assert.Equal(instance.InstanceId, found.InstanceId);
     }
 
     [Fact]
@@ -70,7 +69,6 @@ public class InMemorySagaStateRepositoryTests
         await repository.ReleaseAsync(instance, CancellationToken.None);
 
         // Assert - Should be able to lock again after release
-        var act = async () => await repository.LockAsync(instance, CancellationToken.None);
-        await act.Should().NotThrowAsync();
+        await repository.LockAsync(instance, CancellationToken.None);
     }
 }

@@ -1,4 +1,4 @@
-﻿using Confluent.Kafka;
+using Confluent.Kafka;
 using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using System.Text;
@@ -61,7 +61,7 @@ public class MessageParserTests
         };
 
         var ex = Assert.Throws<ArgumentException>(() => sut.Parse(consumeResult));
-        ex.Message.Should().Contain("invalid message type");
+        Assert.Contains("invalid message type", ex.Message);
     }
 
     [Fact]
