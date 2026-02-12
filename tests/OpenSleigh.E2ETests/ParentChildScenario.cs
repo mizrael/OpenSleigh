@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;

@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
@@ -26,8 +25,8 @@ public abstract class SimpleSagaScenario : E2ETestsBase
 
         Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
         {
-            ctx.MessageId.Should().NotBeNullOrWhiteSpace();
-            ctx.SenderId.Should().NotBeNullOrWhiteSpace();
+            Assert.False(string.IsNullOrWhiteSpace(ctx.MessageId));
+            Assert.False(string.IsNullOrWhiteSpace(ctx.SenderId));
 
             Interlocked.Increment(ref receivedCount);
             tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
@@ -40,7 +39,7 @@ public abstract class SimpleSagaScenario : E2ETestsBase
 
         await Task.Delay(500);
 
-        receivedCount.Should().Be(1);
+        Assert.Equal(1, receivedCount);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

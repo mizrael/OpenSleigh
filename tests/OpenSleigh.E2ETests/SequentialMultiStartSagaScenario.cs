@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
@@ -82,13 +81,13 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
             },
             tokenSource);
 
-        receivedCount.Should().Be(2);
+        Assert.Equal(2, receivedCount);
 
         // These work correctly for in-memory scenarios because the object is always the same
         // Not having access to the host's container, I'm not sure if there's an appropriate way to get at the
         // saga state in the physical-persistence scenarios
-        // state.Foo.Should().Be(foo);
-        // state.Bar.Should().Be(bar);
+        // Assert.Equal(foo, state.Foo);
+        // Assert.Equal(bar, state.Bar);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

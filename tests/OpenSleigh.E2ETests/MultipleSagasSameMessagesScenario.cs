@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
@@ -36,7 +35,7 @@ public abstract class MultipleSagasSameMessagesScenario : E2ETestsBase
             async bus => await bus.PublishAsync(message, tokenSource.Token),
             tokenSource);
 
-        receivedCount.Should().Be(2);
+        Assert.Equal(2, receivedCount);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

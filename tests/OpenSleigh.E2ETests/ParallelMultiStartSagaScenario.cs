@@ -1,4 +1,3 @@
-﻿using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
@@ -6,7 +5,6 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Text.Json;
 using Bogus;
-using FluentAssertions.Execution;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests;
@@ -50,8 +48,8 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
         Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (ctx, inst) =>
         {
             Console.WriteLine($"Handled Start message {JsonSerializer.Serialize(ctx.Message, new JsonSerializerOptions { WriteIndented = true })}");
-            ctx.MessageId.Should().NotBeNullOrWhiteSpace();
-            ctx.SenderId.Should().NotBeNullOrWhiteSpace();
+            Assert.False(string.IsNullOrWhiteSpace(ctx.MessageId));
+            Assert.False(string.IsNullOrWhiteSpace(ctx.SenderId));
 
             instanceIds.Add(inst.InstanceId);
             receivedCount++;
@@ -94,15 +92,14 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
             tokenSource
         );
 
-        using var assertionScope = new AssertionScope();
-        receivedCount.Should().Be(2);
-        instanceIds.Should().HaveCount(1);
+        Assert.Equal(2, receivedCount);
+        Assert.Single(instanceIds);
 
         // These work correctly for in-memory scenarios because the object is always the same
         // Not having access to the host's container, I'm not sure if there's an appropriate way to get at the
         // saga state in the physical-persistence scenarios
-        // state.Foo.Should().Be(foo);
-        // state.Bar.Should().Be(bar);
+        // Assert.Equal(foo, state.Foo);
+        // Assert.Equal(bar, state.Bar);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)
