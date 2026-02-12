@@ -12,26 +12,11 @@
   </RunConfiguration>
   <DataCollectionRunSettings>
     <DataCollectors>
-      <DataCollector friendlyName="Code Coverage" uri="datacollector://Microsoft/CodeCoverage/2.0" assemblyQualifiedName="Microsoft.VisualStudio.Coverage.DynamicCoverageDataCollector, Microsoft.VisualStudio.TraceCollector, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <DataCollector friendlyName="XPlat Code Coverage">
         <Configuration>
-          <CodeCoverage>
-            <ModulePaths>
-              <Include>
-                <ModulePath>opensleigh.*.dll</ModulePath>
-                <ModulePath>OpenSleigh.*.dll</ModulePath>
-              </Include>
-              <Exclude>
-                <ModulePath>.*tests.dll</ModulePath>
-                <ModulePath>.*Tests.dll</ModulePath>
-              </Exclude>
-            </ModulePaths>
-            <Functions>
-              <Include>
-                <Function>^opensleigh\..*</Function>
-                <Function>^OpenSleigh\..*</Function>
-              </Include>
-            </Functions>
-          </CodeCoverage>
+          <Format>cobertura</Format>
+          <Exclude>[*.Tests]*,[*E2ETests]*,[*.Samples.*]*</Exclude>
+          <ExcludeByFile>**/tests/**/*.cs,**/samples/**/*.cs</ExcludeByFile>
         </Configuration>
       </DataCollector>
     </DataCollectors>

@@ -12,7 +12,9 @@
       "Bash(dotnet restore:*)",
       "Bash(gh api:*)",
       "WebFetch(domain:app.circleci.com)",
-      "WebFetch(domain:circleci.com)"
+      "WebFetch(domain:circleci.com)",
+      "Bash(dir:*)",
+      "WebFetch(domain:app.codecov.io)"
     ]
   }
 }
