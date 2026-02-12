@@ -35,12 +35,12 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
         using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
 
         MultiStartSagaState state = null!;
-        var handled = false;
+        var handled = 0;
 
         Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (_, inst) =>
         {
-            receivedCount++;
-            handled = true;
+            Interlocked.Increment(ref receivedCount);
+            Volatile.Write(ref handled, 1);
             if (ReferenceEquals(last, start))
             {
                 state = inst.State;
@@ -51,8 +51,8 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
 
         Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, inst) =>
         {
-            receivedCount++;
-            handled = true;
+            Interlocked.Increment(ref receivedCount);
+            Volatile.Write(ref handled, 1);
             if (ReferenceEquals(last, alsoStart))
             {
                 state = inst.State;
@@ -71,7 +71,7 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
             {
                 await bus.PublishAsync(first, tokenSource.Token);
 
-                while (!handled)
+                while (Volatile.Read(ref handled) == 0)
                     await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
 
                 // wait one more second for unlocking

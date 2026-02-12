@@ -51,7 +51,7 @@ public class SagaExecutionService : ISagaExecutionService
         return sagaInstance;
     }
 
-    private async Task<ISagaInstance> BeginProcessingCore<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) 
+    private async Task<ISagaInstance> BeginProcessingCore<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken)
         where TM : IMessage
     {
         var sagaInstance = await ResolveInstanceAsync(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
@@ -62,7 +62,24 @@ public class SagaExecutionService : ISagaExecutionService
         await sagaInstance.LockAsync(_sagaStateRepository, cancellationToken)
                           .ConfigureAwait(false);
 
+        // re-check after lock to close TOCTOU window: another thread may have
+        // processed the same message between the initial check and lock acquisition
+        if (!sagaInstance.CanProcess(messageContext))
+        {
+            await _sagaStateRepository.ReleaseAsync(sagaInstance, cancellationToken)
+                                      .ConfigureAwait(false);
+            return NoOpSagaInstance.Create(messageContext, descriptor);
+        }
+
         return sagaInstance;
+    }
+
+    public ValueTask ReleaseAsync(
+        ISagaInstance context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return _sagaStateRepository.ReleaseAsync(context, cancellationToken);
     }
 
     public async ValueTask CommitAsync(
