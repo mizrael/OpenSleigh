@@ -1,0 +1,21 @@
+source: "."
+title: OpenSleigh
+description: A distributed Saga management library for .NET Core
+baseurl: "/OpenSleigh"
+url: "https://mizrael.github.io"
+
+theme: just-the-docs
+
+color_scheme: light
+
+nav_enabled: true
+search_enabled: true
+
+heading_anchors: true
+
+back_to_top: true
+back_to_top_text: "Back to top"
+
+exclude:
+  - plans/
+  - Gemfile.lock
