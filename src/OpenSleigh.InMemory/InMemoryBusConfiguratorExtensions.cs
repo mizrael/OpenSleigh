@@ -7,6 +7,7 @@ using OpenSleigh.Outbox;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Channels;
 using OpenSleigh.Persistence;
+using OpenSleigh.Queries;
 
 namespace OpenSleigh.InMemory;
 
@@ -16,8 +17,11 @@ public static class InMemoryBusConfiguratorExtensions
     public static IBusConfigurator UseInMemoryPersistence(
         this IBusConfigurator busConfigurator)
     {
-        busConfigurator.Services.AddSingleton<ISagaStateRepository, InMemorySagaStateRepository>()
-                                .AddSingleton<IOutboxRepository, InMemoryOutboxRepository>();
+        busConfigurator.Services
+            .AddSingleton<InMemorySagaStateRepository>()
+            .AddSingleton<ISagaStateRepository>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
+            .AddSingleton<ISagaStateQuery>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
+            .AddSingleton<IOutboxRepository, InMemoryOutboxRepository>();
 
         return busConfigurator;
     }

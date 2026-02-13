@@ -5,6 +5,7 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Entities;
+using OpenSleigh.Queries;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
@@ -25,7 +26,8 @@ public static class SqlBusConfiguratorExtensions
             .AddScoped<ITransactionManager, SqlTransactionManager>()
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
             .AddTransient<IOutboxRepository, PostgreSQLOutboxRepository>()
-            .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
+            .AddTransient<ISagaStateRepository, SqlSagaStateRepository>()
+            .AddTransient<ISagaStateQuery, SqlSagaStateQuery>();
         
         return busConfigurator;
     }

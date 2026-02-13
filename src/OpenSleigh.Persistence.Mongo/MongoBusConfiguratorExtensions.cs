@@ -2,6 +2,7 @@
 using MongoDB.Driver;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
+using OpenSleigh.Queries;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.Mongo;
@@ -25,7 +26,8 @@ public static class MongoBusConfiguratorExtensions
 
             .AddScoped<IDbContext, DbContext>()
             .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
-            .AddTransient<IOutboxRepository, MongoOutboxRepository>();
+            .AddTransient<IOutboxRepository, MongoOutboxRepository>()
+            .AddTransient<ISagaStateQuery, MongoSagaStateQuery>();
         return busConfigurator;
     }
 }
