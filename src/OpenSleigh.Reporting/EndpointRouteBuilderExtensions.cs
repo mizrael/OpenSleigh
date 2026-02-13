@@ -14,6 +14,10 @@ public static class EndpointRouteBuilderExtensions
 
     public static IEndpointRouteBuilder MapOpenSleighReporting(this IEndpointRouteBuilder endpoints, string prefix = "/opensleigh")
     {
+#if NET9_0_OR_GREATER
+        endpoints.MapOpenApi();
+#endif
+
         var group = endpoints.MapGroup(prefix)
             .WithTags(Tag);
 

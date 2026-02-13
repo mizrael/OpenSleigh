@@ -1,22 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFrameworks>$(TargetFrameworkVersion)</TargetFrameworks>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+	<PropertyGroup>
+		<TargetFramework>net10.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
 
-  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.13" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\OpenSleigh\OpenSleigh.csproj" />
-    <ProjectReference Include="..\..\src\OpenSleigh.InMemory\OpenSleigh.InMemory.csproj" />
-    <ProjectReference Include="..\..\src\OpenSleigh.Reporting\OpenSleigh.Reporting.csproj" />
-  </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\src\OpenSleigh\OpenSleigh.csproj" />
+		<ProjectReference Include="..\..\src\OpenSleigh.InMemory\OpenSleigh.InMemory.csproj" />
+		<ProjectReference Include="..\..\src\OpenSleigh.Reporting\OpenSleigh.Reporting.csproj" />
+	</ItemGroup>
 
 </Project>

@@ -6,10 +6,6 @@ using OpenSleigh.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
 
-#if !NET8_0
-builder.Services.AddOpenApi();
-#endif
-
 builder.Services.AddOpenSleigh(cfg =>
 {
     cfg.UseInMemoryTransport()
@@ -21,12 +17,7 @@ builder.Services.AddOpenSleighReporting();
 
 var app = builder.Build();
 
-#if !NET8_0
-// OpenAPI document at /openapi/v1.json
-app.MapOpenApi();
-#endif
-
-// OpenSleigh reporting endpoints: GET /opensleigh/sagas, /opensleigh/sagas/{id}, etc.
+// OpenSleigh reporting endpoints + OpenAPI document at /openapi/v1.json
 app.MapOpenSleighReporting();
 
 // POST /orders — place a new pizza order
