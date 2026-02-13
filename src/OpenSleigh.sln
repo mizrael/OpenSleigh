@@ -74,6 +74,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Reporting", "Ope
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Reporting.Tests", "..\tests\OpenSleigh.Reporting.Tests\OpenSleigh.Reporting.Tests.csproj", "{640CD86A-30B9-4DA6-823C-FA09A0C3CABB}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "OpenSleigh.Samples.PizzaTracker", "..\samples\OpenSleigh.Samples.PizzaTracker\OpenSleigh.Samples.PizzaTracker.csproj", "{50291589-073C-4FB0-B1A2-E1FEDCC6D789}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -324,6 +326,18 @@ Global
 		{640CD86A-30B9-4DA6-823C-FA09A0C3CABB}.Release|x64.Build.0 = Release|Any CPU
 		{640CD86A-30B9-4DA6-823C-FA09A0C3CABB}.Release|x86.ActiveCfg = Release|Any CPU
 		{640CD86A-30B9-4DA6-823C-FA09A0C3CABB}.Release|x86.Build.0 = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|x64.Build.0 = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Debug|x86.Build.0 = Debug|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|Any CPU.Build.0 = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|x64.ActiveCfg = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|x64.Build.0 = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|x86.ActiveCfg = Release|Any CPU
+		{50291589-073C-4FB0-B1A2-E1FEDCC6D789}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
