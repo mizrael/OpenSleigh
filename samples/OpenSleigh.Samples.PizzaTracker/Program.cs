@@ -6,6 +6,8 @@ using OpenSleigh.Transport;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddOpenApi();
+
 builder.Services.AddOpenSleigh(cfg =>
 {
     cfg.UseInMemoryTransport()
@@ -16,6 +18,9 @@ builder.Services.AddOpenSleigh(cfg =>
 builder.Services.AddOpenSleighReporting();
 
 var app = builder.Build();
+
+// OpenAPI document at /openapi/v1.json
+app.MapOpenApi();
 
 // OpenSleigh reporting endpoints: GET /opensleigh/sagas, /opensleigh/sagas/{id}, etc.
 app.MapOpenSleighReporting();
@@ -31,7 +36,10 @@ app.MapPost("/orders", async (PlaceOrderRequest request, IMessageBus bus) =>
         Message = $"Order placed! {request.PizzaType} for {request.CustomerName}.",
         Tip = "Use GET /opensleigh/sagas to track all orders, or GET /opensleigh/sagas/{instanceId} for a specific order."
     });
-});
+})
+.WithTags("Orders")
+.WithSummary("Place a pizza order")
+.WithDescription("Publishes a PlaceOrder message that starts the OrderSaga.");
 
 app.Run();
 
