@@ -29,9 +29,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-		<PackageReference Include="RabbitMQ.Client" Version="7.1.2" />
-		<PackageReference Include="Polly" Version="8.6.1" />
-		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+		<PackageReference Include="RabbitMQ.Client" Version="7.2.0" />
+		<PackageReference Include="Polly" Version="8.6.5" />
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.103" PrivateAssets="All" />
 	</ItemGroup>
 
 	<ItemGroup>
