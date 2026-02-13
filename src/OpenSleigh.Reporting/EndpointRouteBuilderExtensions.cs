@@ -48,6 +48,7 @@ public static class EndpointRouteBuilderExtensions
             .WithSummary("Get a saga instance by correlation ID")
             .WithDescription("Looks up a saga instance by its correlation ID and saga type.")
             .Produces<SagaInstanceInfo>()
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapGet("/sagas/types", SagaEndpoints.GetRegisteredTypes)
