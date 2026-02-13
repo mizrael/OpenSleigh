@@ -5,7 +5,6 @@ namespace OpenSleigh.Utils;
 
 internal static class StringExtensions
 {
-    // TODO: tests
     public static string ComputeSha256Hash(this string rawData)
     {
         using var sha256Hash = SHA256.Create();

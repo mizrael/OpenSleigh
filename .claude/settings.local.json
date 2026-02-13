@@ -19,7 +19,8 @@
       "Bash(gh pr checks:*)",
       "Bash(gh issue view:*)",
       "Bash(dotnet run:*)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(dotnet:*)"
     ]
   }
 }

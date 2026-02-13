@@ -57,9 +57,6 @@ public abstract class SqlOutboxRepository : IOutboxRepository
        
         try
         {
-            //TODO: this feels like a hack to make E2E tests work. Need to remove.
-            //DbContext.ChangeTracker.Clear(); 
-            
             DbContext.OutboxMessages.AddRange(entities);
             await DbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);

@@ -5,7 +5,6 @@ namespace OpenSleigh.Transport;
 
 internal static class IdempotentMessageExtensions
 {
-    // TODO: tests
     public static string GetIdempotencyKey(this IIdempotentMessage message)
     {
         var sb = new StringBuilder();
