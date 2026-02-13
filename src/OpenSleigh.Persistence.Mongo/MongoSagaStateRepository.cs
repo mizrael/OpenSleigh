@@ -2,6 +2,7 @@
 using MongoDB.Driver;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
+using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.Mongo;
@@ -18,6 +19,9 @@ public class MongoSagaStateRepository : ISagaStateRepository
     private readonly MongoSagaStateRepositoryOptions _options;
     private readonly ISerializer _serializer;
 
+    private static readonly ConcurrentDictionary<Type, ISagaContextFactory> _contextFactories = new();
+    private static readonly ConcurrentDictionary<Type, ISagaStateExtractor> _stateExtractors = new();
+
     public MongoSagaStateRepository(
         IDbContext dbContext,
         MongoSagaStateRepositoryOptions? options,
@@ -27,19 +31,6 @@ public class MongoSagaStateRepository : ISagaStateRepository
         _options = options ?? MongoSagaStateRepositoryOptions.Default;
         _serializer = serializer;
     }
-
-    private static ISagaInstance<TS> CreateSagaContext<TS>(TS state, Entities.SagaState entity, SagaDescriptor descriptor)
-        => new SagaInstance<TS>(
-               instanceId: entity.InstanceId,
-               triggerMessageId: entity.TriggerMessageId,
-               correlationId: entity.CorrelationId,
-               descriptor: descriptor,
-               state: state,
-               processedMessages: entity.ProcessedMessages.Select(e => new ProcessedMessage()
-               {
-                   MessageId = e.MessageId,
-                   When = e.When
-               }));
 
     public async ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
         where TM : IMessage
@@ -80,7 +71,10 @@ public class MongoSagaStateRepository : ISagaStateRepository
         else
         {
             var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
-            result = CreateSagaContext((dynamic)state, entity, descriptor);
+            var factory = _contextFactories.GetOrAdd(descriptor.SagaStateType!, static t =>
+                (ISagaContextFactory)Activator.CreateInstance(
+                    typeof(SagaContextFactory<>).MakeGenericType(t))!);
+            result = factory.Create(state!, entity, descriptor);
         }
 
         if (entity.IsCompleted)
@@ -166,17 +160,17 @@ public class MongoSagaStateRepository : ISagaStateRepository
                 When = msg.When,
             });
 
-        if (state.GetType().IsGenericType)
-            SetStateData((dynamic)state, entity);
+        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
+        {
+            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
+                (ISagaStateExtractor)Activator.CreateInstance(
+                    typeof(SagaStateExtractor<>).MakeGenericType(t))!);
+            entity.StateData = extractor.Extract(state, _serializer);
+        }
 
         await _dbContext.SagaStates.ReplaceOneAsync(filter, entity, new ReplaceOptions()
         {
             IsUpsert = false,
         }).ConfigureAwait(false);
-    }
-
-    private void SetStateData<TS>(ISagaInstance<TS> state, Entities.SagaState entity)
-    {
-        entity.StateData = _serializer.Serialize(state.State);
     }
 }

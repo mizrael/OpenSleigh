@@ -1,9 +1,12 @@
-﻿using OpenSleigh.Transport;
+using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 
 namespace OpenSleigh;
 
 public class SagaInstanceFactory : ISagaInstanceFactory
 {
+    private static readonly ConcurrentDictionary<Type, ISagaStateInstanceCreator> _creators = new();
+
     public ISagaInstance Create<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext)
         where TM : IMessage
     {
@@ -25,19 +28,19 @@ public class SagaInstanceFactory : ISagaInstanceFactory
         if (instance is null)
             throw new TypeLoadException($"unable to create instance of type '{descriptor.SagaStateType.FullName}'");
 
-        return Create((dynamic)instance, messageContext, descriptor);
-    }
+        var creator = _creators.GetOrAdd(descriptor.SagaStateType, static t =>
+            (ISagaStateInstanceCreator)Activator.CreateInstance(
+                typeof(SagaStateInstanceCreator<>).MakeGenericType(t))!);
 
-    private static ISagaInstance Create<TS, TM>(TS state, IMessageContext<TM> messageContext, SagaDescriptor descriptor)
-        where TM : IMessage
-        => new SagaInstance<TS>(
+        return creator.Create(
+            instance,
 #if NET9_0_OR_GREATER
-            instanceId: Guid.CreateVersion7().ToString(),
+            Guid.CreateVersion7().ToString(),
 #else
-            instanceId: Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
 #endif
-            triggerMessageId: messageContext.MessageId,
-            correlationId: messageContext.CorrelationId,
-            descriptor,
-            state);
+            messageContext.MessageId,
+            messageContext.CorrelationId,
+            descriptor);
+    }
 }

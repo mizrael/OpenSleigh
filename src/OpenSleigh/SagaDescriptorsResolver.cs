@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("OpenSleigh.Tests")]
+[assembly: InternalsVisibleTo("OpenSleigh.Benchmarks")]
 namespace OpenSleigh;
 
 internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
