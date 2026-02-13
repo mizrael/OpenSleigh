@@ -132,6 +132,17 @@ public class SagaEndpointsTests
         Assert.IsType<BadRequest<string>>(result);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task GetByCorrelationId_should_return_BadRequest_when_sagaType_is_missing(string? sagaType)
+    {
+        var result = await SagaEndpoints.GetByCorrelationId(_query, "corr-1", sagaType!);
+
+        Assert.IsType<BadRequest<string>>(result);
+    }
+
     private static SagaInstanceInfo CreateSagaInstanceInfo(
         string instanceId,
         string correlationId = "corr-default",
