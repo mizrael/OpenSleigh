@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<TargetFrameworks>$(TargetFrameworkVersion)</TargetFrameworks>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+	</PropertyGroup>
+
+	<PropertyGroup>
+		<PackageVersion>$(PackageVersion)</PackageVersion>
+		<IsPackable>true</IsPackable>
+		<Authors>davidguida</Authors>
+		<Product>OpenSleigh.Reporting</Product>
+		<NeutralLanguage>en-US</NeutralLanguage>
+		<Title>OpenSleigh.Reporting</Title>
+		<PackageDescription>ASP.NET Core Minimal API endpoints for OpenSleigh saga state reporting.</PackageDescription>
+		<Copyright>Copyright 2025</Copyright>
+		<PackageRequireLicenseAcceptance>true</PackageRequireLicenseAcceptance>
+		<PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+		<PackageTags>saga saga-pattern dotnet-core csharp opensleigh reporting</PackageTags>
+		<PackageOutputPath>../../packages/</PackageOutputPath>
+		<RepositoryUrl>$(RepositoryUrl)</RepositoryUrl>
+		<PackageProjectUrl>$(PackageProjectUrl)</PackageProjectUrl>
+		<PublishRepositoryUrl>true</PublishRepositoryUrl>
+		<EmbedUntrackedSources>true</EmbedUntrackedSources>
+		<IncludeSymbols>true</IncludeSymbols>
+		<SymbolPackageFormat>snupkg</SymbolPackageFormat>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.103" PrivateAssets="All" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\OpenSleigh\OpenSleigh.csproj" />
+	</ItemGroup>
+
+</Project>
