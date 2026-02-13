@@ -24,3 +24,7 @@ OpenSleigh Core, Persistence, and Transport libraries are all available as NuGet
 
 - [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/)
 - [Kafka](https://www.nuget.org/packages/OpenSleigh.Transport.Kafka/)
+
+## Reporting
+
+- [Reporting](https://www.nuget.org/packages/OpenSleigh.Reporting/) — ASP.NET Core Minimal API endpoints for saga state querying and monitoring

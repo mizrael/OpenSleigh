@@ -2,7 +2,7 @@
 layout: default
 title: Publishing Messages
 parent: How-To
-nav_order: 4
+nav_order: 5
 ---
 
 # Publishing Messages

@@ -36,6 +36,7 @@ These are the packages available at the moment:
 | [PostgreSQL](https://www.nuget.org/packages/OpenSleigh.Persistence.PostgreSQL/) | ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Persistence.PostgreSQL?style=flat-square) |
 | [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/) | ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Transport.RabbitMQ?style=flat-square) |
 | [Kafka](https://www.nuget.org/packages/OpenSleigh.Transport.Kafka/) | ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Transport.Kafka?style=flat-square) |
+| [Reporting](https://www.nuget.org/packages/OpenSleigh.Reporting/) | ![Nuget](https://img.shields.io/nuget/v/OpenSleigh.Reporting?style=flat-square) |
 
 In-depth instructions can be found in the [How-To]({% link how-to/installation.md %}) section.
 

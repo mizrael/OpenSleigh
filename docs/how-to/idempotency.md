@@ -2,7 +2,7 @@
 layout: default
 title: Idempotency
 parent: How-To
-nav_order: 5
+nav_order: 7
 ---
 
 # Idempotency
