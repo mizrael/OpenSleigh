@@ -18,7 +18,7 @@ public class MessageDispatcherTests
 
         var sut = new MessageDispatcher<FakeSagaStarter>();
 
-        await sut.DispatchAsync(envelope, runner, descriptor, CancellationToken.None);
+        await sut.DispatchAsync(envelope, runner, new[] { descriptor }, CancellationToken.None);
 
         await runner.Received(1).ProcessAsync(
             Arg.Is<IMessageContext<FakeSagaStarter>>(ctx =>

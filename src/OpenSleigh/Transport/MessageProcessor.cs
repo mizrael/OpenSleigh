@@ -29,17 +29,7 @@ internal class MessageProcessor : IMessageProcessor
                 typeof(MessageDispatcher<>).MakeGenericType(t))!);
 
         var descriptors = _sagaDescriptorsResolver.Resolve(outboxMessage.Message);
-        foreach (var descriptor in descriptors)
-        {
-            try
-            {
-                await dispatcher.DispatchAsync(outboxMessage, _sagaRunner, descriptor, cancellationToken)
-                                .ConfigureAwait(false);
-            }
-            catch (SagaException)
-            {
-                // TODO: send outboxMessage + descriptor to deadletter
-            }
-        }
+        await dispatcher.DispatchAsync(outboxMessage, _sagaRunner, descriptors, cancellationToken)
+                        .ConfigureAwait(false);
     }
 }

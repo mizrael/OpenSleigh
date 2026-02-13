@@ -160,7 +160,7 @@ public class MongoSagaStateRepository : ISagaStateRepository
                 When = msg.When,
             });
 
-        if (state.Descriptor.SagaStateType is not null)
+        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
         {
             var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
                 (ISagaStateExtractor)Activator.CreateInstance(
