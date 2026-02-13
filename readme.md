@@ -10,7 +10,7 @@
 OpenSleigh is a distributed saga management library, written in C# with .NET Core. 
 It is intended to be reliable, fast, easy to use, configurable, and extensible.
 
-For more details, check the official website: [https://opensleigh.gitbook.io/](https://opensleigh.gitbook.io/)
+For more details, check the official documentation: [https://mizrael.github.io/OpenSleigh/](https://mizrael.github.io/OpenSleigh/)
 
 Do you like this project? Then consider giving a donation! [![Donate](https://img.shields.io/badge/Donate-PayPal-green.svg)](https://www.paypal.com/donate?business=9F94U4GWN7YS6&currency_code=CAD&item_name=OpenSleigh)
 
