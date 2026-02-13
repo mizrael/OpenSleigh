@@ -14,7 +14,12 @@
       "WebFetch(domain:app.circleci.com)",
       "WebFetch(domain:circleci.com)",
       "Bash(dir:*)",
-      "WebFetch(domain:app.codecov.io)"
+      "WebFetch(domain:app.codecov.io)",
+      "Bash(findstr:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh issue view:*)",
+      "Bash(dotnet run:*)",
+      "Bash(git status:*)"
     ]
   }
 }
