@@ -45,6 +45,9 @@ internal static class SagaEndpoints
         string sagaType,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(sagaType))
+            return Results.BadRequest("sagaType is required.");
+
         var result = await query.GetByCorrelationIdAsync(correlationId, sagaType, cancellationToken);
         return result is not null
             ? Results.Ok(result)

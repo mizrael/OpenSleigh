@@ -71,7 +71,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
     public ValueTask<SagaInstanceInfo?> GetByCorrelationIdAsync(string correlationId, string sagaType, CancellationToken cancellationToken = default)
     {
-        var match = _statesById.Values
+        var match = _statesById.Values.ToList()
             .FirstOrDefault(e => e.state.CorrelationId == correlationId
                 && e.state.Descriptor.SagaType.FullName == sagaType);
         return ValueTask.FromResult(match.state is not null ? MapToInfo(match) : null);

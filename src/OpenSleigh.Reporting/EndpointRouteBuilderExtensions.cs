@@ -12,6 +12,14 @@ public static class EndpointRouteBuilderExtensions
 {
     private const string Tag = "OpenSleigh";
 
+    /// <summary>
+    /// Maps the OpenSleigh reporting endpoints and (on .NET 9+) the OpenAPI document.
+    /// <para>
+    /// <b>Security note:</b> these endpoints expose saga state data, which may contain
+    /// sensitive information. Ensure appropriate authentication and authorization
+    /// middleware is configured before calling this method in production environments.
+    /// </para>
+    /// </summary>
     public static IEndpointRouteBuilder MapOpenSleighReporting(this IEndpointRouteBuilder endpoints, string prefix = "/opensleigh")
     {
 #if NET9_0_OR_GREATER
