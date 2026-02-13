@@ -5,10 +5,10 @@ jobs:
   build:
     resource_class: large
     environment:
-      TARGET_FRAMEWORK: net9.0
+      TARGET_FRAMEWORK: net10.0
 
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:9.0.203
+      - image: mcr.microsoft.com/dotnet/sdk:10.0.103
       - image: mongo:latest       
       - image: rabbitmq:3-management-alpine
         environment:
@@ -66,9 +66,9 @@ jobs:
   codecov:
     resource_class: large
     environment:
-      TARGET_FRAMEWORK: net9.0
+      TARGET_FRAMEWORK: net10.0
     docker:
-      - image: mcr.microsoft.com/dotnet/sdk:9.0.203
+      - image: mcr.microsoft.com/dotnet/sdk:10.0.103
       - image: 'mongo:latest'
       - image: 'rabbitmq:3-management-alpine'
         environment:
