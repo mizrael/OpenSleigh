@@ -18,4 +18,3 @@ back_to_top_text: "Back to top"
 
 exclude:
   - plans/
-  - Gemfile.lock
