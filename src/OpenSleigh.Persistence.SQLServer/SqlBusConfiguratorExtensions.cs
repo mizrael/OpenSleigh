@@ -18,14 +18,24 @@ public static class SqlBusConfiguratorExtensions
         busConfigurator.Services
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
+            .AddSingleton<SagaDbSchemaInitializer>()
             .AddDbContext<SagaDbContext>(builder =>
             {
                 builder.UseSqlServer(config.ConnectionString);
                 builder.AddInterceptors(new QueryHintInterceptor());
             }, contextLifetime: ServiceLifetime.Transient)
-            .AddScoped<ITransactionManager, SqlTransactionManager>()
+            // the relay reads and deletes outbox rows on the context its transaction runs on,
+            // so that the rows it reads stay locked, and are skipped by other relays, until it is done with them
+            .AddScoped<SqlTransactionManager>()
+            .AddScoped<ITransactionManager>(ctx => ctx.GetRequiredService<SqlTransactionManager>())
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
-            .AddTransient<IOutboxRepository, MSSqlOutboxRepository>()
+            .AddTransient<IOutboxRepository>(ctx => new MSSqlOutboxRepository(
+                ctx.GetRequiredService<SagaDbContext>(),
+                ctx.GetRequiredService<OpenSleigh.Utils.ITypeResolver>(),
+                ctx.GetRequiredService<SqlOutboxRepositoryOptions>(),
+                ctx.GetRequiredService<OpenSleigh.Utils.ISerializer>(),
+                ctx.GetRequiredService<DuplicateKeyDetector>(),
+                () => ctx.GetRequiredService<SqlTransactionManager>().DbContext))
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>()
             .AddTransient<ISagaStateQuery, SqlSagaStateQuery>();
         

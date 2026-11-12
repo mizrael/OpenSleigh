@@ -8,15 +8,18 @@ public class SagaExecutionService : ISagaExecutionService
     private readonly ISagaInstanceFactory _sagaExecCtxFactory;
     private readonly ISagaStateRepository _sagaStateRepository;
     private readonly IOutboxRepository _outboxRepository;
+    private readonly IOutboxSignal? _outboxSignal;
 
     public SagaExecutionService(
         ISagaInstanceFactory sagaExecCtxFactory,
         ISagaStateRepository sagaStateRepository,
-        IOutboxRepository outboxRepository)
+        IOutboxRepository outboxRepository,
+        IOutboxSignal? outboxSignal = null)
     {
         _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
         _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
+        _outboxSignal = outboxSignal;
     }
 
     public async ValueTask<ISagaInstance> BeginProcessingAsync<TM>(
@@ -88,17 +91,31 @@ public class SagaExecutionService : ISagaExecutionService
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        // TODO: transaction
+        var hasNewMessages = context.Outbox.Any();
 
-        if (context.Outbox.Any())
+        if (_sagaStateRepository is ISagaStateCommitter committer)
         {
-            await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
-                                   .ConfigureAwait(false);
+            // messages and release are stored together: a relay cannot hand a message back to this saga
+            // while it is still locked, or before the state it was published from is saved
+            await committer.CommitAsync(context, cancellationToken)
+                           .ConfigureAwait(false);
             context.ClearOutbox();
         }
+        else
+        {
+            if (hasNewMessages)
+            {
+                await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
+                                       .ConfigureAwait(false);
+                context.ClearOutbox();
+            }
 
-        await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
-                                  .ConfigureAwait(false);
+            await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
+                                      .ConfigureAwait(false);
+        }
+
+        if (hasNewMessages)
+            _outboxSignal?.NotifyPendingMessages();
     }
 
     private async Task<ISagaInstance> ResolveInstanceAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) where TM : IMessage

@@ -24,7 +24,9 @@ public static class MongoBusConfiguratorExtensions
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
 
-            .AddScoped<IDbContext, DbContext>()
+            // one context per service provider: it only holds the collections, which are safe to share,
+            // and creating it asks the server to create the indexes
+            .AddSingleton<IDbContext, DbContext>()
             .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
             .AddTransient<IOutboxRepository, MongoOutboxRepository>()
             .AddTransient<ISagaStateQuery, MongoSagaStateQuery>();

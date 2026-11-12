@@ -24,8 +24,14 @@ public class OutboxProcessor : IOutboxProcessor
     }
 
     public async ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default)
+        => await RelayPendingMessagesAsync(cancellationToken).ConfigureAwait(false);
+
+    public async ValueTask<OutboxRelayResult> RelayPendingMessagesAsync(CancellationToken cancellationToken = default)
     {
         _logger.LogInformation("Processing available outbox messages...");
+
+        var relayed = 0;
+        var failed = 0;
 
         await using var transaction = await _transactionManager.StartTransactionAsync(cancellationToken);
 
@@ -47,10 +53,13 @@ public class OutboxProcessor : IOutboxProcessor
                     await _outboxRepository.DeleteAsync(message, cancellationToken)
                                            .ConfigureAwait(false);
 
+                    relayed++;
+
                     _logger.LogInformation("Outbox message {MessageId} processed.", message.MessageId);
                 }
                 catch (LockException e)
                 {
+                    failed++;
                     _logger.LogDebug(
                         e,
                         "message '{MessageId}' was already locked by another producer. {Error}",
@@ -59,6 +68,7 @@ public class OutboxProcessor : IOutboxProcessor
                 }
                 catch (Exception e)
                 {
+                    failed++;
                     _logger.LogError(e, "an error has occurred while processing Outbox: {Error}", e.Message);
                 }
             }
@@ -68,6 +78,11 @@ public class OutboxProcessor : IOutboxProcessor
         {
             _logger.LogError(ex, "Error processing outbox messages: {Error}", ex.Message);
             await transaction.RollbackAsync();
+
+            // nothing was removed from the outbox: reporting progress would make the relay retry without pause
+            return new OutboxRelayResult(Relayed: 0, Failed: Math.Max(1, relayed + failed));
         }
+
+        return new OutboxRelayResult(relayed, failed);
     }
 }

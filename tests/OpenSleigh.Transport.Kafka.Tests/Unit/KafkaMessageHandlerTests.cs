@@ -1,6 +1,9 @@
-﻿using Confluent.Kafka;
+using Confluent.Kafka;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
+using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading;
@@ -10,6 +13,70 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class KafkaMessageHandlerTests
 {
+    [Fact]
+    public async Task HandleAsync_should_process_every_message_in_its_own_scope()
+    {
+        var consumeResult = new ConsumeResult<string, byte[]>();
+        var expectedMessage = DummyMessage.CreateEnvelope();
+
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
+        parser.Parse(consumeResult).Returns(expectedMessage);
+
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>()).Returns(new QueueReferences("lorem", "ipsum"));
+
+        var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
+        var scopeFactory = ScopeFactoryFor(messageProcessor, out var scope);
+
+        var sut = new KafkaMessageHandler(
+            parser,
+            scopeFactory,
+            NSubstitute.Substitute.For<IKafkaPublisherExecutor>(),
+            NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>(),
+            NSubstitute.Substitute.For<ISystemInfo>(),
+            queueRefFactory);
+
+        Assert.True(await sut.HandleAsync(consumeResult));
+        Assert.True(await sut.HandleAsync(consumeResult));
+
+        scopeFactory.Received(2).CreateScope();
+        scope.Received(2).Dispose();
+        await messageProcessor.Received(2).ProcessAsync(expectedMessage, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void UseKafkaTransport_should_register_a_handler_the_container_can_build()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddOpenSleigh(configurator => configurator.UseKafkaTransport(new KafkaConfiguration("localhost:9092")));
+        services.AddTransient(_ => NSubstitute.Substitute.For<IMessageProcessor>());
+        services.AddSingleton(NSubstitute.Substitute.For<IKafkaPublisherExecutor>());
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<KafkaMessageHandler>(provider.GetRequiredService<IKafkaMessageHandler>());
+    }
+
+    [Fact]
+    public void Handler_should_have_one_public_constructor_so_that_it_can_be_registered_by_type()
+    {
+        Assert.Single(typeof(KafkaMessageHandler).GetConstructors());
+    }
+
+    private static IServiceScopeFactory ScopeFactoryFor(IMessageProcessor messageProcessor)
+        => ScopeFactoryFor(messageProcessor, out _);
+
+    private static IServiceScopeFactory ScopeFactoryFor(IMessageProcessor messageProcessor, out IServiceScope scope)
+    {
+        var serviceProvider = NSubstitute.Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IMessageProcessor)).Returns(messageProcessor);
+        scope = NSubstitute.Substitute.For<IServiceScope>();
+        scope.ServiceProvider.Returns(serviceProvider);
+        var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+        scopeFactory.CreateScope().Returns(scope);
+        return scopeFactory;
+    }
+
     [Fact]
     public async Task StartAsync_should_return_false_when_message_parsing_fails()
     {
@@ -26,7 +93,7 @@ public class KafkaMessageHandlerTests
         var consumeResult = new ConsumeResult<string, byte[]>();
         var queueRefs = new QueueReferences("lorem", "ipsum");
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+        var sut = new KafkaMessageHandler(parser, ScopeFactoryFor(messageProcessor), publisher, logger, sysInfo, queueRefFactory);
 
         var result = await sut.HandleAsync(consumeResult);
         Assert.False(result);
@@ -57,7 +124,7 @@ public class KafkaMessageHandlerTests
         queueRefFactory.Create(Arg.Any<MessageEnvelope>())
             .Returns(queueRefs);
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+        var sut = new KafkaMessageHandler(parser, ScopeFactoryFor(messageProcessor), publisher, logger, sysInfo, queueRefFactory);
 
         var result = await sut.HandleAsync(consumeResult);
         Assert.True(result);
@@ -90,7 +157,7 @@ public class KafkaMessageHandlerTests
         queueRefFactory.Create(Arg.Any<MessageEnvelope>())
            .Returns(queueRefs);
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+        var sut = new KafkaMessageHandler(parser, ScopeFactoryFor(messageProcessor), publisher, logger, sysInfo, queueRefFactory);
 
         await sut.HandleAsync(consumeResult);
 
@@ -126,7 +193,7 @@ public class KafkaMessageHandlerTests
         queueRefFactory.Create(Arg.Any<MessageEnvelope>())
                        .Returns(queueRefs);
 
-        var sut = new KafkaMessageHandler(parser, messageProcessor, publisher, logger, sysInfo, queueRefFactory);
+        var sut = new KafkaMessageHandler(parser, ScopeFactoryFor(messageProcessor), publisher, logger, sysInfo, queueRefFactory);
 
         await sut.HandleAsync(consumeResult);
 

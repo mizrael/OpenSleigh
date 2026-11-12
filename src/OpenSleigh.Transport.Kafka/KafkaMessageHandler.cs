@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
 using System.Text;
@@ -8,25 +9,36 @@ namespace OpenSleigh.Transport.Kafka;
 public class KafkaMessageHandler : IKafkaMessageHandler
 {
     private readonly IKafkaMessageParser _messageParser;
-    private readonly IMessageProcessor _messageProcessor;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IKafkaPublisherExecutor _publisher;
     private readonly ILogger<KafkaMessageHandler> _logger;
     private readonly ISystemInfo _systemInfo;
     private readonly IQueueReferenceFactory _queueReferenceFactory;
 
+    /// <summary>
+    /// creates a handler that processes every message in its own dependency injection scope,
+    /// with its own <see cref="IMessageProcessor"/>.
+    /// </summary>
     public KafkaMessageHandler(IKafkaMessageParser messageParser,
-                                IMessageProcessor messageProcessor,
+                                IServiceScopeFactory scopeFactory,
                                 IKafkaPublisherExecutor publisher,
                                 ILogger<KafkaMessageHandler> logger,
                                 ISystemInfo systemInfo,
                                 IQueueReferenceFactory queueReferenceFactory)
     {
         _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
-        _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
+    }
+
+    private async ValueTask ProcessInOwnScopeAsync(MessageEnvelope message, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var messageProcessor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
+        await messageProcessor.ProcessAsync(message, cancellationToken);
     }
 
     public async ValueTask<bool> HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken cancellationToken = default)
@@ -72,7 +84,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
             message.MessageId, queueReferences.TopicName);
         try
         {
-            await _messageProcessor.ProcessAsync(message, cancellationToken);
+            await ProcessInOwnScopeAsync(message, cancellationToken);
         }
         catch (TaskCanceledException) { }
         catch (Exception ex)

@@ -140,6 +140,40 @@ public abstract class SqlOutboxRepositoryTests
     }
 
     [Fact]
+    public async Task AppendAsync_should_keep_working_after_a_duplicate_on_the_same_repository()
+    {
+        var message = CreateMessage();
+        var anotherMessage = CreateMessage();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        Assert.Equal(OutboxAppendResult.Success, await sut.AppendAsync([message]));
+        Assert.Equal(OutboxAppendResult.Duplicate, await sut.AppendAsync([message]));
+        Assert.Equal(OutboxAppendResult.Duplicate, await sut.AppendAsync([message]));
+        Assert.Equal(OutboxAppendResult.Success, await sut.AppendAsync([anotherMessage]));
+
+        var storedIds = await db.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
+        Assert.Equal(2, storedIds.Count);
+        Assert.Contains(message.MessageId, storedIds);
+        Assert.Contains(anotherMessage.MessageId, storedIds);
+    }
+
+    [Fact]
+    public async Task AppendAsync_should_not_keep_appended_messages_tracked()
+    {
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        await sut.AppendAsync([CreateMessage(), CreateMessage()]);
+        var duplicate = CreateMessage();
+        await sut.AppendAsync([duplicate]);
+        await sut.AppendAsync([duplicate]);
+
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
+
+    [Fact]
     public async Task DeleteAsync_should_delete_message()
     {
         var message = CreateMessage();

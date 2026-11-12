@@ -50,4 +50,25 @@ public class DefaultMessageBusTests
         
         await outboxRepository.Received(1).AppendAsync(Arg.Any<IEnumerable<MessageEnvelope>>(), CancellationToken.None);
     }
+
+    [Theory]
+    [InlineData(OutboxAppendResult.Success, 1)]
+    [InlineData(OutboxAppendResult.Duplicate, 0)]
+    public async Task PublishAsync_should_signal_pending_messages_only_when_one_was_appended(OutboxAppendResult appendResult, int expectedSignals)
+    {
+        var outboxRepository = Substitute.For<IOutboxRepository>();
+        outboxRepository.AppendAsync(Arg.Any<IEnumerable<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+            .Returns(appendResult);
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+        var sut = new DefaultMessageBus(
+            outboxRepository,
+            Substitute.For<ISystemInfo>(),
+            Substitute.For<ITypeResolver>(),
+            Substitute.For<ILogger<DefaultMessageBus>>(),
+            outboxSignal);
+
+        await sut.PublishAsync(new FakeSagaStarter(), CancellationToken.None);
+
+        outboxSignal.Received(expectedSignals).NotifyPendingMessages();
+    }
 }

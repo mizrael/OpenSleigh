@@ -40,6 +40,21 @@ services.AddOpenSleigh(cfg =>{
 
 ```
 
+### Consumer throughput
+
+By default a consumer handles one message at a time, in the order the broker delivers them, and the broker pushes messages without limit. Two settings on `RabbitConfiguration` change that:
+
+```
+var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
+{
+    ConsumerDispatchConcurrency = 16,
+    PrefetchCount = 64
+};
+```
+
+- `ConsumerDispatchConcurrency` is how many messages are handled at the same time. Raising it raises throughput, but messages are no longer handled in delivery order, and messages for the same saga instance that arrive together contend for its lock and go through the retry queue.
+- `PrefetchCount` is how many unacknowledged messages the broker hands to a consumer at once (0 means no limit). Set it when several workers share a queue, to a value at least as large as `ConsumerDispatchConcurrency`.
+
 
 If your application has to handle messages and events, not just dispatch them, you also have to configure each Saga :
 

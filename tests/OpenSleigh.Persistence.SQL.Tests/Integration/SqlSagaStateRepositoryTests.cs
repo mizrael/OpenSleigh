@@ -2,6 +2,7 @@ using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.ComponentModel;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Integration;
 
@@ -211,6 +212,224 @@ public abstract class SqlSagaStateRepositoryTests
         Assert.Contains(unLockedState.ProcessedMessages, m => m.MessageId == messageContext.MessageId);
         Assert.Contains(unLockedState.ProcessedMessages, m => m.MessageId == messageContext2.MessageId);
     }
+
+    [Fact]
+    public async Task ReleaseAsync_should_throw_and_write_nothing_when_the_lock_expired_and_was_taken_over_and_released()
+    {
+        var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+        var dbName = Guid.NewGuid().ToString();
+        var (firstOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var firstOwnerRepository = CreateSut(firstOwnerDb, options);
+        var secondOwnerRepository = CreateSut(secondOwnerDb, options);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var firstOwner = CreateSagaContext(messageContext);
+        await firstOwner.LockAsync(firstOwnerRepository, CancellationToken.None);
+
+        var secondOwner = CreateSameSaga(firstOwner);
+        await secondOwner.LockAsync(secondOwnerRepository, CancellationToken.None);
+        await secondOwnerRepository.ReleaseAsync(secondOwner);
+
+        firstOwner.SetAsProcessed(messageContext);
+        await Assert.ThrowsAsync<LockException>(async () => await firstOwnerRepository.ReleaseAsync(firstOwner));
+
+        var stored = await ReadStoredSagaAsync(verificationDb, firstOwner.InstanceId);
+        Assert.Empty(stored.ProcessedMessages);
+        Assert.Null(stored.LockId);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_throw_and_leave_the_lock_alone_when_another_owner_holds_it()
+    {
+        var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+        var dbName = Guid.NewGuid().ToString();
+        var (firstOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var firstOwnerRepository = CreateSut(firstOwnerDb, options);
+        var secondOwnerRepository = CreateSut(secondOwnerDb, options);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var firstOwner = CreateSagaContext(messageContext);
+        await firstOwner.LockAsync(firstOwnerRepository, CancellationToken.None);
+
+        var secondOwner = CreateSameSaga(firstOwner);
+        await secondOwner.LockAsync(secondOwnerRepository, CancellationToken.None);
+
+        firstOwner.SetAsProcessed(messageContext);
+        firstOwner.MarkAsCompleted();
+        await Assert.ThrowsAsync<LockException>(async () => await firstOwnerRepository.ReleaseAsync(firstOwner));
+
+        var stored = await ReadStoredSagaAsync(verificationDb, firstOwner.InstanceId);
+        Assert.Empty(stored.ProcessedMessages);
+        Assert.Equal(secondOwner.LockId, stored.LockId);
+        Assert.False(stored.IsCompleted);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_keep_stored_processed_messages_and_add_only_the_new_one()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (firstDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var firstRepository = CreateSut(firstDb);
+        var secondRepository = CreateSut(secondDb);
+
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(firstMessage);
+        await saga.LockAsync(firstRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await firstRepository.ReleaseAsync(saga);
+
+        var storedAfterFirstCycle = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        var firstMessageStoredAt = Assert.Single(storedAfterFirstCycle.ProcessedMessages).When;
+
+        var correlationId = firstMessage.CorrelationId;
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(correlationId);
+        var reloadedSaga = await secondRepository.FindAsync(saga.Descriptor, secondMessage, CancellationToken.None);
+        Assert.NotNull(reloadedSaga);
+        await reloadedSaga.LockAsync(secondRepository, CancellationToken.None);
+        reloadedSaga.SetAsProcessed(secondMessage);
+        await secondRepository.ReleaseAsync(reloadedSaga);
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.Equal(2, stored.ProcessedMessages.Count);
+        Assert.Contains(stored.ProcessedMessages, m => m.MessageId == secondMessage.MessageId);
+        var firstMessageRow = Assert.Single(stored.ProcessedMessages, m => m.MessageId == firstMessage.MessageId);
+        Assert.Equal(firstMessageStoredAt, firstMessageRow.When);
+        Assert.Null(stored.LockId);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_store_the_outbox_and_release_the_saga()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (db, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var sut = CreateSut(db);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.SetAsProcessed(messageContext);
+        var published = Publish(saga);
+
+        await sut.CommitAsync(saga);
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.Null(stored.LockId);
+        Assert.Single(stored.ProcessedMessages);
+        var outboxIds = await verificationDb.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
+        Assert.Equal(new[] { published.MessageId }, outboxIds);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_store_no_outbox_message_when_the_lock_was_taken_over()
+    {
+        var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);
+        var dbName = Guid.NewGuid().ToString();
+        var (firstOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondOwnerDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var firstOwnerRepository = CreateSut(firstOwnerDb, options);
+        var secondOwnerRepository = CreateSut(secondOwnerDb, options);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var firstOwner = CreateSagaContext(messageContext);
+        await firstOwner.LockAsync(firstOwnerRepository, CancellationToken.None);
+        var secondOwner = CreateSameSaga(firstOwner);
+        await secondOwner.LockAsync(secondOwnerRepository, CancellationToken.None);
+
+        firstOwner.SetAsProcessed(messageContext);
+        Publish(firstOwner);
+        await Assert.ThrowsAsync<LockException>(async () => await firstOwnerRepository.CommitAsync(firstOwner));
+
+        var stored = await ReadStoredSagaAsync(verificationDb, firstOwner.InstanceId);
+        Assert.Equal(secondOwner.LockId, stored.LockId);
+        Assert.Empty(stored.ProcessedMessages);
+        Assert.False(await verificationDb.OutboxMessages.AnyAsync());
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_skip_a_message_that_is_already_in_the_outbox_and_store_the_others()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (db, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var sut = CreateSut(db);
+
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
+        var saga = CreateSagaContext(firstMessage);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        var alreadyStored = Publish(saga);
+        await sut.CommitAsync(saga);
+        saga.ClearOutbox();
+
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(correlationId);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.SetAsProcessed(secondMessage);
+        saga.Publish(alreadyStored);
+        var notStoredYet = Publish(saga);
+
+        await sut.CommitAsync(saga);
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.Null(stored.LockId);
+        Assert.Equal(2, stored.ProcessedMessages.Count);
+        var outboxIds = await verificationDb.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
+        Assert.Equal(2, outboxIds.Count);
+        Assert.Contains(alreadyStored.MessageId, outboxIds);
+        Assert.Contains(notStoredYet.MessageId, outboxIds);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_release_the_saga_after_a_commit_that_did_not_complete()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (db, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var sut = CreateSut(db);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.SetAsProcessed(messageContext);
+        Publish(saga);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await sut.CommitAsync(saga, cancelled.Token));
+
+        // what SagaInstance does when its commit fails
+        await sut.ReleaseAsync(saga);
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.Null(stored.LockId);
+        Assert.False(await verificationDb.OutboxMessages.AnyAsync());
+    }
+
+    private static OpenSleigh.Outbox.MessageEnvelope Publish(ISagaInstance saga)
+    {
+        var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga);
+        saga.Publish(envelope);
+        return envelope;
+    }
+
+    private static ISagaInstance CreateSameSaga(ISagaInstance saga)
+        => new SagaInstance(saga.InstanceId, saga.TriggerMessageId, saga.CorrelationId, saga.Descriptor);
+
+    private static Task<Entities.SagaState> ReadStoredSagaAsync(SagaDbContext db, string instanceId)
+        => db.SagaStates
+            .Include(e => e.ProcessedMessages)
+            .AsNoTracking()
+            .SingleAsync(e => e.InstanceId == instanceId);
 
     private SqlSagaStateRepository CreateSut(SagaDbContext db,
         SqlSagaStateRepositoryOptions options = null)

@@ -33,6 +33,18 @@ public class DbFixture : IAsyncLifetime
         return dbContext;
     }
 
+    public string ConnectionString => _connectionString;
+
+    /// <summary>
+    /// returns the name of a database that does not exist yet and is dropped when the fixture is disposed.
+    /// </summary>
+    public string CreateDatabaseName()
+    {
+        var dbName = $"openSleigh_{Guid.NewGuid()}";
+        _dbs.Add(_client.GetDatabase(dbName));
+        return dbName;
+    }
+
     public Task InitializeAsync()
         => Task.CompletedTask;
 

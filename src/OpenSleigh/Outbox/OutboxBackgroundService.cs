@@ -10,16 +10,19 @@ public class OutboxBackgroundService : BackgroundService
     private readonly OutboxProcessorOptions _options;
     private readonly ILogger<OutboxBackgroundService> _logger;
     private readonly ISystemInfo _systemInfo;
+    private readonly IOutboxSignal _signal;
 
     public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
         OutboxProcessorOptions options,
         ILogger<OutboxBackgroundService> logger,
-        ISystemInfo systemInfo)
+        ISystemInfo systemInfo,
+        IOutboxSignal? signal = null)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+        _signal = signal ?? new OutboxSignal();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,19 +40,43 @@ public class OutboxBackgroundService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = _scopeFactory.CreateScope();
+                // what was signalled so far is about to be read; a message appended during the pass signals again
+                _signal.ClearPendingMessages();
 
-                var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
-                await service.ProcessPendingMessagesAsync(stoppingToken)
-                    .ConfigureAwait(false);
+                var result = await RelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
 
-                await Task.Delay(_options.Interval, stoppingToken)
-                    .ConfigureAwait(false);
+                // a pass that left messages behind (broker down, rows locked) is not followed by another right away,
+                // even when it relayed others: the ones that failed would be retried, and logged, at the pace of the drain
+                if (result.Relayed > 0 && result.Failed == 0 && _options.DrainPendingMessages)
+                    continue;
+
+                // and it waits for the whole interval: being woken by every publish would turn each into a retry
+                var canBeWoken = _options.WakeOnPublish && result.Failed == 0;
+                await WaitForNextReadAsync(canBeWoken, stoppingToken).ConfigureAwait(false);
             }
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
         }
+    }
+
+    private async ValueTask<OutboxRelayResult> RelayPendingMessagesAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+
+        var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
+        return await service.RelayPendingMessagesAsync(stoppingToken)
+            .ConfigureAwait(false);
+    }
+
+    private async ValueTask WaitForNextReadAsync(bool canBeWoken, CancellationToken stoppingToken)
+    {
+        if (canBeWoken)
+            await _signal.WaitForPendingMessagesAsync(_options.Interval, stoppingToken)
+                .ConfigureAwait(false);
+        else
+            await Task.Delay(_options.Interval, stoppingToken)
+                .ConfigureAwait(false);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

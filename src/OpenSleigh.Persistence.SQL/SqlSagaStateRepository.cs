@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
@@ -13,7 +13,7 @@ public record SqlSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly SqlSagaStateRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
 }
 
-public class SqlSagaStateRepository : ISagaStateRepository
+public partial class SqlSagaStateRepository : ISagaStateRepository
 {
     private readonly SagaDbContext _dbContext;
     private readonly SqlSagaStateRepositoryOptions _options;
@@ -86,7 +86,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
     private async ValueTask<string> LockAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.SagaStates
-            .Include(e => e.ProcessedMessages)
             .FirstOrDefaultAsync(e =>
                 (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
                 e.SagaType == state.Descriptor.SagaType.FullName &&
@@ -135,7 +134,6 @@ public class SqlSagaStateRepository : ISagaStateRepository
         catch (DbUpdateException)
         {
             entity = await _dbContext.SagaStates
-                .Include(e => e.ProcessedMessages)
                 .FirstOrDefaultAsync(e =>
                     e.CorrelationId == state.CorrelationId &&
                     e.SagaType == state.Descriptor.SagaType.FullName &&
@@ -155,51 +153,4 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return entity.LockId;
     }
 
-    public ValueTask ReleaseAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
-    {  
-        ArgumentNullException.ThrowIfNull(state);
-
-        return ReleaseAsyncCore(state, cancellationToken);
-    }
-
-    private async ValueTask ReleaseAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
-    {
-        var entity = await _dbContext.SagaStates
-             .Include(e => e.ProcessedMessages)
-             .FirstOrDefaultAsync(e => e.InstanceId == state.InstanceId, cancellationToken)
-             .ConfigureAwait(false);
-
-        if (entity is null)
-            throw new ArgumentException($"saga state '{state.InstanceId}' not found");
-
-        if (entity.LockId != state.LockId)
-            throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
-
-        entity.LockTime = null;
-        entity.LockId = null;
-
-        entity.IsCompleted = state.IsCompleted;
-        
-        entity.ProcessedMessages.Clear();
-
-        foreach (var msg in state.ProcessedMessages)
-            entity.ProcessedMessages.Add(new SagaProcessedMessage()
-            {
-                InstanceId = state.InstanceId,
-                MessageId = msg.MessageId,
-                When = msg.When,
-                SagaState = entity
-            });
-                    
-        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
-        {
-            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
-                (ISagaStateExtractor)Activator.CreateInstance(
-                    typeof(SagaStateExtractor<>).MakeGenericType(t))!);
-            entity.StateData = extractor.Extract(state, _serializer);
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken)
-                    .ConfigureAwait(false);
-    }
 }

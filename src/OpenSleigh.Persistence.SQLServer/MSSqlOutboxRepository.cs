@@ -12,13 +12,14 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
         ITypeResolver typeResolver, 
         SqlOutboxRepositoryOptions options, 
         ISerializer serializer, 
-        DuplicateKeyDetector duplicateKeyDetector) : base(options, dbContext, typeResolver, serializer, duplicateKeyDetector)
+        DuplicateKeyDetector duplicateKeyDetector,
+        Func<SagaDbContext>? relayDbContext = null) : base(options, dbContext, typeResolver, serializer, duplicateKeyDetector, relayDbContext)
     {
     }
 
     public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
-        var entities = await DbContext.OutboxMessages
+        var entities = await RelayDbContext.OutboxMessages
            .AsNoTracking()
            .Take(_options.MaxMessagesToPull)
              // make sure the QueryHintInterceptor is registered on the DbContext

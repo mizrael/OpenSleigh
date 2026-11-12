@@ -123,4 +123,52 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         Assert.NotNull(messages);
         Assert.NotEmpty(messages);
     }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_not_return_messages_another_reader_has_claimed()
+    {
+        var db = _fixture.CreateDbContext();
+        var firstRelay = CreateSut(db);
+        var secondRelay = CreateSut(db);
+        await firstRelay.AppendAsync([CreateMessage(), CreateMessage(), CreateMessage()]);
+
+        var readByFirst = await firstRelay.ReadPendingAsync();
+        var readBySecond = await secondRelay.ReadPendingAsync();
+
+        Assert.Equal(3, System.Linq.Enumerable.Count(readByFirst));
+        Assert.Empty(readBySecond);
+    }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_return_messages_whose_claim_has_expired()
+    {
+        var db = _fixture.CreateDbContext();
+        var message = CreateMessage();
+        var options = new MongoOutboxRepositoryOptions(TimeSpan.Zero);
+        var typeResolver = new TypeResolver();
+        typeResolver.Register(typeof(FakeMessage));
+        var sut = new MongoOutboxRepository(db, options, typeResolver, new JsonSerializer());
+        await sut.AppendAsync([message]);
+
+        await sut.ReadPendingAsync();
+        await Task.Delay(50);
+        var readAgain = await sut.ReadPendingAsync();
+
+        Assert.Equal(message.MessageId, Assert.Single(readAgain).MessageId);
+    }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_only_return_new_messages_after_an_earlier_read()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync([CreateMessage()]);
+        await sut.ReadPendingAsync();
+
+        var newMessage = CreateMessage();
+        await sut.AppendAsync([newMessage]);
+        var read = await sut.ReadPendingAsync();
+
+        Assert.Equal(newMessage.MessageId, Assert.Single(read).MessageId);
+    }
 }
