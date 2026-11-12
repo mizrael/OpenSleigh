@@ -54,3 +54,29 @@ To run the gate outside CI, with the services up and a checkout of the base bran
 ```
 BENCH_BASE_DIR=/path/to/base/checkout bash benchmarks/run-gate.sh
 ```
+
+## Runs of the base branch, and the docs site
+
+Every commit that lands on `develop` is measured too, by the `benchmark_develop` job: same script, `full` suite,
+compared with the previous commit of `develop` (its first parent) in the same job. It only reports: a timing
+difference never fails it, because nothing can be done about a commit that is already on `develop` and a noisy
+runner would otherwise turn the branch red.
+
+The results are published on the [Benchmarks page](https://mizrael.github.io/OpenSleigh/benchmarks.html) of the
+docs site:
+
+- `OpenSleigh.Benchmarks.Publish` finds the `benchmark_develop` jobs of recent `develop` commits through the commit
+  statuses CircleCI reports to GitHub, downloads their artifacts through CircleCI's public API, and writes
+  `docs/_includes/benchmark-results.md`, which `docs/benchmarks.md` includes. No CircleCI token is involved.
+- The docs workflow (`.github/workflows/docs.yml`) runs it before every Jekyll build, and is triggered by the
+  commit status of a finished `benchmark_develop` job, so the page is rebuilt after every run.
+- Nothing is committed back to the repository, so a run cannot trigger another run. The file in the repository is
+  a placeholder; it is what the page shows when no run can be read.
+- CircleCI keeps artifacts for a limited time (30 days by default). The page shows up to 8 runs from the last 30
+  commits that still have artifacts.
+
+To preview the page content locally:
+
+```
+dotnet run --project benchmarks/OpenSleigh.Benchmarks.Publish -c Release
+```

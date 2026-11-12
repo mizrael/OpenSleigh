@@ -134,13 +134,27 @@ jobs:
               -- RunConfiguration.TreatNoTestsAsError=false
       - codecov/upload
 
-  benchmark_gate:
+  # benchmarks the checked out commit against a base, in the same job:
+  # as benchmark_gate it fails branches that are slower than the base branch,
+  # as benchmark_develop it records the base branch itself, compared with its previous commit, and never fails on timing
+  benchmark:
+    parameters:
+      base:
+        description: a branch to compare with, or "previous-commit"
+        type: string
+      suite:
+        type: string
+        default: gate
+      report_only:
+        type: boolean
+        default: false
     resource_class: large
     environment:
       BENCH_BASE_DIR: /tmp/bench-base
       BENCH_OUT_DIR: /tmp/bench-artifacts
       BENCH_ROUNDS: "<< pipeline.parameters.benchmark_rounds >>"
-      BENCH_REPORT_ONLY: "<< pipeline.parameters.benchmark_report_only >>"
+      BENCH_REPORT_ONLY: "<< parameters.report_only >>"
+      BENCH_SUITE: "<< parameters.suite >>"
       # a named service container is reached by its name, not on localhost
       BENCH_KAFKA: broker:29092
     docker:
@@ -179,14 +193,20 @@ jobs:
       - run: apt-get update && apt-get install -y openssh-client
       - checkout
       - run:
-          name: Check out the base branch
+          name: Check out the base (<< parameters.base >>)
           command: |
-            git fetch --no-tags origin "<< pipeline.parameters.benchmark_base_branch >>"
-            git worktree add --detach "$BENCH_BASE_DIR" FETCH_HEAD
+            if [ "<< parameters.base >>" = "previous-commit" ]; then
+              # the first parent of a merge commit is the previous tip of this branch
+              base_ref="HEAD~1"
+            else
+              git fetch --no-tags origin "<< parameters.base >>"
+              base_ref="FETCH_HEAD"
+            fi
+            git worktree add --detach "$BENCH_BASE_DIR" "$base_ref"
             echo "base: $(git -C "$BENCH_BASE_DIR" rev-parse HEAD)"
             echo "head: $(git rev-parse HEAD)"
       - run:
-          name: Benchmark this branch against << pipeline.parameters.benchmark_base_branch >>
+          name: Benchmark this commit against << parameters.base >>
           no_output_timeout: 15m
           command: bash ./benchmarks/run-gate.sh
       - store_artifacts:
@@ -206,8 +226,23 @@ workflows:
           context: codecov
   benchmark_gate:
     jobs:
-      - benchmark_gate:
+      - benchmark:
+          name: benchmark_gate
+          base: << pipeline.parameters.benchmark_base_branch >>
+          report_only: << pipeline.parameters.benchmark_report_only >>
           filters:
             branches:
               ignore:
+                - << pipeline.parameters.benchmark_base_branch >>
+  # every commit that lands on the base branch is measured too; the docs site publishes these runs
+  benchmark_develop:
+    jobs:
+      - benchmark:
+          name: benchmark_develop
+          base: previous-commit
+          suite: full
+          report_only: true
+          filters:
+            branches:
+              only:
                 - << pipeline.parameters.benchmark_base_branch >>
