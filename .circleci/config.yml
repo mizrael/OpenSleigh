@@ -71,7 +71,11 @@ jobs:
           name: Integration tests
           command: |
             cd ./src            
-            dotnet test --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category=Integration"
+            dotnet test --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category=Integration" --logger trx --results-directory /tmp/trx
+      - store_artifacts:
+          path: /tmp/trx
+          destination: trx
+          when: always
 
       #- run: # skipping E2E tests for now
       #    name: E2E tests
