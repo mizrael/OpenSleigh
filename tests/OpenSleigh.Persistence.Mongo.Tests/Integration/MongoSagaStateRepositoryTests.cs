@@ -238,10 +238,120 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         var fakeContext = NSubstitute.Substitute.For<ISagaInstance>();
         fakeContext.InstanceId.Returns(sagaContext.InstanceId);
         fakeContext.LockId.Returns("lorem");
+        fakeContext.Descriptor.Returns(sagaContext.Descriptor);
 
         var ex = await Assert.ThrowsAsync<LockException>(async () => await sut.ReleaseAsync(fakeContext));
         Assert.Contains($"unable to release Saga State '{sagaContext.InstanceId}' with lock id 'lorem'", ex.Message);
     }
+
+    [Fact]
+    public async Task Find_lock_and_release_should_store_a_new_saga_and_keep_its_state_and_messages_on_the_next_message()
+    {
+        var dbSuffix = Guid.NewGuid().ToString();
+        var descriptor = SagaDescriptor.Create<FakeSagaWithState, DummyState>();
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
+        var state = DummyState.New();
+
+        var firstRepository = CreateSut(_fixture.CreateDbContext(dbSuffix));
+        Assert.Null(await firstRepository.FindAsync(descriptor, firstMessage, CancellationToken.None));
+        var saga = new SagaInstance<DummyState>(Guid.NewGuid().ToString(), firstMessage.MessageId, correlationId, descriptor, state);
+        await saga.LockAsync(firstRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await firstRepository.ReleaseAsync(saga);
+
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(correlationId);
+        var secondRepository = CreateSut(_fixture.CreateDbContext(dbSuffix));
+        var found = await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        Assert.NotNull(found);
+        await found.LockAsync(secondRepository, CancellationToken.None);
+        found.SetAsProcessed(secondMessage);
+        await secondRepository.ReleaseAsync(found);
+
+        var stored = await CreateSut(_fixture.CreateDbContext(dbSuffix)).FindAsync(descriptor, secondMessage, CancellationToken.None);
+        var storedWithState = Assert.IsAssignableFrom<ISagaInstance<DummyState>>(stored);
+        Assert.Equal(state, storedWithState.State);
+        Assert.Equal(saga.InstanceId, stored.InstanceId);
+        Assert.True(string.IsNullOrEmpty(stored.LockId));
+        Assert.Equal(
+            new[] { firstMessage.MessageId, secondMessage.MessageId }.Order(),
+            stored.ProcessedMessages.Select(m => m.MessageId).Order());
+    }
+
+    [Fact]
+    public async Task LockAsync_should_report_a_saga_that_someone_else_started_after_it_was_not_found_and_work_on_the_next_attempt()
+    {
+        var dbSuffix = Guid.NewGuid().ToString();
+        var firstRepository = CreateSut(_fixture.CreateDbContext(dbSuffix));
+        var secondRepository = CreateSut(_fixture.CreateDbContext(dbSuffix));
+
+        // two consumers receive a message that starts the same saga, and neither finds it
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(firstMessage.CorrelationId);
+        var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+        Assert.Null(await firstRepository.FindAsync(descriptor, firstMessage, CancellationToken.None));
+        Assert.Null(await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None));
+
+        var started = CreateSagaContext(firstMessage);
+        await started.LockAsync(firstRepository, CancellationToken.None);
+        await firstRepository.ReleaseAsync(started);
+
+        var late = CreateSagaContext(secondMessage);
+        await Assert.ThrowsAsync<OptimisticLockException>(async () => await late.LockAsync(secondRepository, CancellationToken.None));
+
+        // what SagaExecutionService does next: it looks for the saga again, through the same repository
+        var found = await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        Assert.NotNull(found);
+        Assert.Equal(started.InstanceId, found.InstanceId);
+        await found.LockAsync(secondRepository, CancellationToken.None);
+        found.SetAsProcessed(secondMessage);
+        await secondRepository.ReleaseAsync(found);
+
+        var stored = await firstRepository.FindAsync(descriptor, firstMessage, CancellationToken.None);
+        Assert.NotNull(stored);
+        Assert.Single(stored.ProcessedMessages);
+    }
+
+    [Fact]
+    public async Task LockAsync_should_throw_when_someone_else_holds_the_lock_and_work_once_it_is_released()
+    {
+        var dbSuffix = Guid.NewGuid().ToString();
+        var ownerRepository = CreateSut(_fixture.CreateDbContext(dbSuffix));
+        var sut = CreateSut(_fixture.CreateDbContext(dbSuffix));
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(ownerRepository, CancellationToken.None);
+
+        var found = await sut.FindAsync(saga.Descriptor, messageContext, CancellationToken.None);
+        Assert.NotNull(found);
+        await Assert.ThrowsAsync<LockException>(async () => await found.LockAsync(sut, CancellationToken.None));
+
+        await ownerRepository.ReleaseAsync(saga);
+        await found.LockAsync(sut, CancellationToken.None);
+        Assert.False(string.IsNullOrEmpty(found.LockId));
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_not_write_when_it_is_cancelled()
+    {
+        var sut = CreateSut(_fixture.CreateDbContext());
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(sut, CancellationToken.None);
+
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await sut.ReleaseAsync(saga, cancelled.Token));
+
+        await Assert.ThrowsAsync<LockException>(async () => await CreateSagaContext(messageContext, saga).LockAsync(sut, CancellationToken.None));
+    }
+
+    private static ISagaInstance CreateSagaContext<TM>(IMessageContext<TM> messageContext, ISagaInstance sameAs)
+        where TM : IMessage
+        => new SagaInstance(sameAs.InstanceId, sameAs.TriggerMessageId, sameAs.CorrelationId, sameAs.Descriptor);
 
     [Fact]
     public async Task ReleaseLockAsync_should_release_lock_and_update_state()

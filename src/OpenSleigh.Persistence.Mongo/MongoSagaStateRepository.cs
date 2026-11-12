@@ -22,8 +22,8 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     private static readonly ConcurrentDictionary<Type, ISagaContextFactory> _contextFactories = new();
     private static readonly ConcurrentDictionary<Type, ISagaStateExtractor> _stateExtractors = new();
 
-    // sagas this repository looked for and did not find: locking one of them stores it, without looking again
-    private readonly ConcurrentDictionary<string, byte> _sagasNotFound = new();
+    // the saga this repository last looked for and did not find: locking it stores it, without looking again
+    private readonly HashSet<string> _sagasNotFound = new();
 
     public MongoSagaStateRepository(
         IDbContext dbContext,
@@ -52,12 +52,14 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
                 filterBuilder.Eq(e => e.SagaType, descriptor.SagaType.FullName),
                 stateTypeFilter);
 
+        _sagasNotFound.Clear();
+
         var entity = await _dbContext.SagaStates.FindOneAsync(filter, cancellationToken)
                                      .ConfigureAwait(false);
 
         if (entity is null)
         {
-            _sagasNotFound.TryAdd(SagaKey(correlationId, descriptor), 0);
+            _sagasNotFound.Add(SagaKey(correlationId, descriptor));
             return null;
         }
 
@@ -100,33 +102,55 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     {
         var lockId = Guid.NewGuid().ToString();
 
-        // a saga this repository looked for and did not find is new: it is stored locked, in one write.
-        // If someone else stored it in the meantime, it is treated like any other existing saga
-        if (_sagasNotFound.TryRemove(SagaKey(state.CorrelationId, state.Descriptor), out _))
+        // a saga this repository looked for and did not find is new: it is stored locked, in one write
+        if (_sagasNotFound.Remove(SagaKey(state.CorrelationId, state.Descriptor)))
         {
-            try
-            {
-                await InsertLockedAsync(state, lockId, cancellationToken).ConfigureAwait(false);
-                return lockId;
-            }
-            catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
-            {
-            }
+            await InsertLockedAsync(state, lockId, cancellationToken).ConfigureAwait(false);
+            return lockId;
         }
 
         if (await TryLockExistingAsync(state, lockId, cancellationToken).ConfigureAwait(false))
             return lockId;
 
-        var exists = await _dbContext.SagaStates
-            .Find(WithInstanceId(state.InstanceId))
-            .AnyAsync(cancellationToken)
-            .ConfigureAwait(false);
-        if (exists)
+        var entity = await _dbContext.SagaStates.FindOneAsync(WithInstanceId(state.InstanceId), cancellationToken)
+                                                .ConfigureAwait(false);
+        if (entity is null)
+        {
+            await InsertLockedAsync(state, lockId, cancellationToken).ConfigureAwait(false);
+            return lockId;
+        }
+
+        if (entity.LockId is not null &&
+            entity.LockTime is not null &&
+            entity.LockTime > DateTimeOffset.UtcNow - _options.LockMaxDuration)
             throw new LockException($"saga state '{state.InstanceId}' is already locked");
 
-        await InsertLockedAsync(state, lockId, cancellationToken).ConfigureAwait(false);
+        // the lock has expired, but not in a way the server could tell: a lock time written by an older version
+        // is stored in another format. It is taken over only if it is still the one that was just read
+        if (!await TryTakeOverLockAsync(state, entity.LockId, lockId, cancellationToken).ConfigureAwait(false))
+            throw new LockException($"saga state '{state.InstanceId}' is already locked");
+
         return lockId;
     }
+
+    private async ValueTask<bool> TryTakeOverLockAsync(ISagaInstance state, string? expiredLockId, string lockId, CancellationToken cancellationToken)
+    {
+        var filterBuilder = Builders<Entities.SagaState>.Filter;
+        var stillTheSameLock = filterBuilder.And(
+            WithInstanceId(state.InstanceId),
+            filterBuilder.Eq(e => e.LockId, expiredLockId));
+
+        var result = await _dbContext.SagaStates
+            .UpdateOneAsync(stillTheSameLock, TakeLock(lockId), cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        return result.MatchedCount > 0;
+    }
+
+    private static UpdateDefinition<Entities.SagaState> TakeLock(string lockId)
+        => Builders<Entities.SagaState>.Update
+            .Set(e => e.LockId, lockId)
+            .Set(e => e.LockTime, DateTimeOffset.UtcNow);
 
     // one conditional update: the lock is taken only if nobody holds it, whoever else is trying at the same time
     private async ValueTask<bool> TryLockExistingAsync(ISagaInstance state, string lockId, CancellationToken cancellationToken)
@@ -138,12 +162,8 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             filterBuilder.Eq(e => e.LockTime, null),
             filterBuilder.Lte(e => e.LockTime, lockExpiredBefore));
 
-        var takeLock = Builders<Entities.SagaState>.Update
-            .Set(e => e.LockId, lockId)
-            .Set(e => e.LockTime, DateTimeOffset.UtcNow);
-
         var result = await _dbContext.SagaStates
-            .UpdateOneAsync(filterBuilder.And(WithInstanceId(state.InstanceId), notLocked), takeLock, cancellationToken: cancellationToken)
+            .UpdateOneAsync(filterBuilder.And(WithInstanceId(state.InstanceId), notLocked), TakeLock(lockId), cancellationToken: cancellationToken)
             .ConfigureAwait(false);
 
         return result.MatchedCount > 0;
@@ -164,8 +184,17 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             LockTime = DateTimeOffset.UtcNow,
         };
 
-        await _dbContext.SagaStates.InsertOneAsync(entity, cancellationToken: cancellationToken)
-                                   .ConfigureAwait(false);
+        try
+        {
+            await _dbContext.SagaStates.InsertOneAsync(entity, cancellationToken: cancellationToken)
+                                       .ConfigureAwait(false);
+        }
+        catch (MongoWriteException ex) when (ex.WriteError?.Category == ServerErrorCategory.DuplicateKey)
+        {
+            // someone else started the saga for this correlation in the meantime, under another instance id:
+            // whoever handles the message looks for the saga again and finds theirs
+            throw new OptimisticLockException($"saga state for correlation '{state.CorrelationId}' was created by someone else");
+        }
     }
 
     public async ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
@@ -190,18 +219,16 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             .Set(e => e.IsCompleted, state.IsCompleted)
             .Set(e => e.ProcessedMessages, processedMessages);
 
-        // the lock is checked by the update itself, so the state is not required to be complete before it is known to hold it
-        var stateType = state.Descriptor?.SagaStateType;
-        if (stateType is not null && state.GetType().IsGenericType)
+        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
         {
-            var extractor = _stateExtractors.GetOrAdd(stateType, static t =>
+            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
                 (ISagaStateExtractor)Activator.CreateInstance(
                     typeof(SagaStateExtractor<>).MakeGenericType(t))!);
             release = release.Set(e => e.StateData, extractor.Extract(state, _serializer));
         }
 
         // one conditional update: the saga is only written while the lock is still the one this state holds
-        var result = await _dbContext.SagaStates.UpdateOneAsync(heldByState, release)
+        var result = await _dbContext.SagaStates.UpdateOneAsync(heldByState, release, cancellationToken: cancellationToken)
                                                 .ConfigureAwait(false);
         if (result.MatchedCount > 0)
             return;

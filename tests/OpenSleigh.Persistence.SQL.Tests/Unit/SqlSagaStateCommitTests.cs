@@ -170,6 +170,34 @@ public class SqlSagaStateCommitTests
         Assert.Equal(found.LockId, (await db.SagaStates.SingleAsync()).LockId);
     }
 
+    [Fact]
+    public async Task Lock_and_release_of_a_saga_found_by_the_same_repository_should_keep_its_state()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var descriptor = SagaDescriptor.Create<FakeSagaWithState, DummyState>();
+        var firstMessage = CreateMessageContext();
+        var state = DummyState.New();
+
+        var firstRepository = CreateSut(dbName);
+        var saga = new SagaInstance<DummyState>(Guid.NewGuid().ToString(), firstMessage.MessageId, firstMessage.CorrelationId, descriptor, state);
+        await saga.LockAsync(firstRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await firstRepository.ReleaseAsync(saga);
+
+        var secondMessage = CreateMessageContext(firstMessage.CorrelationId);
+        var secondRepository = CreateSut(dbName);
+        var found = await secondRepository.FindAsync(descriptor, secondMessage);
+        Assert.NotNull(found);
+        await found.LockAsync(secondRepository, CancellationToken.None);
+        found.SetAsProcessed(secondMessage);
+        await secondRepository.ReleaseAsync(found);
+
+        var stored = await CreateSut(dbName).FindAsync(descriptor, secondMessage);
+        var storedWithState = Assert.IsAssignableFrom<ISagaInstance<DummyState>>(stored);
+        Assert.Equal(state, storedWithState.State);
+        Assert.Equal(2, stored.ProcessedMessages.Count);
+    }
+
     private static async Task<ISagaInstance> StoreSagaAsync(string dbName, IMessageContext<FakeMessage> messageContext)
     {
         var repository = CreateSut(dbName);

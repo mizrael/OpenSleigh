@@ -47,6 +47,10 @@ public class OutboxProcessor : IOutboxProcessor
                 if (message is null)
                     continue;
 
+                // what was published so far is still removed below: stopping must not send it again
+                if (cancellationToken.IsCancellationRequested)
+                    break;
+
                 try
                 {
                     _logger.LogInformation("Processing outbox message {MessageId}...", message.MessageId);
@@ -80,8 +84,9 @@ public class OutboxProcessor : IOutboxProcessor
                 }
             }
 
+            // not cancellable, like the commit: these messages are published, and leaving them in the outbox sends them twice
             if (batchRepository is not null && published.Count > 0)
-                await batchRepository.DeleteAsync(published, cancellationToken)
+                await batchRepository.DeleteAsync(published, CancellationToken.None)
                                      .ConfigureAwait(false);
 
             await transaction.CommitAsync();

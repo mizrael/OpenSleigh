@@ -197,6 +197,35 @@ public class OutboxProcessorTests
     }
 
     [Fact]
+    public async Task RelayPendingMessagesAsync_should_still_delete_what_it_published_when_it_is_stopped_half_way()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var txManager = Substitute.For<ITransactionManager>();
+        var tx = Substitute.For<ITransaction>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(tx);
+
+        using var stopping = new CancellationTokenSource();
+        var published = DummyMessage.CreateEnvelope();
+        var notReached = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { published, notReached });
+        publisher.When(p => p.PublishAsync(published, Arg.Any<CancellationToken>()))
+            .Do(_ => stopping.Cancel());
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(stopping.Token);
+
+        Assert.Equal(1, result.Relayed);
+        await publisher.DidNotReceive().PublishAsync(notReached, Arg.Any<CancellationToken>());
+        await ((IOutboxBatchRepository)outboxRepo).Received(1).DeleteAsync(
+            Arg.Is<IReadOnlyCollection<MessageEnvelope>>(deleted => deleted.SequenceEqual(new[] { published })),
+            CancellationToken.None);
+        await tx.Received(1).CommitAsync();
+    }
+
+    [Fact]
     public async Task RelayPendingMessagesAsync_should_report_nothing_relayed_when_the_batch_cannot_be_deleted()
     {
         var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();

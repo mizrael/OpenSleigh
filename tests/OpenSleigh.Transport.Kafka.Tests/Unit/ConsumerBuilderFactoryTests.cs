@@ -10,6 +10,14 @@ public class ConsumerBuilderFactoryTests
     }
 
     [Fact]
+    public void ProducerLinger_should_default_to_zero_and_reject_a_negative_value()
+    {
+        Assert.Equal(TimeSpan.Zero, new KafkaConfiguration("lorem").ProducerLinger);
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => new KafkaConfiguration("lorem") { ProducerLinger = TimeSpan.FromMilliseconds(-1) });
+    }
+
+    [Fact]
     public void Create_should_return_valid_instance()
     {
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();

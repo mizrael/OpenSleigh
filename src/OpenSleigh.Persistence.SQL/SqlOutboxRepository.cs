@@ -114,7 +114,7 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
     }
 
     /// <summary>
-    /// removes the messages of a relay pass with one statement.
+    /// removes the messages of a relay pass with one round trip.
     /// </summary>
     public ValueTask DeleteAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
@@ -122,10 +122,14 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         if (messages.Count == 0)
             return ValueTask.CompletedTask;
 
-        return DeleteAsyncCore(messages, cancellationToken);
+        return DeleteBatchAsync(messages, cancellationToken);
     }
 
-    private async ValueTask DeleteAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
+    /// <summary>
+    /// removes the messages with one statement. A provider whose database would not look the rows up by key
+    /// for such a statement overrides it.
+    /// </summary>
+    protected virtual async ValueTask DeleteBatchAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         var messageIds = messages.Select(message => message.MessageId).ToArray();
 

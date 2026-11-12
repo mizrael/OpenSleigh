@@ -203,4 +203,20 @@ public abstract class SqlOutboxRepositoryTests
         var remaining = await db.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
         Assert.Equal(new[] { kept.MessageId }, remaining);
     }
+
+    [Fact]
+    public async Task DeleteAsync_should_delete_the_rest_of_a_batch_when_one_of_its_messages_is_already_gone()
+    {
+        var stored = CreateMessage();
+        var alreadyGone = CreateMessage();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        await sut.AppendAsync([stored]);
+        await sut.DeleteAsync(new[] { stored, alreadyGone });
+
+        Assert.False(await db.OutboxMessages.AsNoTracking().AnyAsync());
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
 }

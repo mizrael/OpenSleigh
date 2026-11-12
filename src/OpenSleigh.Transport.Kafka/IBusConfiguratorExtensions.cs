@@ -16,7 +16,18 @@ public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator
     /// so every millisecond here is added to every message. Raise it only when something else publishes
     /// many messages at once through the same producer.
     /// </summary>
-    public TimeSpan ProducerLinger { get; init; } = TimeSpan.Zero;
+    /// <exception cref="ArgumentOutOfRangeException">the value is negative.</exception>
+    public TimeSpan ProducerLinger
+    {
+        get => _producerLinger;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _producerLinger = value;
+        }
+    }
+
+    private readonly TimeSpan _producerLinger = TimeSpan.Zero;
 }
 
 [ExcludeFromCodeCoverage]

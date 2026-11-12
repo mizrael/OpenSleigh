@@ -46,7 +46,11 @@ public partial class SqlSagaStateRepository
             return null;
 
         if (IsLocked(found.Row.LockId, found.Row.LockTime))
+        {
+            // what was found is out of date by the time the saga can be locked
+            _foundSagas.Remove(state.InstanceId);
             return null;
+        }
 
         if (_dbContext.ChangeTracker.Entries<SagaState>().Any(entry => entry.Entity.InstanceId == state.InstanceId))
             return null;
@@ -64,6 +68,7 @@ public partial class SqlSagaStateRepository
         catch (DbUpdateConcurrencyException)
         {
             _dbContext.Entry(entity).State = EntityState.Detached;
+            _foundSagas.Remove(state.InstanceId);
             return null;
         }
         catch

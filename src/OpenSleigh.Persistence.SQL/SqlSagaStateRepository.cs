@@ -38,6 +38,10 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         var sagaType = descriptor.SagaType.FullName;
         var sagaStateType = descriptor.SagaStateType?.FullName;
 
+        // what an earlier message left behind is of no use to this one
+        _foundSagas.Clear();
+        _missingSagas.Clear();
+
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
             .AsNoTracking()
@@ -145,6 +149,8 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         }
         catch (DbUpdateConcurrencyException)
         {
+            // left tracked, the row would come back from a later attempt with the lock that was not stored
+            ForgetUnsavedChanges();
             throw new LockException($"saga state '{state.InstanceId}' is already locked");
         }
         catch (DbUpdateException)
@@ -167,6 +173,11 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 throw new OptimisticLockException();
             }
 
+            throw;
+        }
+        catch
+        {
+            ForgetUnsavedChanges();
             throw;
         }
 
