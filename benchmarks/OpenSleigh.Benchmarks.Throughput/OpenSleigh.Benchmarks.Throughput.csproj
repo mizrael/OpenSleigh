@@ -1,0 +1,51 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>12</LangVersion>
+    <IsPackable>false</IsPackable>
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <!-- with tiered compilation a scenario runs faster the longer the process has been alive,
+         so a result would depend on how long the scenarios before it took -->
+    <TieredCompilation>false</TieredCompilation>
+  </PropertyGroup>
+
+  <!--
+    The harness only uses the public API of the libraries, so the very same harness sources
+    can be compiled against another checkout (e.g. the PR target branch) by overriding this property:
+    dotnet build -p:OpenSleighSrcRoot=/path/to/other/checkout/src
+  -->
+  <PropertyGroup>
+    <OpenSleighSrcRoot Condition="'$(OpenSleighSrcRoot)' == ''">$(MSBuildThisFileDirectory)..\..\src</OpenSleighSrcRoot>
+    <RabbitConfigurationFile>$(OpenSleighSrcRoot)/OpenSleigh.Transport.RabbitMQ/RabbitConfiguration.cs</RabbitConfigurationFile>
+  </PropertyGroup>
+
+  <!-- scenarios for settings that only exist on one side of a comparison are compiled in only where the setting exists -->
+  <PropertyGroup Condition="Exists('$(RabbitConfigurationFile)') And $([System.IO.File]::ReadAllText('$(RabbitConfigurationFile)').Contains('ConsumerDispatchConcurrency'))">
+    <DefineConstants>$(DefineConstants);RABBIT_CONSUMER_TUNING</DefineConstants>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.15" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh\OpenSleigh.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.InMemory\OpenSleigh.InMemory.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Persistence.SQL\OpenSleigh.Persistence.SQL.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Transport.Kafka\OpenSleigh.Transport.Kafka.csproj" />
+    <ProjectReference Include="$(OpenSleighSrcRoot)\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\gate.json" Link="gate.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

@@ -10,3 +10,4 @@ TestResults/
 coverage*/
 BenchmarkDotNet.Artifacts/
 .claude/settings.local.json
+benchmarks/artifacts/
