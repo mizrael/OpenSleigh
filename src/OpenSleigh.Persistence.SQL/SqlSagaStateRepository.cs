@@ -39,8 +39,8 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         var sagaStateType = descriptor.SagaStateType?.FullName;
 
         // what an earlier message left behind is of no use to this one
-        _foundSagas.Clear();
-        _missingSagas.Clear();
+        _dbContext.ChangeTracker.Clear();
+        _sagaNotFound = null;
 
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
@@ -54,11 +54,9 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
 
         if (entity is null)
         {
-            RememberMissingSaga(correlationId, sagaType, sagaStateType);
+            _sagaNotFound = SagaKey(correlationId, sagaType, sagaStateType);
             return null;
         }
-
-        RememberFoundSaga(entity);
 
         ISagaInstance ? result;
 
@@ -75,7 +73,7 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 }));
         else
         {
-            var state = _serializer.Deserialize(entity.StateData, descriptor.SagaStateType);
+            var state = ReadState(entity.StateData, descriptor.SagaStateType);
             var factory = _contextFactories.GetOrAdd(descriptor.SagaStateType!, static t =>
                 (ISagaContextFactory)Activator.CreateInstance(
                     typeof(SagaContextFactory<>).MakeGenericType(t))!);
@@ -85,30 +83,51 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         if (entity.IsCompleted)
             result.MarkAsCompleted();
 
+        RememberFoundSaga(result, entity);
+
         return result;
+    }
+
+    // a saga stored by an older version has no state until its first message is done with:
+    // whoever finds it in the meantime sees a new state, as that message did
+    private object? ReadState(byte[]? stateData, Type stateType)
+        => stateData is null
+            ? Activator.CreateInstance(stateType)
+            : _serializer.Deserialize(stateData, stateType);
+
+    private byte[]? ExtractStateData(ISagaInstance state)
+    {
+        if (state.Descriptor.SagaStateType is null || !state.GetType().IsGenericType)
+            return null;
+
+        var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
+            (ISagaStateExtractor)Activator.CreateInstance(
+                typeof(SagaStateExtractor<>).MakeGenericType(t))!);
+        return extractor.Extract(state, _serializer);
     }
 
     public ValueTask<string> LockAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        return LockAsyncCore(state, cancellationToken);
+        return TryGetFoundRow(state, out var foundRow)
+            ? LockFoundSagaAsync(state, foundRow, cancellationToken)
+            : LockAsyncCore(state, cancellationToken);
     }
 
+    // locks a saga this repository knows nothing about, or stores a new one
     private async ValueTask<string> LockAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
-        var lockId = await TryLockFoundSagaAsync(state, cancellationToken).ConfigureAwait(false);
-        if (lockId is not null)
-            return lockId;
-
         var sagaType = state.Descriptor.SagaType.FullName;
         var sagaStateType = state.Descriptor.SagaStateType?.FullName;
 
-        // a saga this repository looked for and did not find is stored without looking again:
+        // a saga this repository holds the lock of is not read again, and stays as it is when the lock is refused.
+        // A saga this repository looked for and did not find is stored without looking again:
         // if someone else stored it in the meantime, the insert fails and is handled below
-        var entity = WasNotFound(state.CorrelationId, sagaType, sagaStateType)
-            ? null
-            : await _dbContext.SagaStates
+        var entity = FindTracked(state.InstanceId);
+        var wasTracked = entity is not null;
+        if (entity is null && !WasNotFound(state.CorrelationId, sagaType, sagaStateType))
+            entity = await _dbContext.SagaStates
                 .FirstOrDefaultAsync(e =>
                     (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
                     e.SagaType == sagaType &&
@@ -126,18 +145,18 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 IsCompleted = state.IsCompleted,
                 SagaType = sagaType,
                 SagaStateType = sagaStateType,
-                TriggerMessageId = state.TriggerMessageId,                    
+                TriggerMessageId = state.TriggerMessageId,
+                // stored with the saga, so that whoever finds it before its first message is done with can read it
+                StateData = ExtractStateData(state),
             };
             _dbContext.SagaStates.Add(entity);
         }
-        else
+        else if (IsLocked(entity.LockId, entity.LockTime))
         {
-            if (IsLocked(entity.LockId, entity.LockTime))
-            {
-                // left tracked, the row would be handed back as it is now by a later attempt, locked for good
+            // read just now and left tracked, the row would be handed back as it is by a later attempt, locked for good
+            if (!wasTracked)
                 _dbContext.Entry(entity).State = EntityState.Detached;
-                throw new LockException($"saga state '{state.InstanceId}' is already locked");
-            }
+            throw AlreadyLocked(state);
         }
 
         SetNewLock(entity);
@@ -150,13 +169,13 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         catch (DbUpdateConcurrencyException)
         {
             // left tracked, the row would come back from a later attempt with the lock that was not stored
-            ForgetUnsavedChanges();
-            throw new LockException($"saga state '{state.InstanceId}' is already locked");
+            ForgetUnsavedChanges(state);
+            throw AlreadyLocked(state);
         }
         catch (DbUpdateException)
         {
             // the row that could not be stored would be sent again by every later save on this context
-            ForgetUnsavedChanges();
+            ForgetUnsavedChanges(state);
 
             var storedInstanceId = await _dbContext.SagaStates
                 .AsNoTracking()
@@ -168,24 +187,29 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            if (storedInstanceId != null && storedInstanceId != state.InstanceId)
-            {
-                throw new OptimisticLockException();
-            }
+            if (storedInstanceId is null)
+                throw;
 
-            throw;
+            // someone else stored the saga in the meantime. Under another instance id, the message has to look
+            // for the saga again; under this one, they hold the lock they stored it with
+            if (storedInstanceId != state.InstanceId)
+                throw new OptimisticLockException();
+
+            throw AlreadyLocked(state);
         }
         catch
         {
-            ForgetUnsavedChanges();
+            ForgetUnsavedChanges(state);
             throw;
         }
 
-        if (isNew)
-            RememberNewSaga(entity.InstanceId);
+        RememberLockedSaga(state, isNew);
 
         return entity.LockId!;
     }
+
+    private SagaState? FindTracked(string instanceId)
+        => _dbContext.SagaStates.Local.FirstOrDefault(e => e.InstanceId == instanceId);
 
     private bool IsLocked(string? lockId, DateTimeOffset? lockTime)
         => lockId is not null &&
@@ -195,10 +219,16 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
     private static void SetNewLock(SagaState entity)
     {
         entity.LockTime = DateTimeOffset.UtcNow;
-#if NET9_0_OR_GREATER
-        entity.LockId = Guid.CreateVersion7().ToString();
-#else
-        entity.LockId = Guid.NewGuid().ToString();
-#endif
+        entity.LockId = NewLockId();
     }
+
+    private static string NewLockId()
+#if NET9_0_OR_GREATER
+        => Guid.CreateVersion7().ToString();
+#else
+        => Guid.NewGuid().ToString();
+#endif
+
+    private static LockException AlreadyLocked(ISagaInstance state)
+        => new($"saga state '{state.InstanceId}' is already locked");
 }

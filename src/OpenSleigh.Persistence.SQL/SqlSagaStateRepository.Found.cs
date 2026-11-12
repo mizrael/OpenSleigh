@@ -1,62 +1,103 @@
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
+using System.Diagnostics.CodeAnalysis;
+using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Persistence.SQL;
 
 // A message is handled by one repository: it finds the saga, locks it and releases it.
-// What the find read is kept, so that the lock and the release do not ask the database for it again.
+// What the find read is kept with the instance it returned, so that the lock and the release
+// do not ask the database for it again, and so that a saga that changed since it was found is not locked as it was.
 public partial class SqlSagaStateRepository
 {
-    private readonly Dictionary<string, FoundSaga> _foundSagas = new();
-    private readonly HashSet<string> _missingSagas = new();
+    // keyed by the instance itself: another message gets another instance, and nothing outlives its instance
+    private readonly ConditionalWeakTable<ISagaInstance, KnownSaga> _knownSagas = new();
 
-    private sealed record FoundSaga(SagaState? Row, HashSet<string> StoredMessageIds);
+    // the saga this repository last looked for and did not find
+    private string? _sagaNotFound;
 
-    private void RememberMissingSaga(string correlationId, string? sagaType, string? sagaStateType)
-        => _missingSagas.Add(MissingSagaKey(correlationId, sagaType, sagaStateType));
+    private sealed class KnownSaga
+    {
+        /// <summary>the row as <see cref="FindAsync"/> read it. Null once the saga is locked, or when it was not found.</summary>
+        public SagaState? FoundRow { get; set; }
+
+        /// <summary>ids of the processed messages that are stored. Null when they have to be read.</summary>
+        public HashSet<string>? StoredMessageIds { get; init; }
+    }
 
     private bool WasNotFound(string correlationId, string? sagaType, string? sagaStateType)
-        => _missingSagas.Remove(MissingSagaKey(correlationId, sagaType, sagaStateType));
+    {
+        var wasNotFound = _sagaNotFound == SagaKey(correlationId, sagaType, sagaStateType);
+        _sagaNotFound = null;
+        return wasNotFound;
+    }
 
-    private static string MissingSagaKey(string correlationId, string? sagaType, string? sagaStateType)
+    private static string SagaKey(string correlationId, string? sagaType, string? sagaStateType)
         => $"{correlationId}|{sagaType}|{sagaStateType}";
 
-    private void RememberFoundSaga(SagaState row)
-        => _foundSagas[row.InstanceId] = new FoundSaga(
-            row,
-            new HashSet<string>(row.ProcessedMessages.Select(message => message.MessageId)));
+    private void RememberFoundSaga(ISagaInstance instance, SagaState row)
+        => _knownSagas.AddOrUpdate(instance, new KnownSaga
+        {
+            FoundRow = row,
+            StoredMessageIds = new HashSet<string>(row.ProcessedMessages.Select(message => message.MessageId))
+        });
 
-    private void RememberNewSaga(string instanceId)
-        => _foundSagas[instanceId] = new FoundSaga(Row: null, new HashSet<string>());
+    private void RememberLockedSaga(ISagaInstance instance, bool isNew)
+        => _knownSagas.AddOrUpdate(instance, new KnownSaga
+        {
+            StoredMessageIds = isNew ? new HashSet<string>() : null
+        });
 
-    private void RememberStoredMessages(string instanceId, IReadOnlyCollection<string> messageIds)
+    private bool TryGetFoundRow(ISagaInstance instance, [NotNullWhen(true)] out SagaState? foundRow)
     {
-        if (_foundSagas.TryGetValue(instanceId, out var found))
-            found.StoredMessageIds.UnionWith(messageIds);
+        foundRow = _knownSagas.TryGetValue(instance, out var known) ? known.FoundRow : null;
+        return foundRow is not null;
     }
 
     /// <summary>
-    /// locks the saga with one conditional update, using the row that <see cref="FindAsync"/> read.
-    /// Returns null when the row has to be read again: it was not found by this repository,
-    /// it looked locked when it was found, or its lock changed in the meantime.
+    /// locks a saga that <see cref="FindAsync"/> returned, with one update that only applies while the saga
+    /// is still as it was found: every lock and every release leaves another <see cref="SagaState.LockId"/> behind.
     /// </summary>
-    private async ValueTask<string?> TryLockFoundSagaAsync(ISagaInstance state, CancellationToken cancellationToken)
+    /// <exception cref="LockException">someone else holds the lock.</exception>
+    /// <exception cref="OptimisticLockException">the saga was locked and released by someone else since it was found:
+    /// what was found is out of date, and the saga has to be looked for again.</exception>
+    private async ValueTask<string> LockFoundSagaAsync(ISagaInstance state, SagaState foundRow, CancellationToken cancellationToken)
     {
-        if (!_foundSagas.TryGetValue(state.InstanceId, out var found) || found.Row is null)
-            return null;
-
-        if (IsLocked(found.Row.LockId, found.Row.LockTime))
+        var lockedWhenFound = IsLocked(foundRow.LockId, foundRow.LockTime);
+        if (!lockedWhenFound && FindTracked(state.InstanceId) is null)
         {
-            // what was found is out of date by the time the saga can be locked
-            _foundSagas.Remove(state.InstanceId);
-            return null;
+            var lockId = await TryLockAsFoundAsync(state, foundRow, cancellationToken).ConfigureAwait(false);
+            if (lockId is not null)
+                return lockId;
         }
 
-        if (_dbContext.ChangeTracker.Entries<SagaState>().Any(entry => entry.Entity.InstanceId == state.InstanceId))
-            return null;
+        // the saga was locked when it was found, or is no longer as it was found: its lock is read, to tell which
+        var current = await _dbContext.SagaStates
+            .AsNoTracking()
+            .Where(e => e.InstanceId == state.InstanceId)
+            .Select(e => new { e.LockId, e.LockTime })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
 
-        // LockId is a concurrency token: the update only applies while the lock is the one that was found
-        var entity = CopyWithoutProcessedMessages(found.Row);
+        if (current is not null && IsLocked(current.LockId, current.LockTime))
+            throw AlreadyLocked(state);
+
+        if (current is null || current.LockId != foundRow.LockId)
+        {
+            _knownSagas.Remove(state);
+            throw new OptimisticLockException($"saga state '{state.InstanceId}' has changed since it was found");
+        }
+
+        // still the lock that was found, and expired by now: its owner never released the saga, which is as it was found
+        return await TryLockAsFoundAsync(state, foundRow, cancellationToken).ConfigureAwait(false)
+            ?? throw AlreadyLocked(state);
+    }
+
+    // LockId is a concurrency token: the update only applies while it is the one that was found.
+    // Returns null when it is not
+    private async ValueTask<string?> TryLockAsFoundAsync(ISagaInstance state, SagaState foundRow, CancellationToken cancellationToken)
+    {
+        var entity = CopyWithoutProcessedMessages(foundRow);
         _dbContext.SagaStates.Attach(entity);
         SetNewLock(entity);
 
@@ -68,7 +109,6 @@ public partial class SqlSagaStateRepository
         catch (DbUpdateConcurrencyException)
         {
             _dbContext.Entry(entity).State = EntityState.Detached;
-            _foundSagas.Remove(state.InstanceId);
             return null;
         }
         catch
@@ -76,6 +116,10 @@ public partial class SqlSagaStateRepository
             _dbContext.Entry(entity).State = EntityState.Detached;
             throw;
         }
+
+        // the saga is locked: the row that was found is not what is stored any more
+        if (_knownSagas.TryGetValue(state, out var known))
+            known.FoundRow = null;
 
         return entity.LockId;
     }

@@ -203,7 +203,6 @@ public abstract class SqlSagaStateRepositoryTests
 
         var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == sagaContext.InstanceId);
         Assert.NotNull(unLockedState);
-        Assert.Null(unLockedState.LockId);
         Assert.Null(unLockedState.LockTime);
         Assert.True(unLockedState.IsCompleted);
         Assert.NotNull(unLockedState.ProcessedMessages);
@@ -237,7 +236,7 @@ public abstract class SqlSagaStateRepositoryTests
 
         var stored = await ReadStoredSagaAsync(verificationDb, firstOwner.InstanceId);
         Assert.Empty(stored.ProcessedMessages);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
     }
 
     [Fact]
@@ -301,7 +300,7 @@ public abstract class SqlSagaStateRepositoryTests
         Assert.Contains(stored.ProcessedMessages, m => m.MessageId == secondMessage.MessageId);
         var firstMessageRow = Assert.Single(stored.ProcessedMessages, m => m.MessageId == firstMessage.MessageId);
         Assert.Equal(firstMessageStoredAt, firstMessageRow.When);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
     }
 
     [Fact]
@@ -321,7 +320,7 @@ public abstract class SqlSagaStateRepositoryTests
         await sut.CommitAsync(saga);
 
         var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
         Assert.Single(stored.ProcessedMessages);
         var outboxIds = await verificationDb.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
         Assert.Equal(new[] { published.MessageId }, outboxIds);
@@ -381,7 +380,7 @@ public abstract class SqlSagaStateRepositoryTests
         await sut.CommitAsync(saga);
 
         var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
         Assert.Equal(2, stored.ProcessedMessages.Count);
         var outboxIds = await verificationDb.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
         Assert.Equal(2, outboxIds.Count);
@@ -411,12 +410,12 @@ public abstract class SqlSagaStateRepositoryTests
         await sut.ReleaseAsync(saga);
 
         var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
         Assert.False(await verificationDb.OutboxMessages.AnyAsync());
     }
 
     [Fact]
-    public async Task ReleaseAsync_should_not_fail_when_the_processed_message_was_stored_by_someone_else_after_the_saga_was_found()
+    public async Task LockAsync_should_not_let_a_message_be_handled_twice_by_consumers_that_found_the_saga_together()
     {
         var dbName = Guid.NewGuid().ToString();
         var (setupDb, _) = _fixture.CreateDbContext(dbName);
@@ -446,13 +445,84 @@ public abstract class SqlSagaStateRepositoryTests
         firstCopy.SetAsProcessed(duplicatedMessage);
         await firstRepository.ReleaseAsync(firstCopy);
 
-        await secondCopy.LockAsync(secondRepository, CancellationToken.None);
-        secondCopy.SetAsProcessed(duplicatedMessage);
-        await secondRepository.ReleaseAsync(secondCopy);
+        // the second consumer is not handed the saga as it found it, where the message is still to be handled
+        await Assert.ThrowsAsync<OptimisticLockException>(async () => await secondCopy.LockAsync(secondRepository, CancellationToken.None));
+
+        var foundAgain = await secondRepository.FindAsync(saga.Descriptor, duplicatedMessage, CancellationToken.None);
+        Assert.NotNull(foundAgain);
+        Assert.False(foundAgain.CanProcess(duplicatedMessage));
 
         var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
         Assert.Equal(2, stored.ProcessedMessages.Count);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_store_nothing_when_its_message_was_stored_by_someone_else_without_changing_the_lock()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (setupDb, _) = _fixture.CreateDbContext(dbName);
+        var (db, _) = _fixture.CreateDbContext(dbName);
+        var (otherDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var setupRepository = CreateSut(setupDb);
+        var sut = CreateSut(db);
+
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(firstMessage);
+        await saga.LockAsync(setupRepository, CancellationToken.None);
+        await setupRepository.ReleaseAsync(saga);
+
+        var duplicatedMessage = CreateMessageContext<FakeMessage>();
+        duplicatedMessage.CorrelationId.Returns(saga.CorrelationId);
+        var found = await sut.FindAsync(saga.Descriptor, duplicatedMessage, CancellationToken.None);
+        Assert.NotNull(found);
+
+        // what a consumer running a version that releases without leaving a new lock id behind does in the meantime
+        var row = await otherDb.SagaStates.SingleAsync(e => e.InstanceId == saga.InstanceId);
+        row.ProcessedMessages.Add(new Entities.SagaProcessedMessage
+        {
+            InstanceId = saga.InstanceId,
+            MessageId = duplicatedMessage.MessageId,
+            When = DateTimeOffset.UtcNow,
+            SagaState = row
+        });
+        await otherDb.SaveChangesAsync();
+
+        await found.LockAsync(sut, CancellationToken.None);
+        found.SetAsProcessed(duplicatedMessage);
+        found.MarkAsCompleted();
+        Publish(found);
+        await Assert.ThrowsAsync<LockException>(async () => await sut.CommitAsync(found));
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.False(stored.IsCompleted);
+        Assert.Single(stored.ProcessedMessages);
+        Assert.False(await verificationDb.OutboxMessages.AnyAsync());
+
+        // what SagaInstance does when its commit fails
+        await sut.ReleaseAsync(found);
+        Assert.Null((await ReadStoredSagaAsync(verificationDb, saga.InstanceId)).LockTime);
+    }
+
+    [Fact]
+    public async Task LockAsync_should_report_a_saga_inserted_by_someone_else_under_the_same_instance_id_as_locked()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (firstDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondDb, _) = _fixture.CreateDbContext(dbName);
+        var firstRepository = CreateSut(firstDb);
+        var secondRepository = CreateSut(secondDb);
+
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+        Assert.Null(await firstRepository.FindAsync(descriptor, messageContext, CancellationToken.None));
+        Assert.Null(await secondRepository.FindAsync(descriptor, messageContext, CancellationToken.None));
+
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(firstRepository, CancellationToken.None);
+
+        await Assert.ThrowsAsync<LockException>(async () => await CreateSameSaga(saga).LockAsync(secondRepository, CancellationToken.None));
     }
 
     [Fact]
@@ -479,9 +549,14 @@ public abstract class SqlSagaStateRepositoryTests
         await firstCopy.LockAsync(firstRepository, CancellationToken.None);
         await Assert.ThrowsAsync<LockException>(async () => await secondCopy.LockAsync(secondRepository, CancellationToken.None));
 
+        // once it is released, the saga is not what the second repository found: it looks for it again
         await firstRepository.ReleaseAsync(firstCopy);
-        await secondCopy.LockAsync(secondRepository, CancellationToken.None);
-        Assert.False(string.IsNullOrEmpty(secondCopy.LockId));
+        await Assert.ThrowsAsync<OptimisticLockException>(async () => await secondCopy.LockAsync(secondRepository, CancellationToken.None));
+
+        var foundAgain = await secondRepository.FindAsync(saga.Descriptor, firstMessage, CancellationToken.None);
+        Assert.NotNull(foundAgain);
+        await foundAgain.LockAsync(secondRepository, CancellationToken.None);
+        Assert.False(string.IsNullOrEmpty(foundAgain.LockId));
     }
 
     [Fact]
@@ -519,7 +594,7 @@ public abstract class SqlSagaStateRepositoryTests
 
         var (verificationDb, _) = _fixture.CreateDbContext(dbName);
         var stored = await ReadStoredSagaAsync(verificationDb, started.InstanceId);
-        Assert.Null(stored.LockId);
+        Assert.Null(stored.LockTime);
         Assert.Single(stored.ProcessedMessages);
     }
 
