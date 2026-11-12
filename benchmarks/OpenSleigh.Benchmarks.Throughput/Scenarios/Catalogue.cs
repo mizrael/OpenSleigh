@@ -45,6 +45,10 @@ internal static class Catalogue
             "find/lock/release cycle on a saga with 300 processed messages, SQL repository on a SQLite file; mean of 40 cycles",
             ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqliteSagaState(ctx), 300, 40)),
 
+        new("local-sqlite-state-find", LocalOnly, Milliseconds, false,
+            "FindAsync on a saga with 10 processed messages, SQL repository on a pooled SQLite file: the client side of the query; mean of 2000",
+            ctx => SagaStateScenarios.FindAsync(ctx, PersistenceTarget.SqliteSagaState(ctx, pooled: true), 10, 2000)),
+
         // ---- real infrastructure ----
         new("sqlserver-dbcontext", GateAndFull, Milliseconds, false,
             "resolve 200 SagaDbContext from new DI scopes; mean per context",
@@ -117,6 +121,18 @@ internal static class Catalogue
         new("postgres-kafka-e2e", FullOnly, SagasPerSecond, true,
             "200 two-hop sagas on PostgreSQL + Kafka; rate until completed or 15 s",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+
+        new("sqlserver-kafka-e2e", FullOnly, SagasPerSecond, true,
+            "200 two-hop sagas on SQL Server + Kafka; rate until completed or 15 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+
+        new("mongo-kafka-e2e", FullOnly, SagasPerSecond, true,
+            "200 two-hop sagas on MongoDB + Kafka; rate until completed or 15 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+
+        new("sqlserver-kafka-latency", FullOnly, Milliseconds, false,
+            "one two-hop saga at a time on SQL Server + Kafka; median of 5",
+            ctx => PipelineScenarios.EndToEndLatencyAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 5)),
 
         new("postgres-rabbit-latency", FullOnly, Milliseconds, false,
             "one two-hop saga at a time on PostgreSQL + RabbitMQ; median of 5",
@@ -205,6 +221,7 @@ internal static class Catalogue
         ("local-inmemory-e2e", false, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.InMemory(ctx), TransportTarget.InMemory(), 2000, TimeSpan.FromSeconds(30))),
         ("postgres-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
         ("sqlserver-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("sqlserver-kafka-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
         ("mongo-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
     ];
 

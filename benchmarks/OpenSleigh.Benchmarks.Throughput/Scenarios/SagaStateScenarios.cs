@@ -64,6 +64,46 @@ internal static class SagaStateScenarios
         }
     }
 
+    /// <summary>
+    /// Milliseconds per FindAsync, one DI scope each, on a saga with a few processed messages.
+    /// </summary>
+    public static async Task<double> FindAsync(ScenarioContext context, PersistenceTarget persistence, int processedMessages, int iterations)
+    {
+        var host = BenchHost.Build(context, cfg =>
+        {
+            persistence.Configure(cfg);
+            cfg.AddSaga<BenchSaga, BenchState>();
+        });
+
+        try
+        {
+            var descriptor = SagaDescriptor.Create<BenchSaga, BenchState>();
+            var correlationId = await CreateSagaAsync(host.Services, processedMessages);
+
+            for (var i = 0; i < WarmUpCycles; i++)
+                await FindOnceAsync(host.Services, descriptor, correlationId);
+
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < iterations; i++)
+                await FindOnceAsync(host.Services, descriptor, correlationId);
+            stopwatch.Stop();
+
+            return stopwatch.Elapsed.TotalMilliseconds / iterations;
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host, persistence.DropAsync);
+        }
+    }
+
+    private static async Task FindOnceAsync(IServiceProvider services, SagaDescriptor descriptor, string correlationId)
+    {
+        using var scope = services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<ISagaStateRepository>();
+        var instance = await repository.FindAsync(descriptor, NewMessageContext(correlationId))
+            ?? throw new InvalidOperationException("saga state not found");
+    }
+
     private static async Task<double> MeasureCyclesAsync(IServiceProvider services, string correlationId, int cycles)
     {
         var descriptor = SagaDescriptor.Create<BenchSaga, BenchState>();

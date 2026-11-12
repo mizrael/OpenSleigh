@@ -63,7 +63,8 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     /// <summary>
     /// The SQL saga state repository on a local SQLite file: the library's own EF Core code, without a server.
     /// </summary>
-    public static PersistenceTarget SqliteSagaState(ScenarioContext context)
+    /// <param name="pooled">keep connections open between operations, so that what is measured is the client side.</param>
+    public static PersistenceTarget SqliteSagaState(ScenarioContext context, bool pooled = false)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"{DatabaseName(context)}.db");
         return new PersistenceTarget(
@@ -71,11 +72,12 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
             cfg => cfg.Services
                 .AddSingleton(SqlSagaStateRepositoryOptions.Default)
                 .AddDbContext<SagaDbContext>(
-                    builder => builder.UseSqlite($"Data Source={databasePath};Pooling=False"),
+                    builder => builder.UseSqlite($"Data Source={databasePath};Pooling={pooled}"),
                     contextLifetime: ServiceLifetime.Transient)
                 .AddTransient<ISagaStateRepository, SqlSagaStateRepository>(),
             _ =>
             {
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
                 File.Delete(databasePath);
                 return Task.CompletedTask;
             });
