@@ -170,6 +170,56 @@ public class OutboxProcessorTests
     }
 
     [Fact]
+    public async Task RelayPendingMessagesAsync_should_delete_what_it_published_with_one_call_when_the_repository_can()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        var first = DummyMessage.CreateEnvelope();
+        var failing = DummyMessage.CreateEnvelope();
+        var second = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { first, failing, second });
+        publisher.PublishAsync(failing, Arg.Any<CancellationToken>())
+            .Returns(x => throw new InvalidOperationException("publish failed"));
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(CancellationToken.None);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 2, Failed: 1), result);
+        await ((IOutboxBatchRepository)outboxRepo).Received(1).DeleteAsync(
+            Arg.Is<IReadOnlyCollection<MessageEnvelope>>(deleted => deleted.SequenceEqual(new[] { first, second })),
+            Arg.Any<CancellationToken>());
+        await outboxRepo.DidNotReceiveWithAnyArgs().DeleteAsync(default(MessageEnvelope)!, default);
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_report_nothing_relayed_when_the_batch_cannot_be_deleted()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var txManager = Substitute.For<ITransactionManager>();
+        var tx = Substitute.For<ITransaction>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(tx);
+
+        var envelope = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { envelope });
+        ((IOutboxBatchRepository)outboxRepo)
+            .DeleteAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+            .Returns(x => throw new InvalidOperationException("delete failed"));
+
+        var sut = new OutboxProcessor(outboxRepo, Substitute.For<IPublisher>(), Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(CancellationToken.None);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 0, Failed: 1), result);
+        await tx.Received(1).RollbackAsync();
+    }
+
+    [Fact]
     public void Ctor_should_throw_when_outboxRepository_is_null()
     {
         var publisher = Substitute.For<IPublisher>();

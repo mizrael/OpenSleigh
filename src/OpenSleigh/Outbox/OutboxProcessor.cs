@@ -37,6 +37,10 @@ public class OutboxProcessor : IOutboxProcessor
 
         try
         {
+            // a repository that can remove a whole pass at once is asked to, after the last message was published
+            var batchRepository = _outboxRepository as IOutboxBatchRepository;
+            var published = new List<MessageEnvelope>();
+
             var messages = await _outboxRepository.ReadPendingAsync(cancellationToken);
             foreach (var message in messages)
             {
@@ -50,8 +54,11 @@ public class OutboxProcessor : IOutboxProcessor
                     await _publisher.PublishAsync(message, cancellationToken)
                                     .ConfigureAwait(false);
 
-                    await _outboxRepository.DeleteAsync(message, cancellationToken)
-                                           .ConfigureAwait(false);
+                    if (batchRepository is null)
+                        await _outboxRepository.DeleteAsync(message, cancellationToken)
+                                               .ConfigureAwait(false);
+                    else
+                        published.Add(message);
 
                     relayed++;
 
@@ -72,6 +79,11 @@ public class OutboxProcessor : IOutboxProcessor
                     _logger.LogError(e, "an error has occurred while processing Outbox: {Error}", e.Message);
                 }
             }
+
+            if (batchRepository is not null && published.Count > 0)
+                await batchRepository.DeleteAsync(published, cancellationToken)
+                                     .ConfigureAwait(false);
+
             await transaction.CommitAsync();
         }
         catch (Exception ex)

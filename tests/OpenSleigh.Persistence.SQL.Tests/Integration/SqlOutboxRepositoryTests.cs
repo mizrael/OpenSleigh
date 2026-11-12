@@ -187,4 +187,20 @@ public abstract class SqlOutboxRepositoryTests
         var lockedMessage = await db.OutboxMessages.FirstOrDefaultAsync(e => e.MessageId == message.MessageId);
         Assert.Null(lockedMessage);
     }
+
+    [Fact]
+    public async Task DeleteAsync_should_delete_a_batch_of_messages_and_leave_the_others()
+    {
+        var deleted = new[] { CreateMessage(), CreateMessage() };
+        var kept = CreateMessage();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        await sut.AppendAsync([.. deleted, kept]);
+        await sut.DeleteAsync(deleted);
+
+        var remaining = await db.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
+        Assert.Equal(new[] { kept.MessageId }, remaining);
+    }
 }

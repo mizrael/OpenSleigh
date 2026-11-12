@@ -78,8 +78,15 @@ internal sealed class StageTimings
                 ? new TimedCommittingSagaStateRepository(inner, timings)
                 : new TimedSagaStateRepository(inner, timings);
         });
-        services.TryDecorate<IOutboxRepository>((provider, inner)
-            => new TimedOutboxRepository(inner, provider.GetRequiredService<StageTimings>()));
+        services.TryDecorate<IOutboxRepository>((provider, inner) =>
+        {
+            var timings = provider.GetRequiredService<StageTimings>();
+#if OUTBOX_BATCH_DELETE
+            if (inner is IOutboxBatchRepository)
+                return new TimedBatchOutboxRepository(inner, timings);
+#endif
+            return new TimedOutboxRepository(inner, timings);
+        });
         services.TryDecorate<IPublisher>((provider, inner)
             => new TimedPublisher(inner, provider.GetRequiredService<StageTimings>()));
         services.TryDecorate<ITransactionManager>((provider, inner)
@@ -98,6 +105,7 @@ internal static class Stages
     public const string ReadPending = "relay: outbox ReadPendingAsync";
     public const string Publish = "relay: PublishAsync";
     public const string Delete = "relay: outbox DeleteAsync";
+    public const string DeleteBatch = "relay: outbox DeleteAsync (batch)";
     public const string CommitTransaction = "relay: transaction CommitAsync";
 }
 
@@ -133,26 +141,38 @@ internal sealed class TimedCommittingSagaStateRepository : TimedSagaStateReposit
         => Timings.MeasureAsync(Stages.Commit, () => ((ISagaStateCommitter)Inner).CommitAsync(state, cancellationToken));
 }
 
-internal sealed class TimedOutboxRepository : IOutboxRepository
+internal class TimedOutboxRepository : IOutboxRepository
 {
-    private readonly IOutboxRepository _inner;
-    private readonly StageTimings _timings;
+    protected readonly IOutboxRepository Inner;
+    protected readonly StageTimings Timings;
 
     public TimedOutboxRepository(IOutboxRepository inner, StageTimings timings)
     {
-        _inner = inner;
-        _timings = timings;
+        Inner = inner;
+        Timings = timings;
     }
 
     public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
-        => _timings.MeasureAsync(Stages.Append, () => _inner.AppendAsync(messages, cancellationToken));
+        => Timings.MeasureAsync(Stages.Append, () => Inner.AppendAsync(messages, cancellationToken));
 
     public ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
-        => _timings.MeasureAsync(Stages.ReadPending, () => _inner.ReadPendingAsync(cancellationToken));
+        => Timings.MeasureAsync(Stages.ReadPending, () => Inner.ReadPendingAsync(cancellationToken));
 
     public ValueTask DeleteAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
-        => _timings.MeasureAsync(Stages.Delete, () => _inner.DeleteAsync(message, cancellationToken));
+        => Timings.MeasureAsync(Stages.Delete, () => Inner.DeleteAsync(message, cancellationToken));
 }
+
+#if OUTBOX_BATCH_DELETE
+internal sealed class TimedBatchOutboxRepository : TimedOutboxRepository, IOutboxBatchRepository
+{
+    public TimedBatchOutboxRepository(IOutboxRepository inner, StageTimings timings) : base(inner, timings)
+    {
+    }
+
+    public ValueTask DeleteAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+        => Timings.MeasureAsync(Stages.DeleteBatch, () => ((IOutboxBatchRepository)Inner).DeleteAsync(messages, cancellationToken));
+}
+#endif
 
 internal sealed class TimedPublisher : IPublisher
 {

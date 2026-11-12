@@ -15,7 +15,7 @@ public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration, int MaxMessag
 public delegate bool DuplicateKeyDetector(Exception exception);
 
 
-public abstract class SqlOutboxRepository : IOutboxRepository
+public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepository
 {
     protected readonly SqlOutboxRepositoryOptions _options;
     protected readonly ISerializer _serializer;
@@ -109,6 +109,27 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     private async ValueTask DeleteAsyncCore(MessageEnvelope message,  CancellationToken cancellationToken)
     {
         await RelayDbContext.OutboxMessages.Where(e => e.MessageId == message.MessageId)
+                                    .ExecuteDeleteAsync(cancellationToken)
+                                    .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// removes the messages of a relay pass with one statement.
+    /// </summary>
+    public ValueTask DeleteAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        if (messages.Count == 0)
+            return ValueTask.CompletedTask;
+
+        return DeleteAsyncCore(messages, cancellationToken);
+    }
+
+    private async ValueTask DeleteAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
+    {
+        var messageIds = messages.Select(message => message.MessageId).ToArray();
+
+        await RelayDbContext.OutboxMessages.Where(e => messageIds.Contains(e.MessageId))
                                     .ExecuteDeleteAsync(cancellationToken)
                                     .ConfigureAwait(false);
     }
