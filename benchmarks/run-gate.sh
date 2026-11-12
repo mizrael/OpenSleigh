@@ -28,7 +28,7 @@ SCENARIOS="${BENCH_SCENARIOS:-$(echo "$HEAD_MESSAGE" | sed -n 's/.*\[bench-scena
 if [ -n "$SCENARIOS" ]; then selection=(--scenario "$SCENARIOS"); else selection=(--suite "$SUITE"); fi
 ROUNDS="${BENCH_ROUNDS:-5}"
 MIN_ROUNDS="${BENCH_MIN_ROUNDS:-3}"
-TIME_BUDGET_SECONDS="${BENCH_TIME_BUDGET_SECONDS:-600}"
+TIME_BUDGET_SECONDS="${BENCH_TIME_BUDGET_SECONDS:-2700}"
 
 PROJECT_DIR="$REPO_ROOT/benchmarks/OpenSleigh.Benchmarks.Throughput"
 ASSEMBLY="OpenSleigh.Benchmarks.Throughput.dll"

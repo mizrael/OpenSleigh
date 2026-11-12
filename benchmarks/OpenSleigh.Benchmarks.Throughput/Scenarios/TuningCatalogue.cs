@@ -144,6 +144,7 @@ internal static class TuningCatalogue
         EndToEnd("t-mssql-kafka", "defaults", SerialSagas, ctx => PersistenceTarget.SqlServer(ctx), ctx => KafkaSaga(ctx, null, 1)),
         EndToEnd("t-mssql-kafka-linger0", "linger.ms=0", SerialSagas, ctx => PersistenceTarget.SqlServer(ctx), ctx => KafkaSaga(ctx, NoLinger, 1)),
         EndToEnd("t-mssql-kafka-linger0-delayed", "linger.ms=0, delayed durability", SerialSagas, ctx => PersistenceTarget.SqlServer(ctx, SqlServerDelayedDurability), ctx => KafkaSaga(ctx, NoLinger, 1)),
+        EndToEnd("t-mssql-kafka-linger0-4x", "linger.ms=0, 4 consumers on 4 partitions", ConcurrentSagas, ctx => PersistenceTarget.SqlServer(ctx), ctx => KafkaSaga(ctx, NoLinger, KafkaConsumers)),
         EndToEnd("t-mssql-kafka-best", "linger.ms=0, 4 consumers on 4 partitions, relay reads 100 rows, delayed durability, snapshot reads, Encrypt=False", ConcurrentSagas, ctx => PersistenceTarget.SqlServer(ctx, SqlServerBest), ctx => KafkaSaga(ctx, NoLinger, KafkaConsumers)),
         EndToEnd("t-mongo-kafka", "defaults", SerialSagas, ctx => PersistenceTarget.Mongo(ctx), ctx => KafkaSaga(ctx, null, 1)),
         EndToEnd("t-mongo-kafka-linger0", "linger.ms=0", SerialSagas, ctx => PersistenceTarget.Mongo(ctx), ctx => KafkaSaga(ctx, NoLinger, 1)),
