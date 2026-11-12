@@ -415,6 +415,75 @@ public abstract class SqlSagaStateRepositoryTests
         Assert.False(await verificationDb.OutboxMessages.AnyAsync());
     }
 
+    [Fact]
+    public async Task ReleaseAsync_should_not_fail_when_the_processed_message_was_stored_by_someone_else_after_the_saga_was_found()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (setupDb, _) = _fixture.CreateDbContext(dbName);
+        var (firstDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondDb, _) = _fixture.CreateDbContext(dbName);
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var setupRepository = CreateSut(setupDb);
+        var firstRepository = CreateSut(firstDb);
+        var secondRepository = CreateSut(secondDb);
+
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
+        var saga = CreateSagaContext(firstMessage);
+        await saga.LockAsync(setupRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await setupRepository.ReleaseAsync(saga);
+
+        // the same message is delivered to two consumers, which both find the saga before either locks it
+        var duplicatedMessage = CreateMessageContext<FakeMessage>();
+        duplicatedMessage.CorrelationId.Returns(correlationId);
+        var firstCopy = await firstRepository.FindAsync(saga.Descriptor, duplicatedMessage, CancellationToken.None);
+        var secondCopy = await secondRepository.FindAsync(saga.Descriptor, duplicatedMessage, CancellationToken.None);
+        Assert.NotNull(firstCopy);
+        Assert.NotNull(secondCopy);
+
+        await firstCopy.LockAsync(firstRepository, CancellationToken.None);
+        firstCopy.SetAsProcessed(duplicatedMessage);
+        await firstRepository.ReleaseAsync(firstCopy);
+
+        await secondCopy.LockAsync(secondRepository, CancellationToken.None);
+        secondCopy.SetAsProcessed(duplicatedMessage);
+        await secondRepository.ReleaseAsync(secondCopy);
+
+        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
+        Assert.Null(stored.LockId);
+        Assert.Equal(2, stored.ProcessedMessages.Count);
+    }
+
+    [Fact]
+    public async Task LockAsync_should_lock_a_saga_found_by_the_same_repository_once()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (setupDb, _) = _fixture.CreateDbContext(dbName);
+        var (firstDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondDb, _) = _fixture.CreateDbContext(dbName);
+        var setupRepository = CreateSut(setupDb);
+        var firstRepository = CreateSut(firstDb);
+        var secondRepository = CreateSut(secondDb);
+
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(firstMessage);
+        await saga.LockAsync(setupRepository, CancellationToken.None);
+        await setupRepository.ReleaseAsync(saga);
+
+        var firstCopy = await firstRepository.FindAsync(saga.Descriptor, firstMessage, CancellationToken.None);
+        var secondCopy = await secondRepository.FindAsync(saga.Descriptor, firstMessage, CancellationToken.None);
+        Assert.NotNull(firstCopy);
+        Assert.NotNull(secondCopy);
+
+        await firstCopy.LockAsync(firstRepository, CancellationToken.None);
+        await Assert.ThrowsAsync<LockException>(async () => await secondCopy.LockAsync(secondRepository, CancellationToken.None));
+
+        await firstRepository.ReleaseAsync(firstCopy);
+        await secondCopy.LockAsync(secondRepository, CancellationToken.None);
+        Assert.False(string.IsNullOrEmpty(secondCopy.LockId));
+    }
+
     private static OpenSleigh.Outbox.MessageEnvelope Publish(ISagaInstance saga)
     {
         var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga);

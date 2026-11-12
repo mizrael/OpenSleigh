@@ -42,9 +42,10 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             throw LockLost(state);
 
         OutboxMessage[] outboxEntities = [];
+        var storedMessageIdsWereRemembered = _foundSagas.ContainsKey(state.InstanceId);
         try
         {
-            await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
+            var newMessageIds = await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
 
             entity.IsCompleted = state.IsCompleted;
             if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
@@ -64,6 +65,8 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             // one save, one transaction: state, processed messages and outbox are stored together or not at all
             await _dbContext.SaveChangesAsync(cancellationToken)
                             .ConfigureAwait(false);
+
+            RememberStoredMessages(state.InstanceId, newMessageIds);
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -80,7 +83,10 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
 
             // a message with an idempotency key that is already in the outbox is not stored twice
             var notStoredYet = await ExcludeStoredMessagesAsync(outbox, cancellationToken).ConfigureAwait(false);
-            if (notStoredYet.Count == outbox.Count)
+
+            // and a processed message that someone stored after this repository found the saga is not stored twice either:
+            // what was remembered is forgotten by now, so the retry reads the stored ones
+            if (notStoredYet.Count == outbox.Count && !storedMessageIdsWereRemembered)
                 throw;
 
             await ReleaseAsyncCore(state, notStoredYet, canRetry: false, cancellationToken).ConfigureAwait(false);
@@ -99,7 +105,10 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     // a later release through this repository would find a lock that looks gone and leave the saga locked.
     // Forgetting everything makes the next call read the saga from the database
     private void ForgetUnsavedChanges()
-        => _dbContext.ChangeTracker.Clear();
+    {
+        _dbContext.ChangeTracker.Clear();
+        _foundSagas.Clear();
+    }
 
     private void StopTracking(IEnumerable<OutboxMessage> outboxEntities)
     {
@@ -141,25 +150,25 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     }
 
     // processed messages are only ever added: the ones already stored are left alone
-    // instead of being deleted and written again on every release
-    private async ValueTask AddNewProcessedMessagesAsync(SagaState entity, ISagaInstance state, CancellationToken cancellationToken)
+    // instead of being deleted and written again on every release.
+    // Which ones are stored is known when this repository found the saga, and read from the database otherwise
+    private async ValueTask<IReadOnlyCollection<string>> AddNewProcessedMessagesAsync(SagaState entity, ISagaInstance state, CancellationToken cancellationToken)
     {
         if (state.ProcessedMessages.Count == 0)
-            return;
+            return [];
 
-        var storedMessageIds = await _dbContext.Set<SagaProcessedMessage>()
-            .Where(m => m.InstanceId == state.InstanceId)
-            .Select(m => m.MessageId)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
+        var storedMessageIds = _foundSagas.TryGetValue(state.InstanceId, out var found)
+            ? found.StoredMessageIds
+            : await ReadStoredMessageIdsAsync(state.InstanceId, cancellationToken).ConfigureAwait(false);
 
-        var knownMessageIds = new HashSet<string>(storedMessageIds);
+        var newMessageIds = new List<string>();
 
         foreach (var msg in state.ProcessedMessages)
         {
-            if (!knownMessageIds.Add(msg.MessageId))
+            if (storedMessageIds.Contains(msg.MessageId))
                 continue;
 
+            newMessageIds.Add(msg.MessageId);
             entity.ProcessedMessages.Add(new SagaProcessedMessage()
             {
                 InstanceId = state.InstanceId,
@@ -168,6 +177,19 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
                 SagaState = entity
             });
         }
+
+        return newMessageIds;
+    }
+
+    private async ValueTask<HashSet<string>> ReadStoredMessageIdsAsync(string instanceId, CancellationToken cancellationToken)
+    {
+        var storedMessageIds = await _dbContext.Set<SagaProcessedMessage>()
+            .Where(m => m.InstanceId == instanceId)
+            .Select(m => m.MessageId)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return new HashSet<string>(storedMessageIds);
     }
 
     private static LockException LockLost(ISagaInstance state)

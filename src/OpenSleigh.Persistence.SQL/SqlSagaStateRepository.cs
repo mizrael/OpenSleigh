@@ -48,6 +48,8 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         if (entity is null)
             return null;
 
+        RememberFoundSaga(entity);
+
         ISagaInstance ? result;
 
         if (descriptor.SagaStateType is null)
@@ -85,6 +87,10 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
 
     private async ValueTask<string> LockAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
+        var lockId = await TryLockFoundSagaAsync(state, cancellationToken).ConfigureAwait(false);
+        if (lockId is not null)
+            return lockId;
+
         var entity = await _dbContext.SagaStates
             .FirstOrDefaultAsync(e =>
                 (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
@@ -94,6 +100,7 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 cancellationToken)
             .ConfigureAwait(false);
 
+        var isNew = entity is null;
         if (entity is null)
         {
             entity = new SagaState()
@@ -109,18 +116,11 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         }
         else
         {
-            if (entity.LockId is not null &&
-                entity.LockTime is not null &&
-                entity.LockTime > DateTimeOffset.UtcNow - _options.LockMaxDuration)
+            if (IsLocked(entity.LockId, entity.LockTime))
                 throw new LockException($"saga state '{state.InstanceId}' is already locked");
         }
 
-        entity.LockTime = DateTimeOffset.UtcNow;
-#if NET9_0_OR_GREATER
-        entity.LockId = Guid.CreateVersion7().ToString();
-#else
-        entity.LockId = Guid.NewGuid().ToString();
-#endif
+        SetNewLock(entity);
 
         try
         {
@@ -150,7 +150,24 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
             throw;
         }
 
-        return entity.LockId;
+        if (isNew)
+            RememberNewSaga(entity.InstanceId);
+
+        return entity.LockId!;
     }
 
+    private bool IsLocked(string? lockId, DateTimeOffset? lockTime)
+        => lockId is not null &&
+           lockTime is not null &&
+           lockTime > DateTimeOffset.UtcNow - _options.LockMaxDuration;
+
+    private static void SetNewLock(SagaState entity)
+    {
+        entity.LockTime = DateTimeOffset.UtcNow;
+#if NET9_0_OR_GREATER
+        entity.LockId = Guid.CreateVersion7().ToString();
+#else
+        entity.LockId = Guid.NewGuid().ToString();
+#endif
+    }
 }
