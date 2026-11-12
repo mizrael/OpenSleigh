@@ -15,6 +15,8 @@ namespace OpenSleigh.Benchmarks.Throughput.Scenarios;
 internal static class PipelineScenarios
 {
     private static readonly TimeSpan WarmUpTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan RelaySettleTime = TimeSpan.FromMilliseconds(200);
+    private const int RelayWarmUpMessages = 30;
     private const int PublishParallelism = 8;
 
     /// <summary>
@@ -30,7 +32,8 @@ internal static class PipelineScenarios
 
         try
         {
-            await PublishStartAsync(host.Services);
+            // every caller opens its connection and compiles what it runs before the measurement starts
+            await BenchHost.RunConcurrentlyAsync(parallelism * 4, parallelism, _ => PublishStartAsync(host.Services));
 
             var stopwatch = Stopwatch.StartNew();
             await BenchHost.RunConcurrentlyAsync(messages, parallelism, _ => PublishStartAsync(host.Services));
@@ -111,11 +114,20 @@ internal static class PipelineScenarios
             await host.Services.GetRequiredService<IPublisher>().PublishAsync(NewStart(systemInfo));
             tracker.Reset();
 
+            // the first passes compile queries and code that every later pass reuses: they are not what is measured
+            await SeedOutboxAsync(host.Services, RelayWarmUpMessages);
+            await host.StartAsync();
+            if (!await BenchHost.WaitUntilAsync(() => tracker.Count >= RelayWarmUpMessages, WarmUpTimeout))
+                throw new TimeoutException("warm-up messages were not relayed");
+            await Task.Delay(RelaySettleTime);
+
             await SeedOutboxAsync(host.Services, messages);
+            tracker.Reset();
             host.Services.GetService<StageTimings>()?.Reset();
 
+            // the relay is waiting for its next poll: what was seeded behind its back is announced
             var start = Stopwatch.GetTimestamp();
-            await host.StartAsync();
+            host.Services.GetRequiredService<IOutboxSignal>().NotifyPendingMessages();
             await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
 
             return completed(host.Services, tracker, start);

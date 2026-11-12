@@ -59,16 +59,16 @@ internal static class Catalogue
             ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.Postgres(ctx), 200)),
 
         new("sqlserver-outbox-append", GateAndFull, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.SqlServer(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.SqlServer(ctx), 2000, 16)),
 
         new("postgres-outbox-append", GateAndFull, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Postgres(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Postgres(ctx), 2000, 16)),
 
         new("mongo-outbox-append", FullOnly, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Mongo(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Mongo(ctx), 2000, 16)),
 
         new("sqlserver-outbox-relay", GateAndFull, MessagesPerSecond, true,
             "500 pending outbox rows relayed to a no-op publisher; rate until drained or 10 s",
