@@ -169,6 +169,19 @@ internal static class Catalogue
         new("postgres-rabbit-e2e-concurrent-batch100", FullOnly, SagasPerSecond, true,
             "as postgres-rabbit-e2e-concurrent, with MaxMessagesToPull = 100 instead of the default 10",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
+
+        // 200 sagas are over before connection pools and thread pool have grown: these run long enough to show the steady rate
+        new("postgres-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
+            "2000 two-hop sagas on PostgreSQL + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+
+        new("postgres-rabbit-e2e-concurrent-long-batch100", FullOnly, SagasPerSecond, true,
+            "as postgres-rabbit-e2e-concurrent-long, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+
+        new("mongo-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
+            "2000 two-hop sagas on MongoDB + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
 #endif
     ];
 
@@ -177,6 +190,10 @@ internal static class Catalogue
     /// </summary>
     public static IReadOnlyList<(string Name, bool NeedsInfrastructure, Func<ScenarioContext, Task<EndToEndProfile>> RunAsync)> Profiles { get; } =
     [
+#if RABBIT_CONSUMER_TUNING
+        ("postgres-rabbit-e2e-concurrent-long", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+        ("mongo-rabbit-e2e-concurrent-long", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+#endif
         ("local-inmemory-e2e", false, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.InMemory(ctx), TransportTarget.InMemory(), 2000, TimeSpan.FromSeconds(30))),
         ("postgres-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
         ("sqlserver-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
