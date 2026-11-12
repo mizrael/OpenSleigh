@@ -51,7 +51,15 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton<IPublisher, KafkaPublisher>();
 
         busConfigurator.Services.AddSingleton<IKafkaMessageParser, KafkaMessageParser>();
-        busConfigurator.Services.AddSingleton<IKafkaMessageHandler, KafkaMessageHandler>();
+        // the handler is a singleton and the saga pipeline is not: it gets a scope factory
+        // so that every message is processed by its own pipeline instead of one captured for the life of the process
+        busConfigurator.Services.AddSingleton<IKafkaMessageHandler>(ctx => new KafkaMessageHandler(
+            ctx.GetRequiredService<IKafkaMessageParser>(),
+            ctx.GetRequiredService<IServiceScopeFactory>(),
+            ctx.GetRequiredService<IKafkaPublisherExecutor>(),
+            ctx.GetRequiredService<Microsoft.Extensions.Logging.ILogger<KafkaMessageHandler>>(),
+            ctx.GetRequiredService<ISystemInfo>(),
+            ctx.GetRequiredService<IQueueReferenceFactory>()));
 
         busConfigurator.Services.AddSingleton<IConsumerBuilderFactory, ConsumerBuilderFactory>();
 

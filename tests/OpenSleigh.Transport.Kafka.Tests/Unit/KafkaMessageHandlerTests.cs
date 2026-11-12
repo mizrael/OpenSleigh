@@ -1,4 +1,5 @@
 ﻿using Confluent.Kafka;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
 using System.Collections.Generic;
@@ -10,6 +11,42 @@ namespace OpenSleigh.Transport.Kafka.Tests.Unit;
 
 public class KafkaMessageHandlerTests
 {
+    [Fact]
+    public async Task HandleAsync_should_process_every_message_in_its_own_scope()
+    {
+        var consumeResult = new ConsumeResult<string, byte[]>();
+        var expectedMessage = DummyMessage.CreateEnvelope();
+
+        var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
+        parser.Parse(consumeResult).Returns(expectedMessage);
+
+        var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
+        queueRefFactory.Create(Arg.Any<MessageEnvelope>()).Returns(new QueueReferences("lorem", "ipsum"));
+
+        var messageProcessor = NSubstitute.Substitute.For<IMessageProcessor>();
+        var serviceProvider = NSubstitute.Substitute.For<IServiceProvider>();
+        serviceProvider.GetService(typeof(IMessageProcessor)).Returns(messageProcessor);
+        var scope = NSubstitute.Substitute.For<IServiceScope>();
+        scope.ServiceProvider.Returns(serviceProvider);
+        var scopeFactory = NSubstitute.Substitute.For<IServiceScopeFactory>();
+        scopeFactory.CreateScope().Returns(scope);
+
+        var sut = new KafkaMessageHandler(
+            parser,
+            scopeFactory,
+            NSubstitute.Substitute.For<IKafkaPublisherExecutor>(),
+            NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>(),
+            NSubstitute.Substitute.For<ISystemInfo>(),
+            queueRefFactory);
+
+        Assert.True(await sut.HandleAsync(consumeResult));
+        Assert.True(await sut.HandleAsync(consumeResult));
+
+        scopeFactory.Received(2).CreateScope();
+        scope.Received(2).Dispose();
+        await messageProcessor.Received(2).ProcessAsync(expectedMessage, Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task StartAsync_should_return_false_when_message_parsing_fails()
     {
