@@ -24,6 +24,12 @@ services.AddOpenSleigh(cfg =>{
 });
 ```
 
+The producer sends every message as soon as it is published. If something in your application publishes many messages at once through the same producer and you would rather trade latency for larger requests, set `ProducerLinger` (Kafka's `linger.ms`):
+
+```
+var kafkaConfig = new KafkaConfiguration(connectionString) { ProducerLinger = TimeSpan.FromMilliseconds(5) };
+```
+
 It is also possible to use a custom naming policy to customize the name of the Topic and the Dead Letter Queue:
 
 ```

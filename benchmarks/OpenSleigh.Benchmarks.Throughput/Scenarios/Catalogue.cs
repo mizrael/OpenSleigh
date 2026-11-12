@@ -153,6 +153,14 @@ internal static class Catalogue
             "2000 messages handed to the RabbitMQ publisher one after the other, nothing consuming",
             ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Rabbit(ctx), 2000)),
 
+        new("kafka-publish", FullOnly, MessagesPerSecond, true,
+            "300 messages handed to the Kafka publisher one after the other, nothing consuming",
+            ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 300)),
+
+        new("postgres-kafka-relay", FullOnly, MessagesPerSecond, true,
+            "300 pending outbox rows relayed to Kafka, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 300, TimeSpan.FromSeconds(10), TransportTarget.Kafka(ctx, typeof(StartBench)))),
+
         new("postgres-rabbit-relay", FullOnly, MessagesPerSecond, true,
             "500 pending outbox rows relayed to RabbitMQ, nothing consuming; rate until drained or 10 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
