@@ -38,6 +38,7 @@ public static class ServiceCollectionExtensions
                         
             .AddTransient<IOutboxProcessor, OutboxProcessor>()
             .AddSingleton(OutboxProcessorOptions.Default)
+            .AddSingleton<IOutboxSignal, OutboxSignal>()
             .AddHostedService<OutboxBackgroundService>()
         ;
 

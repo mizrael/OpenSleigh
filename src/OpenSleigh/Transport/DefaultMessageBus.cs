@@ -10,17 +10,29 @@ public class DefaultMessageBus : IMessageBus
     private readonly ISystemInfo _systemInfo;
     private readonly ITypeResolver _typeResolver;
     private readonly ILogger<DefaultMessageBus> _logger;
+    private readonly IOutboxSignal? _outboxSignal;
 
     public DefaultMessageBus(
         IOutboxRepository outboxRepository,
         ISystemInfo systemInfo,
         ITypeResolver typeResolver,
         ILogger<DefaultMessageBus> logger)
+        : this(outboxRepository, systemInfo, typeResolver, logger, null)
+    {
+    }
+
+    public DefaultMessageBus(
+        IOutboxRepository outboxRepository,
+        ISystemInfo systemInfo,
+        ITypeResolver typeResolver,
+        ILogger<DefaultMessageBus> logger,
+        IOutboxSignal? outboxSignal)
     {
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _outboxSignal = outboxSignal;
     }
 
     public async ValueTask<OutboxAppendResult> PublishAsync<TM>(TM message, CancellationToken cancellationToken = default) 
@@ -39,8 +51,11 @@ public class DefaultMessageBus : IMessageBus
 
         if (appendResult == OutboxAppendResult.Duplicate)
             _logger.LogWarning("message '{MessageId}' is a duplicate of an existing outbox message.", outboxMessage.MessageId);
-        else 
+        else
+        {
             _logger.LogInformation("message '{MessageId}' added to outbox.", outboxMessage.MessageId);
+            _outboxSignal?.NotifyPendingMessages();
+        }
 
         return appendResult;
     }

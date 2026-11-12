@@ -10,16 +10,27 @@ public class OutboxBackgroundService : BackgroundService
     private readonly OutboxProcessorOptions _options;
     private readonly ILogger<OutboxBackgroundService> _logger;
     private readonly ISystemInfo _systemInfo;
+    private readonly IOutboxSignal _signal;
 
     public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
         OutboxProcessorOptions options,
         ILogger<OutboxBackgroundService> logger,
         ISystemInfo systemInfo)
+        : this(scopeFactory, options, logger, systemInfo, new OutboxSignal())
+    {
+    }
+
+    public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
+        OutboxProcessorOptions options,
+        ILogger<OutboxBackgroundService> logger,
+        ISystemInfo systemInfo,
+        IOutboxSignal signal)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
+        _signal = signal ?? throw new ArgumentNullException(nameof(signal));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -37,19 +48,39 @@ public class OutboxBackgroundService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                using var scope = _scopeFactory.CreateScope();
+                var result = await RelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
 
-                var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
-                await service.ProcessPendingMessagesAsync(stoppingToken)
-                    .ConfigureAwait(false);
+                if (result.Relayed > 0 && _options.DrainPendingMessages)
+                    continue;
 
-                await Task.Delay(_options.Interval, stoppingToken)
-                    .ConfigureAwait(false);
+                // a pass that only failed (broker down, rows locked) waits for the whole interval:
+                // being woken by every publish would turn each of them into a retry of the backlog
+                var canBeWoken = _options.WakeOnPublish && result.Failed == 0;
+                await WaitForNextReadAsync(canBeWoken, stoppingToken).ConfigureAwait(false);
             }
         }
-        catch (TaskCanceledException)
+        catch (OperationCanceledException)
         {
         }
+    }
+
+    private async ValueTask<OutboxRelayResult> RelayPendingMessagesAsync(CancellationToken stoppingToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+
+        var service = scope.ServiceProvider.GetRequiredService<IOutboxProcessor>();
+        return await service.RelayPendingMessagesAsync(stoppingToken)
+            .ConfigureAwait(false);
+    }
+
+    private async ValueTask WaitForNextReadAsync(bool canBeWoken, CancellationToken stoppingToken)
+    {
+        if (canBeWoken)
+            await _signal.WaitForPendingMessagesAsync(_options.Interval, stoppingToken)
+                .ConfigureAwait(false);
+        else
+            await Task.Delay(_options.Interval, stoppingToken)
+                .ConfigureAwait(false);
     }
 
     public override async Task StopAsync(CancellationToken cancellationToken)

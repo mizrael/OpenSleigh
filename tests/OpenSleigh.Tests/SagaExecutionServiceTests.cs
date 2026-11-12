@@ -161,6 +161,34 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task CommitAsync_should_signal_pending_messages_only_after_releasing_the_lock()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance));
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(),
+            sagaStateRepository,
+            Substitute.For<IOutboxRepository>(),
+            outboxSignal);
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        Received.InOrder(() =>
+        {
+            sagaStateRepository.ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+            outboxSignal.NotifyPendingMessages();
+        });
+    }
+
+    [Fact]
     public async Task CommitAsync_should_append_outbox_and_release_lock()
     {
         // Arrange
