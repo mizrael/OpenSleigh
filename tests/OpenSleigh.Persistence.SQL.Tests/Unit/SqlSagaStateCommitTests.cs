@@ -137,8 +137,15 @@ public class SqlSagaStateCommitTests
 
         await Assert.ThrowsAsync<LockException>(async () => await found.LockAsync(sut, CancellationToken.None));
 
-        await using var db = CreateDbContext(dbName);
-        Assert.Equal(saga.LockId, (await db.SagaStates.SingleAsync()).LockId);
+        await using (var db = CreateDbContext(dbName))
+            Assert.Equal(saga.LockId, (await db.SagaStates.SingleAsync()).LockId);
+
+        // and the same repository can lock it once it is released
+        await someoneElse.ReleaseAsync(saga);
+        await found.LockAsync(sut, CancellationToken.None);
+
+        await using var dbAfterRelease = CreateDbContext(dbName);
+        Assert.Equal(found.LockId, (await dbAfterRelease.SagaStates.SingleAsync()).LockId);
     }
 
     [Fact]

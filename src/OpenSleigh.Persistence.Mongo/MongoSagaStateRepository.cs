@@ -190,9 +190,11 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             .Set(e => e.IsCompleted, state.IsCompleted)
             .Set(e => e.ProcessedMessages, processedMessages);
 
-        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
+        // the lock is checked by the update itself, so the state is not required to be complete before it is known to hold it
+        var stateType = state.Descriptor?.SagaStateType;
+        if (stateType is not null && state.GetType().IsGenericType)
         {
-            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
+            var extractor = _stateExtractors.GetOrAdd(stateType, static t =>
                 (ISagaStateExtractor)Activator.CreateInstance(
                     typeof(SagaStateExtractor<>).MakeGenericType(t))!);
             release = release.Set(e => e.StateData, extractor.Extract(state, _serializer));

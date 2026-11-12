@@ -117,7 +117,11 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         else
         {
             if (IsLocked(entity.LockId, entity.LockTime))
+            {
+                // left tracked, the row would be handed back as it is now by a later attempt, locked for good
+                _dbContext.Entry(entity).State = EntityState.Detached;
                 throw new LockException($"saga state '{state.InstanceId}' is already locked");
+            }
         }
 
         SetNewLock(entity);
