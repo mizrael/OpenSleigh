@@ -173,6 +173,20 @@ internal static class Catalogue
             "300 messages handed to the Kafka publisher one after the other, nothing consuming",
             ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 300)),
 
+        new("kafka-publish-concurrent", FullOnly, MessagesPerSecond, true,
+            "400 messages handed to the Kafka publisher by 32 concurrent callers, nothing consuming: what feeds kafka-consume",
+            ctx => PipelineScenarios.PublishConcurrentlyAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 400, 32)),
+
+        new("kafka-consume-backlog", FullOnly, MessagesPerSecond, true,
+            "2000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 30 s",
+            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 2000, 32, TimeSpan.FromSeconds(30))),
+
+#if KAFKA_PRODUCER_LINGER
+        new("kafka-consume-linger5", FullOnly, MessagesPerSecond, true,
+            "as kafka-consume, with ProducerLinger = 5 ms, the producer's setting on develop",
+            ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.KafkaWithLinger(ctx, TimeSpan.FromMilliseconds(5), typeof(Ping)), 400, 32, TimeSpan.Zero, TimeSpan.FromSeconds(10))),
+#endif
+
         new("postgres-kafka-relay", FullOnly, MessagesPerSecond, true,
             "300 pending outbox rows relayed to Kafka, nothing consuming; rate until drained or 10 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 300, TimeSpan.FromSeconds(10), TransportTarget.Kafka(ctx, typeof(StartBench)))),

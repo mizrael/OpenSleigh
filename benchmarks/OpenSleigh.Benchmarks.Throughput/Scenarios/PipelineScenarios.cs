@@ -139,6 +139,82 @@ internal static class PipelineScenarios
     }
 
     /// <summary>
+    /// Messages that are all in the broker before the subscriber starts, consumed into a one-message saga
+    /// on the in-memory persistence: the consumer never waits for a publisher.
+    /// </summary>
+    public static async Task<double> ConsumeBacklogAsync(
+        ScenarioContext context,
+        TransportTarget transport,
+        int messages,
+        int publishParallelism,
+        TimeSpan cap)
+    {
+        await transport.PrepareAsync();
+
+        var host = BenchHost.Build(context, cfg =>
+        {
+            PersistenceTarget.InMemory(context).Configure(cfg);
+            transport.Configure(cfg);
+            cfg.AddSaga<PingSaga>();
+        });
+
+        try
+        {
+            var tracker = host.Services.GetRequiredService<WorkTracker>();
+            var publisher = host.Services.GetRequiredService<IPublisher>();
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+
+            await BenchHost.RunConcurrentlyAsync(messages, publishParallelism,
+                async _ => await publisher.PublishAsync(NewPing(systemInfo)));
+
+            await host.StartAsync();
+            await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
+
+            return tracker.RateBetweenFirstAndLast();
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host);
+        }
+    }
+
+    /// <summary>
+    /// Messages handed to the transport's publisher by concurrent callers, each waiting for its acknowledgement.
+    /// Nothing consumes them.
+    /// </summary>
+    public static async Task<double> PublishConcurrentlyAsync(ScenarioContext context, TransportTarget transport, int messages, int parallelism)
+    {
+        await transport.PrepareAsync();
+
+        var host = BenchHost.Build(context, cfg =>
+        {
+            PersistenceTarget.InMemory(context).Configure(cfg);
+            transport.Configure(cfg);
+            cfg.AddSaga<PingSaga>();
+            cfg.SetPublishOnly();
+        });
+
+        try
+        {
+            var publisher = host.Services.GetRequiredService<IPublisher>();
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+
+            await publisher.PublishAsync(NewPing(systemInfo));
+
+            var stopwatch = Stopwatch.StartNew();
+            await BenchHost.RunConcurrentlyAsync(messages, parallelism,
+                async _ => await publisher.PublishAsync(NewPing(systemInfo)));
+            stopwatch.Stop();
+
+            return messages / stopwatch.Elapsed.TotalSeconds;
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host);
+        }
+    }
+
+    /// <summary>
     /// Messages handed to the transport's publisher one after the other, the way the relay does. Nothing consumes them.
     /// </summary>
     public static async Task<double> PublishAsync(ScenarioContext context, TransportTarget transport, int messages)

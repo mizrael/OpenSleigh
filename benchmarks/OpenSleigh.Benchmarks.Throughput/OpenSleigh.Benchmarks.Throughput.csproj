@@ -28,6 +28,10 @@
     <DefineConstants>$(DefineConstants);RABBIT_CONSUMER_TUNING</DefineConstants>
   </PropertyGroup>
 
+  <PropertyGroup Condition="$([System.IO.File]::ReadAllText('$(OpenSleighSrcRoot)/OpenSleigh.Transport.Kafka/IBusConfiguratorExtensions.cs').Contains('ProducerLinger'))">
+    <DefineConstants>$(DefineConstants);KAFKA_PRODUCER_LINGER</DefineConstants>
+  </PropertyGroup>
+
   <PropertyGroup Condition="Exists('$(OpenSleighSrcRoot)/OpenSleigh/Outbox/IOutboxBatchRepository.cs')">
     <DefineConstants>$(DefineConstants);OUTBOX_BATCH_DELETE</DefineConstants>
   </PropertyGroup>
