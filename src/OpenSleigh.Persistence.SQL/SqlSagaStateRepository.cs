@@ -34,14 +34,17 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
     { 
         var correlationId = messageContext.CorrelationId;
 
+        // plain locals: a member chain inside the query would be evaluated by EF Core on every call
+        var sagaType = descriptor.SagaType.FullName;
+        var sagaStateType = descriptor.SagaStateType?.FullName;
+
         var entity = await _dbContext.SagaStates
             .Include(e => e.ProcessedMessages)
             .AsNoTracking()
             .FirstOrDefaultAsync(e =>
                 e.CorrelationId == correlationId && 
-                e.SagaType == descriptor.SagaType.FullName &&
-                ((descriptor.SagaStateType == null && e.SagaStateType == null) || 
-                (descriptor.SagaStateType != null && e.SagaStateType == descriptor.SagaStateType.FullName)),
+                e.SagaType == sagaType &&
+                e.SagaStateType == sagaStateType,
                 cancellationToken)
             .ConfigureAwait(false);
 
