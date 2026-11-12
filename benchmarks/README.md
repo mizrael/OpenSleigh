@@ -27,9 +27,19 @@ dotnet run -c Release -- run --scenario kafka-consume,rabbit-consume --runs 3 --
 dotnet run -c Release -- profile --suite local             # where the time of an end-to-end saga goes, call by call
 ```
 
-`profile` runs the end-to-end scenarios with the saga state repository, the outbox repository, the publisher and
-the transaction manager wrapped, and prints calls and time per call. With the `full` suite the gate job prints it
-for both sides and stores it with the results (`profile-base.md`, `profile-head.md`).
+`profile` runs the end-to-end and relay scenarios with the saga state repository, the outbox repository, the
+publisher and the transaction manager wrapped, and prints calls and time per call. With the `full` suite the gate
+job prints it for both sides and stores it with the results (`profile-base.md`, `profile-head.md`).
+
+What the scenarios leave out on purpose:
+
+- The relay, append and end-to-end scenarios do some work before they start the clock. The harness runs with tiered
+  compilation off, so the first call of every code path is compiled in full, and the first use of a query is
+  compiled by EF Core: a few hundred milliseconds that would otherwise be most of a short scenario.
+- The end-to-end scenarios with 200 sagas are over in a second or two. The `-long` ones run 2000, long enough for
+  connection pools and the thread pool to have grown.
+- SQL Server end to end moves by more than the gate's tolerance between rounds on a CI runner, and Kafka needs
+  seconds to start: their scenarios are in the `full` suite only.
 
 The `gate` and `full` suites need the services of `tests/infra/docker-compose.yml`. Connection settings default to
 those containers and can be overridden with `BENCH_SQLSERVER`, `BENCH_POSTGRES`, `BENCH_MONGO`, `BENCH_KAFKA`,
