@@ -24,8 +24,17 @@ permissions:
   pages: write
   id-token: write
 
+# Runs that deploy share one group, so deployments never overlap. A run started by a commit status that is not
+# the develop benchmark does nothing, and gets a group of its own: in the shared group it would take the single
+# pending slot and cancel a run that was waiting to publish.
 concurrency:
-  group: "pages"
+  group: >-
+    ${{ (github.event_name == 'status' &&
+         !(github.event.context == 'ci/circleci: benchmark_develop' &&
+           github.event.state != 'pending' &&
+           contains(github.event.branches.*.name, 'develop')))
+        && format('docs-skipped-{0}', github.run_id)
+        || (github.event_name == 'pull_request' && format('docs-pr-{0}', github.ref) || 'pages') }}
   cancel-in-progress: false
 
 env:
