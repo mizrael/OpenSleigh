@@ -43,6 +43,13 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
 
         _channel = await _channelFactory.GetConsumeChannelAsync(cancellationToken);
         _channel.CallbackExceptionAsync += OnChannelException;
+
+        if (_rabbitConfiguration.PrefetchCount > 0)
+            await _channel.BasicQosAsync(
+                prefetchSize: 0,
+                prefetchCount: _rabbitConfiguration.PrefetchCount,
+                global: false,
+                cancellationToken);
     }
 
     private Task OnChannelException(object _, CallbackExceptionEventArgs ea)

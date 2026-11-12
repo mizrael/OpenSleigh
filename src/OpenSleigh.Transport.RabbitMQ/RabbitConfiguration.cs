@@ -42,4 +42,18 @@ public record RabbitConfiguration
     /// Gets a value indicating whether the resource is automatically deleted when no longer in use. Defaults to false.
     /// </summary>
     public bool AutoDelete { get; }
+
+    /// <summary>
+    /// Gets how many messages a consumer handles at the same time. Defaults to 1: messages are handled one at a time,
+    /// in the order the broker delivers them. Values above 1 raise throughput but give up that ordering, and messages
+    /// for the same saga instance that arrive together will contend for its lock and go through the retry queue.
+    /// </summary>
+    public ushort ConsumerDispatchConcurrency { get; init; } = 1;
+
+    /// <summary>
+    /// Gets how many unacknowledged messages the broker hands to a consumer at once.
+    /// Defaults to 0, which means no limit: the broker pushes messages as fast as it can.
+    /// Set it when several workers share a queue, so one worker cannot hoard the backlog.
+    /// </summary>
+    public ushort PrefetchCount { get; init; }
 }

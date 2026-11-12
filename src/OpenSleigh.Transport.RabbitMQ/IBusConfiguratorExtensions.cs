@@ -39,6 +39,7 @@ public static class IBusConfiguratorExtensions
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 NetworkRecoveryInterval = config.RetryDelay,
                 AutomaticRecoveryEnabled = true,
+                ConsumerDispatchConcurrency = config.ConsumerDispatchConcurrency,
             };
             return connectionFactory;
         });
