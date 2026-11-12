@@ -43,7 +43,15 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     public ValueTask StartAsync(CancellationToken cancellationToken = default)
     {
         _stoppingCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _consumerTask = Task.Run(async () => await ConsumeMessages(_stoppingCts.Token), _stoppingCts.Token);
+        var stoppingToken = _stoppingCts.Token;
+
+        // Consume blocks its caller for up to the consume timeout, over and over, for as long as the application runs:
+        // the loop gets a thread of its own instead of keeping one of the thread pool's busy
+        _consumerTask = Task.Factory.StartNew(
+            () => ConsumeMessages(stoppingToken).AsTask().GetAwaiter().GetResult(),
+            stoppingToken,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         return ValueTask.CompletedTask;
     }
 
@@ -75,9 +83,10 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
         {
-            // noop. seems to be a known issue in the c# Kafka driver
-            // occurring when consumers are started before producers.
-        }      
+            // seems to be a known issue in the c# Kafka driver, occurring when consumers are started before producers.
+            // The error comes back without waiting for the consume timeout, so the loop waits here instead
+            await Task.Delay(_config.ConsumeTimeout, stoppingToken);
+        }
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)

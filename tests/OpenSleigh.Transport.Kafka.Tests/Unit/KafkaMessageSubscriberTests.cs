@@ -60,6 +60,27 @@ public class KafkaMessageSubscriberTests
         consumer.Received(1).Consume(Arg.Any<int>());
     }
 
+    [Fact]
+    public async Task StartAsync_should_wait_before_consuming_again_when_the_topic_is_unknown()
+    {
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>())
+            .Returns(_ => throw new ConsumeException(
+                new ConsumeResult<byte[], byte[]>(),
+                new Error(ErrorCode.UnknownTopicOrPart, "unknown topic or partition")));
+        var config = new KafkaSubscriberConfig(TimeSpan.Zero, TimeSpan.FromMilliseconds(200));
+
+        var sut = CreateSut(consumer, Substitute.For<IKafkaMessageHandler>(), config);
+
+        await sut.StartAsync();
+        await Task.Delay(500);
+        await sut.StopAsync();
+
+        // without the wait this would be many thousands of calls
+        var calls = consumer.ReceivedCalls().Count(call => call.GetMethodInfo().Name == nameof(IConsumer<string, byte[]>.Consume));
+        Assert.InRange(calls, 1, 6);
+    }
+
     private static KafkaMessageSubscriber CreateSut(
         IConsumer<string, byte[]> consumer,
         IKafkaMessageHandler handler,
