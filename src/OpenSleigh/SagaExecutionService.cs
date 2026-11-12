@@ -13,16 +13,8 @@ public class SagaExecutionService : ISagaExecutionService
     public SagaExecutionService(
         ISagaInstanceFactory sagaExecCtxFactory,
         ISagaStateRepository sagaStateRepository,
-        IOutboxRepository outboxRepository)
-        : this(sagaExecCtxFactory, sagaStateRepository, outboxRepository, null)
-    {
-    }
-
-    public SagaExecutionService(
-        ISagaInstanceFactory sagaExecCtxFactory,
-        ISagaStateRepository sagaStateRepository,
         IOutboxRepository outboxRepository,
-        IOutboxSignal? outboxSignal)
+        IOutboxSignal? outboxSignal = null)
     {
         _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
         _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));

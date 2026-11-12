@@ -16,17 +16,8 @@ public class DefaultMessageBus : IMessageBus
         IOutboxRepository outboxRepository,
         ISystemInfo systemInfo,
         ITypeResolver typeResolver,
-        ILogger<DefaultMessageBus> logger)
-        : this(outboxRepository, systemInfo, typeResolver, logger, null)
-    {
-    }
-
-    public DefaultMessageBus(
-        IOutboxRepository outboxRepository,
-        ISystemInfo systemInfo,
-        ITypeResolver typeResolver,
         ILogger<DefaultMessageBus> logger,
-        IOutboxSignal? outboxSignal)
+        IOutboxSignal? outboxSignal = null)
     {
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));

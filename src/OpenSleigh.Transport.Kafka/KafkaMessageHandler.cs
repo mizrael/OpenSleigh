@@ -9,27 +9,11 @@ namespace OpenSleigh.Transport.Kafka;
 public class KafkaMessageHandler : IKafkaMessageHandler
 {
     private readonly IKafkaMessageParser _messageParser;
-    private readonly Func<MessageEnvelope, CancellationToken, ValueTask> _processMessage;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly IKafkaPublisherExecutor _publisher;
     private readonly ILogger<KafkaMessageHandler> _logger;
     private readonly ISystemInfo _systemInfo;
     private readonly IQueueReferenceFactory _queueReferenceFactory;
-
-    /// <summary>
-    /// creates a handler that processes every message with the same <see cref="IMessageProcessor"/>.
-    /// Whatever that processor holds on to (repositories, database contexts) lives as long as the handler does.
-    /// </summary>
-    public KafkaMessageHandler(IKafkaMessageParser messageParser,
-                                IMessageProcessor messageProcessor,
-                                IKafkaPublisherExecutor publisher,
-                                ILogger<KafkaMessageHandler> logger,
-                                ISystemInfo systemInfo,
-                                IQueueReferenceFactory queueReferenceFactory)
-        : this(messageParser, publisher, logger, systemInfo, queueReferenceFactory)
-    {
-        ArgumentNullException.ThrowIfNull(messageProcessor);
-        _processMessage = messageProcessor.ProcessAsync;
-    }
 
     /// <summary>
     /// creates a handler that processes every message in its own dependency injection scope,
@@ -41,29 +25,20 @@ public class KafkaMessageHandler : IKafkaMessageHandler
                                 ILogger<KafkaMessageHandler> logger,
                                 ISystemInfo systemInfo,
                                 IQueueReferenceFactory queueReferenceFactory)
-        : this(messageParser, publisher, logger, systemInfo, queueReferenceFactory)
-    {
-        ArgumentNullException.ThrowIfNull(scopeFactory);
-        _processMessage = async (message, cancellationToken) =>
-        {
-            await using var scope = scopeFactory.CreateAsyncScope();
-            var messageProcessor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
-            await messageProcessor.ProcessAsync(message, cancellationToken);
-        };
-    }
-
-    private KafkaMessageHandler(IKafkaMessageParser messageParser,
-                                IKafkaPublisherExecutor publisher,
-                                ILogger<KafkaMessageHandler> logger,
-                                ISystemInfo systemInfo,
-                                IQueueReferenceFactory queueReferenceFactory)
     {
         _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
-        _processMessage = null!;
+    }
+
+    private async ValueTask ProcessInOwnScopeAsync(MessageEnvelope message, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var messageProcessor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
+        await messageProcessor.ProcessAsync(message, cancellationToken);
     }
 
     public async ValueTask<bool> HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken cancellationToken = default)
@@ -109,7 +84,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
             message.MessageId, queueReferences.TopicName);
         try
         {
-            await _processMessage(message, cancellationToken);
+            await ProcessInOwnScopeAsync(message, cancellationToken);
         }
         catch (TaskCanceledException) { }
         catch (Exception ex)

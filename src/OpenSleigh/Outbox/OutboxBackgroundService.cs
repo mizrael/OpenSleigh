@@ -15,22 +15,14 @@ public class OutboxBackgroundService : BackgroundService
     public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
         OutboxProcessorOptions options,
         ILogger<OutboxBackgroundService> logger,
-        ISystemInfo systemInfo)
-        : this(scopeFactory, options, logger, systemInfo, new OutboxSignal())
-    {
-    }
-
-    public OutboxBackgroundService(IServiceScopeFactory scopeFactory,
-        OutboxProcessorOptions options,
-        ILogger<OutboxBackgroundService> logger,
         ISystemInfo systemInfo,
-        IOutboxSignal signal)
+        IOutboxSignal? signal = null)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _systemInfo = systemInfo ?? throw new ArgumentNullException(nameof(systemInfo));
-        _signal = signal ?? throw new ArgumentNullException(nameof(signal));
+        _signal = signal ?? new OutboxSignal();
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
