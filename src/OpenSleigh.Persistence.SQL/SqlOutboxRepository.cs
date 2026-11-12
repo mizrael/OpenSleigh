@@ -27,21 +27,35 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     // callers sharing one repository take turns, callers with their own repository do not wait for each other
     private readonly SemaphoreSlim _appendSemaphore = new(1, 1);
 
+    private readonly Func<SagaDbContext>? _relayDbContext;
+
+    /// <param name="relayDbContext">
+    /// optional. Provides the context that pending messages are read from and deleted on. Passing the context
+    /// the relay's transaction runs on is what keeps the rows it reads locked until that transaction ends,
+    /// so that another relay skips them. When omitted, <paramref name="dbContext"/> is used.
+    /// </param>
     public SqlOutboxRepository(
         SqlOutboxRepositoryOptions options,
         SagaDbContext dbContext,
         ITypeResolver typeResolver,
         ISerializer serializer,
-        DuplicateKeyDetector duplicateKeyDetector)
+        DuplicateKeyDetector duplicateKeyDetector,
+        Func<SagaDbContext>? relayDbContext = null)
     {
         DbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
         _duplicateKeyDetector = duplicateKeyDetector;
+        _relayDbContext = relayDbContext;
     }
 
     protected SagaDbContext DbContext { get; }
+
+    /// <summary>
+    /// the context to read pending messages from and to delete them on.
+    /// </summary>
+    protected SagaDbContext RelayDbContext => _relayDbContext?.Invoke() ?? DbContext;
 
     public ValueTask<OutboxAppendResult> AppendAsync(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
@@ -94,7 +108,7 @@ public abstract class SqlOutboxRepository : IOutboxRepository
 
     private async ValueTask DeleteAsyncCore(MessageEnvelope message,  CancellationToken cancellationToken)
     {
-        await DbContext.OutboxMessages.Where(e => e.MessageId == message.MessageId)
+        await RelayDbContext.OutboxMessages.Where(e => e.MessageId == message.MessageId)
                                     .ExecuteDeleteAsync(cancellationToken)
                                     .ConfigureAwait(false);
     }

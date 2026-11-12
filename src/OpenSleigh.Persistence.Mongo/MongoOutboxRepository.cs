@@ -74,13 +74,27 @@ public class MongoOutboxRepository : IOutboxRepository
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
-        var maxLockDate = DateTimeOffset.UtcNow - _options.LockMaxDuration;
+        var now = DateTimeOffset.UtcNow;
+        var maxLockDate = now - _options.LockMaxDuration;
 
         var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
-        var filter = filterBuilder.Or(
+        var available = filterBuilder.Or(
                         filterBuilder.Eq(e => e.LockId, null),
                         filterBuilder.Lt(e => e.LockTime, maxLockDate)
                     );
+
+        // the messages are claimed before they are read, so that another relay reading at the same time
+        // does not publish them too. A claim that is not followed by a delete expires after LockMaxDuration
+        var claimId = Guid.NewGuid().ToString();
+        var claim = Builders<Entities.OutboxMessage>.Update
+            .Set(e => e.LockId, claimId)
+            .Set(e => e.LockTime, now);
+        var claimed = await _dbContext.OutboxMessages.UpdateManyAsync(available, claim, cancellationToken: cancellationToken)
+                                                     .ConfigureAwait(false);
+        if (claimed.IsAcknowledged && claimed.ModifiedCount == 0)
+            return Enumerable.Empty<MessageEnvelope>();
+
+        var filter = filterBuilder.Eq(e => e.LockId, claimId);
         var cursor = await _dbContext.OutboxMessages.FindAsync(filter, cancellationToken: cancellationToken)
                                                      .ConfigureAwait(false);
         var entities = await cursor.ToListAsync(cancellationToken)

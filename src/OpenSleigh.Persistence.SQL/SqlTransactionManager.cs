@@ -2,16 +2,19 @@
 
 public class SqlTransactionManager : ITransactionManager
 {
-    private readonly SagaDbContext _dbContext;
-
     public SqlTransactionManager(SagaDbContext dbContext)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        DbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
+
+    /// <summary>
+    /// the context the transactions run on: what has to take part in a transaction has to use it.
+    /// </summary>
+    public SagaDbContext DbContext { get; }
 
     public async ValueTask<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
     {
-        var transaction = await _dbContext.BeginTransactionAsync(cancellationToken);
+        var transaction = await DbContext.BeginTransactionAsync(cancellationToken);
         return transaction;
     }
 }
