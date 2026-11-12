@@ -72,6 +72,23 @@ public class MongoDbContextTests : IClassFixture<DbFixture>
         Assert.True(IsUnique(outboxIndexes[OutboxMessageIdIndex]));
     }
 
+    [Fact]
+    public async Task Ctor_should_accept_an_existing_index_on_the_instance_id_under_another_name()
+    {
+        var database = new MongoClient(_fixture.ConnectionString).GetDatabase(_fixture.CreateDatabaseName());
+        var sagaStates = database.GetCollection<Entities.SagaState>("sagaStates");
+        await sagaStates.Indexes.CreateOneAsync(new CreateIndexModel<Entities.SagaState>(
+            Builders<Entities.SagaState>.IndexKeys.Ascending(e => e.InstanceId),
+            new CreateIndexOptions { Name = "created_by_someone_else" }));
+
+        var sut = new DbContext(database);
+
+        var sagaIndexes = await ReadIndexesAsync(sut.SagaStates);
+        Assert.True(sagaIndexes.ContainsKey("created_by_someone_else"));
+        Assert.False(sagaIndexes.ContainsKey(SagaInstanceIdIndex));
+        Assert.True(IsUnique(sagaIndexes[SagaCorrelationIndex]));
+    }
+
     private static ServiceProvider BuildProvider(MongoConfiguration configuration)
         => new ServiceCollection()
             .AddOpenSleigh(configurator => configurator.UseMongoPersistence(configuration))

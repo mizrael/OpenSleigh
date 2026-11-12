@@ -61,8 +61,19 @@ public class DbContext : IDbContext
             {
                 Name = "ix_instance_id"
             });
-        SagaStates.Indexes.CreateOne(instanceIdIndex);
+        try
+        {
+            SagaStates.Indexes.CreateOne(instanceIdIndex);
+        }
+        catch (MongoCommandException ex) when (ex.Code is IndexOptionsConflictCode or IndexKeySpecsConflictCode)
+        {
+            // the collection already has an index on this key, created by someone else under another name
+            // or with other options. It serves the same lookups: failing here would stop the application from starting
+        }
     }
+
+    private const int IndexOptionsConflictCode = 85;
+    private const int IndexKeySpecsConflictCode = 86;
 
     private static void TryRegisterClassMap<T>(Action<BsonClassMap<T>> mapAction)
     {
