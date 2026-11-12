@@ -219,4 +219,21 @@ public abstract class SqlOutboxRepositoryTests
         Assert.False(await db.OutboxMessages.AsNoTracking().AnyAsync());
         Assert.Empty(db.ChangeTracker.Entries());
     }
+
+    [Fact]
+    public async Task DeleteAsync_should_delete_a_batch_that_lists_a_message_twice()
+    {
+        var message = CreateMessage();
+        var kept = CreateMessage();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        await sut.AppendAsync([message, kept]);
+        await sut.DeleteAsync(new[] { message, message });
+
+        var remaining = await db.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
+        Assert.Equal(new[] { kept.MessageId }, remaining);
+        Assert.Empty(db.ChangeTracker.Entries());
+    }
 }

@@ -88,6 +88,59 @@ public abstract class SqlOutboxRelayTests
         Assert.Empty(await ReadPendingIdsAsync(nextRelay));
     }
 
+    [Fact]
+    public async Task A_pass_deleted_as_a_batch_in_a_committed_transaction_should_be_gone_and_leave_the_rest()
+    {
+        await using var provider = BuildProvider();
+        var appended = await AppendMessagesAsync(provider, 2 * BatchSize);
+
+        IReadOnlyCollection<string> deleted;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            deleted = await DeletePendingAsBatchAsync(relay);
+            await transaction.CommitAsync();
+        }
+
+        await using var nextRelay = provider.CreateAsyncScope();
+        await using var nextTransaction = await StartTransactionAsync(nextRelay);
+        var left = await ReadPendingIdsAsync(nextRelay);
+
+        Assert.Equal(BatchSize, deleted.Count);
+        Assert.Equal(appended.Except(deleted).OrderBy(id => id), left.OrderBy(id => id));
+    }
+
+    [Fact]
+    public async Task A_pass_deleted_as_a_batch_should_be_read_again_when_its_transaction_is_rolled_back()
+    {
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, BatchSize);
+
+        IReadOnlyCollection<string> deleted;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            deleted = await DeletePendingAsBatchAsync(relay);
+            await transaction.RollbackAsync();
+        }
+
+        await using var nextRelay = provider.CreateAsyncScope();
+        await using var nextTransaction = await StartTransactionAsync(nextRelay);
+        var readAgain = await ReadPendingIdsAsync(nextRelay);
+
+        Assert.Equal(deleted.OrderBy(id => id), readAgain.OrderBy(id => id));
+    }
+
+    // what the relay does with a pass: the repository it resolves deletes it with one call
+    private static async Task<IReadOnlyCollection<string>> DeletePendingAsBatchAsync(AsyncServiceScope relay)
+    {
+        var repository = relay.ServiceProvider.GetRequiredService<IOutboxRepository>();
+        var batchRepository = Assert.IsAssignableFrom<IOutboxBatchRepository>(repository);
+        var messages = (await repository.ReadPendingAsync()).ToArray();
+        await batchRepository.DeleteAsync(messages);
+        return messages.Select(message => message.MessageId).ToArray();
+    }
+
     private ServiceProvider BuildProvider()
     {
         var (_, connectionString) = _fixture.CreateDbContext();

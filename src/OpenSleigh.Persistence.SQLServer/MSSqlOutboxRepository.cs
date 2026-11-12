@@ -39,16 +39,17 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
 
     // SQL Server is not given one statement listing the keys: depending on the version it reads the list as JSON,
     // which needs compatibility level 130, and it may scan the table for it, waiting on rows another relay holds.
-    // The rows are deleted by key instead, with the statements sent together
+    // The rows are deleted by key instead, one statement each, all sent together
     protected override async ValueTask DeleteBatchAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
         var dbContext = RelayDbContext;
-        var rows = messages.Select(ToKeyOnlyRow).ToArray();
-        dbContext.OutboxMessages.AttachRange(rows);
-        dbContext.OutboxMessages.RemoveRange(rows);
+        var rows = messages.DistinctBy(message => message.MessageId).Select(ToKeyOnlyRow).ToArray();
 
         try
         {
+            dbContext.OutboxMessages.AttachRange(rows);
+            dbContext.OutboxMessages.RemoveRange(rows);
+
             await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         }
         catch (DbUpdateConcurrencyException)
