@@ -2,9 +2,11 @@
 
 namespace OpenSleigh.Transport.Kafka;
 
+/// <param name="ConsumeDelay">pause after every consume attempt. Defaults to none: an idle consumer already waits inside the consume call for up to <paramref name="ConsumeTimeout"/>.</param>
+/// <param name="ConsumeTimeout">how long a consume attempt waits for a message before giving up.</param>
 public record KafkaSubscriberConfig(TimeSpan ConsumeDelay, TimeSpan ConsumeTimeout)
 {
-    public static readonly KafkaSubscriberConfig Default = new(TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+    public static readonly KafkaSubscriberConfig Default = new(TimeSpan.Zero, TimeSpan.FromMilliseconds(250));
 }
 
 public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
@@ -53,8 +55,8 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         {
             await ConsumeMessageAsync(stoppingToken);
 
-            // TODO: check if it's possible to get rid of this
-            await Task.Delay(_config.ConsumeDelay, stoppingToken);
+            if (_config.ConsumeDelay > TimeSpan.Zero)
+                await Task.Delay(_config.ConsumeDelay, stoppingToken);
         }
     }
 
