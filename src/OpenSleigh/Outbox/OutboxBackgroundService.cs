@@ -40,13 +40,17 @@ public class OutboxBackgroundService : BackgroundService
         {
             while (!stoppingToken.IsCancellationRequested)
             {
+                // what was signalled so far is about to be read; a message appended during the pass signals again
+                _signal.ClearPendingMessages();
+
                 var result = await RelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
 
-                if (result.Relayed > 0 && _options.DrainPendingMessages)
+                // a pass that left messages behind (broker down, rows locked) is not followed by another right away,
+                // even when it relayed others: the ones that failed would be retried, and logged, at the pace of the drain
+                if (result.Relayed > 0 && result.Failed == 0 && _options.DrainPendingMessages)
                     continue;
 
-                // a pass that only failed (broker down, rows locked) waits for the whole interval:
-                // being woken by every publish would turn each of them into a retry of the backlog
+                // and it waits for the whole interval: being woken by every publish would turn each into a retry
                 var canBeWoken = _options.WakeOnPublish && result.Failed == 0;
                 await WaitForNextReadAsync(canBeWoken, stoppingToken).ConfigureAwait(false);
             }

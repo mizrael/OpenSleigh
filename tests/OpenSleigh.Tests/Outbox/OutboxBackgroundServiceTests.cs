@@ -120,6 +120,68 @@ public class OutboxBackgroundServiceTests
         await outboxProcessor.Received(1).RelayPendingMessagesAsync(Arg.Any<CancellationToken>());
     }
 
+    [Fact]
+    public async Task ExecuteAsync_should_wait_for_the_interval_when_a_read_relayed_some_messages_and_failed_others()
+    {
+        var outboxProcessor = Substitute.For<IOutboxProcessor>();
+        outboxProcessor.RelayPendingMessagesAsync(Arg.Any<CancellationToken>())
+            .Returns(new OutboxRelayResult(Relayed: 9, Failed: 1));
+        var signal = new OutboxSignal();
+
+        var sut = CreateSut(outboxProcessor, new OutboxProcessorOptions(TimeSpan.FromHours(1)), signal);
+
+        await sut.StartAsync(CancellationToken.None);
+        await WaitForCallsAsync(outboxProcessor, 1);
+        signal.NotifyPendingMessages();
+        await Task.Delay(100);
+        await sut.StopAsync(CancellationToken.None);
+
+        await outboxProcessor.Received(1).RelayPendingMessagesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_should_read_once_for_any_number_of_signals_raised_before_the_read()
+    {
+        var outboxProcessor = Substitute.For<IOutboxProcessor>();
+        var signal = new OutboxSignal();
+        for (var i = 0; i < 5; i++)
+            signal.NotifyPendingMessages();
+
+        var sut = CreateSut(outboxProcessor, new OutboxProcessorOptions(TimeSpan.FromHours(1)), signal);
+
+        await sut.StartAsync(CancellationToken.None);
+        await WaitForCallsAsync(outboxProcessor, 1);
+        await Task.Delay(100);
+        await sut.StopAsync(CancellationToken.None);
+
+        await outboxProcessor.Received(1).RelayPendingMessagesAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_should_read_again_when_signalled_during_a_read()
+    {
+        var signal = new OutboxSignal();
+        var outboxProcessor = Substitute.For<IOutboxProcessor>();
+        var reads = 0;
+        outboxProcessor.RelayPendingMessagesAsync(Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                // a message appended after this read looked at the outbox
+                if (Interlocked.Increment(ref reads) == 1)
+                    signal.NotifyPendingMessages();
+                return OutboxRelayResult.Nothing;
+            });
+
+        var sut = CreateSut(outboxProcessor, new OutboxProcessorOptions(TimeSpan.FromHours(1)), signal);
+
+        await sut.StartAsync(CancellationToken.None);
+        await WaitForCallsAsync(outboxProcessor, 2);
+        await Task.Delay(100);
+        await sut.StopAsync(CancellationToken.None);
+
+        await outboxProcessor.Received(2).RelayPendingMessagesAsync(Arg.Any<CancellationToken>());
+    }
+
     private static OutboxBackgroundService CreateSut(IOutboxProcessor outboxProcessor, OutboxProcessorOptions options, IOutboxSignal signal)
     {
         var scope = Substitute.For<IServiceScope>();
