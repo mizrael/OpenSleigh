@@ -91,21 +91,29 @@ public class SagaExecutionService : ISagaExecutionService
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        // TODO: transaction
-
         var hasNewMessages = context.Outbox.Any();
-        if (hasNewMessages)
+
+        if (_sagaStateRepository is ISagaStateCommitter committer)
         {
-            await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
-                                   .ConfigureAwait(false);
+            // messages and release are stored together: a relay cannot hand a message back to this saga
+            // while it is still locked, or before the state it was published from is saved
+            await committer.CommitAsync(context, cancellationToken)
+                           .ConfigureAwait(false);
             context.ClearOutbox();
         }
+        else
+        {
+            if (hasNewMessages)
+            {
+                await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
+                                       .ConfigureAwait(false);
+                context.ClearOutbox();
+            }
 
-        await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
-                                  .ConfigureAwait(false);
+            await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
+                                      .ConfigureAwait(false);
+        }
 
-        // only once the saga is released: a message relayed earlier could come back
-        // while this instance is still locked, or be handled on the state as it was before this commit
         if (hasNewMessages)
             _outboxSignal?.NotifyPendingMessages();
     }

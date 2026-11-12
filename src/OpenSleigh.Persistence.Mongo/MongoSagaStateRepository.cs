@@ -13,7 +13,7 @@ public record MongoSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly MongoSagaStateRepositoryOptions Default = new MongoSagaStateRepositoryOptions(TimeSpan.FromMinutes(1));
 }
 
-public class MongoSagaStateRepository : ISagaStateRepository
+public partial class MongoSagaStateRepository : ISagaStateRepository
 {
     private readonly IDbContext _dbContext;
     private readonly MongoSagaStateRepositoryOptions _options;

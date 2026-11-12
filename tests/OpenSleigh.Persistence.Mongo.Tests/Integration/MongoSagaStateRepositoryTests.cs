@@ -43,6 +43,88 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         return context;
     }
 
+    private static OpenSleigh.Outbox.MessageEnvelope Publish(ISagaInstance saga)
+    {
+        var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga);
+        saga.Publish(envelope);
+        return envelope;
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_store_the_outbox_ready_to_be_relayed_and_release_the_saga()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var saga = CreateSagaContext(messageContext);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.SetAsProcessed(messageContext);
+        var published = Publish(saga);
+
+        await sut.CommitAsync(saga);
+
+        var storedSaga = await db.SagaStates.Find(e => e.InstanceId == saga.InstanceId).SingleAsync();
+        Assert.Null(storedSaga.LockId);
+        Assert.Single(storedSaga.ProcessedMessages);
+        var storedMessage = await db.OutboxMessages.Find(e => e.MessageId == published.MessageId).SingleAsync();
+        Assert.Null(storedMessage.LockId);
+        Assert.Null(storedMessage.LockTime);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_leave_no_outbox_message_when_the_lock_is_not_held()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db, new MongoSagaStateRepositoryOptions(TimeSpan.Zero));
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var firstOwner = CreateSagaContext(messageContext);
+        await firstOwner.LockAsync(sut, CancellationToken.None);
+        var secondOwner = new SagaInstance(firstOwner.InstanceId, firstOwner.TriggerMessageId, firstOwner.CorrelationId, firstOwner.Descriptor);
+        await secondOwner.LockAsync(sut, CancellationToken.None);
+
+        var published = Publish(firstOwner);
+        await Assert.ThrowsAsync<LockException>(async () => await sut.CommitAsync(firstOwner));
+
+        Assert.False(await db.OutboxMessages.Find(e => e.MessageId == published.MessageId).AnyAsync());
+        var storedSaga = await db.SagaStates.Find(e => e.InstanceId == firstOwner.InstanceId).SingleAsync();
+        Assert.Equal(secondOwner.LockId, storedSaga.LockId);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_release_the_saga_when_it_published_nothing()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var saga = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        await saga.LockAsync(sut, CancellationToken.None);
+
+        await sut.CommitAsync(saga);
+
+        var storedSaga = await db.SagaStates.Find(e => e.InstanceId == saga.InstanceId).SingleAsync();
+        Assert.Null(storedSaga.LockId);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_skip_a_message_that_is_already_in_the_outbox_and_store_the_others()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var saga = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        await saga.LockAsync(sut, CancellationToken.None);
+        var alreadyStored = Publish(saga);
+        await sut.CommitAsync(saga);
+        saga.ClearOutbox();
+
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.Publish(alreadyStored);
+        var notStoredYet = Publish(saga);
+        await sut.CommitAsync(saga);
+
+        Assert.Equal(2, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
+        var storedMessage = await db.OutboxMessages.Find(e => e.MessageId == notStoredYet.MessageId).SingleAsync();
+        Assert.Null(storedMessage.LockId);
+    }
+
     [Fact]
     public async Task FindAsync_should_return_null_if_not_existing()
     {

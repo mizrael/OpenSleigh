@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
@@ -13,7 +13,7 @@ public record SqlSagaStateRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly SqlSagaStateRepositoryOptions Default = new (TimeSpan.FromMinutes(1));
 }
 
-public class SqlSagaStateRepository : ISagaStateRepository
+public partial class SqlSagaStateRepository : ISagaStateRepository
 {
     private readonly SagaDbContext _dbContext;
     private readonly SqlSagaStateRepositoryOptions _options;
@@ -153,77 +153,4 @@ public class SqlSagaStateRepository : ISagaStateRepository
         return entity.LockId;
     }
 
-    public ValueTask ReleaseAsync(ISagaInstance  state, CancellationToken cancellationToken = default)
-    {  
-        ArgumentNullException.ThrowIfNull(state);
-
-        return ReleaseAsyncCore(state, cancellationToken);
-    }
-
-    private async ValueTask ReleaseAsyncCore(ISagaInstance  state, CancellationToken cancellationToken)
-    {
-        // the saga was loaded by this context when it was locked: it is not read from the database again.
-        // LockId is a concurrency token, so releasing a lock that someone else took over still fails on save
-        var entity = await _dbContext.SagaStates
-             .FindAsync([state.InstanceId], cancellationToken)
-             .ConfigureAwait(false);
-
-        if (entity is null)
-            throw new ArgumentException($"saga state '{state.InstanceId}' not found");
-
-        if (entity.LockId != state.LockId)
-            throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
-
-        entity.LockTime = null;
-        entity.LockId = null;
-
-        entity.IsCompleted = state.IsCompleted;
-
-        await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
-                    
-        if (state.Descriptor.SagaStateType is not null && state.GetType().IsGenericType)
-        {
-            var extractor = _stateExtractors.GetOrAdd(state.Descriptor.SagaStateType, static t =>
-                (ISagaStateExtractor)Activator.CreateInstance(
-                    typeof(SagaStateExtractor<>).MakeGenericType(t))!);
-            entity.StateData = extractor.Extract(state, _serializer);
-        }
-
-        try
-        {
-            await _dbContext.SaveChangesAsync(cancellationToken)
-                        .ConfigureAwait(false);
-        }
-        catch (DbUpdateConcurrencyException)
-        {
-            throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
-        }
-    }
-
-    // processed messages are only ever added: the ones already stored are left alone
-    // instead of being deleted and written again on every release
-    private async ValueTask AddNewProcessedMessagesAsync(SagaState entity, ISagaInstance state, CancellationToken cancellationToken)
-    {
-        var storedMessageIds = await _dbContext.Set<SagaProcessedMessage>()
-            .Where(m => m.SagaState.InstanceId == state.InstanceId)
-            .Select(m => m.MessageId)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var knownMessageIds = new HashSet<string>(storedMessageIds);
-
-        foreach (var msg in state.ProcessedMessages)
-        {
-            if (!knownMessageIds.Add(msg.MessageId))
-                continue;
-
-            entity.ProcessedMessages.Add(new SagaProcessedMessage()
-            {
-                InstanceId = state.InstanceId,
-                MessageId = msg.MessageId,
-                When = msg.When,
-                SagaState = entity
-            });
-        }
-    }
 }
