@@ -223,6 +223,9 @@ internal static class Catalogue
         ("sqlserver-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
         ("sqlserver-kafka-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
         ("mongo-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("postgres-outbox-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10))),
+        ("postgres-rabbit-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+        ("sqlserver-outbox-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10))),
     ];
 
     public static IReadOnlyList<Scenario> Select(string? suite, string? names)

@@ -48,12 +48,40 @@ internal static class PipelineScenarios
     /// Pre-filled outbox drained by the real OutboxBackgroundService into a publisher that does nothing,
     /// or into the publisher of <paramref name="transport"/> when one is given. Nothing consumes what it publishes.
     /// </summary>
-    public static async Task<double> OutboxRelayAsync(
+    public static Task<double> OutboxRelayAsync(
         ScenarioContext context,
         PersistenceTarget persistence,
         int messages,
         TimeSpan cap,
         TransportTarget? transport = null)
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+            instrument: null,
+            completed: (_, tracker, start) => tracker.RateSince(start));
+
+    /// <summary>
+    /// The same run as <see cref="OutboxRelayAsync"/>, reporting how long the relay spent in each call.
+    /// </summary>
+    public static Task<EndToEndProfile> ProfileOutboxRelayAsync(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        int messages,
+        TimeSpan cap,
+        TransportTarget? transport = null)
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+            instrument: StageTimings.Instrument,
+            completed: (services, tracker, start) => new EndToEndProfile(
+                tracker.Count,
+                tracker.Count / Math.Max(tracker.RateSince(start), double.Epsilon) * 1000,
+                services.GetRequiredService<StageTimings>().Snapshot()));
+
+    private static async Task<T> RunOutboxRelayAsync<T>(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        int messages,
+        TimeSpan cap,
+        TransportTarget? transport,
+        Action<IServiceCollection>? instrument,
+        Func<IServiceProvider, WorkTracker, long, T> completed)
     {
         if (transport is not null)
             await transport.PrepareAsync();
@@ -71,6 +99,7 @@ internal static class PipelineScenarios
             else
                 services.TryDecorate<IPublisher>((provider, inner)
                     => new TrackingPublisher(inner, provider.GetRequiredService<WorkTracker>()));
+            instrument?.Invoke(services);
         });
 
         try
@@ -83,12 +112,13 @@ internal static class PipelineScenarios
             tracker.Reset();
 
             await SeedOutboxAsync(host.Services, messages);
+            host.Services.GetService<StageTimings>()?.Reset();
 
             var start = Stopwatch.GetTimestamp();
             await host.StartAsync();
             await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
 
-            return tracker.RateSince(start);
+            return completed(host.Services, tracker, start);
         }
         finally
         {
