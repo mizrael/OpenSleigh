@@ -93,12 +93,13 @@ internal static partial class ResultsPage
         if (change is null)
             return "n/a";
 
-        var percent = change.Value.ToString("+0%;-0%", CultureInfo.InvariantCulture);
+        var percent = Math.Round(change.Value * 100, MidpointRounding.AwayFromZero);
+        var text = percent == 0 ? "0%" : percent.ToString("+0;-0", CultureInfo.InvariantCulture) + "%";
         if (change > tolerance)
-            return $"{percent} (faster)";
+            return $"{text} (faster)";
         if (change < -tolerance)
-            return $"{percent} (slower)";
-        return $"{percent} (within noise)";
+            return $"{text} (slower)";
+        return $"{text} (within noise)";
     }
 
     private static string Percent(double fraction) => fraction.ToString("0%", CultureInfo.InvariantCulture);

@@ -34,5 +34,14 @@ internal static class Statistics
     }
 
     public static string FormatPercent(double fraction)
-        => double.IsNaN(fraction) ? "n/a" : fraction.ToString("+0.0%;-0.0%", System.Globalization.CultureInfo.InvariantCulture);
+    {
+        if (double.IsNaN(fraction))
+            return "n/a";
+
+        // rounded first, so that a tiny negative change reads "0.0%" and not "-0.0%"
+        var percent = Math.Round(fraction * 100, 1, MidpointRounding.AwayFromZero);
+        return percent == 0
+            ? "0.0%"
+            : percent.ToString("+0.0;-0.0", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
 }
