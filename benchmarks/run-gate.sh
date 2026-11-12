@@ -21,6 +21,9 @@ SUITE="${BENCH_SUITE:-gate}"
 # or for specific scenarios: [bench-full] or [bench-scenarios name1,name2] in its message
 HEAD_MESSAGE="$(git -C "$REPO_ROOT" log -1 --pretty=%B 2>/dev/null)"
 if echo "$HEAD_MESSAGE" | grep -q '\[bench-full\]'; then SUITE="full"; fi
+# [bench-suite name] runs another suite, such as the configuration experiments of the tuning suite
+SUITE_FROM_MESSAGE="$(echo "$HEAD_MESSAGE" | sed -n 's/.*\[bench-suite \([^]]*\)\].*/\1/p' | head -n 1)"
+if [ -n "$SUITE_FROM_MESSAGE" ]; then SUITE="$SUITE_FROM_MESSAGE"; fi
 SCENARIOS="${BENCH_SCENARIOS:-$(echo "$HEAD_MESSAGE" | sed -n 's/.*\[bench-scenarios \([^]]*\)\].*/\1/p' | head -n 1)}"
 if [ -n "$SCENARIOS" ]; then selection=(--scenario "$SCENARIOS"); else selection=(--suite "$SUITE"); fi
 ROUNDS="${BENCH_ROUNDS:-5}"

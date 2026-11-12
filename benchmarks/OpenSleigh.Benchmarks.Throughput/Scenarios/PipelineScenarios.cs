@@ -30,6 +30,7 @@ internal static class PipelineScenarios
 
         try
         {
+            persistence.Prepare(host.Services);
             await PublishStartAsync(host.Services);
 
             var stopwatch = Stopwatch.StartNew();
@@ -61,6 +62,7 @@ internal static class PipelineScenarios
 
         try
         {
+            persistence.Prepare(host.Services);
             await SeedOutboxAsync(host.Services, messages);
 
             var tracker = host.Services.GetRequiredService<WorkTracker>();
@@ -108,6 +110,7 @@ internal static class PipelineScenarios
             await publisher.PublishAsync(NewPing(systemInfo));
             if (!await BenchHost.WaitUntilAsync(() => tracker.Count >= 1, WarmUpTimeout))
                 throw new TimeoutException("warm-up message was not consumed");
+            await Task.Delay(transport.SettleTime);
 
             tracker.Reset();
             tracker.HandlerDelay = handlerDelay;
@@ -118,6 +121,44 @@ internal static class PipelineScenarios
             await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap - Stopwatch.GetElapsedTime(start));
 
             return tracker.RateBetweenFirstAndLast();
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host);
+        }
+    }
+
+    /// <summary>
+    /// One caller publishing straight to the broker, each message awaited before the next,
+    /// the way the outbox relay publishes. Nothing consumes.
+    /// </summary>
+    public static async Task<double> PublishSeriallyAsync(ScenarioContext context, TransportTarget transport, int messages)
+    {
+        const int warmUpMessages = 20;
+
+        await transport.PrepareAsync();
+
+        var host = BenchHost.Build(context, cfg =>
+        {
+            PersistenceTarget.InMemory(context).Configure(cfg);
+            transport.Configure(cfg);
+            cfg.AddSaga<PingSaga>();
+        });
+
+        try
+        {
+            var publisher = host.Services.GetRequiredService<IPublisher>();
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+
+            for (var i = 0; i < warmUpMessages; i++)
+                await publisher.PublishAsync(NewPing(systemInfo));
+
+            var stopwatch = Stopwatch.StartNew();
+            for (var i = 0; i < messages; i++)
+                await publisher.PublishAsync(NewPing(systemInfo));
+            stopwatch.Stop();
+
+            return messages / stopwatch.Elapsed.TotalSeconds;
         }
         finally
         {
@@ -148,6 +189,7 @@ internal static class PipelineScenarios
         {
             var tracker = host.Services.GetRequiredService<WorkTracker>();
             await StartAndWarmUpAsync(host, persistence, tracker);
+            await Task.Delay(transport.SettleTime);
 
             tracker.Reset();
 

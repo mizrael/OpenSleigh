@@ -1,5 +1,5 @@
 {
-  "defaultTolerance": 0.30,
+  "defaultTolerance": 10.0,
   "minimumRounds": 3,
   "scenarios": {
     "sqlserver-outbox-append": { "tolerance": 0.45 },

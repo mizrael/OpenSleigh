@@ -15,7 +15,7 @@ internal static class Catalogue
 
     private const int SqlDefaultBatchSize = 10;
 
-    public static IReadOnlyList<Scenario> All { get; } = Build();
+    public static IReadOnlyList<Scenario> All { get; } = [.. Build(), .. TuningCatalogue.All];
 
     private static List<Scenario> Build() =>
     [

@@ -31,6 +31,7 @@ internal static class SagaStateScenarios
 
         try
         {
+            persistence.Prepare(host.Services);
             var correlationId = await CreateSagaAsync(host.Services, processedMessages);
             return await MeasureCyclesAsync(host.Services, correlationId, cycles);
         }
