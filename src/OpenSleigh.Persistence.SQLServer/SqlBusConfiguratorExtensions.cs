@@ -19,11 +19,11 @@ public static class SqlBusConfiguratorExtensions
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
             .AddSingleton<SagaDbSchemaInitializer>()
-            .AddDbContext<SagaDbContext>(builder =>
+            .AddPooledSagaDbContext(builder =>
             {
                 builder.UseSqlServer(config.ConnectionString);
                 builder.AddInterceptors(new QueryHintInterceptor());
-            }, contextLifetime: ServiceLifetime.Transient)
+            })
             // the relay reads and deletes outbox rows on the context its transaction runs on,
             // so that the rows it reads stay locked, and are skipped by other relays, until it is done with them
             .AddScoped<SqlTransactionManager>()

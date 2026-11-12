@@ -69,12 +69,13 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
         var databasePath = Path.Combine(Path.GetTempPath(), $"{DatabaseName(context)}.db");
         return new PersistenceTarget(
             "sqlite",
-            cfg => cfg.Services
-                .AddSingleton(SqlSagaStateRepositoryOptions.Default)
-                .AddDbContext<SagaDbContext>(
-                    builder => builder.UseSqlite($"Data Source={databasePath};Pooling={pooled}"),
-                    contextLifetime: ServiceLifetime.Transient)
-                .AddTransient<ISagaStateRepository, SqlSagaStateRepository>(),
+            cfg =>
+            {
+                cfg.Services
+                    .AddSingleton(SqlSagaStateRepositoryOptions.Default)
+                    .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
+                AddSqliteDbContext(cfg.Services, $"Data Source={databasePath};Pooling={pooled}");
+            },
             _ =>
             {
                 Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
@@ -84,6 +85,16 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     }
 
     private static string DatabaseName(ScenarioContext context) => $"osb_{context.RunId}";
+
+    // the context is registered the way the SQL providers of the checkout being measured register theirs
+    private static void AddSqliteDbContext(IServiceCollection services, string connectionString)
+    {
+#if SAGA_DBCONTEXT_POOL
+        services.AddPooledSagaDbContext(builder => builder.UseSqlite(connectionString));
+#else
+        services.AddDbContext<SagaDbContext>(builder => builder.UseSqlite(connectionString), contextLifetime: ServiceLifetime.Transient);
+#endif
+    }
 
     private static SqlConfiguration SqlConfigurationFor(string connectionString, int? outboxBatchSize)
         => outboxBatchSize is null
