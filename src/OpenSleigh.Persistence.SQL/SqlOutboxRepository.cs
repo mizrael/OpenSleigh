@@ -23,7 +23,9 @@ public abstract class SqlOutboxRepository : IOutboxRepository
     
     private readonly DuplicateKeyDetector _duplicateKeyDetector;
 
-    private static SemaphoreSlim _appendSemaphore = new(1, 1);
+    // a repository owns its DbContext, which cannot run two operations at once:
+    // callers sharing one repository take turns, callers with their own repository do not wait for each other
+    private readonly SemaphoreSlim _appendSemaphore = new(1, 1);
 
     public SqlOutboxRepository(
         SqlOutboxRepositoryOptions options,
@@ -52,7 +54,7 @@ public abstract class SqlOutboxRepository : IOutboxRepository
 
     private async ValueTask<OutboxAppendResult> AppendAsyncCore(IEnumerable<MessageEnvelope> messages, CancellationToken cancellationToken)
     {
-        var entities = messages.Select(message => Entities.OutboxMessage.Map(message, _serializer));
+        var entities = messages.Select(message => Entities.OutboxMessage.Map(message, _serializer)).ToArray();
         await _appendSemaphore.WaitAsync(cancellationToken);
        
         try
@@ -68,8 +70,17 @@ public abstract class SqlOutboxRepository : IOutboxRepository
         }
         finally
         {
+            StopTracking(entities);
             _appendSemaphore.Release();
         }
+    }
+
+    // appended messages are never read back through this context. Left tracked, they would pile up
+    // for as long as the repository lives, and a rejected duplicate would be re-sent with every later append
+    private void StopTracking(IEnumerable<Entities.OutboxMessage> entities)
+    {
+        foreach (var entity in entities)
+            DbContext.Entry(entity).State = EntityState.Detached;
     }
 
     public abstract ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default);
