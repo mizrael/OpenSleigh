@@ -73,6 +73,7 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
             {
                 cfg.Services
                     .AddSingleton(SqlSagaStateRepositoryOptions.Default)
+                    .AddSingleton<SagaDbSchemaInitializer>()
                     .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
                 AddSqliteDbContext(cfg.Services, $"Data Source={databasePath};Pooling={pooled}");
             },

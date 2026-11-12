@@ -88,6 +88,9 @@ public sealed class WorkTracker
 
     public int Count => _completed.Count;
 
+    /// <summary>timestamp of the last completion, zero when there is none.</summary>
+    public long LastCompletion => Interlocked.Read(ref _last);
+
     public void Complete(string id)
     {
         if (!_completed.TryAdd(id, 0))

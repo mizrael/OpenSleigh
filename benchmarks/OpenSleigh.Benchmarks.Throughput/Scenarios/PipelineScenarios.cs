@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using OpenSleigh.Persistence;
 using OpenSleigh.Benchmarks.Throughput.Infrastructure;
 using OpenSleigh.Benchmarks.Throughput.Workload;
 using OpenSleigh.DependencyInjection;
@@ -15,7 +17,7 @@ namespace OpenSleigh.Benchmarks.Throughput.Scenarios;
 internal static class PipelineScenarios
 {
     private static readonly TimeSpan WarmUpTimeout = TimeSpan.FromSeconds(90);
-    private static readonly TimeSpan RelaySettleTime = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan RelaySettleTime = TimeSpan.FromSeconds(2);
     private const int RelayWarmUpMessages = 30;
     private const int PublishParallelism = 8;
 
@@ -59,7 +61,7 @@ internal static class PipelineScenarios
         TransportTarget? transport = null)
         => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
             instrument: null,
-            completed: (_, tracker, start) => tracker.RateSince(start));
+            completed: (_, relayed, elapsed) => elapsed > TimeSpan.Zero ? relayed / elapsed.TotalSeconds : 0);
 
     /// <summary>
     /// The same run as <see cref="OutboxRelayAsync"/>, reporting how long the relay spent in each call.
@@ -72,9 +74,9 @@ internal static class PipelineScenarios
         TransportTarget? transport = null)
         => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
             instrument: StageTimings.Instrument,
-            completed: (services, tracker, start) => new EndToEndProfile(
-                tracker.Count,
-                tracker.Count / Math.Max(tracker.RateSince(start), double.Epsilon) * 1000,
+            completed: (services, relayed, elapsed) => new EndToEndProfile(
+                relayed,
+                elapsed.TotalMilliseconds,
                 services.GetRequiredService<StageTimings>().Snapshot()));
 
     private static async Task<T> RunOutboxRelayAsync<T>(
@@ -84,10 +86,12 @@ internal static class PipelineScenarios
         TimeSpan cap,
         TransportTarget? transport,
         Action<IServiceCollection>? instrument,
-        Func<IServiceProvider, WorkTracker, long, T> completed)
+        Func<IServiceProvider, int, TimeSpan, T> completed)
     {
         if (transport is not null)
             await transport.PrepareAsync();
+
+        var commits = new CommitClock();
 
         var host = BenchHost.Build(context, cfg =>
         {
@@ -102,6 +106,9 @@ internal static class PipelineScenarios
             else
                 services.TryDecorate<IPublisher>((provider, inner)
                     => new TrackingPublisher(inner, provider.GetRequiredService<WorkTracker>()));
+
+            services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+            services.TryDecorate<ITransactionManager>((_, inner) => new CommitTrackingTransactionManager(inner, commits));
             instrument?.Invoke(services);
         });
 
@@ -114,23 +121,24 @@ internal static class PipelineScenarios
             await host.Services.GetRequiredService<IPublisher>().PublishAsync(NewStart(systemInfo));
             tracker.Reset();
 
-            // the first passes compile queries and code that every later pass reuses: they are not what is measured
+            // the first passes compile queries and code that every later pass reuses: they are not what is measured.
+            // They run here, before the relay is started, so that it cannot take measured messages early
             await SeedOutboxAsync(host.Services, RelayWarmUpMessages);
-            await host.StartAsync();
-            if (!await BenchHost.WaitUntilAsync(() => tracker.Count >= RelayWarmUpMessages, WarmUpTimeout))
-                throw new TimeoutException("warm-up messages were not relayed");
-            await Task.Delay(RelaySettleTime);
+            await RelayUntilAsync(host.Services, () => tracker.Count >= RelayWarmUpMessages);
 
             await SeedOutboxAsync(host.Services, messages);
             tracker.Reset();
+            commits.Reset();
             host.Services.GetService<StageTimings>()?.Reset();
 
-            // the relay is waiting for its next poll: what was seeded behind its back is announced
             var start = Stopwatch.GetTimestamp();
-            host.Services.GetRequiredService<IOutboxSignal>().NotifyPendingMessages();
+            await host.StartAsync();
             await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
 
-            return completed(host.Services, tracker, start);
+            // a message is relayed once its pass has removed it from the outbox and committed, not when it is published
+            await BenchHost.WaitUntilAsync(() => commits.Last >= tracker.LastCompletion, RelaySettleTime);
+
+            return completed(host.Services, tracker.Count, Stopwatch.GetElapsedTime(start, Math.Max(commits.Last, tracker.LastCompletion)));
         }
         finally
         {
@@ -217,35 +225,19 @@ internal static class PipelineScenarios
     /// <summary>
     /// Messages handed to the transport's publisher one after the other, the way the relay does. Nothing consumes them.
     /// </summary>
-    public static async Task<double> PublishAsync(ScenarioContext context, TransportTarget transport, int messages)
+    public static Task<double> PublishAsync(ScenarioContext context, TransportTarget transport, int messages)
+        => PublishConcurrentlyAsync(context, transport, messages, parallelism: 1);
+
+    private static async Task RelayUntilAsync(IServiceProvider services, Func<bool> done)
     {
-        await transport.PrepareAsync();
-
-        var host = BenchHost.Build(context, cfg =>
+        var stopwatch = Stopwatch.StartNew();
+        while (!done())
         {
-            PersistenceTarget.InMemory(context).Configure(cfg);
-            transport.Configure(cfg);
-            cfg.AddSaga<PingSaga>();
-            cfg.SetPublishOnly();
-        });
+            if (stopwatch.Elapsed > WarmUpTimeout)
+                throw new TimeoutException("warm-up messages were not relayed");
 
-        try
-        {
-            var publisher = host.Services.GetRequiredService<IPublisher>();
-            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
-
-            await publisher.PublishAsync(NewPing(systemInfo));
-
-            var stopwatch = Stopwatch.StartNew();
-            for (var i = 0; i < messages; i++)
-                await publisher.PublishAsync(NewPing(systemInfo));
-            stopwatch.Stop();
-
-            return messages / stopwatch.Elapsed.TotalSeconds;
-        }
-        finally
-        {
-            await BenchHost.StopAndDisposeAsync(host);
+            using var scope = services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IOutboxProcessor>().RelayPendingMessagesAsync();
         }
     }
 
