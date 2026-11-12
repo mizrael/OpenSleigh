@@ -201,7 +201,7 @@ public abstract class SqlSagaStateRepositoryTests
 
         await sut.ReleaseAsync(sagaContext);
 
-        var unLockedState = await db.SagaStates.FirstOrDefaultAsync(e => e.InstanceId == sagaContext.InstanceId);
+        var unLockedState = await ReadStoredSagaAsync(db, sagaContext.InstanceId);
         Assert.NotNull(unLockedState);
         Assert.Null(unLockedState.LockTime);
         Assert.True(unLockedState.IsCompleted);
