@@ -484,6 +484,45 @@ public abstract class SqlSagaStateRepositoryTests
         Assert.False(string.IsNullOrEmpty(secondCopy.LockId));
     }
 
+    [Fact]
+    public async Task LockAsync_should_report_a_saga_that_someone_else_started_after_it_was_not_found_and_work_on_the_next_attempt()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var (firstDb, _) = _fixture.CreateDbContext(dbName);
+        var (secondDb, _) = _fixture.CreateDbContext(dbName);
+        var firstRepository = CreateSut(firstDb);
+        var secondRepository = CreateSut(secondDb);
+
+        // two consumers receive a message that starts the same saga, and neither finds it
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(correlationId);
+        var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
+        Assert.Null(await firstRepository.FindAsync(descriptor, firstMessage, CancellationToken.None));
+        Assert.Null(await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None));
+
+        var started = CreateSagaContext(firstMessage);
+        await started.LockAsync(firstRepository, CancellationToken.None);
+        await firstRepository.ReleaseAsync(started);
+
+        var late = CreateSagaContext(secondMessage);
+        await Assert.ThrowsAsync<OptimisticLockException>(async () => await late.LockAsync(secondRepository, CancellationToken.None));
+
+        // what SagaExecutionService does next: it looks for the saga again, through the same repository
+        var found = await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        Assert.NotNull(found);
+        Assert.Equal(started.InstanceId, found.InstanceId);
+        await found.LockAsync(secondRepository, CancellationToken.None);
+        found.SetAsProcessed(secondMessage);
+        await secondRepository.ReleaseAsync(found);
+
+        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
+        var stored = await ReadStoredSagaAsync(verificationDb, started.InstanceId);
+        Assert.Null(stored.LockId);
+        Assert.Single(stored.ProcessedMessages);
+    }
+
     private static OpenSleigh.Outbox.MessageEnvelope Publish(ISagaInstance saga)
     {
         var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga);

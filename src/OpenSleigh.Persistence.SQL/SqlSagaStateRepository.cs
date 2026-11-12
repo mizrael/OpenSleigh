@@ -49,7 +49,10 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
             .ConfigureAwait(false);
 
         if (entity is null)
+        {
+            RememberMissingSaga(correlationId, sagaType, sagaStateType);
             return null;
+        }
 
         RememberFoundSaga(entity);
 
@@ -94,14 +97,20 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         if (lockId is not null)
             return lockId;
 
-        var entity = await _dbContext.SagaStates
-            .FirstOrDefaultAsync(e =>
-                (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
-                e.SagaType == state.Descriptor.SagaType.FullName &&
-                ((state.Descriptor.SagaStateType == null && e.SagaStateType == null) ||
-                 (state.Descriptor.SagaStateType != null && e.SagaStateType == state.Descriptor.SagaStateType.FullName)),
-                cancellationToken)
-            .ConfigureAwait(false);
+        var sagaType = state.Descriptor.SagaType.FullName;
+        var sagaStateType = state.Descriptor.SagaStateType?.FullName;
+
+        // a saga this repository looked for and did not find is stored without looking again:
+        // if someone else stored it in the meantime, the insert fails and is handled below
+        var entity = WasNotFound(state.CorrelationId, sagaType, sagaStateType)
+            ? null
+            : await _dbContext.SagaStates
+                .FirstOrDefaultAsync(e =>
+                    (e.InstanceId == state.InstanceId || e.CorrelationId == state.CorrelationId) &&
+                    e.SagaType == sagaType &&
+                    e.SagaStateType == sagaStateType,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
         var isNew = entity is null;
         if (entity is null)
@@ -111,8 +120,8 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
                 CorrelationId = state.CorrelationId,
                 InstanceId = state.InstanceId,
                 IsCompleted = state.IsCompleted,
-                SagaType = state.Descriptor.SagaType.FullName,
-                SagaStateType = state.Descriptor.SagaStateType?.FullName,
+                SagaType = sagaType,
+                SagaStateType = sagaStateType,
                 TriggerMessageId = state.TriggerMessageId,                    
             };
             _dbContext.SagaStates.Add(entity);
@@ -140,16 +149,20 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
         }
         catch (DbUpdateException)
         {
-            entity = await _dbContext.SagaStates
-                .FirstOrDefaultAsync(e =>
+            // the row that could not be stored would be sent again by every later save on this context
+            ForgetUnsavedChanges();
+
+            var storedInstanceId = await _dbContext.SagaStates
+                .AsNoTracking()
+                .Where(e =>
                     e.CorrelationId == state.CorrelationId &&
-                    e.SagaType == state.Descriptor.SagaType.FullName &&
-                    ((state.Descriptor.SagaStateType == null && e.SagaStateType == null) ||
-                     (state.Descriptor.SagaStateType != null && e.SagaStateType == state.Descriptor.SagaStateType.FullName)),
-                    cancellationToken)
+                    e.SagaType == sagaType &&
+                    e.SagaStateType == sagaStateType)
+                .Select(e => e.InstanceId)
+                .FirstOrDefaultAsync(cancellationToken)
                 .ConfigureAwait(false);
 
-            if (entity != null && entity.InstanceId != state.InstanceId)
+            if (storedInstanceId != null && storedInstanceId != state.InstanceId)
             {
                 throw new OptimisticLockException();
             }

@@ -8,8 +8,18 @@ namespace OpenSleigh.Persistence.SQL;
 public partial class SqlSagaStateRepository
 {
     private readonly Dictionary<string, FoundSaga> _foundSagas = new();
+    private readonly HashSet<string> _missingSagas = new();
 
     private sealed record FoundSaga(SagaState? Row, HashSet<string> StoredMessageIds);
+
+    private void RememberMissingSaga(string correlationId, string? sagaType, string? sagaStateType)
+        => _missingSagas.Add(MissingSagaKey(correlationId, sagaType, sagaStateType));
+
+    private bool WasNotFound(string correlationId, string? sagaType, string? sagaStateType)
+        => _missingSagas.Remove(MissingSagaKey(correlationId, sagaType, sagaStateType));
+
+    private static string MissingSagaKey(string correlationId, string? sagaType, string? sagaStateType)
+        => $"{correlationId}|{sagaType}|{sagaStateType}";
 
     private void RememberFoundSaga(SagaState row)
         => _foundSagas[row.InstanceId] = new FoundSaga(
