@@ -30,6 +30,27 @@ internal sealed class CountingPublisher : IPublisher
 }
 
 /// <summary>
+/// Publishes for real, and records which messages were relayed and when.
+/// </summary>
+internal sealed class TrackingPublisher : IPublisher
+{
+    private readonly IPublisher _inner;
+    private readonly WorkTracker _tracker;
+
+    public TrackingPublisher(IPublisher inner, WorkTracker tracker)
+    {
+        _inner = inner;
+        _tracker = tracker;
+    }
+
+    public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
+    {
+        await _inner.PublishAsync(envelope, cancellationToken).ConfigureAwait(false);
+        _tracker.Complete(envelope.MessageId);
+    }
+}
+
+/// <summary>
 /// In-process outbox that hands out pending messages in fixed-size batches, in insertion order,
 /// the way a SQL outbox with a row limit does.
 /// </summary>

@@ -26,22 +26,24 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     /// </summary>
     public Action<IServiceProvider> Prepare { get; init; } = _ => { };
 
-    public static PersistenceTarget SqlServer(ScenarioContext context)
+    /// <param name="outboxBatchSize">rows the relay reads at once; the provider's default when omitted.</param>
+    public static PersistenceTarget SqlServer(ScenarioContext context, int? outboxBatchSize = null)
     {
         var connectionString = string.Format(context.Settings.SqlServer, DatabaseName(context));
         return new PersistenceTarget(
             "sqlserver",
-            cfg => cfg.UseSqlServerPersistence(new SqlConfiguration(connectionString)),
+            cfg => cfg.UseSqlServerPersistence(SqlConfigurationFor(connectionString, outboxBatchSize)),
             DropSqlDatabaseAsync)
         { Prepare = CreateSqlSchema };
     }
 
-    public static PersistenceTarget Postgres(ScenarioContext context)
+    /// <param name="outboxBatchSize">rows the relay reads at once; the provider's default when omitted.</param>
+    public static PersistenceTarget Postgres(ScenarioContext context, int? outboxBatchSize = null)
     {
         var connectionString = string.Format(context.Settings.Postgres, DatabaseName(context));
         return new PersistenceTarget(
             "postgres",
-            cfg => cfg.UsePostgreSqlPersistence(new SqlConfiguration(connectionString)),
+            cfg => cfg.UsePostgreSqlPersistence(SqlConfigurationFor(connectionString, outboxBatchSize)),
             DropSqlDatabaseAsync)
         { Prepare = CreateSqlSchema };
     }
@@ -80,6 +82,14 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     }
 
     private static string DatabaseName(ScenarioContext context) => $"osb_{context.RunId}";
+
+    private static SqlConfiguration SqlConfigurationFor(string connectionString, int? outboxBatchSize)
+        => outboxBatchSize is null
+            ? new SqlConfiguration(connectionString)
+            : new SqlConfiguration(
+                connectionString,
+                SqlSagaStateRepositoryOptions.Default,
+                SqlOutboxRepositoryOptions.Default with { MaxMessagesToPull = outboxBatchSize.Value });
 
     private static void CreateSqlSchema(IServiceProvider services)
     {

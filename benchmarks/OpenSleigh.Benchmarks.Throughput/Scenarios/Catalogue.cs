@@ -14,6 +14,7 @@ internal static class Catalogue
     private static readonly string[] FullOnly = [Suites.Full];
 
     private const int SqlDefaultBatchSize = 10;
+    private const int LargeSqlBatchSize = 100;
 
     public static IReadOnlyList<Scenario> All { get; } = Build();
 
@@ -130,6 +131,56 @@ internal static class Catalogue
             "as postgres-rabbit-e2e, with ConsumerDispatchConcurrency = 16 and PrefetchCount = 64",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
 #endif
+
+        // ---- what the remaining findings are measured with ----
+        new("postgres-state-shortsaga", GateAndFull, Milliseconds, false,
+            "find/lock/release cycle on a saga with no processed messages to start with; mean of 40 cycles",
+            ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.Postgres(ctx), 0, 40)),
+
+        new("sqlserver-state-shortsaga", FullOnly, Milliseconds, false,
+            "find/lock/release cycle on a saga with no processed messages to start with; mean of 40 cycles",
+            ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqlServer(ctx), 0, 40)),
+
+        new("postgres-outbox-relay-batch100", FullOnly, MessagesPerSecond, true,
+            "as postgres-outbox-relay, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), 500, TimeSpan.FromSeconds(10))),
+
+        new("sqlserver-outbox-relay-batch100", FullOnly, MessagesPerSecond, true,
+            "as sqlserver-outbox-relay, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx, LargeSqlBatchSize), 500, TimeSpan.FromSeconds(10))),
+
+        new("rabbit-publish", FullOnly, MessagesPerSecond, true,
+            "2000 messages handed to the RabbitMQ publisher one after the other, nothing consuming",
+            ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Rabbit(ctx), 2000)),
+
+        new("postgres-rabbit-relay", FullOnly, MessagesPerSecond, true,
+            "500 pending outbox rows relayed to RabbitMQ, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+
+        new("mongo-rabbit-relay", FullOnly, MessagesPerSecond, true,
+            "500 pending outbox documents relayed to RabbitMQ, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+
+#if RABBIT_CONSUMER_TUNING
+        new("mongo-rabbit-e2e-concurrent", FullOnly, SagasPerSecond, true,
+            "as mongo-rabbit-e2e, with ConsumerDispatchConcurrency = 16 and PrefetchCount = 64",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
+
+        new("postgres-rabbit-e2e-concurrent-batch100", FullOnly, SagasPerSecond, true,
+            "as postgres-rabbit-e2e-concurrent, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
+#endif
+    ];
+
+    /// <summary>
+    /// The end-to-end runs that are profiled: where the time of a saga goes, call by call.
+    /// </summary>
+    public static IReadOnlyList<(string Name, bool NeedsInfrastructure, Func<ScenarioContext, Task<EndToEndProfile>> RunAsync)> Profiles { get; } =
+    [
+        ("local-inmemory-e2e", false, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.InMemory(ctx), TransportTarget.InMemory(), 2000, TimeSpan.FromSeconds(30))),
+        ("postgres-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("sqlserver-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("mongo-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
     ];
 
     public static IReadOnlyList<Scenario> Select(string? suite, string? names)

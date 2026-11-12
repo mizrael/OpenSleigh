@@ -24,7 +24,12 @@ dotnet run -c Release -- run --suite local --runs 5        # no infrastructure: 
 dotnet run -c Release -- run --suite gate                  # real services, the pull request subset
 dotnet run -c Release -- run --suite full                  # real services, everything
 dotnet run -c Release -- run --scenario kafka-consume,rabbit-consume --runs 3 --out results/run.json
+dotnet run -c Release -- profile --suite local             # where the time of an end-to-end saga goes, call by call
 ```
+
+`profile` runs the end-to-end scenarios with the saga state repository, the outbox repository, the publisher and
+the transaction manager wrapped, and prints calls and time per call. With the `full` suite the gate job prints it
+for both sides and stores it with the results (`profile-base.md`, `profile-head.md`).
 
 The `gate` and `full` suites need the services of `tests/infra/docker-compose.yml`. Connection settings default to
 those containers and can be overridden with `BENCH_SQLSERVER`, `BENCH_POSTGRES`, `BENCH_MONGO`, `BENCH_KAFKA`,
