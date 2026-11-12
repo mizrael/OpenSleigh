@@ -12,13 +12,16 @@ public class TypeResolver : ITypeResolver
     {
         ArgumentNullException.ThrowIfNull(type);
 
-        _assemblies.TryAdd(type.Assembly, 0);
+        // this runs on every publish: reads come first, so that a type already known costs no write
+        if (!_assemblies.ContainsKey(type.Assembly))
+            _assemblies.TryAdd(type.Assembly, 0);
 
-        // messages travel with the full name of their type, which is unique.
-        // The short name is kept as a convenience: the first type registered with it wins
-        if (type.FullName is not null)
-            _typesByName[type.FullName] = type;
-        _typesByName.TryAdd(type.Name, type);
+        // messages travel with the full name of their type. The short name is kept as a convenience.
+        // For both, the first type registered with a name keeps it
+        if (type.FullName is not null && !_typesByName.ContainsKey(type.FullName))
+            _typesByName.TryAdd(type.FullName, type);
+        if (!_typesByName.ContainsKey(type.Name))
+            _typesByName.TryAdd(type.Name, type);
     }
 
     public Type? Resolve(string typeName, bool throwOnError = true)
@@ -26,9 +29,9 @@ public class TypeResolver : ITypeResolver
         if (_typesByName.TryGetValue(typeName, out var dataType))
             return dataType;
 
-        foreach (var assembly in _assemblies.Keys)
+        foreach (var assembly in _assemblies)
         {
-            dataType = assembly.GetType(typeName, throwOnError: false, ignoreCase: true);
+            dataType = assembly.Key.GetType(typeName, throwOnError: false, ignoreCase: true);
             if (dataType is not null)
                 break;
         }
@@ -44,10 +47,12 @@ public class TypeResolver : ITypeResolver
 
     internal int CachedNamesCount => _typesByName.Count;
 
-    // type names arrive in message headers, and one type answers to unlimited spellings
-    // (padding, array and pointer suffixes, generic arguments): only its own full name is cached,
-    // so the cache cannot grow beyond the types of the registered assemblies
+    // type names arrive in message headers, and unlimited names resolve to a type: other spellings of one type
+    // (padding, array and pointer suffixes) and constructed generics, which are a new type for every type argument.
+    // Only the own full name of a type defined in a registered assembly is cached,
+    // so the cache cannot grow beyond the types those assemblies define
     private static bool IsCanonicalName(string typeName, Type type)
         => !type.HasElementType &&
+           !type.IsConstructedGenericType &&
            string.Equals(typeName, type.FullName, StringComparison.OrdinalIgnoreCase);
 }

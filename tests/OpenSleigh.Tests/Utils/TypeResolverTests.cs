@@ -108,6 +108,49 @@ public class TypeResolverTests
     }
 
     [Fact]
+    public void Resolve_should_not_cache_constructed_generic_types()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(GenericProbe<>));
+        var cachedBefore = sut.CachedNamesCount;
+
+        // a different closed type for every type argument: the names are canonical, and there is no end to them
+        var closedTypes = new[]
+        {
+            typeof(GenericProbe<int>), typeof(GenericProbe<int[]>), typeof(GenericProbe<int[][]>),
+            typeof(GenericProbe<string>), typeof(GenericProbe<GenericProbe<int>>), typeof(GenericProbe<GenericProbe<GenericProbe<long>>>)
+        };
+        foreach (var closedType in closedTypes)
+            Assert.Equal(closedType, sut.Resolve(closedType.FullName!));
+
+        Assert.Equal(cachedBefore, sut.CachedNamesCount);
+    }
+
+    [Fact]
+    public void Register_should_keep_a_constructed_generic_type_resolvable_from_the_cache()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(GenericProbe<int>));
+        var cachedBefore = sut.CachedNamesCount;
+
+        Assert.Equal(typeof(GenericProbe<int>), sut.Resolve(typeof(GenericProbe<int>).FullName!));
+        Assert.Equal(cachedBefore, sut.CachedNamesCount);
+    }
+
+    [Fact]
+    public void Register_should_not_change_the_cache_when_the_type_is_already_known()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(FakeSagaStarter));
+        var cachedBefore = sut.CachedNamesCount;
+
+        sut.Register(typeof(FakeSagaStarter));
+
+        Assert.Equal(cachedBefore, sut.CachedNamesCount);
+        Assert.Equal(typeof(FakeSagaStarter), sut.Resolve(typeof(FakeSagaStarter).FullName!));
+    }
+
+    [Fact]
     public void Resolve_should_find_every_registered_type_of_an_assembly_by_its_short_name()
     {
         var sut = new TypeResolver();
@@ -135,3 +178,5 @@ public class TypeResolverTests
         await Task.WhenAll(tasks);
     }
 }
+
+public class GenericProbe<T> { }
