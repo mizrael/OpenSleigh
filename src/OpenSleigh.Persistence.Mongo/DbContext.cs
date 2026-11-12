@@ -53,6 +53,15 @@ public class DbContext : IDbContext
             Name = "ix_correlation_type"
         });
         SagaStates.Indexes.CreateOne(index);
+
+        // lock and release look a saga up by instance id
+        var instanceIdIndex = new CreateIndexModel<Entities.SagaState>(
+            indexBuilder.Ascending(e => e.InstanceId),
+            new CreateIndexOptions()
+            {
+                Name = "ix_instance_id"
+            });
+        SagaStates.Indexes.CreateOne(instanceIdIndex);
     }
 
     private static void TryRegisterClassMap<T>(Action<BsonClassMap<T>> mapAction)
