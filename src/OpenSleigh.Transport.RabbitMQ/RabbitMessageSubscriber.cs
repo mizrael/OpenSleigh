@@ -18,6 +18,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     
     private CancellationTokenSource? _linkedCts;
     private IChannel? _channel;
+    private readonly SemaphoreSlim _channelGate = new(1, 1);
 
     public RabbitMessageSubscriber(
         IChannelFactory channelFactory,
@@ -98,7 +99,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
                 eventArgs.Exchange,
                 ex.Message);
 
-            await channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false);
+            await WithChannelAsync(() => channel.BasicRejectAsync(eventArgs.DeliveryTag, requeue: false));
             return;
         }
 
@@ -114,7 +115,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
             var processor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
             await processor.ProcessAsync(message, _linkedCts?.Token ?? CancellationToken.None);
 
-            await channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false);
+            await WithChannelAsync(() => channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false));
         }
         catch (LockException lockEx)
         {
@@ -142,13 +143,17 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         _logger.LogWarning(ex, errorMsg, message.MessageId, queueReference.ExchangeName, ex.Message);
 
         if (!requeue)
-            await channel.BasicRejectAsync(deliveryProps.DeliveryTag, requeue: false);
-        else
+        {
+            await WithChannelAsync(() => channel.BasicRejectAsync(deliveryProps.DeliveryTag, requeue: false));
+            return;
+        }
+
+        var props = new BasicProperties(deliveryProps.BasicProperties);
+        await WithChannelAsync(async () =>
         {
             // we acknowledge the message so it's removed from the original queue
             await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
 
-            var props = new BasicProperties(deliveryProps.BasicProperties);
             // we publish the message to the retry exchange
             await channel.BasicPublishAsync(
                 exchange: queueReference.RetryExchangeName,
@@ -156,6 +161,21 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
                 mandatory: true,
                 basicProperties: props,
                 body: deliveryProps.Body);
+        });
+    }
+
+    // with ConsumerDispatchConcurrency above 1 several deliveries are handled at the same time, all on this
+    // consumer's channel, and a channel must not be used by more than one caller at once
+    private async ValueTask WithChannelAsync(Func<ValueTask> useChannel)
+    {
+        await _channelGate.WaitAsync();
+        try
+        {
+            await useChannel();
+        }
+        finally
+        {
+            _channelGate.Release();
         }
     }
 

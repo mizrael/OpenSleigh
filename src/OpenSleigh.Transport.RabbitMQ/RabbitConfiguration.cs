@@ -48,7 +48,19 @@ public record RabbitConfiguration
     /// in the order the broker delivers them. Values above 1 raise throughput but give up that ordering, and messages
     /// for the same saga instance that arrive together will contend for its lock and go through the retry queue.
     /// </summary>
-    public ushort ConsumerDispatchConcurrency { get; init; } = 1;
+    /// <exception cref="ArgumentOutOfRangeException">the value is lower than 1: the consumer would handle nothing.</exception>
+    public ushort ConsumerDispatchConcurrency
+    {
+        get => _consumerDispatchConcurrency;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, MinConsumerDispatchConcurrency);
+            _consumerDispatchConcurrency = value;
+        }
+    }
+
+    private const ushort MinConsumerDispatchConcurrency = 1;
+    private readonly ushort _consumerDispatchConcurrency = MinConsumerDispatchConcurrency;
 
     /// <summary>
     /// Gets how many unacknowledged messages the broker hands to a consumer at once.
