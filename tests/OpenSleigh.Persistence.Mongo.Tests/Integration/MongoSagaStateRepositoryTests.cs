@@ -288,8 +288,9 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
 
         // two consumers receive a message that starts the same saga, and neither finds it
         var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
         var secondMessage = CreateMessageContext<FakeMessage>();
-        secondMessage.CorrelationId.Returns(firstMessage.CorrelationId);
+        secondMessage.CorrelationId.Returns(correlationId);
         var descriptor = SagaDescriptor.Create<FakeSagaNoState>();
         Assert.Null(await firstRepository.FindAsync(descriptor, firstMessage, CancellationToken.None));
         Assert.Null(await secondRepository.FindAsync(descriptor, secondMessage, CancellationToken.None));
