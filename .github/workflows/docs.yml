@@ -5,11 +5,22 @@ on:
     branches: [develop]
     paths:
       - 'docs/**'
+      - 'benchmarks/OpenSleigh.Benchmarks.Publish/**'
       - '.github/workflows/docs.yml'
+  # pull requests build the site without deploying it
+  pull_request:
+    paths:
+      - 'docs/**'
+      - 'benchmarks/OpenSleigh.Benchmarks.Publish/**'
+      - '.github/workflows/docs.yml'
+  # CircleCI reports every job as a commit status: the site is rebuilt when a benchmark run of develop finishes,
+  # so that the benchmarks page shows it. Every other status starts a run that is skipped.
+  status:
   workflow_dispatch:
 
 permissions:
   contents: read
+  statuses: read
   pages: write
   id-token: write
 
@@ -17,12 +28,37 @@ concurrency:
   group: "pages"
   cancel-in-progress: false
 
+env:
+  # the job condition below repeats this value: the env context is not available there
+  BENCHMARK_STATUS_CONTEXT: 'ci/circleci: benchmark_develop'
+
 jobs:
   build:
+    if: >-
+      github.event_name != 'status' ||
+      (github.event.context == 'ci/circleci: benchmark_develop' &&
+       github.event.state != 'pending' &&
+       contains(github.event.branches.*.name, 'develop'))
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # reads the latest benchmark runs of develop from CircleCI's public API. Nothing is committed:
+      # the page is regenerated on every build, and keeps its placeholder when no run can be read
+      - name: Fetch benchmark results
+        run: >-
+          dotnet run --project benchmarks/OpenSleigh.Benchmarks.Publish -c Release --
+          --branch develop
+          --context "$BENCHMARK_STATUS_CONTEXT"
+          --output docs/_includes/benchmark-results.md
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
@@ -33,11 +69,12 @@ jobs:
 
       - name: Setup Pages
         id: pages
+        if: github.event_name != 'pull_request'
         uses: actions/configure-pages@v5
 
       - name: Build with Jekyll
         working-directory: docs
-        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path }}" --destination ../_site
+        run: bundle exec jekyll build --baseurl "${{ steps.pages.outputs.base_path || '/OpenSleigh' }}" --destination ../_site
         env:
           JEKYLL_ENV: production
 
@@ -45,6 +82,7 @@ jobs:
         uses: actions/upload-pages-artifact@v3
 
   deploy:
+    if: github.event_name != 'pull_request'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
