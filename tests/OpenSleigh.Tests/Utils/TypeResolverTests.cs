@@ -72,4 +72,66 @@ public class TypeResolverTests
 
         Assert.Equal(typeof(FakeSagaMessage), result);
     }
+
+    [Fact]
+    public void Resolve_should_cache_a_type_found_by_its_full_name()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(FakeSagaStarter));
+        var cachedBefore = sut.CachedNamesCount;
+
+        sut.Resolve(typeof(FakeSagaMessage).FullName!);
+        sut.Resolve(typeof(FakeSagaMessage).FullName!.ToUpperInvariant());
+
+        Assert.Equal(cachedBefore + 1, sut.CachedNamesCount);
+    }
+
+    [Fact]
+    public void Resolve_should_not_cache_other_spellings_of_a_type_name()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(FakeSagaStarter));
+        var fullName = typeof(FakeSagaMessage).FullName!;
+        sut.Resolve(fullName);
+        var cachedBefore = sut.CachedNamesCount;
+
+        var spellings = Enumerable.Range(1, 20)
+            .Select(rank => fullName + string.Concat(Enumerable.Repeat("[]", rank)))
+            .Append(" " + fullName)
+            .Append(fullName + "*")
+            .Append(fullName + "&")
+            .ToArray();
+        var resolved = spellings.Count(spelling => sut.Resolve(spelling, throwOnError: false) is not null);
+
+        Assert.True(resolved >= 20, $"only {resolved} spellings resolved: the test would prove nothing");
+        Assert.Equal(cachedBefore, sut.CachedNamesCount);
+    }
+
+    [Fact]
+    public void Resolve_should_find_every_registered_type_of_an_assembly_by_its_short_name()
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(FakeSagaStarter));
+        sut.Register(typeof(FakeSagaMessage));
+
+        Assert.Equal(typeof(FakeSagaMessage), sut.Resolve(nameof(FakeSagaMessage)));
+    }
+
+    [Fact]
+    public async Task Register_and_Resolve_should_be_safe_to_call_concurrently()
+    {
+        var sut = new TypeResolver();
+        var types = typeof(FakeSagaStarter).Assembly.GetTypes().Where(t => t.FullName is not null).ToArray();
+
+        var tasks = Enumerable.Range(0, 8).Select(_ => Task.Run(() =>
+        {
+            foreach (var type in types)
+            {
+                sut.Register(type);
+                Assert.Equal(type, sut.Resolve(type.FullName!));
+            }
+        }));
+
+        await Task.WhenAll(tasks);
+    }
 }
