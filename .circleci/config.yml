@@ -1,6 +1,21 @@
 version: 2.1
 orbs:
   codecov: codecov/codecov@6
+
+parameters:
+  benchmark_base_branch:
+    description: branch the benchmark gate compares every other branch against
+    type: string
+    default: develop
+  benchmark_rounds:
+    description: maximum number of base/head rounds the benchmark gate runs
+    type: integer
+    default: 5
+  benchmark_report_only:
+    description: print the benchmark comparison without failing the job
+    type: boolean
+    default: false
+
 jobs:
   build:
     resource_class: large
@@ -119,6 +134,88 @@ jobs:
               -- RunConfiguration.TreatNoTestsAsError=false
       - codecov/upload
 
+  # benchmarks the checked out commit against a base, in the same job:
+  # as benchmark_gate it fails branches that are slower than the base branch,
+  # as benchmark_develop it records the base branch itself, compared with its previous commit, and never fails on timing
+  benchmark:
+    parameters:
+      base:
+        description: a branch to compare with, or "previous-commit"
+        type: string
+      suite:
+        type: string
+        default: gate
+      report_only:
+        type: boolean
+        default: false
+    resource_class: large
+    environment:
+      BENCH_BASE_DIR: /tmp/bench-base
+      BENCH_OUT_DIR: /tmp/bench-artifacts
+      BENCH_ROUNDS: "<< pipeline.parameters.benchmark_rounds >>"
+      BENCH_REPORT_ONLY: "<< parameters.report_only >>"
+      BENCH_SUITE: "<< parameters.suite >>"
+      # a named service container is reached by its name, not on localhost
+      BENCH_KAFKA: broker:29092
+    docker:
+      - image: mcr.microsoft.com/dotnet/sdk:10.0.103
+      - image: 'mongo:latest'
+      - image: 'rabbitmq:3-management-alpine'
+        environment:
+          RABBITMQ_DEFAULT_VHOST: "/opensleigh-tests"
+      - image: 'mcr.microsoft.com/mssql/server:2022-latest'
+        environment:
+          SA_PASSWORD: "Sup3r_p4ssword123"
+          ACCEPT_EULA: "Y"
+      - image: 'postgres:13.4'
+        environment:
+          POSTGRES_PASSWORD: "Sup3r_p4ssword123"
+      - image: 'apache/kafka:latest'
+        name: broker
+        environment:
+          KAFKA_BROKER_ID: 1
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_NODE_ID: 1
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
+          KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+    steps:
+      - run: apt-get update && apt-get install -y openssh-client
+      - checkout
+      - run:
+          name: Check out the base (<< parameters.base >>)
+          command: |
+            if [ "<< parameters.base >>" = "previous-commit" ]; then
+              # the first parent of a merge commit is the previous tip of this branch
+              base_ref="HEAD~1"
+            else
+              git fetch --no-tags origin "<< parameters.base >>"
+              base_ref="FETCH_HEAD"
+            fi
+            git worktree add --detach "$BENCH_BASE_DIR" "$base_ref"
+            echo "base: $(git -C "$BENCH_BASE_DIR" rev-parse HEAD)"
+            echo "head: $(git rev-parse HEAD)"
+      - run:
+          name: Benchmark this commit against << parameters.base >>
+          no_output_timeout: 15m
+          command: bash ./benchmarks/run-gate.sh
+      - store_artifacts:
+          path: /tmp/bench-artifacts/results
+          destination: benchmark-results
+      - store_artifacts:
+          path: /tmp/bench-artifacts/summary.md
+          destination: benchmark-summary.md
+
 workflows:
   build_and_test:
     jobs:
@@ -127,3 +224,25 @@ workflows:
     jobs:
       - codecov:
           context: codecov
+  benchmark_gate:
+    jobs:
+      - benchmark:
+          name: benchmark_gate
+          base: << pipeline.parameters.benchmark_base_branch >>
+          report_only: << pipeline.parameters.benchmark_report_only >>
+          filters:
+            branches:
+              ignore:
+                - << pipeline.parameters.benchmark_base_branch >>
+  # every commit that lands on the base branch is measured too; the docs site publishes these runs
+  benchmark_develop:
+    jobs:
+      - benchmark:
+          name: benchmark_develop
+          base: previous-commit
+          suite: full
+          report_only: true
+          filters:
+            branches:
+              only:
+                - << pipeline.parameters.benchmark_base_branch >>
