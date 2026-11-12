@@ -38,6 +38,10 @@ What the scenarios leave out on purpose:
   compiled by EF Core: a few hundred milliseconds that would otherwise be most of a short scenario.
 - The end-to-end scenarios with 200 sagas are over in a second or two. The `-long` ones run 2000, long enough for
   connection pools and the thread pool to have grown.
+- `kafka-consume` puts its messages in the broker before the subscriber starts. Fed by a publisher while it runs,
+  the consumer only showed how fast 32 callers can publish (about 5,500 msg/s with the producer's default linger of
+  5 ms, whatever the consumer did); on a backlog it handles about 40,000 msg/s. That feed is measured on its own, as
+  `kafka-publish-concurrent`.
 - SQL Server end to end moves by more than the gate's tolerance between rounds on a CI runner, and Kafka needs
   seconds to start: their scenarios are in the `full` suite only.
 

@@ -162,21 +162,13 @@ internal sealed record TransportTarget(string Name, Action<IBusConfigurator> Con
     }
 
     public static TransportTarget Kafka(ScenarioContext context, params Type[] messageTypes)
-        => Kafka(context, configuration => configuration, messageTypes);
-
-#if KAFKA_PRODUCER_LINGER
-    public static TransportTarget KafkaWithLinger(ScenarioContext context, TimeSpan producerLinger, params Type[] messageTypes)
-        => Kafka(context, configuration => configuration with { ProducerLinger = producerLinger }, messageTypes);
-#endif
-
-    private static TransportTarget Kafka(ScenarioContext context, Func<KafkaConfiguration, KafkaConfiguration> tune, Type[] messageTypes)
     {
         var prefix = $"bench.{context.RunId}";
         string TopicName(Type messageType) => $"{prefix}.{messageType.Name}".ToLowerInvariant();
 
-        var configuration = tune(new KafkaConfiguration(
+        var configuration = new KafkaConfiguration(
             context.Settings.Kafka,
-            messageType => new OpenSleigh.Transport.Kafka.QueueReferences(TopicName(messageType), $"{TopicName(messageType)}.dead")));
+            messageType => new OpenSleigh.Transport.Kafka.QueueReferences(TopicName(messageType), $"{TopicName(messageType)}.dead"));
 
         return new TransportTarget(
             "kafka",

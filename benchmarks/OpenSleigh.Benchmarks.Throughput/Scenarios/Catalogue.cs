@@ -102,9 +102,11 @@ internal static class Catalogue
             "400 messages consumed from RabbitMQ, handler awaits 10 ms, in-memory persistence; rate until consumed or 10 s",
             ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.Rabbit(ctx), 400, 1, TimeSpan.FromMilliseconds(10), TimeSpan.FromSeconds(10))),
 
+        // the messages are in the broker before the subscriber starts: fed by a publisher while it runs,
+        // the consumer only ever shows how fast that publisher is
         new("kafka-consume", GateAndFull, MessagesPerSecond, true,
-            "400 messages consumed from Kafka, in-memory persistence; rate until consumed or 10 s",
-            ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 400, 32, TimeSpan.Zero, TimeSpan.FromSeconds(10))),
+            "5000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 30 s",
+            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 5000, 32, TimeSpan.FromSeconds(30))),
 
         new("postgres-rabbit-e2e", GateAndFull, SagasPerSecond, true,
             "200 two-hop sagas on PostgreSQL + RabbitMQ; rate until completed or 15 s",
@@ -174,18 +176,8 @@ internal static class Catalogue
             ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 300)),
 
         new("kafka-publish-concurrent", FullOnly, MessagesPerSecond, true,
-            "400 messages handed to the Kafka publisher by 32 concurrent callers, nothing consuming: what feeds kafka-consume",
+            "400 messages handed to the Kafka publisher by 32 concurrent callers, each waiting for its acknowledgement, nothing consuming",
             ctx => PipelineScenarios.PublishConcurrentlyAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 400, 32)),
-
-        new("kafka-consume-backlog", FullOnly, MessagesPerSecond, true,
-            "2000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 30 s",
-            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 2000, 32, TimeSpan.FromSeconds(30))),
-
-#if KAFKA_PRODUCER_LINGER
-        new("kafka-consume-linger5", FullOnly, MessagesPerSecond, true,
-            "as kafka-consume, with ProducerLinger = 5 ms, the producer's setting on develop",
-            ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.KafkaWithLinger(ctx, TimeSpan.FromMilliseconds(5), typeof(Ping)), 400, 32, TimeSpan.Zero, TimeSpan.FromSeconds(10))),
-#endif
 
         new("postgres-kafka-relay", FullOnly, MessagesPerSecond, true,
             "300 pending outbox rows relayed to Kafka, nothing consuming; rate until drained or 10 s",
