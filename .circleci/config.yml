@@ -15,6 +15,10 @@ parameters:
     description: print the benchmark comparison without failing the job
     type: boolean
     default: false
+  e2e_repetitions:
+    description: how many times the E2E job runs the whole E2E suite; raise it to measure flakiness
+    type: integer
+    default: 10
 
 jobs:
   build:
@@ -73,10 +77,55 @@ jobs:
             cd ./src            
             dotnet test --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category=Integration"
 
-      #- run: # skipping E2E tests for now
-      #    name: E2E tests
-      #    command: |            
-      #      dotnet test --filter "Category=E2E"           
+  # the E2E tests run whole sagas on real hosts, against real services. They have a job of their own:
+  # they take minutes rather than seconds, and a failure here should not hide the result of the build job
+  e2e:
+    resource_class: large
+    environment:
+      TARGET_FRAMEWORK: net10.0
+      E2E_REPETITIONS: "<< pipeline.parameters.e2e_repetitions >>"
+      E2E_RESULTS_DIR: /tmp/e2e-results
+
+    docker:
+      - image: mcr.microsoft.com/dotnet/sdk:10.0.103
+      - image: rabbitmq:3-management-alpine
+        environment:
+          RABBITMQ_DEFAULT_VHOST: "/opensleigh-tests"
+      - image: 'postgres:13.4'
+        environment:
+          POSTGRES_PASSWORD: "Sup3r_p4ssword123"
+      - image: 'apache/kafka:latest'
+        name: broker
+        environment:
+          KAFKA_BROKER_ID: 1
+          KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://broker:29092,PLAINTEXT_HOST://localhost:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+          KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+          KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+          KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+          KAFKA_PROCESS_ROLES: broker,controller
+          KAFKA_NODE_ID: 1
+          KAFKA_CONTROLLER_QUORUM_VOTERS: 1@broker:29093
+          KAFKA_LISTENERS: PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092
+          KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+          KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+          KAFKA_LOG_DIRS: /tmp/kraft-combined-logs
+          CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
+
+    steps:
+      - run: apt-get update && apt-get install -y openssh-client
+      - checkout
+      - run:
+          name: Build the E2E tests
+          command: dotnet build ./tests/OpenSleigh.E2ETests/OpenSleigh.E2ETests.csproj --framework $TARGET_FRAMEWORK
+      - run:
+          name: E2E tests
+          no_output_timeout: 20m
+          command: bash ./tests/OpenSleigh.E2ETests/run-e2e.sh
+      - store_artifacts:
+          path: /tmp/e2e-results
+          destination: e2e-results
 
   codecov:
     resource_class: large
@@ -220,6 +269,9 @@ workflows:
   build_and_test:
     jobs:
       - build
+  e2e:
+    jobs:
+      - e2e
   codecov:
     jobs:
       - codecov:
