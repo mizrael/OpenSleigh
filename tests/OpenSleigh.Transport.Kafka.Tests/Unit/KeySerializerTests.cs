@@ -16,6 +16,16 @@ public class KeySerializerTests
     }
 
     [Fact]
+    public void Serialize_should_return_the_bytes_of_a_string_as_the_consumer_reads_them_back()
+    {
+        var sut = new KeySerializer<string>();
+
+        var result = sut.Serialize("lorem-ipsum", default);
+
+        Assert.Equal("lorem-ipsum", Confluent.Kafka.Deserializers.Utf8.Deserialize(result, false, default));
+    }
+
+    [Fact]
     public void Serialize_should_return_json_bytes_from_class()
     {
         var sut = new KeySerializer<DummyMessage>();
