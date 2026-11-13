@@ -59,6 +59,13 @@ public class MessageHandlerManager : IMessageHandlerManager
             await handler.RollbackAsync(messageContext, cancellationToken)
                          .ConfigureAwait(false);
         }
+        // a rollback that was interrupted because the application is stopping has not failed either:
+        // nothing of it is stored and the message is delivered again
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            executionContext.ClearOutbox();
+            throw;
+        }
         catch (Exception rollbackFailure)
         {
             _logger.LogError(

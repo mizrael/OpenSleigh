@@ -94,17 +94,11 @@ public record SagaInstance : ISagaInstance
             await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                        .ConfigureAwait(false);
 
-            this.SetAsProcessed(messageContext);
-
-            await sagaExecutionService.CommitAsync(this, cancellationToken)
-                                      .ConfigureAwait(false);
-
-            // to be done after Commit, as it will be checked when releasing the state
-            this.LockId = string.Empty;
+            await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
         }
         catch (SagaException failure) when (failure.RolledBack && !string.IsNullOrEmpty(this.LockId))
         {
-            await CommitRollbackAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
+            await CommitRollbackAsync(messageContext, sagaExecutionService).ConfigureAwait(false);
             throw;
         }
         catch
@@ -115,20 +109,15 @@ public record SagaInstance : ISagaInstance
     }
 
     // the handler failed and its rollback ran: what the rollback published is stored with the release, like the messages
-    // of a handler that succeeded. The message is recorded as processed, so that a redelivery does not roll back twice
+    // of a handler that succeeded. The message is recorded as processed, so that a redelivery does not roll back twice.
+    // Not cancellable: a stop must not leave a rollback that ran without the messages it published
     private async ValueTask CommitRollbackAsync<TM>(
         IMessageContext<TM> messageContext,
-        ISagaExecutionService sagaExecutionService,
-        CancellationToken cancellationToken) where TM : IMessage
+        ISagaExecutionService sagaExecutionService) where TM : IMessage
     {
         try
         {
-            this.SetAsProcessed(messageContext);
-
-            await sagaExecutionService.CommitAsync(this, cancellationToken)
-                                      .ConfigureAwait(false);
-
-            this.LockId = string.Empty;
+            await CommitAsProcessedAsync(messageContext, sagaExecutionService, CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -136,6 +125,31 @@ public record SagaInstance : ISagaInstance
             await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async ValueTask CommitAsProcessedAsync<TM>(
+        IMessageContext<TM> messageContext,
+        ISagaExecutionService sagaExecutionService,
+        CancellationToken cancellationToken) where TM : IMessage
+    {
+        this.SetAsProcessed(messageContext);
+
+        try
+        {
+            await sagaExecutionService.CommitAsync(this, cancellationToken)
+                                      .ConfigureAwait(false);
+        }
+        catch
+        {
+            // the messages were not stored: the message must not be released as processed, or a redelivery would
+            // be ignored and they would never go out
+            _processedMessages.Remove(messageContext.MessageId);
+            ClearOutbox();
+            throw;
+        }
+
+        // to be done after Commit, as it will be checked when releasing the state
+        this.LockId = string.Empty;
     }
 
     private async ValueTask TryReleaseAsync(ISagaExecutionService sagaExecutionService)

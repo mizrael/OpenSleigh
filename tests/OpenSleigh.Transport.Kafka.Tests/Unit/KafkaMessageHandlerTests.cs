@@ -79,7 +79,7 @@ public class KafkaMessageHandlerTests
     }
 
     [Fact]
-    public async Task StartAsync_should_return_false_when_message_parsing_fails()
+    public async Task StartAsync_should_skip_a_message_that_cannot_be_parsed()
     {
         var parser = NSubstitute.Substitute.For<IKafkaMessageParser>();
         parser.WhenForAnyArgs(p => p.Parse(Arg.Any<ConsumeResult<string, byte[]>>()))
@@ -97,7 +97,8 @@ public class KafkaMessageHandlerTests
         var sut = new KafkaMessageHandler(parser, ScopeFactoryFor(messageProcessor), publisher, logger, sysInfo, queueRefFactory, Configuration);
 
         var result = await sut.HandleAsync(consumeResult);
-        Assert.False(result);
+        // delivered again it could not be read either: it is dealt with, by being skipped
+        Assert.True(result);
 
         parser.Received().Parse(consumeResult);
 
@@ -225,7 +226,7 @@ public class KafkaMessageHandlerTests
         var before = DateTimeOffset.UtcNow;
         Assert.True(await sut.HandleAsync(consumeResult));
 
-        await publisher.Received(1).PublishAsync(message, "lorem.retry", Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishAsync(message, "lorem.retry", Arg.Any<IEnumerable<Header>>(), CancellationToken.None);
         await publisher.DidNotReceive().PublishAsync(Arg.Any<MessageEnvelope>(), queueRefs.DeadLetterTopicName, Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>());
 
         var headers = new Headers();
@@ -233,6 +234,66 @@ public class KafkaMessageHandlerTests
             headers.Add(header);
         Assert.True(RetrySchedule.TryGetNotBefore(headers, out var notBefore));
         Assert.InRange(notBefore, before + Configuration.RetryDelay - TimeSpan.FromSeconds(1), DateTimeOffset.UtcNow + Configuration.RetryDelay);
+        Assert.Equal(ClientGroup, Encoding.UTF8.GetString(headers.GetLastBytes(HeaderNames.RetryGroup)));
+    }
+
+    [Fact]
+    public async Task HandleAsync_should_report_a_message_as_not_dealt_with_when_it_cannot_be_published_anywhere()
+    {
+        var queueRefs = new QueueReferences("lorem", "lorem.dead");
+        var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
+        publisher.PublishAsync(Arg.Any<MessageEnvelope>(), Arg.Any<string>(), Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>())
+                 .Returns<ValueTask<DeliveryResult<string, byte[]>>>(_ => throw new KafkaException(new Error(ErrorCode.Local_MsgTimedOut, "timed out")));
+        var (sut, message, consumeResult) = CreateSutFailingWith(new LockException("locked by someone else"), queueRefs, publisher);
+
+        Assert.False(await sut.HandleAsync(consumeResult));
+
+        await publisher.Received(1).PublishAsync(message, queueRefs.RetryTopicName, Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>());
+        await publisher.Received(1).PublishAsync(message, queueRefs.DeadLetterTopicName, Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_should_leave_a_message_to_be_delivered_again_when_its_processing_is_interrupted_by_a_stop()
+    {
+        var queueRefs = new QueueReferences("lorem", "lorem.dead");
+        var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
+        using var stopping = new CancellationTokenSource();
+        stopping.Cancel();
+        var (sut, _, consumeResult) = CreateSutFailingWith(new OperationCanceledException(stopping.Token), queueRefs, publisher);
+
+        Assert.False(await sut.HandleAsync(consumeResult, stopping.Token));
+
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default!, default, default);
+    }
+
+    [Fact]
+    public async Task HandleAsync_should_not_fall_back_to_the_dead_letter_topic_when_the_retry_cannot_be_published_during_a_stop()
+    {
+        var queueRefs = new QueueReferences("lorem", "lorem.dead");
+        var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
+        publisher.PublishAsync(Arg.Any<MessageEnvelope>(), queueRefs.RetryTopicName, Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>())
+                 .Returns<ValueTask<DeliveryResult<string, byte[]>>>(_ => throw new KafkaException(new Error(ErrorCode.Local_MsgTimedOut, "timed out")));
+        using var stopping = new CancellationTokenSource();
+        stopping.Cancel();
+        var (sut, _, consumeResult) = CreateSutFailingWith(new LockException("locked by someone else"), queueRefs, publisher);
+
+        Assert.False(await sut.HandleAsync(consumeResult, stopping.Token));
+
+        await publisher.DidNotReceive().PublishAsync(Arg.Any<MessageEnvelope>(), queueRefs.DeadLetterTopicName, Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandleAsync_should_dead_letter_a_message_whose_processing_was_cancelled_by_something_else_than_a_stop()
+    {
+        var queueRefs = new QueueReferences("lorem", "lorem.dead");
+        var publisher = NSubstitute.Substitute.For<IKafkaPublisherExecutor>();
+        publisher.PublishAsync(Arg.Any<MessageEnvelope>(), Arg.Any<string>(), Arg.Any<IEnumerable<Header>>(), Arg.Any<CancellationToken>())
+                 .Returns(new DeliveryResult<string, byte[]>());
+        var (sut, message, consumeResult) = CreateSutFailingWith(new TaskCanceledException("the database timed out"), queueRefs, publisher);
+
+        Assert.True(await sut.HandleAsync(consumeResult));
+
+        await publisher.Received(1).PublishAsync(message, queueRefs.DeadLetterTopicName, Arg.Any<IEnumerable<Header>>(), CancellationToken.None);
     }
 
     [Fact]
@@ -267,14 +328,19 @@ public class KafkaMessageHandlerTests
         var queueRefFactory = NSubstitute.Substitute.For<IQueueReferenceFactory>();
         queueRefFactory.Create(Arg.Any<MessageEnvelope>()).Returns(queueRefs);
 
+        var systemInfo = NSubstitute.Substitute.For<ISystemInfo>();
+        systemInfo.ClientGroup.Returns(ClientGroup);
+
         var sut = new KafkaMessageHandler(
             parser,
             ScopeFactoryFor(messageProcessor),
             publisher,
             NSubstitute.Substitute.For<ILogger<KafkaMessageHandler>>(),
-            NSubstitute.Substitute.For<ISystemInfo>(),
+            systemInfo,
             queueRefFactory,
             Configuration);
         return (sut, message, consumeResult);
     }
+
+    private const string ClientGroup = "mine";
 }

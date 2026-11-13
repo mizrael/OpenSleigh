@@ -115,3 +115,5 @@ What happens then:
 - A Saga whose handler fails does not prevent the other Sagas registered for the same message from handling it.
 
 A handler failure is never retried. Only a lock conflict is, that is a message for a Saga instance that another worker is processing at that moment: the message is delivered again after a delay, for as long as the conflict lasts.
+
+A handler, or a rollback, that is interrupted because the application is stopping (it observes the cancellation token and throws `OperationCanceledException`) has not failed: nothing it published is stored, the message is not recorded as processed, and it is delivered again. The same goes for a message whose state and messages could not be stored once its handler had run.

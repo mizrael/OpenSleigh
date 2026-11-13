@@ -1,4 +1,6 @@
-﻿using Confluent.Kafka;
+using Confluent.Kafka;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace OpenSleigh.Transport.Kafka;
 
@@ -13,17 +15,16 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 {
     private readonly IKafkaMessageHandler _messageHandler;
     private readonly KafkaSubscriberConfig _config;
+    private readonly ILogger<KafkaMessageSubscriber> _logger;
 
     private readonly string[] _topicNames;
+    private readonly RetryTopics _retryTopics;
+    private readonly TimeSpan _retryDelay;
 
     private readonly IConsumer<string, byte[]> _consumer;
     private readonly HeldMessages _heldMessages = new();
-    private readonly Dictionary<TopicPartition, ConsumeResult<string, byte[]>> _lastHandledOfOtherPartitions = new();
-    private ConsumeResult<string, byte[]>? _lastHandled;
-    private int _handledSinceOffsetsStored;
     private bool _storesOffsets = true;
 
-    private const int MaxHandledBeforeOffsetsAreStored = 100;
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
     private int _consumerClosed;
@@ -31,35 +32,78 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     private static readonly TimeSpan ConsumeLoopStopTimeout = TimeSpan.FromSeconds(10);
 
+    /// <param name="systemInfo">tells which messages of a retry topic are for this client group. When missing, all of them are processed.</param>
+    /// <param name="kafkaConfiguration">its retry delay is the longest a message is kept waiting. Defaults to 30 seconds.</param>
     public KafkaMessageSubscriber(
         IConsumerBuilderFactory builderFactory,
         ISagaDescriptorsResolver sagaDescriptorsResolver,
         IQueueReferenceFactory queueReferenceFactory,
         IKafkaMessageHandler messageHandler,
-        KafkaSubscriberConfig? config = null)
+        KafkaSubscriberConfig? config = null,
+        ISystemInfo? systemInfo = null,
+        KafkaConfiguration? kafkaConfiguration = null,
+        ILogger<KafkaMessageSubscriber>? logger = null)
     {
         ArgumentNullException.ThrowIfNull(builderFactory);
-
         ArgumentNullException.ThrowIfNull(sagaDescriptorsResolver);
 
-        var builder = builderFactory.Create<string, byte[]>();
-        _consumer = builder.Build();
-
-        var messageTypes = sagaDescriptorsResolver.GetRegisteredMessageTypes();
-        _topicNames = messageTypes.Select(messageType => queueReferenceFactory.Create(messageType))
-                                  .SelectMany(TopicsToConsume)
-                                  .Distinct()
-                                  .ToArray();
         _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
         _config = config ?? KafkaSubscriberConfig.Default;
+        _logger = logger ?? NullLogger<KafkaMessageSubscriber>.Instance;
+        _retryDelay = kafkaConfiguration?.RetryDelay ?? KafkaConfiguration.DefaultRetryDelay;
+
+        var queueReferences = sagaDescriptorsResolver.GetRegisteredMessageTypes()
+                                                     .Select(messageType => queueReferenceFactory.Create(messageType))
+                                                     .ToArray();
+        var retryTopicNames = queueReferences.Select(references => references.RetryTopicName)
+                                             .Where(topicName => !string.IsNullOrWhiteSpace(topicName))
+                                             .ToArray();
+        _topicNames = queueReferences.Select(references => references.TopicName)
+                                     .Concat(retryTopicNames)
+                                     .Distinct()
+                                     .ToArray();
+        _retryTopics = new RetryTopics(retryTopicNames, systemInfo?.ClientGroup, _retryDelay);
+
+        var builder = builderFactory.Create<string, byte[]>();
+        ForgetHeldMessagesOnRebalance(builder);
+        _consumer = builder.Build();
     }
 
-    private static IEnumerable<string> TopicsToConsume(QueueReferences queueReferences)
+    // a partition that is taken away from this consumer goes to another one, which receives what was not stored
+    // as handled: the messages held for it here would be processed twice, and behind them the ones that arrive
+    // when the partition comes back
+    private void ForgetHeldMessagesOnRebalance(ConsumerBuilder<string, byte[]> builder)
     {
-        yield return queueReferences.TopicName;
+        try
+        {
+            builder.SetPartitionsRevokedHandler((_, partitions) => ForgetHeldMessages(partitions));
+            builder.SetPartitionsLostHandler((_, partitions) => ForgetHeldMessages(partitions));
+        }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex,
+                "the Kafka consumer builder already has a rebalance handler: messages waiting to be processed again when their partition is taken away can be processed twice");
+        }
+    }
 
-        if (!string.IsNullOrWhiteSpace(queueReferences.RetryTopicName))
-            yield return queueReferences.RetryTopicName;
+    // called by the consumer from inside Consume or Close, on the thread of the consume loop
+    private void ForgetHeldMessages(List<TopicPartitionOffset> partitions)
+    {
+        if (_heldMessages.IsEmpty)
+            return;
+
+        foreach (var partition in partitions)
+        {
+            if (!_heldMessages.Forget(partition.TopicPartition))
+                continue;
+
+            _logger.LogInformation(
+                "partition '{Partition}' was taken away: the messages waiting to be processed again are left to its next consumer",
+                partition.TopicPartition);
+
+            // a pause that outlived the assignment would leave the partition paused when it comes back
+            ResumePartition(partition.TopicPartition);
+        }
     }
 
     public ValueTask StartAsync(CancellationToken cancellationToken = default)
@@ -79,10 +123,10 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     private async ValueTask ConsumeMessages(CancellationToken stoppingToken)
     {
-        _consumer?.Subscribe(_topicNames);
-
         try
         {
+            _consumer?.Subscribe(_topicNames);
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 await ConsumeMessageAsync(stoppingToken);
@@ -91,15 +135,16 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
                     await Task.Delay(_config.ConsumeDelay, stoppingToken);
             }
         }
-        finally
+        catch (Exception ex) when (ex is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
         {
-            // closing the consumer commits what is stored
-            StoreHandledOffsets();
+            // nobody observes the loop: without this it would end without a trace
+            _logger.LogCritical(ex, "the Kafka consume loop has stopped, no more messages are consumed: {Error}", ex.Message);
+            throw;
         }
     }
 
     /// <summary>
-    /// consumes a single message, after processing the held ones whose time has come
+    /// consumes a single message, after processing a held one whose time has come
     /// </summary>
     private async ValueTask ConsumeMessageAsync(CancellationToken stoppingToken)
     {
@@ -108,22 +153,15 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             var consumeTimeout = _config.ConsumeTimeout;
             if (!_heldMessages.IsEmpty)
             {
-                await ProcessDueMessagesAsync(stoppingToken);
+                // one at a time: the consumer has to be polled between messages, or the group takes it for dead
+                await ProcessDueMessageAsync(stoppingToken);
                 consumeTimeout = Min(consumeTimeout, _heldMessages.TimeToNextDue(DateTimeOffset.UtcNow));
             }
 
-            var result = _consumer.Consume((int)consumeTimeout.TotalMilliseconds);
+            var result = _consumer.Consume((int)Math.Ceiling(consumeTimeout.TotalMilliseconds));
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if (!canProcess)
-            {
-                // nothing to do right now: a good moment for what is cheaper done once in a while
-                StoreHandledOffsets();
-            }
-            else if (!TryHold(result!))
-            {
-                await _messageHandler.HandleAsync(result!, stoppingToken);
-                MarkAsHandled(result!, stoppingToken);
-            }
+            if (canProcess && !TryHoldOrSkip(result!))
+                await HandleAsync(result!, stoppingToken);
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
         {
@@ -131,57 +169,88 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             // The error comes back without waiting for the consume timeout, so the loop waits here instead
             await Task.Delay(_config.ConsumeTimeout, stoppingToken);
         }
+        catch (ConsumeException ex) when (ex.Error is null || !ex.Error.IsFatal)
+        {
+            // one topic that cannot be read, a retry topic the client is not authorized on for instance,
+            // does not keep the others from being consumed
+            _logger.LogError(ex, "an error has occurred while consuming from Kafka topic '{Topic}', the other topics are still consumed: {Error}",
+                ex.ConsumerRecord?.Topic, ex.Message);
+            await Task.Delay(_config.ConsumeTimeout, stoppingToken);
+        }
     }
 
     private static TimeSpan Min(TimeSpan first, TimeSpan second) => first < second ? first : second;
 
-    /// <returns>true when the message has to wait: it is kept, and processed when its time comes.</returns>
-    private bool TryHold(ConsumeResult<string, byte[]> result)
+    /// <returns>true when there is nothing to do with the message right now: it has to wait, or it is not for this consumer.</returns>
+    private bool TryHoldOrSkip(ConsumeResult<string, byte[]> result)
     {
         // a broker may still deliver what it had sent before the partition was paused: it waits its turn behind the held message
         if (!_heldMessages.IsEmpty && _heldMessages.IsHolding(result.TopicPartition))
         {
-            _heldMessages.Hold(result, NotBeforeOf(result));
+            _heldMessages.Hold(result, DueAt(result, DateTimeOffset.UtcNow));
             return true;
         }
 
-        if (!RetrySchedule.TryGetNotBefore(result.Message?.Headers, out var notBefore) || notBefore <= DateTimeOffset.UtcNow)
+        // a not-before time only means something where this library wrote it
+        if (!_retryTopics.Contains(result.Topic))
             return false;
 
-        HoldAndPausePartition(result, notBefore);
+        if (_retryTopics.IsForAnotherGroup(result.Message?.Headers))
+        {
+            StoreOffset(result);
+            return true;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var dueAt = _retryTopics.DueAt(result.Message?.Headers, now);
+        if (dueAt <= now)
+            return false;
+
+        HoldAndPausePartition(result, dueAt);
         return true;
     }
 
-    private static DateTimeOffset NotBeforeOf(ConsumeResult<string, byte[]> result)
-        => RetrySchedule.TryGetNotBefore(result.Message?.Headers, out var notBefore) ? notBefore : DateTimeOffset.MinValue;
+    private DateTimeOffset DueAt(ConsumeResult<string, byte[]> result, DateTimeOffset now)
+        => _retryTopics.Contains(result.Topic) ? _retryTopics.DueAt(result.Message?.Headers, now) : now;
 
     // a retry topic only receives messages that have to wait for the same delay, so the first one is the first to be due:
     // nothing else is fetched from its partition until then, while the other partitions keep flowing
-    private void HoldAndPausePartition(ConsumeResult<string, byte[]> result, DateTimeOffset notBefore)
+    private void HoldAndPausePartition(ConsumeResult<string, byte[]> result, DateTimeOffset dueAt)
     {
-        _heldMessages.Hold(result, notBefore);
+        _heldMessages.Hold(result, dueAt);
+
+        _logger.LogDebug("the message at '{Offset}' is held until {DueAt}", result.TopicPartitionOffset, dueAt);
 
         try
         {
             _consumer.Pause([result.TopicPartition]);
         }
-        catch (KafkaException)
+        catch (KafkaException ex)
         {
-            // the partition was taken away in the meantime: whatever still arrives from it is held as well
+            // whatever still arrives from the partition is held as well
+            _logger.LogWarning(ex, "unable to pause partition '{Partition}': {Error}", result.TopicPartition, ex.Message);
         }
     }
 
-    private async ValueTask ProcessDueMessagesAsync(CancellationToken stoppingToken)
+    private async ValueTask ProcessDueMessageAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested
-               && _heldMessages.TryTakeDue(DateTimeOffset.UtcNow, out var result, out var isLastOfPartition))
-        {
-            await _messageHandler.HandleAsync(result, stoppingToken);
-            MarkAsHandled(result, stoppingToken);
+        if (stoppingToken.IsCancellationRequested
+            || !_heldMessages.TryTakeDue(DateTimeOffset.UtcNow, out var result, out var isLastOfPartition))
+            return;
 
-            if (isLastOfPartition)
-                ResumePartition(result.TopicPartition);
+        var isHandled = _retryTopics.Contains(result.Topic) && _retryTopics.IsForAnotherGroup(result.Message?.Headers)
+                        || await _messageHandler.HandleAsync(result, stoppingToken);
+        if (!isHandled)
+        {
+            if (!stoppingToken.IsCancellationRequested)
+                _heldMessages.HoldFirst(result, RedeliveryTime(result));
+            return;
         }
+
+        StoreOffset(result);
+
+        if (isLastOfPartition)
+            ResumePartition(result.TopicPartition);
     }
 
     private void ResumePartition(TopicPartition partition)
@@ -190,50 +259,41 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         {
             _consumer.Resume([partition]);
         }
-        catch (KafkaException)
+        catch (KafkaException ex)
         {
             // the partition was taken away in the meantime, and whoever has it now is not paused
+            _logger.LogWarning(ex, "unable to resume partition '{Partition}': {Error}", partition, ex.Message);
         }
     }
 
-    // the offset of a message is stored, and later committed, only once the message was dealt with:
-    // one that was not, because the process died or stopped or because it is still held, is delivered again.
-    // Storing an offset covers every message before it in the partition, and is a call into the native client:
-    // it is made for the last message handled of each partition, once in a while, instead of once per message.
-    // Until then a message that was handled can be delivered again, never skipped
-    private void MarkAsHandled(ConsumeResult<string, byte[]> result, CancellationToken stoppingToken)
+    private async ValueTask HandleAsync(ConsumeResult<string, byte[]> result, CancellationToken stoppingToken)
     {
-        if (!_storesOffsets || stoppingToken.IsCancellationRequested)
-            return;
-
-        // messages mostly come in runs of the same partition: only the last one of a run is set aside
-        var previous = _lastHandled;
-        if (previous is not null && !IsSamePartition(previous, result))
-            _lastHandledOfOtherPartitions[previous.TopicPartition] = previous;
-        _lastHandled = result;
-
-        if (++_handledSinceOffsetsStored >= MaxHandledBeforeOffsetsAreStored)
-            StoreHandledOffsets();
-    }
-
-    private static bool IsSamePartition(ConsumeResult<string, byte[]> first, ConsumeResult<string, byte[]> second)
-        => first.Partition.Value == second.Partition.Value && string.Equals(first.Topic, second.Topic, StringComparison.Ordinal);
-
-    private void StoreHandledOffsets()
-    {
-        if (_lastHandled is null)
-            return;
-
-        // the most recent message goes last: its partition may also be among the others, with an older message
-        foreach (var result in _lastHandledOfOtherPartitions.Values)
+        if (await _messageHandler.HandleAsync(result, stoppingToken))
+        {
             StoreOffset(result);
-        StoreOffset(_lastHandled);
+            return;
+        }
 
-        _lastHandledOfOtherPartitions.Clear();
-        _lastHandled = null;
-        _handledSinceOffsetsStored = 0;
+        // a message whose processing was interrupted by a stop is left for the next consumer of the partition
+        if (stoppingToken.IsCancellationRequested)
+            return;
+
+        // storing the offset of the next message would also mark this one as consumed:
+        // nothing else is read from its partition until it is dealt with
+        HoldAndPausePartition(result, RedeliveryTime(result));
     }
 
+    private DateTimeOffset RedeliveryTime(ConsumeResult<string, byte[]> result)
+    {
+        _logger.LogWarning(
+            "the message at '{Offset}' could neither be processed nor set aside: it is processed again in {Delay}, and its partition waits for it",
+            result.TopicPartitionOffset, _retryDelay);
+
+        return DateTimeOffset.UtcNow + _retryDelay;
+    }
+
+    // the offset of a message is stored, and later committed, only once the message was dealt with:
+    // one that was not, because the process died or stopped or because it is still held, is delivered again
     private void StoreOffset(ConsumeResult<string, byte[]> result)
     {
         if (!_storesOffsets)
@@ -245,12 +305,16 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         }
         catch (KafkaException ex) when (ex.Error?.Code == ErrorCode.Local_InvalidArg)
         {
-            // the consumer was built by a custom factory that left enable.auto.offset.store on, and stores offsets by itself
             _storesOffsets = false;
+            _logger.LogWarning(ex,
+                "the Kafka consumer stores offsets by itself (enable.auto.offset.store): a message that is being processed, or is waiting to be processed again, " +
+                "when the consumer stops is not delivered again. Set enable.auto.offset.store to false in the IConsumerBuilderFactory");
         }
-        catch (KafkaException)
+        catch (KafkaException ex)
         {
             // the partition was taken away in the meantime: its next consumer starts from the last committed offset
+            _logger.LogWarning(ex, "unable to store the offset '{Offset}', its message may be delivered again: {Error}",
+                result.TopicPartitionOffset, ex.Message);
         }
     }
 

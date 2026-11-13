@@ -8,19 +8,30 @@ namespace OpenSleigh.Transport.Kafka;
 /// </summary>
 internal sealed class HeldMessages
 {
-    private readonly Dictionary<TopicPartition, Queue<Held>> _partitions = new();
+    private readonly Dictionary<TopicPartition, LinkedList<Held>> _partitions = new();
 
     public bool IsEmpty => _partitions.Count == 0;
 
     public bool IsHolding(TopicPartition partition) => _partitions.ContainsKey(partition);
 
+    /// <summary>
+    /// keeps a message behind the ones already held for its partition.
+    /// </summary>
     public void Hold(ConsumeResult<string, byte[]> message, DateTimeOffset dueAt)
-    {
-        var partition = message.TopicPartition;
-        if (!_partitions.TryGetValue(partition, out var held))
-            _partitions[partition] = held = new Queue<Held>();
+        => MessagesOf(message.TopicPartition).AddLast(new Held(message, dueAt));
 
-        held.Enqueue(new Held(message, dueAt));
+    /// <summary>
+    /// keeps a message ahead of the ones already held for its partition: it was taken and has to be processed again.
+    /// </summary>
+    public void HoldFirst(ConsumeResult<string, byte[]> message, DateTimeOffset dueAt)
+        => MessagesOf(message.TopicPartition).AddFirst(new Held(message, dueAt));
+
+    private LinkedList<Held> MessagesOf(TopicPartition partition)
+    {
+        if (!_partitions.TryGetValue(partition, out var held))
+            _partitions[partition] = held = new LinkedList<Held>();
+
+        return held;
     }
 
     /// <summary>
@@ -31,10 +42,12 @@ internal sealed class HeldMessages
     {
         foreach (var (partition, held) in _partitions)
         {
-            if (held.Peek().DueAt > now)
+            var first = held.First!.Value;
+            if (first.DueAt > now)
                 continue;
 
-            message = held.Dequeue().Message;
+            held.RemoveFirst();
+            message = first.Message;
             isLastOfPartition = held.Count == 0;
             if (isLastOfPartition)
                 _partitions.Remove(partition);
@@ -51,13 +64,19 @@ internal sealed class HeldMessages
         var nextDue = DateTimeOffset.MaxValue;
         foreach (var held in _partitions.Values)
         {
-            var dueAt = held.Peek().DueAt;
+            var dueAt = held.First!.Value.DueAt;
             if (dueAt < nextDue)
                 nextDue = dueAt;
         }
 
         return nextDue > now ? nextDue - now : TimeSpan.Zero;
     }
+
+    /// <summary>
+    /// forgets the messages of a partition that this consumer no longer owns: its next owner receives them.
+    /// </summary>
+    /// <returns>true when messages were held for the partition.</returns>
+    public bool Forget(TopicPartition partition) => _partitions.Remove(partition);
 
     private readonly record struct Held(ConsumeResult<string, byte[]> Message, DateTimeOffset DueAt);
 }

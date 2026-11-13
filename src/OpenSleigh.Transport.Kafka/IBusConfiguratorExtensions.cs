@@ -45,7 +45,9 @@ public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator
         }
     }
 
-    private readonly TimeSpan _retryDelay = TimeSpan.FromSeconds(30);
+    private readonly TimeSpan _retryDelay = DefaultRetryDelay;
+
+    internal static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(30);
 }
 
 [ExcludeFromCodeCoverage]

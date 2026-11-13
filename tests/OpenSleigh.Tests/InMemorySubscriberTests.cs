@@ -74,28 +74,31 @@ public class InMemorySubscriberTests
     }
 
     [Fact]
-    public async Task Should_publish_a_message_again_after_the_retry_delay_on_a_lock_conflict()
+    public async Task Should_process_a_message_again_after_the_retry_delay_on_a_lock_conflict_without_keeping_the_others_waiting()
     {
         var channel = Channel.CreateUnbounded<MessageEnvelope>();
-        var retryDelay = TimeSpan.FromMilliseconds(300);
+        var retryDelay = TimeSpan.FromMilliseconds(400);
         var deadLetters = new InMemoryDeadLetters();
-        var failedAt = DateTimeOffset.MaxValue;
+        var conflicting = DummyMessage.CreateEnvelope();
+        var other = DummyMessage.CreateEnvelope();
+        var attempts = new ConcurrentQueue<(MessageEnvelope Message, DateTimeOffset At)>();
+        var processedAgain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var messageProcessor = Substitute.For<IMessageProcessor>();
         messageProcessor.ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
-                        .Returns(_ =>
+                        .Returns(call =>
                         {
-                            failedAt = DateTimeOffset.UtcNow;
-                            return ValueTask.FromException(new LockException("locked by someone else"));
+                            var message = call.Arg<MessageEnvelope>();
+                            attempts.Enqueue((message, DateTimeOffset.UtcNow));
+                            if (!ReferenceEquals(message, conflicting))
+                                return ValueTask.CompletedTask;
+
+                            if (attempts.Count(a => ReferenceEquals(a.Message, conflicting)) == 1)
+                                return ValueTask.FromException(new LockException("locked by someone else"));
+
+                            processedAgain.TrySetResult();
+                            return ValueTask.CompletedTask;
                         });
-        var publishedAt = new TaskCompletionSource<DateTimeOffset>(TaskCreationOptions.RunContinuationsAsynchronously);
         var publisher = Substitute.For<IPublisher>();
-        var envelope = DummyMessage.CreateEnvelope();
-        publisher.PublishAsync(envelope, Arg.Any<CancellationToken>())
-                 .Returns(_ =>
-                 {
-                     publishedAt.TrySetResult(DateTimeOffset.UtcNow);
-                     return ValueTask.CompletedTask;
-                 });
         using var sut = new InMemorySubscriber(
             ScopeFactoryFor(() => messageProcessor),
             channel.Reader,
@@ -104,14 +107,90 @@ public class InMemorySubscriberTests
             InMemorySubscriberOptions.Defaults with { RetryDelay = retryDelay },
             deadLetters);
 
-        await channel.Writer.WriteAsync(envelope);
+        await channel.Writer.WriteAsync(conflicting);
         await sut.StartAsync(CancellationToken.None);
-        var republishedAt = await publishedAt.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Delay(100);
+        await channel.Writer.WriteAsync(other);
+        await processedAgain.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await sut.StopAsync(CancellationToken.None);
 
+        var conflictingAttempts = attempts.Where(a => ReferenceEquals(a.Message, conflicting)).Select(a => a.At).ToArray();
+        Assert.Equal(2, conflictingAttempts.Length);
         // timers may fire a few milliseconds early
-        Assert.True(republishedAt - failedAt >= retryDelay - TimeSpan.FromMilliseconds(50), $"published again after {republishedAt - failedAt}");
+        Assert.True(conflictingAttempts[1] - conflictingAttempts[0] >= retryDelay - TimeSpan.FromMilliseconds(50),
+            $"processed again after {conflictingAttempts[1] - conflictingAttempts[0]}");
+        var otherAttempt = Assert.Single(attempts, a => ReferenceEquals(a.Message, other));
+        Assert.True(otherAttempt.At < conflictingAttempts[1], "the other message waited for the retry");
         Assert.Empty(deadLetters.Messages);
+    }
+
+    [Fact]
+    public async Task Should_stop_reading_new_messages_while_too_many_are_waiting_to_be_processed_again()
+    {
+        var channel = Channel.CreateUnbounded<MessageEnvelope>();
+        var conflicts = 0;
+        var newMessage = DummyMessage.CreateEnvelope();
+        var allConflicted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messageProcessor = Substitute.For<IMessageProcessor>();
+        messageProcessor.ProcessAsync(Arg.Is<MessageEnvelope>(m => !ReferenceEquals(m, newMessage)), Arg.Any<CancellationToken>())
+                        .Returns(_ =>
+                        {
+                            if (Interlocked.Increment(ref conflicts) == InMemorySubscriber.MaxPendingRetries)
+                                allConflicted.TrySetResult();
+                            return ValueTask.FromException(new LockException("locked by someone else"));
+                        });
+        using var sut = new InMemorySubscriber(
+            ScopeFactoryFor(() => messageProcessor),
+            channel.Reader,
+            Substitute.For<ILogger<InMemorySubscriber>>(),
+            Substitute.For<IPublisher>(),
+            InMemorySubscriberOptions.Defaults with { RetryDelay = TimeSpan.FromHours(1) });
+
+        for (var i = 0; i < InMemorySubscriber.MaxPendingRetries; i++)
+            await channel.Writer.WriteAsync(DummyMessage.CreateEnvelope());
+        await sut.StartAsync(CancellationToken.None);
+        await allConflicted.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        await channel.Writer.WriteAsync(newMessage);
+        await Task.Delay(300);
+        await sut.StopAsync(CancellationToken.None);
+
+        await messageProcessor.DidNotReceive().ProcessAsync(newMessage, Arg.Any<CancellationToken>());
+        Assert.True(channel.Reader.TryPeek(out var unread));
+        Assert.Same(newMessage, unread);
+    }
+
+    [Fact]
+    public async Task Should_go_on_processing_after_a_message_was_cancelled_by_something_else_than_a_stop()
+    {
+        var channel = Channel.CreateUnbounded<MessageEnvelope>();
+        var deadLetters = new InMemoryDeadLetters();
+        var timedOut = DummyMessage.CreateEnvelope();
+        var next = DummyMessage.CreateEnvelope();
+        var nextProcessed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messageProcessor = Substitute.For<IMessageProcessor>();
+        messageProcessor.ProcessAsync(timedOut, Arg.Any<CancellationToken>())
+                        .Returns(_ => ValueTask.FromException(new TaskCanceledException("the database timed out")));
+        messageProcessor.ProcessAsync(next, Arg.Any<CancellationToken>())
+                        .Returns(_ =>
+                        {
+                            nextProcessed.TrySetResult();
+                            return ValueTask.CompletedTask;
+                        });
+        using var sut = new InMemorySubscriber(
+            ScopeFactoryFor(() => messageProcessor),
+            channel.Reader,
+            Substitute.For<ILogger<InMemorySubscriber>>(),
+            Substitute.For<IPublisher>(),
+            deadLetters: deadLetters);
+
+        await channel.Writer.WriteAsync(timedOut);
+        await sut.StartAsync(CancellationToken.None);
+        await Task.Delay(100);
+        await channel.Writer.WriteAsync(next);
+        await nextProcessed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await sut.StopAsync(CancellationToken.None);
+
+        Assert.Same(timedOut, Assert.Single(deadLetters.Messages).Message);
     }
 
     [Fact]
@@ -149,6 +228,23 @@ public class InMemorySubscriberTests
         Assert.Same(failure, deadLetter.Error);
         await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default);
         await messageProcessor.Received(1).ProcessAsync(envelope, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void UseInMemoryTransport_should_give_the_subscriber_the_batch_size_and_the_retry_delay_of_the_saga_options()
+    {
+        var services = new ServiceCollection();
+        var configurator = Substitute.For<OpenSleigh.DependencyInjection.IBusConfigurator>();
+        configurator.Services.Returns(services);
+
+        OpenSleigh.InMemory.InMemoryBusConfiguratorExtensions.UseInMemoryTransport(
+            configurator,
+            new OpenSleigh.InMemory.InMemorySagaOptions(9) { SubscriberRetryDelay = TimeSpan.FromSeconds(2) });
+
+        var options = Assert.IsType<InMemorySubscriberOptions>(
+            Assert.Single(services, descriptor => descriptor.ServiceType == typeof(InMemorySubscriberOptions)).ImplementationInstance);
+        Assert.Equal(9, options.MaxMessagesBatchSize);
+        Assert.Equal(TimeSpan.FromSeconds(2), options.RetryDelay);
     }
 
     [Fact]

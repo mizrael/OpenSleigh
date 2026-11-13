@@ -132,6 +132,31 @@ public class MessageHandlerManagerTests
         await handler.DidNotReceiveWithAnyArgs().RollbackAsync(default!, default);
     }
 
+    [Fact]
+    public async Task ProcessAsync_should_not_report_a_rollback_that_was_interrupted_by_a_stop_as_a_failure()
+    {
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
+        using var stopping = new CancellationTokenSource();
+
+        var handler = Substitute.For<IHandleMessage<FakeSagaStarter>>();
+        handler.HandleAsync(messageContext, Arg.Any<CancellationToken>())
+            .Returns(_ => ValueTask.FromException(new InvalidOperationException("test error")));
+        handler.RollbackAsync(messageContext, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                saga.Publish(DummyMessage.CreateEnvelope());
+                stopping.Cancel();
+                return ValueTask.FromException(new OperationCanceledException(stopping.Token));
+            });
+        var sut = CreateSut(saga, handler);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => sut.ProcessAsync(saga, messageContext, stopping.Token).AsTask());
+
+        Assert.Empty(saga.Outbox);
+    }
+
     private static MessageHandlerManager CreateSut(ISagaInstance saga, IHandleMessage<FakeSagaStarter> handler)
     {
         var factory = Substitute.For<IMessageHandlerFactory>();

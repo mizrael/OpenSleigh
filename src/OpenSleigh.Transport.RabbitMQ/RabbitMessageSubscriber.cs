@@ -109,13 +109,21 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
             "received message '{MessageId}' from Exchange '{ExchangeName}', Queue '{QueueName}'. Processing...",
             message.MessageId, queueReference.ExchangeName, queueReference.QueueName);
 
+        var stoppingToken = _linkedCts?.Token ?? CancellationToken.None;
         try
         {
             using var scope = _serviceProvider.CreateScope();
             var processor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
-            await processor.ProcessAsync(message, _linkedCts?.Token ?? CancellationToken.None);
+            await processor.ProcessAsync(message, stoppingToken);
 
             await WithChannelAsync(() => channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false));
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
+            // interrupted by a stop, the message has not failed. It is neither acknowledged nor rejected:
+            // the broker gives it back to its queue when the channel closes, for this service to process later.
+            // Rejected with requeue it would come straight back to this consumer, over and over until then
+            _logger.LogInformation("the processing of Message '{MessageId}' was interrupted by a stop: it is left to be delivered again", message.MessageId);
         }
         catch (Exception ex)
         {
@@ -142,10 +150,10 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
             // we acknowledge the message so it's removed from the original queue
             await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
 
-            // we publish the message to the retry exchange
+            // we publish the message to the retry exchange, for the retry queue of this service only
             await channel.BasicPublishAsync(
                 exchange: queueReference.RetryExchangeName,
-                routingKey: deliveryProps.RoutingKey,
+                routingKey: queueReference.RetryQueueName,
                 mandatory: true,
                 basicProperties: props,
                 body: deliveryProps.Body);

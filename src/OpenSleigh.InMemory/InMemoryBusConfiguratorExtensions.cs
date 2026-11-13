@@ -34,7 +34,11 @@ public static class InMemoryBusConfiguratorExtensions
         options ??= InMemorySagaOptions.Defaults;
 
         // subscriber options registered by the application are left alone
-        busConfigurator.Services.TryAddSingleton(InMemorySubscriberOptions.Defaults with { RetryDelay = options.SubscriberRetryDelay });
+        busConfigurator.Services.TryAddSingleton(
+            new InMemorySubscriberOptions(options.SubscriberMaxMessagesBatchSize, InMemorySubscriberOptions.Defaults.PollingInterval)
+            {
+                RetryDelay = options.SubscriberRetryDelay
+            });
 
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)

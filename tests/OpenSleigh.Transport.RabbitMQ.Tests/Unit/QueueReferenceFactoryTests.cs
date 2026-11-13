@@ -69,7 +69,7 @@ public class QueueReferenceFactoryTests
         Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
         Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
         Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
-        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
+        Assert.Equal("fakesagastarter.test.workers.retry.direct", result.RetryQueueName);
     }
 
     [Fact]
@@ -89,7 +89,7 @@ public class QueueReferenceFactoryTests
         Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
         Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
         Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
-        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
+        Assert.Equal("fakesagastarter.test.workers.retry.direct", result.RetryQueueName);
     }
 
     [Fact]
@@ -142,7 +142,9 @@ public class QueueReferenceFactoryTests
         Assert.Equal("fakesagastarter.dead", result.DeadLetterExchangeName);
         Assert.Equal("fakesagastarter.dead.test.workers", result.DeadLetterQueue);
         Assert.Equal("fakesagastarter.retry", result.RetryExchangeName);
-        Assert.Equal("fakesagastarter.test.workers.retry", result.RetryQueueName);
+        // the retry queue of 3.3.0 keeps its name, and goes on sending its messages to every service
+        Assert.Equal("fakesagastarter.test.workers.retry", result.LegacyRetryQueueName);
+        Assert.Equal("fakesagastarter.test.workers.retry.direct", result.RetryQueueName);
     }
 
     [Fact]

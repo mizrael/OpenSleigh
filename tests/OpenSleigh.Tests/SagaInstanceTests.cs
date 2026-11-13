@@ -357,15 +357,63 @@ public class SagaInstanceTests
         var executionService = Substitute.For<ISagaExecutionService>();
         var sut = await CreateLockedSagaAsync(descriptor, messageContext);
         handler.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>())
-               .Returns(_ => ValueTask.FromException(failure));
+               .Returns(_ =>
+               {
+                   sut.Publish(DummyMessage.CreateEnvelope());
+                   return ValueTask.FromException(failure);
+               });
         executionService.CommitAsync(sut, Arg.Any<CancellationToken>())
                         .Returns(_ => ValueTask.FromException(new LockException("the lock was taken over")));
+        var processedWhenReleased = true;
+        var outboxWhenReleased = -1;
+        executionService.When(x => x.ReleaseAsync(sut, Arg.Any<CancellationToken>()))
+                        .Do(_ =>
+                        {
+                            processedWhenReleased = sut.ProcessedMessages.Count != 0;
+                            outboxWhenReleased = sut.Outbox.Count;
+                        });
+        using var stopping = new CancellationTokenSource();
+        stopping.Cancel();
 
         await Assert.ThrowsAsync<LockException>(
+            () => sut.ProcessAsync(handler, messageContext, executionService, stopping.Token).AsTask());
+
+        // a stop does not keep the rollback from being committed
+        await executionService.Received(1).CommitAsync(sut, CancellationToken.None);
+        await executionService.Received(1).ReleaseAsync(sut, CancellationToken.None);
+        Assert.False(processedWhenReleased);
+        Assert.Equal(0, outboxWhenReleased);
+        Assert.True(sut.CanProcess(messageContext));
+        Assert.Empty(sut.LockId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_should_not_release_the_message_as_processed_when_the_commit_fails()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+
+        var handler = Substitute.For<IMessageHandlerManager>();
+        var executionService = Substitute.For<ISagaExecutionService>();
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
+        handler.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>())
+               .Returns(_ =>
+               {
+                   sut.Publish(DummyMessage.CreateEnvelope());
+                   return ValueTask.CompletedTask;
+               });
+        executionService.CommitAsync(sut, Arg.Any<CancellationToken>())
+                        .Returns(_ => ValueTask.FromException(new InvalidOperationException("the database is gone")));
+        var processedWhenReleased = true;
+        executionService.When(x => x.ReleaseAsync(sut, Arg.Any<CancellationToken>()))
+                        .Do(_ => processedWhenReleased = sut.ProcessedMessages.Count != 0);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
 
-        await executionService.Received(1).ReleaseAsync(sut, CancellationToken.None);
-        Assert.Empty(sut.LockId);
+        Assert.False(processedWhenReleased);
+        Assert.Empty(sut.Outbox);
+        Assert.True(sut.CanProcess(messageContext));
     }
 
     private static async Task<SagaInstance> CreateLockedSagaAsync(SagaDescriptor descriptor, IMessageContext<FakeSagaStarter> messageContext)

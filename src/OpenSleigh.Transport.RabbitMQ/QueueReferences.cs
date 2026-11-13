@@ -45,7 +45,22 @@ public record QueueReferences
     /// this will be used to delay the message before re-sending it to the main queue
     /// </summary>
     public string RetryExchangeName => this.ExchangeName + ".retry";
-    public string RetryQueueName => this.QueueName + ".retry";
+
+    /// <summary>
+    /// the queue where a message waits before it is processed again. It sends the message back to <see cref="QueueName"/>
+    /// only, not to every queue bound to the exchange with the same routing key.
+    /// </summary>
+    /// <remarks>
+    /// A queue cannot be told to send its messages somewhere else once it exists. When the routing key is shared by
+    /// several queues, as with the default naming, the retry queue of version 3.3.0 and earlier sends a message back
+    /// to all of them: another queue takes its place, and the old one (<see cref="LegacyRetryQueueName"/>) is left
+    /// to deliver what it still holds.
+    /// </remarks>
+    public string RetryQueueName => ReturnsToOwnQueueOnly ? LegacyRetryQueueName : this.QueueName + ".retry.direct";
+
+    internal string LegacyRetryQueueName => this.QueueName + ".retry";
+
+    private bool ReturnsToOwnQueueOnly => string.Equals(this.RoutingKey, this.QueueName, StringComparison.Ordinal);
 
     public string ExchangeName { get; }
     public string QueueName { get; }
