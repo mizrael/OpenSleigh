@@ -1,6 +1,7 @@
 {
   "defaultTolerance": 0.30,
   "minimumRounds": 3,
+  "minimumDifference": { "ms": 0.005 },
   "scenarios": {
     "sqlserver-outbox-append": { "tolerance": 0.45 },
     "postgres-outbox-append": { "tolerance": 0.45 }

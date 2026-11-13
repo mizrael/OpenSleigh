@@ -61,6 +61,22 @@ its tolerance, or when a scenario that works on the base fails on the branch.
   within each round. Absolute numbers move a lot between runners; the difference within a round moves much less.
 - `benchmarks/gate.json` holds the tolerance (30% by default, per-scenario overrides), the minimum number of
   rounds, and lets a scenario be reported without gating (`"gate": false`).
+- The tolerance is relative, and a relative change means nothing between two values that are both next to zero.
+  `minimumDifference` in `gate.json` is the absolute floor under it, per unit and in that unit
+  (`"minimumDifference": { "ms": 0.005 }`): a change beyond the tolerance, for better or for worse, whose median
+  difference is smaller than the floor is reported as `ok: ... by less than the floor` and does not fail the job.
+  A unit that is not listed has no floor, and a scenario can set its own (`"minimumDifference": 0.01` next to its
+  `tolerance`). The summary shows the difference and the floor of every scenario.
+  - Why 0.005 ms: the two `dbcontext` scenarios measure 2 to 3 microseconds per context. Over 7 gate jobs that
+    compared identical code (35 paired rounds), base and head differed by up to 2.3 microseconds in a round and
+    by up to 1.1 in the median of a job, which was once 34% and failed the job. The floor is about twice the
+    largest difference seen in a round. Every other `ms` scenario measures more than a millisecond, where its
+    tolerance is hundreds of times the floor: the floor never decides for them.
+  - What it costs: a `dbcontext` scenario now fails only when a context gets more than 5 microseconds slower.
+    What those scenarios are there to catch (a context that is built, or a schema that is checked, per message)
+    costs far more than that.
+  - Throughput units have no floor: their scale differs by orders of magnitude between scenarios
+    (96 msg/s for one, 60,000 for another), so a floor per unit would be wrong for most of them.
 - The harness may only use public API that exists on both sides. A scenario for something that only exists on the
   branch is compiled conditionally (see `RABBIT_CONSUMER_TUNING` in the project file) and reported as inconclusive.
 - Put `[bench-full]` in the message of the last commit to run the `full` suite instead, or
