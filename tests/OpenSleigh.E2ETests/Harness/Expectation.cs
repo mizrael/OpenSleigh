@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 
-namespace OpenSleigh.E2ETests;
+namespace OpenSleigh.E2ETests.Harness;
 
 /// <summary>
 /// counts what the sagas of a scenario report, from whatever thread they run on,
 /// and tells when the expected number was reached.
 /// </summary>
-internal sealed class Expectation
+public sealed class Expectation
 {
     private readonly int _expectedCount;
     private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);

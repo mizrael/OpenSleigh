@@ -90,9 +90,14 @@ jobs:
 
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
+      - image: mongo:latest
       - image: rabbitmq:3-management-alpine
         environment:
           RABBITMQ_DEFAULT_VHOST: "/opensleigh-tests"
+      - image: 'mcr.microsoft.com/mssql/server:2022-latest'
+        environment:
+          SA_PASSWORD: "Sup3r_p4ssword123"
+          ACCEPT_EULA: "Y"
       - image: 'postgres:13.4'
         environment:
           POSTGRES_PASSWORD: "Sup3r_p4ssword123"

@@ -2,6 +2,8 @@
 # runs the E2E suite E2E_REPETITIONS times, keeps one trx file per run and a summary of the
 # tests that failed, and exits non-zero when any run failed or ran no test.
 # Expects the E2E project to be built already for TARGET_FRAMEWORK.
+# E2E_COMBINATIONS (for example "inmemory" or "postgresql-rabbitmq,mongodb-kafka") runs only those combinations,
+# E2E_FILTER narrows the tests, E2E_INCLUDE_KNOWN_DEFECTS=true runs the cases excluded in Harness/KnownDefects.cs.
 set -u
 
 repetitions="${E2E_REPETITIONS:-1}"
@@ -36,9 +38,16 @@ wait_for_port() {
 
 kafka="${ConnectionStrings__kafka:-127.0.0.1:9092}"
 
-wait_for_port 127.0.0.1 5432 || exit 1
-wait_for_port 127.0.0.1 5672 || exit 1
-wait_for_port "${kafka%%:*}" "${kafka##*:}" || exit 1
+# a service is waited for when a combination that uses it is run: all of them, unless E2E_COMBINATIONS names a few
+uses() {
+  [ -z "${E2E_COMBINATIONS:-}" ] || [[ "$E2E_COMBINATIONS" == *"$1"* ]]
+}
+
+if uses sqlserver; then wait_for_port 127.0.0.1 1433 || exit 1; fi
+if uses postgresql; then wait_for_port 127.0.0.1 5432 || exit 1; fi
+if uses mongodb; then wait_for_port 127.0.0.1 27017 || exit 1; fi
+if uses rabbitmq; then wait_for_port 127.0.0.1 5672 || exit 1; fi
+if uses kafka; then wait_for_port "${kafka%%:*}" "${kafka##*:}" || exit 1; fi
 
 failed_runs=0
 for run in $(seq 1 "$repetitions"); do

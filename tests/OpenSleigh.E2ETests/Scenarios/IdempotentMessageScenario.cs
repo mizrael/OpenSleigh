@@ -1,32 +1,23 @@
 using Microsoft.Extensions.DependencyInjection;
-using OpenSleigh.DependencyInjection;
 using OpenSleigh.E2ETests.Sagas;
 using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
-using System.ComponentModel;
 using Xunit.Abstractions;
 
-namespace OpenSleigh.E2ETests;
+namespace OpenSleigh.E2ETests.Scenarios;
 
-[Category("E2E")]
-[Trait("Category", "E2E")]
-public abstract class IdempotentMessageScenario : E2ETestsBase
+public class IdempotentMessageScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const int CopiesOfEachMessage = 4;
-
-    protected IdempotentMessageScenario(ITestOutputHelper console) : base(console) { }
+    private static readonly TimeSpan PublishRetryDelay = TimeSpan.FromMilliseconds(100);
 
     [Theory]
-    [HostsCountData]
-    public async Task run_idempotent_message_scenario(int hostsCount)
+    [MatrixData]
+    public async Task run_idempotent_message_scenario(string combination, int hostsCount)
     {
-#if NET9_0_OR_GREATER
-        var requestId = Guid.CreateVersion7().ToString("N");
-        var correlationId = Guid.CreateVersion7().ToString("N");
-#else
         var requestId = Guid.NewGuid().ToString("N");
         var correlationId = Guid.NewGuid().ToString("N");
-#endif
+
         var messages = new[]
         {
             new IdempotentMessage(requestId, correlationId, 0),
@@ -44,17 +35,18 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
             expectation.Signal();
         };
 
-        await RunScenarioAsync(hostsCount,
-            (ctx, services) => services.AddSingleton(onMessage),
-            async (services, cancellationToken) =>
-            {
-                var bus = services.GetRequiredService<IMessageBus>();
+        var setup = new HostSetup(bus => bus.AddSaga<IdempotentSaga>())
+        {
+            ConfigureServices = services => services.AddSingleton(onMessage)
+        };
 
-                var copies = Enumerable.Range(0, CopiesOfEachMessage).SelectMany(_ => messages);
-                await Task.WhenAll(copies.Select(message => PublishAsync(bus, message, cancellationToken)));
+        await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
+        {
+            var copies = Enumerable.Range(0, CopiesOfEachMessage).SelectMany(_ => messages);
+            await Task.WhenAll(copies.Select(message => PublishAsync(run.AnyHost, message, cancellationToken)));
 
-                await Task.WhenAll(received.Select(expectation => expectation.Reached)).WaitAsync(cancellationToken);
-            });
+            await Task.WhenAll(received.Select(expectation => expectation.Reached)).WaitAsync(cancellationToken);
+        });
 
         Assert.All(received, expectation =>
         {
@@ -66,22 +58,17 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
     // a copy either gets into the outbox or is refused as a duplicate of one that is there:
     // anything else is tried again
     private static async Task PublishAsync(
-        IMessageBus bus,
+        ScenarioHost host,
         IdempotentMessage message,
         CancellationToken cancellationToken)
     {
         while (true)
         {
-            var result = await bus.PublishAsync(message, cancellationToken);
+            var result = await host.PublishAsync(message, cancellationToken);
             if (result is OutboxAppendResult.Success or OutboxAppendResult.Duplicate)
                 return;
 
-            await Task.Delay(100, cancellationToken);
+            await Task.Delay(PublishRetryDelay, cancellationToken);
         }
-    }
-
-    protected override void RegisterSagas(IBusConfigurator cfg)
-    {
-        cfg.AddSaga<IdempotentSaga>();
     }
 }
