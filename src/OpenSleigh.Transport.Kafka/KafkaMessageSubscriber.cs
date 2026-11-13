@@ -19,6 +19,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     private readonly IConsumer<string, byte[]> _consumer;
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
+    private int _consumerClosed;
 
     public KafkaMessageSubscriber(
         IConsumerBuilderFactory builderFactory,
@@ -105,14 +106,22 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             }
         }
 
-        _consumer.Close();
+        CloseConsumer();
+    }
+
+    // closing a consumer also disposes it, and a disposed consumer cannot be closed again:
+    // a host stops its subscribers and then disposes them
+    private void CloseConsumer()
+    {
+        if (Interlocked.Exchange(ref _consumerClosed, 1) == 0)
+            _consumer.Close();
     }
 
     public void Dispose()
     {
         _stoppingCts?.Cancel();
         _stoppingCts?.Dispose();
-        _consumer.Close();
+        CloseConsumer();
         _consumer.Dispose();
     }
 }

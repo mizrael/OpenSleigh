@@ -81,6 +81,21 @@ public class KafkaMessageSubscriberTests
         Assert.InRange(calls, 1, 6);
     }
 
+    [Fact]
+    public async Task Dispose_should_not_close_the_consumer_again_after_StopAsync()
+    {
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>()).Returns((ConsumeResult<string, byte[]>?)null);
+
+        var sut = CreateSut(consumer, Substitute.For<IKafkaMessageHandler>());
+
+        await sut.StartAsync();
+        await sut.StopAsync();
+        sut.Dispose();
+
+        consumer.Received(1).Close();
+    }
+
     private static KafkaMessageSubscriber CreateSut(
         IConsumer<string, byte[]> consumer,
         IKafkaMessageHandler handler,
