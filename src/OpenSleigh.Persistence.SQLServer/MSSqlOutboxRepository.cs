@@ -17,10 +17,12 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
     // A row that is waiting for its time is never read, however many there are. The index is named: left to choose,
     // SQL Server may scan the table, or sort it and lock every due row, depending on what it knew about the table
     // when it compiled the query. The messages of a pass are chosen, and locked, in the index alone, which has their key:
-    // only the ones that are returned are looked up in the table, and their bodies are not sorted.
-    // The due time is sent by the application and compared with its own clock, like every other time in the outbox
+    // only the ones that are returned are looked up in the table, by key and one at a time, and their bodies are not sorted.
+    // Without that being asked for, SQL Server may read the whole table to find them, and wait on every row
+    // that is being stored. The due time is sent by the application and compared with its own clock,
+    // like every other time in the outbox
     private const string ReadQuery =
-        $"SELECT message.* FROM (" +
+        "SELECT message.* FROM (" +
         $"SELECT TOP ({{1}}) pending.{MessageId} FROM (" +
         $"SELECT {MessageId}, {DeliverAt} FROM (SELECT TOP ({{2}}) {MessageId}, {DeliverAt} FROM {Table} {Hints} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt}) AS due " +
         "UNION ALL " +
@@ -28,7 +30,7 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
         ") AS pending " +
         $"ORDER BY CASE WHEN pending.{DeliverAt} IS NULL THEN 1 ELSE 0 END, pending.{DeliverAt}" +
         ") AS chosen " +
-        $"INNER JOIN {Table} AS message ON message.{MessageId} = chosen.{MessageId}";
+        $"INNER LOOP JOIN {Table} AS message WITH (FORCESEEK) ON message.{MessageId} = chosen.{MessageId}";
 
     public MSSqlOutboxRepository(
         SagaDbContext dbContext, 
