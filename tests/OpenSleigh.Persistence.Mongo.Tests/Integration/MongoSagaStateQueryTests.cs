@@ -19,7 +19,14 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     private MongoSagaStateQuery CreateSut(IDbContext db)
-        => new MongoSagaStateQuery(db, _serializer);
+        => new MongoSagaStateQuery(db, _serializer, new StubStateTypeResolver([typeof(DummyState)]));
+
+    private sealed class StubStateTypeResolver(IEnumerable<Type> stateTypes) : ISagaStateTypeResolver
+    {
+        private readonly Dictionary<string, Type> _byName = stateTypes.ToDictionary(type => type.FullName!);
+
+        public Type? Resolve(string stateTypeName) => _byName.GetValueOrDefault(stateTypeName);
+    }
 
     private async Task<Entities.SagaState> InsertSagaState(
         IDbContext db,
@@ -111,7 +118,7 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
         var stateData = _serializer.Serialize(state);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: typeof(DummyState).AssemblyQualifiedName,
+            sagaStateType: typeof(DummyState).FullName,
             stateData: stateData);
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
@@ -125,35 +132,14 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task GetByInstanceIdAsync_should_deserialize_state_data_stored_with_the_full_name_of_its_type()
+    public async Task GetByInstanceIdAsync_should_return_null_state_without_a_state_type_resolver()
     {
         var db = _fixture.CreateDbContext();
-        var typeResolver = new TypeResolver();
-        typeResolver.Register(typeof(DummyState));
-        var sut = new MongoSagaStateQuery(db, _serializer, typeResolver);
+        var sut = new MongoSagaStateQuery(db, _serializer);
 
-        var state = DummyState.New();
         var entity = await InsertSagaState(db,
             sagaStateType: typeof(DummyState).FullName,
-            stateData: _serializer.Serialize(state));
-
-        var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
-
-        var deserialized = Assert.IsType<DummyState>(result!.StateData);
-        Assert.Equal(state.Id, deserialized.Id);
-    }
-
-    [Fact]
-    public async Task GetByInstanceIdAsync_should_return_null_state_when_type_unknown_to_the_resolver()
-    {
-        var db = _fixture.CreateDbContext();
-        var typeResolver = new TypeResolver();
-        typeResolver.Register(typeof(DummyState));
-        var sut = new MongoSagaStateQuery(db, _serializer, typeResolver);
-
-        var entity = await InsertSagaState(db,
-            sagaStateType: "Some.NonExistent.Type, FakeAssembly",
-            stateData: new byte[] { 0x01 });
+            stateData: _serializer.Serialize(DummyState.New()));
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
 
@@ -168,7 +154,7 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
         var sut = CreateSut(db);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: typeof(DummyState).AssemblyQualifiedName,
+            sagaStateType: typeof(DummyState).FullName,
             stateData: new byte[] { 0xFF, 0xFE });
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
@@ -177,15 +163,18 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
         Assert.Null(result.StateData);
     }
 
-    [Fact]
-    public async Task GetByInstanceIdAsync_should_return_null_state_when_type_unknown()
+    [Theory]
+    [InlineData("Some.NonExistent.Type")]
+    [InlineData("System.Text.StringBuilder")]
+    [InlineData("System.Text.StringBuilder, System.Private.CoreLib")]
+    public async Task GetByInstanceIdAsync_should_return_null_state_when_the_type_is_not_a_known_state_type(string storedTypeName)
     {
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: "Some.NonExistent.Type, FakeAssembly",
-            stateData: new byte[] { 0x01 });
+            sagaStateType: storedTypeName,
+            stateData: "{}"u8.ToArray());
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
 

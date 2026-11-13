@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Persistence.SQL;
@@ -269,14 +270,13 @@ public class SqlSagaStateQueryTests
         var expectedState = DummyState.New();
         var serializer = new OpenSleigh.Utils.JsonSerializer();
         var stateBytes = serializer.Serialize(expectedState);
-        var stateType = typeof(DummyState).AssemblyQualifiedName!;
         var entity = CreateSagaStateEntity(
             instanceId: "inst-deser",
-            sagaStateType: stateType,
+            sagaStateType: typeof(DummyState).FullName,
             stateData: stateBytes);
         await SeedAsync(db, entity);
 
-        var sut = new SqlSagaStateQuery(db, serializer);
+        var sut = new SqlSagaStateQuery(db, serializer, KnownStateTypes(typeof(DummyState)));
 
         var result = await sut.GetByInstanceIdAsync("inst-deser");
 
@@ -288,41 +288,20 @@ public class SqlSagaStateQueryTests
         Assert.Equal(expectedState.Bar, deserialized.Bar);
     }
 
-    [Fact]
-    public async Task MapToSagaInstanceInfo_should_deserialize_state_data_stored_with_the_full_name_of_its_type()
-    {
-        using var db = CreateDbContext();
-        var expectedState = DummyState.New();
-        var serializer = new OpenSleigh.Utils.JsonSerializer();
-        var entity = CreateSagaStateEntity(
-            instanceId: "inst-full-name",
-            sagaStateType: typeof(DummyState).FullName,
-            stateData: serializer.Serialize(expectedState));
-        await SeedAsync(db, entity);
-
-        var typeResolver = new TypeResolver();
-        typeResolver.Register(typeof(DummyState));
-        var sut = new SqlSagaStateQuery(db, serializer, typeResolver);
-
-        var result = await sut.GetByInstanceIdAsync("inst-full-name");
-
-        var deserialized = Assert.IsType<DummyState>(result!.StateData);
-        Assert.Equal(expectedState.Id, deserialized.Id);
-    }
-
-    [Fact]
-    public async Task MapToSagaInstanceInfo_should_return_null_state_when_type_unknown()
+    [Theory]
+    [InlineData("Some.NonExistent.Type")]
+    [InlineData("System.Text.StringBuilder")]
+    [InlineData("System.Text.StringBuilder, System.Private.CoreLib")]
+    public async Task MapToSagaInstanceInfo_should_return_null_state_when_the_type_is_not_a_known_state_type(string storedTypeName)
     {
         using var db = CreateDbContext();
         var entity = CreateSagaStateEntity(
             instanceId: "inst-unknown-type",
-            sagaStateType: "Some.NonExistent.Type, FakeAssembly",
-            stateData: new byte[] { 0x01 });
+            sagaStateType: storedTypeName,
+            stateData: "{}"u8.ToArray());
         await SeedAsync(db, entity);
 
-        var typeResolver = new TypeResolver();
-        typeResolver.Register(typeof(DummyState));
-        var sut = new SqlSagaStateQuery(db, new OpenSleigh.Utils.JsonSerializer(), typeResolver);
+        var sut = new SqlSagaStateQuery(db, new OpenSleigh.Utils.JsonSerializer(), KnownStateTypes(typeof(DummyState)));
 
         var result = await sut.GetByInstanceIdAsync("inst-unknown-type");
 
@@ -331,20 +310,48 @@ public class SqlSagaStateQueryTests
     }
 
     [Fact]
+    public async Task MapToSagaInstanceInfo_should_return_null_state_without_a_state_type_resolver()
+    {
+        using var db = CreateDbContext();
+        var serializer = new OpenSleigh.Utils.JsonSerializer();
+        var entity = CreateSagaStateEntity(
+            instanceId: "inst-no-resolver",
+            sagaStateType: typeof(DummyState).FullName,
+            stateData: serializer.Serialize(DummyState.New()));
+        await SeedAsync(db, entity);
+
+        var sut = new SqlSagaStateQuery(db, serializer);
+
+        var result = await sut.GetByInstanceIdAsync("inst-no-resolver");
+
+        Assert.NotNull(result);
+        Assert.Null(result!.StateData);
+    }
+
+    private static ISagaStateTypeResolver KnownStateTypes(params Type[] stateTypes)
+        => new StubStateTypeResolver(stateTypes);
+
+    private sealed class StubStateTypeResolver(IEnumerable<Type> stateTypes) : ISagaStateTypeResolver
+    {
+        private readonly Dictionary<string, Type> _byName = stateTypes.ToDictionary(type => type.FullName!);
+
+        public Type? Resolve(string stateTypeName) => _byName.GetValueOrDefault(stateTypeName);
+    }
+
+    [Fact]
     public async Task MapToSagaInstanceInfo_should_handle_corrupted_state_data()
     {
         using var db = CreateDbContext();
         var stateBytes = new byte[] { 0xFF, 0xFE };
-        var stateType = typeof(DummyState).AssemblyQualifiedName!;
         var entity = CreateSagaStateEntity(
             instanceId: "inst-corrupt",
-            sagaStateType: stateType,
+            sagaStateType: typeof(DummyState).FullName,
             stateData: stateBytes);
         await SeedAsync(db, entity);
 
         // Use real JsonSerializer which will throw on invalid bytes
         var serializer = new OpenSleigh.Utils.JsonSerializer();
-        var sut = new SqlSagaStateQuery(db, serializer);
+        var sut = new SqlSagaStateQuery(db, serializer, KnownStateTypes(typeof(DummyState)));
 
         var result = await sut.GetByInstanceIdAsync("inst-corrupt");
 
