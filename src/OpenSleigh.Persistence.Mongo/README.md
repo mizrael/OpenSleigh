@@ -29,7 +29,12 @@ Of course it can be used in conjunction with any other Transport library as well
 
 Delayed messages are stored with a `DeliverAt` date on their outbox document; messages without a delay are stored as before. The outbox collection gets one more index, `ix_deliver_at`, created at startup like the others: building it on a large outbox takes time, and the database user needs the `createIndex` action, as for the existing indexes. Nothing has to be done by hand.
 
-Instances of the earlier version do not know about delays and publish a delayed message as soon as they read it: do not publish messages with a delay until every instance runs the new version.
+Instances of the earlier version cannot read an outbox document that has a `DeliverAt` date: while one is stored, their relay fails at every read, and the messages it had claimed wait for the claim to expire (one minute by default) before another instance can publish them. So:
+
+- do not publish messages with a delay until every instance runs the new version;
+- before going back to the earlier version, wait until no delayed message is left in the outbox, or remove them: `db.outbox.deleteMany({ DeliverAt: { $exists: true } })`.
+
+From this version on, the outbox ignores document elements it does not know.
 
 ---
 

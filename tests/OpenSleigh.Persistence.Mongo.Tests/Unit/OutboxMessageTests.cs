@@ -84,6 +84,18 @@ public class OutboxMessageTests
         Assert.Null(mapped.DeliverAt);
     }
 
+    [Fact]
+    public void A_document_with_an_element_this_version_does_not_know_should_still_be_read()
+    {
+        var envelope = MessageEnvelope.Create(new FakeMessage(), CreateSystemInfo());
+        var document = Entities.OutboxMessage.Create(envelope, Serializer).ToBsonDocument();
+        document.Add("AddedByALaterVersion", 42);
+
+        var read = BsonSerializer.Deserialize<Entities.OutboxMessage>(document);
+
+        Assert.Equal(envelope.MessageId, read.MessageId);
+    }
+
     private static ISystemInfo CreateSystemInfo()
     {
         var systemInfo = Substitute.For<ISystemInfo>();

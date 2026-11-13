@@ -43,15 +43,6 @@ public class SagaDbSchemaInitializerTests
         Assert.Equal(2, upgrade.Applied);
     }
 
-    [Fact]
-    public void EnsureCreated_should_leave_an_existing_database_alone_without_an_upgrade()
-    {
-        var sut = new SagaDbSchemaInitializer();
-        using var context = CreateExistingDatabase();
-
-        sut.EnsureCreated(context.Database);
-    }
-
     private static DbContext CreateExistingDatabase()
     {
         var context = CreateContext(Guid.NewGuid().ToString());

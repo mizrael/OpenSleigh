@@ -79,7 +79,7 @@ What to expect:
 - It is stored in the same commit as the Saga State: a handler that fails does not leave a timeout behind, and a timeout that was stored survives a restart.
 - There is nothing to cancel. A delayed message that becomes due after its Saga was marked as completed is not handled. If the Saga is still running, the handler decides from the state whether the timeout still matters, as in the example.
 - The delay is counted on the clock of the application that publishes, and compared with the clock of the application that reads the outbox: keep the clocks of your instances in sync.
-- It works the same way with every transport and every persistence provider. Applications using SQL Server or PostgreSQL get a new column on the outbox table when they are upgraded: see the README of the provider.
+- It works the same way with every transport and every persistence provider. Upgrading an application that uses SQL Server, PostgreSQL or MongoDB changes how the outbox is stored, and instances of an earlier version must be gone before the first message is published with a delay: see the README of the provider.
 
 ## Publish-Only Mode
 

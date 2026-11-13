@@ -5,6 +5,8 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.Mongo.Entities;
 
+// an element added by a later version must not stop this one from reading the outbox
+[BsonIgnoreExtraElements]
 public record OutboxMessage
 {
     public ObjectId Id { get; init; }
