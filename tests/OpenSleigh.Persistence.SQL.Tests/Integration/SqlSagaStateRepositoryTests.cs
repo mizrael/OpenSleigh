@@ -327,27 +327,6 @@ public abstract class SqlSagaStateRepositoryTests
     }
 
     [Fact]
-    public async Task A_failed_handler_should_leave_only_the_messages_of_its_rollback_in_the_outbox_stored_with_the_release()
-    {
-        var dbName = Guid.NewGuid().ToString();
-        var (db, _) = _fixture.CreateDbContext(dbName);
-        var (verificationDb, _) = _fixture.CreateDbContext(dbName);
-        var sut = CreateSut(db);
-
-        var messageContext = CreateMessageContext<FakeMessage>();
-        var saga = CreateSagaContext(messageContext);
-        await saga.LockAsync(sut, CancellationToken.None);
-
-        var messages = await FailedHandler.ProcessAsync(saga, messageContext, sut);
-
-        var stored = await ReadStoredSagaAsync(verificationDb, saga.InstanceId);
-        Assert.Null(stored.LockTime);
-        Assert.Equal(messageContext.MessageId, Assert.Single(stored.ProcessedMessages).MessageId);
-        var outboxIds = await verificationDb.OutboxMessages.AsNoTracking().Select(e => e.MessageId).ToListAsync();
-        Assert.Equal(new[] { messages.PublishedByRollback.MessageId }, outboxIds);
-    }
-
-    [Fact]
     public async Task CommitAsync_should_store_no_outbox_message_when_the_lock_was_taken_over()
     {
         var options = new SqlSagaStateRepositoryOptions(TimeSpan.Zero);

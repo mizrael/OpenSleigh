@@ -72,26 +72,6 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task A_failed_handler_should_leave_only_the_messages_of_its_rollback_in_the_outbox_ready_to_be_relayed()
-    {
-        var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
-        var messageContext = CreateMessageContext<FakeMessage>();
-        var saga = CreateSagaContext(messageContext);
-        await saga.LockAsync(sut, CancellationToken.None);
-
-        var messages = await FailedHandler.ProcessAsync(saga, messageContext, sut);
-
-        var storedSaga = await db.SagaStates.Find(e => e.InstanceId == saga.InstanceId).SingleAsync();
-        Assert.Null(storedSaga.LockTime);
-        Assert.Equal(messageContext.MessageId, Assert.Single(storedSaga.ProcessedMessages).MessageId);
-        var storedMessage = await db.OutboxMessages.Find(e => e.CorrelationId == saga.CorrelationId).SingleAsync();
-        Assert.Equal(messages.PublishedByRollback.MessageId, storedMessage.MessageId);
-        Assert.Null(storedMessage.LockId);
-        Assert.Null(storedMessage.LockTime);
-    }
-
-    [Fact]
     public async Task CommitAsync_should_leave_no_outbox_message_when_the_lock_is_not_held()
     {
         var db = _fixture.CreateDbContext();

@@ -49,68 +49,6 @@ public class MessageHandlerManagerTests
     }
 
     [Fact]
-    public async Task ProcessAsync_should_leave_in_the_outbox_only_what_the_rollback_published_when_the_handler_fails()
-    {
-        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
-        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
-        var publishedByHandler = DummyMessage.CreateEnvelope();
-        var publishedByRollback = DummyMessage.CreateEnvelope();
-
-        var handler = Substitute.For<IHandleMessage<FakeSagaStarter>>();
-        handler.HandleAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                saga.Publish(publishedByHandler);
-                return ValueTask.FromException(new InvalidOperationException("test error"));
-            });
-        handler.RollbackAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                saga.Publish(publishedByRollback);
-                return ValueTask.CompletedTask;
-            });
-        var sut = CreateSut(saga, handler);
-
-        var ex = await Assert.ThrowsAsync<SagaException>(
-            () => sut.ProcessAsync(saga, messageContext, CancellationToken.None).AsTask());
-
-        Assert.True(ex.RolledBack);
-        Assert.Same(publishedByRollback, Assert.Single(saga.Outbox));
-    }
-
-    [Fact]
-    public async Task ProcessAsync_should_leave_nothing_in_the_outbox_when_the_rollback_fails_as_well()
-    {
-        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
-        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
-        var handlerFailure = new InvalidOperationException("test error");
-        var rollbackFailure = new InvalidOperationException("rollback error");
-
-        var handler = Substitute.For<IHandleMessage<FakeSagaStarter>>();
-        handler.HandleAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                saga.Publish(DummyMessage.CreateEnvelope());
-                return ValueTask.FromException(handlerFailure);
-            });
-        handler.RollbackAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                saga.Publish(DummyMessage.CreateEnvelope());
-                return ValueTask.FromException(rollbackFailure);
-            });
-        var sut = CreateSut(saga, handler);
-
-        var ex = await Assert.ThrowsAsync<SagaException>(
-            () => sut.ProcessAsync(saga, messageContext, CancellationToken.None).AsTask());
-
-        Assert.False(ex.RolledBack);
-        Assert.Empty(saga.Outbox);
-        var failures = Assert.IsType<AggregateException>(ex.InnerException).InnerExceptions;
-        Assert.Equal(new Exception[] { handlerFailure, rollbackFailure }, failures);
-    }
-
-    [Fact]
     public async Task ProcessAsync_should_not_roll_back_a_handler_that_was_interrupted_by_a_stop()
     {
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
@@ -130,31 +68,6 @@ public class MessageHandlerManagerTests
             () => sut.ProcessAsync(saga, messageContext, stopping.Token).AsTask());
 
         await handler.DidNotReceiveWithAnyArgs().RollbackAsync(default!, default);
-    }
-
-    [Fact]
-    public async Task ProcessAsync_should_not_report_a_rollback_that_was_interrupted_by_a_stop_as_a_failure()
-    {
-        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
-        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
-        using var stopping = new CancellationTokenSource();
-
-        var handler = Substitute.For<IHandleMessage<FakeSagaStarter>>();
-        handler.HandleAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ => ValueTask.FromException(new InvalidOperationException("test error")));
-        handler.RollbackAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(_ =>
-            {
-                saga.Publish(DummyMessage.CreateEnvelope());
-                stopping.Cancel();
-                return ValueTask.FromException(new OperationCanceledException(stopping.Token));
-            });
-        var sut = CreateSut(saga, handler);
-
-        await Assert.ThrowsAsync<OperationCanceledException>(
-            () => sut.ProcessAsync(saga, messageContext, stopping.Token).AsTask());
-
-        Assert.Empty(saga.Outbox);
     }
 
     private static MessageHandlerManager CreateSut(ISagaInstance saga, IHandleMessage<FakeSagaStarter> handler)

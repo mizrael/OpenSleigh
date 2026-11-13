@@ -96,32 +96,8 @@ public record SagaInstance : ISagaInstance
 
             await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
         }
-        catch (SagaException failure) when (failure.RolledBack && !string.IsNullOrEmpty(this.LockId))
-        {
-            await CommitRollbackAsync(messageContext, sagaExecutionService).ConfigureAwait(false);
-            throw;
-        }
         catch
         {
-            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
-            throw;
-        }
-    }
-
-    // the handler failed and its rollback ran: what the rollback published is stored with the release, like the messages
-    // of a handler that succeeded. The message is recorded as processed, so that a redelivery does not roll back twice.
-    // Not cancellable: a stop must not leave a rollback that ran without the messages it published
-    private async ValueTask CommitRollbackAsync<TM>(
-        IMessageContext<TM> messageContext,
-        ISagaExecutionService sagaExecutionService) where TM : IMessage
-    {
-        try
-        {
-            await CommitAsProcessedAsync(messageContext, sagaExecutionService, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // nothing of the rollback was stored: the message is reported with this failure, not with the handler's
             await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
             throw;
         }

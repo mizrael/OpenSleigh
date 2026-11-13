@@ -81,7 +81,7 @@ public class HandlerFailureTests
     }
 
     [Fact]
-    public async Task A_failed_handler_should_deliver_what_its_rollback_published_and_dead_letter_the_message_once()
+    public async Task A_failed_handler_should_dead_letter_the_message_once_and_deliver_nothing_it_or_its_rollback_published()
     {
         var journal = new Journal();
         await using var services = new ServiceCollection()
@@ -98,11 +98,14 @@ public class HandlerFailureTests
             await hostedService.StartAsync(CancellationToken.None);
 
         var timeout = TimeSpan.FromSeconds(20);
+        var deadLetters = services.GetRequiredService<InMemoryDeadLetters>();
         await using (var scope = services.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(new PlaceOrder());
-        await journal.Cancelled.Task.WaitAsync(timeout);
         await journal.Audited.Task.WaitAsync(timeout);
-        // time for what must not happen: the message the failed handler published, or a second attempt
+        var deadline = DateTimeOffset.UtcNow + timeout;
+        while (deadLetters.Messages.Count == 0 && DateTimeOffset.UtcNow < deadline)
+            await Task.Delay(20);
+        // time for what must not happen: a message published by the failed handler or its rollback, or a second attempt
         await Task.Delay(500);
         foreach (var hostedService in hostedServices)
             await hostedService.StopAsync(CancellationToken.None);
@@ -110,14 +113,13 @@ public class HandlerFailureTests
         var entries = journal.Entries.ToArray();
         Assert.Single(entries, "order: placing");
         Assert.Single(entries, "order: rolling back");
-        Assert.Single(entries, "order: cancelled");
         Assert.Single(entries, "audit: placing");
         Assert.DoesNotContain("order: shipped", entries);
+        Assert.DoesNotContain("order: cancelled", entries);
 
-        var deadLetter = Assert.Single(services.GetRequiredService<InMemoryDeadLetters>().Messages);
+        var deadLetter = Assert.Single(deadLetters.Messages);
         Assert.IsType<PlaceOrder>(deadLetter.Message.Message);
         var failure = Assert.IsType<SagaException>(deadLetter.Error);
-        Assert.True(failure.RolledBack);
         Assert.Equal("out of stock", failure.InnerException!.Message);
     }
 }
