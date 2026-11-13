@@ -54,6 +54,10 @@ var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
 
 - `ConsumerDispatchConcurrency` is how many messages are handled at the same time. Raising it raises throughput, but messages are no longer handled in delivery order, and messages for the same saga instance that arrive together contend for its lock and go through the retry queue.
 - `PrefetchCount` is how many unacknowledged messages the broker hands to a consumer at once (0 means no limit). Set it when several workers share a queue, to a value at least as large as `ConsumerDispatchConcurrency`.
+### When a message cannot be processed
+
+- When the saga instance a message is for is being processed by another worker (a lock conflict), the message goes through the retry queue and is processed again after `RetryDelay`, 30 seconds by default. This repeats for as long as the conflict lasts.
+- On any other failure, a saga handler that throws included, the message is rejected and ends up in the dead letter queue. It is not processed again.
 
 
 If your application has to handle messages and events, not just dispatch them, you also have to configure each Saga :

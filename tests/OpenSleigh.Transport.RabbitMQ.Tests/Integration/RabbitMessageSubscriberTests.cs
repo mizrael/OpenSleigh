@@ -96,7 +96,40 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Assert.Equal(2, processCount);
     }
 
+    [Fact]
+    public async Task StartAsync_should_dead_letter_a_message_whose_handler_failed_without_retrying_it()
+    {
+        var processCount = 0;
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            Interlocked.Increment(ref processCount);
+            throw new SagaException("the handler failed", new InvalidOperationException("whoops"));
+        }, out var services);
+
+        await sut.StartAsync();
+
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
+
+        var deadLetterQueue = services.GetRequiredService<IQueueReferenceFactory>().Create(message).DeadLetterQueue;
+        var channel = await services.GetRequiredService<IChannelFactory>().GetPublishChannelAsync();
+        global::RabbitMQ.Client.BasicGetResult? deadLetter = null;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (deadLetter is null && DateTime.UtcNow < deadline)
+        {
+            deadLetter = await channel.BasicGetAsync(deadLetterQueue, autoAck: true);
+            if (deadLetter is null)
+                await Task.Delay(50);
+        }
+
+        Assert.NotNull(deadLetter);
+        Assert.Equal(1, processCount);
+    }
+
     private (IPublisher publisher, IMessageSubscriber sut) CreateSUT(Action<MessageEnvelope>? onMessage = null)
+        => CreateSUT(onMessage, out _);
+
+    private (IPublisher publisher, IMessageSubscriber sut) CreateSUT(Action<MessageEnvelope>? onMessage, out IServiceProvider provider)
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -155,6 +188,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         services.AddSingleton(processor);
 
         var sp = services.BuildServiceProvider();
+        provider = sp;
 
         var sut = sp.GetRequiredService<IMessageSubscriber>();
         var publisher = sp.GetRequiredService<IPublisher>();

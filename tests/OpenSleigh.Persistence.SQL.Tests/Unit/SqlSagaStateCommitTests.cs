@@ -32,6 +32,24 @@ public class SqlSagaStateCommitTests
     }
 
     [Fact]
+    public async Task A_failed_handler_should_leave_only_the_messages_of_its_rollback_in_the_outbox_and_release_the_saga()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var sut = CreateSut(dbName);
+        var messageContext = CreateMessageContext();
+        var saga = CreateSaga(messageContext);
+        await saga.LockAsync(sut, CancellationToken.None);
+
+        var messages = await FailedHandler.ProcessAsync(saga, messageContext, sut);
+
+        await using var db = CreateDbContext(dbName);
+        var stored = await db.SagaStates.Include(e => e.ProcessedMessages).SingleAsync();
+        Assert.Null(stored.LockTime);
+        Assert.Equal(messageContext.MessageId, Assert.Single(stored.ProcessedMessages).MessageId);
+        Assert.Equal(messages.PublishedByRollback.MessageId, (await db.OutboxMessages.SingleAsync()).MessageId);
+    }
+
+    [Fact]
     public async Task CommitAsync_should_fail_with_a_lock_exception_when_the_lock_was_taken_over()
     {
         var dbName = Guid.NewGuid().ToString();

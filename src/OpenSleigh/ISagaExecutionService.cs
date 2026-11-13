@@ -28,7 +28,8 @@ public interface ISagaExecutionService
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// releases the lock on the saga instance without persisting state changes.
+    /// releases the lock on the saga instance without storing the messages it published.
+    /// The state of the instance is stored as it is.
     /// </summary>
     ValueTask ReleaseAsync(
         ISagaInstance context,

@@ -18,7 +18,11 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     private readonly IConsumer<string, byte[]> _consumer;
     private readonly HeldMessages _heldMessages = new();
+    private readonly Dictionary<(string? Topic, int Partition), ConsumeResult<string, byte[]>> _lastHandled = new();
+    private int _handledSinceOffsetsStored;
     private bool _storesOffsets = true;
+
+    private const int MaxHandledBeforeOffsetsAreStored = 100;
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
     private int _consumerClosed;
@@ -76,12 +80,20 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     {
         _consumer?.Subscribe(_topicNames);
 
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await ConsumeMessageAsync(stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await ConsumeMessageAsync(stoppingToken);
 
-            if (_config.ConsumeDelay > TimeSpan.Zero)
-                await Task.Delay(_config.ConsumeDelay, stoppingToken);
+                if (_config.ConsumeDelay > TimeSpan.Zero)
+                    await Task.Delay(_config.ConsumeDelay, stoppingToken);
+            }
+        }
+        finally
+        {
+            // closing the consumer commits what is stored
+            StoreHandledOffsets();
         }
     }
 
@@ -101,10 +113,15 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
             var result = _consumer.Consume((int)consumeTimeout.TotalMilliseconds);
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if (canProcess && !TryHold(result!))
+            if (!canProcess)
+            {
+                // nothing to do right now: a good moment for what is cheaper done once in a while
+                StoreHandledOffsets();
+            }
+            else if (!TryHold(result!))
             {
                 await _messageHandler.HandleAsync(result!, stoppingToken);
-                StoreOffset(result!, stoppingToken);
+                MarkAsHandled(result!, stoppingToken);
             }
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
@@ -159,7 +176,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
                && _heldMessages.TryTakeDue(DateTimeOffset.UtcNow, out var result, out var isLastOfPartition))
         {
             await _messageHandler.HandleAsync(result, stoppingToken);
-            StoreOffset(result, stoppingToken);
+            MarkAsHandled(result, stoppingToken);
 
             if (isLastOfPartition)
                 ResumePartition(result.TopicPartition);
@@ -179,10 +196,36 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     }
 
     // the offset of a message is stored, and later committed, only once the message was dealt with:
-    // one that was not, because the process died or stopped or because it is still held, is delivered again
-    private void StoreOffset(ConsumeResult<string, byte[]> result, CancellationToken stoppingToken)
+    // one that was not, because the process died or stopped or because it is still held, is delivered again.
+    // Storing an offset covers every message before it in the partition, and is a call into the native client:
+    // it is made for the last message handled of each partition, once in a while, instead of once per message.
+    // Until then a message that was handled can be delivered again, never skipped
+    private void MarkAsHandled(ConsumeResult<string, byte[]> result, CancellationToken stoppingToken)
     {
         if (!_storesOffsets || stoppingToken.IsCancellationRequested)
+            return;
+
+        _lastHandled[(result.Topic, result.Partition.Value)] = result;
+
+        if (++_handledSinceOffsetsStored >= MaxHandledBeforeOffsetsAreStored)
+            StoreHandledOffsets();
+    }
+
+    private void StoreHandledOffsets()
+    {
+        if (_handledSinceOffsetsStored == 0)
+            return;
+
+        foreach (var result in _lastHandled.Values)
+            StoreOffset(result);
+
+        _lastHandled.Clear();
+        _handledSinceOffsetsStored = 0;
+    }
+
+    private void StoreOffset(ConsumeResult<string, byte[]> result)
+    {
+        if (!_storesOffsets)
             return;
 
         try

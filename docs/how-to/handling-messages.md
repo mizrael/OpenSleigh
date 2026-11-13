@@ -74,3 +74,44 @@ public class MyAwesomeSaga :
 ```
 
 This step is completely optional but signals OpenSleigh to stop sending messages to that Saga instance.
+
+## When a handler fails
+
+When `HandleAsync` throws, OpenSleigh calls `RollbackAsync` for the same message on the same Saga. It does nothing by default; implement it to undo what the handler did, or to publish compensating messages:
+
+```csharp
+public class MyAwesomeSaga :
+    Saga<MyAwesomeSagaState>,
+    IStartedBy<StartMyAwesomeSaga>
+{
+    // code omitted for brevity
+
+    public async ValueTask HandleAsync(
+        IMessageContext<StartMyAwesomeSaga> context,
+        CancellationToken cancellationToken = default)
+    {
+        this.Context.State.Reserved = true;
+        this.Publish(new ShipOrder());
+        throw new InvalidOperationException("out of stock");
+    }
+
+    public ValueTask RollbackAsync(
+        IMessageContext<StartMyAwesomeSaga> context,
+        CancellationToken cancellationToken = default)
+    {
+        this.Context.State.Reserved = false;
+        this.Publish(new CancelOrder());
+        return ValueTask.CompletedTask;
+    }
+}
+```
+
+What happens then:
+
+- The messages the handler published before it failed are discarded (`ShipOrder` above). The messages published by `RollbackAsync` are stored together with the state of the Saga and delivered, exactly like the messages of a handler that succeeded.
+- The state of the Saga is stored as the handler and the rollback left it. Changes made by the failed handler are not undone for you: `RollbackAsync` is where to undo them.
+- The message is recorded as processed by that Saga, and is sent to the dead letter destination of the transport once every Saga registered for it has handled it. It is not processed again: if it is delivered again, or replayed from the dead letter destination, a Saga that rolled it back ignores it, so the rollback never runs twice. To try again, publish a new message.
+- If `RollbackAsync` throws as well, nothing it published is stored, the Saga is released as it is, and the message is sent to the dead letter destination without being recorded as processed.
+- A Saga whose handler fails does not prevent the other Sagas registered for the same message from handling it.
+
+A handler failure is never retried. Only a lock conflict is, that is a message for a Saga instance that another worker is processing at that moment: the message is delivered again after a delay, for as long as the conflict lasts.
