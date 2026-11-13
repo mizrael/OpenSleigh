@@ -90,26 +90,30 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
         string combination, int hostsCount)
     {
         var published = new Expectation(2);
-        var firstReceived = new Expectation(1);
-        var bothReceived = new Expectation(2);
-        Action<IMessageContext<StartSimpleSaga>> onMessage = _ =>
-        {
-            firstReceived.Signal();
-            bothReceived.Signal();
-        };
+        var bothHandled = new Expectation(2);
+        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (_, _) => bothHandled.Signal();
+        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, _) => { };
 
-        var setup = new HostSetup(bus => bus.AddSaga<SimpleSaga>())
+        var setup = new HostSetup(bus => bus.AddSaga<MultiStartSaga, MultiStartSagaState>())
         {
             ConfigureServices = services => services
-                .AddSingleton(onMessage)
+                .AddSingleton(onStart)
+                .AddSingleton(onAlsoStart)
                 .Decorate<IPublisher>((_, inner) => new CountingPublisher(inner, published))
         };
 
         await RunScenarioAsync(combination, async (run, cancellationToken) =>
         {
+            // a host that is stopped while it handles a message leaves it to be delivered again:
+            // this one is stopped once it is done with the first message
+            Task WaitUntilHandledAsync(string correlationId)
+                => run.WaitForSagaAsync<MultiStartSaga>(correlationId,
+                    stored => stored.ProcessedMessages.Count == 1 && !stored.IsLocked, cancellationToken);
+
             var first = (await run.StartHostsAsync(hostsCount, setup))[0];
-            await first.PublishAsync(new StartSimpleSaga(), cancellationToken);
-            await firstReceived.Reached.WaitAsync(cancellationToken);
+            var handledByFirst = Guid.NewGuid().ToString();
+            await first.PublishAsync(new StartMultiStartSaga(1, handledByFirst), cancellationToken);
+            await WaitUntilHandledAsync(handledByFirst);
 
             await first.StopAsync();
             Assert.False(first.IsRunning);
@@ -117,19 +121,21 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
             var second = await run.StartHostAsync(setup);
             Assert.Same(second, run.AnyHost);
 
-            await second.PublishAsync(new StartSimpleSaga(), cancellationToken);
-            await bothReceived.Reached.WaitAsync(cancellationToken);
+            var handledBySecond = Guid.NewGuid().ToString();
+            await second.PublishAsync(new StartMultiStartSaga(2, handledBySecond), cancellationToken);
+            await WaitUntilHandledAsync(handledBySecond);
+            await bothHandled.Reached.WaitAsync(cancellationToken);
             await published.Reached.WaitAsync(cancellationToken);
 
             Assert.Equal(2, run.Hosts.Count);
         });
 
-        Assert.Equal(2, bothReceived.Count);
+        Assert.Equal(2, bothHandled.Count);
         Assert.Equal(2, published.Count);
     }
 
     [Theory]
-    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
+    [MatrixData(Only = [Combinations.InMemory, Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
     public async Task a_message_for_a_saga_that_does_not_exist_is_read_as_a_dead_letter(string combination, int hostsCount)
     {
         // the child saga handles this message and is not started by it

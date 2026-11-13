@@ -28,18 +28,7 @@ public static class KnownDefects
     /// </summary>
     public const string MongoRegistersNoTransactionManager = "mongo-registers-no-transaction-manager";
 
-    public static readonly IReadOnlyList<KnownDefect> Exclusions =
-    [
-        new KnownDefect(
-            Id: "rabbitmq-retry-is-delivered-to-every-service",
-            Reason: "On RabbitMQ a message retried after a lock conflict is published to the retry exchange of its " +
-                    "message type, to which the retry queue of every service is bound with the same routing key, " +
-                    "and each retry queue hands it back to the exchange all services listen to. With two services, " +
-                    "one retry delivers the message twice more to both: 3 deliveries each instead of 2 and 1. " +
-                    "The extra deliveries are stopped only by the processed-message check.",
-            Affects: matrixCase => matrixCase.Scenario == nameof(Scenarios.RetryWithSeveralServicesScenario)
-                                   && Combinations.Uses(matrixCase.Combination, Combinations.RabbitMq)),
-    ];
+    public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
 
     public static bool AreIncluded
         => bool.TryParse(Environment.GetEnvironmentVariable(IncludeVariable), out var included) && included;

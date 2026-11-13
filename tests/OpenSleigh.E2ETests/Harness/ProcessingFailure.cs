@@ -5,8 +5,8 @@ using OpenSleigh.Transport;
 namespace OpenSleigh.E2ETests.Harness;
 
 /// <summary>
-/// a message that a host gave back to its transport with an exception: what the transport then does with it,
-/// retry or dead letter, depends on the exception.
+/// a message that a host gave back to its transport with an exception: what the transport then does with it
+/// depends on the exception. A lock conflict is retried, anything else is dead-lettered.
 /// </summary>
 public sealed record ProcessingFailure(string Service, Type MessageType, string MessageId, Exception Exception)
 {
@@ -20,11 +20,13 @@ public sealed record ProcessingFailure(string Service, Type MessageType, string 
     public bool IsSagaNotFound
         => Exception is ApplicationException && Exception.Message.StartsWith(SagaNotFoundMessagePrefix, StringComparison.Ordinal);
 
-    /// <summary>the saga was locked by someone else: the message is retried.</summary>
-    public bool IsLockConflict
-        => Exception is LockException or OptimisticLockException
-           || Exception is AggregateException aggregate
-              && aggregate.InnerExceptions.Any(inner => inner is LockException or OptimisticLockException);
+    /// <summary>the saga was locked by someone else: the message is retried, by the service that could not process it.</summary>
+    public bool IsLockConflict => Exception.IsLockConflict();
+
+    /// <summary>a handler threw, in one saga or in several: the message is dead-lettered once every saga had its turn.</summary>
+    public bool IsHandlerFailure
+        => Exception is SagaException
+           || Exception is AggregateException aggregate && aggregate.InnerExceptions.All(inner => inner is SagaException);
 }
 
 /// <summary>

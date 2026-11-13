@@ -8,7 +8,7 @@ using OpenSleigh.Transport.Kafka;
 namespace OpenSleigh.E2ETests.Harness.Transports;
 
 /// <summary>
-/// a topic and a dead letter topic per message type, named after the run and created before the hosts start:
+/// a topic, a retry topic and a dead letter topic per message type, named after the run and created before the hosts start:
 /// a consumer that subscribes to a topic that does not exist yet finds it only at its next metadata refresh.
 /// The hosts of a service are one consumer group, and a topic has enough partitions for each of them to get some:
 /// with a single partition one host would consume everything and the others would only watch.
@@ -25,6 +25,9 @@ internal sealed class KafkaTransport : ITransport
     private static readonly TimeSpan BrokerTimeout = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan AssignmentPollingInterval = TimeSpan.FromMilliseconds(100);
 
+    // as short as the retry delay of the RabbitMQ transport in these tests: the default is half a minute
+    private static readonly TimeSpan RetryDelay = TimeSpan.FromMilliseconds(500);
+
     private readonly string _runId;
     private readonly string _bootstrapServers;
     private readonly SemaphoreSlim _topicsGate = new(1, 1);
@@ -39,7 +42,7 @@ internal sealed class KafkaTransport : ITransport
     }
 
     public void Configure(IBusConfigurator bus, string service)
-        => bus.UseKafkaTransport(new KafkaConfiguration(_bootstrapServers, CreateQueueReferences));
+        => bus.UseKafkaTransport(new KafkaConfiguration(_bootstrapServers, CreateQueueReferences) { RetryDelay = RetryDelay });
 
     private QueueReferences CreateQueueReferences(Type messageType)
     {
@@ -58,6 +61,8 @@ internal sealed class KafkaTransport : ITransport
                 var references = CreateQueueReferences(messageType);
                 if (_topics.TryAdd(references.TopicName, 0))
                     missing.Add(Topic(references.TopicName, Partitions));
+                if (_topics.TryAdd(references.RetryTopicName, 0))
+                    missing.Add(Topic(references.RetryTopicName, Partitions));
                 if (_deadLetterTopics.TryAdd(references.DeadLetterTopicName, messageType))
                     missing.Add(Topic(references.DeadLetterTopicName, DeadLetterPartitions));
             }

@@ -145,8 +145,8 @@ A host must still be running when the scenario returns: the checks read the stor
 | publish from a given host | `host.PublishAsync(message, token)` |
 | final state, processed messages | `run.WaitForSagaAsync`, `run.FindSagaAsync`: read through a running host that has the saga |
 | outbox | `run.CountOutboxMessagesAsync` |
-| dead letters | `run.ReadDeadLettersAsync` (count per message type), where `run.SupportsDeadLetters` (not in memory) |
-| why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound` and `IsLockConflict` |
+| dead letters | `run.ReadDeadLettersAsync` (count per message type), on every combination |
+| why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound`, `IsLockConflict` and `IsHandlerFailure` |
 | dead letters that are expected | pass `assertDeadLetters` to `RunScenarioAsync`, for example `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` |
 | hosts that start on a database nobody prepared | `prepareStore: false` on `RunScenarioAsync`: the first hosts create the database themselves, together |
 | anything else in a host | `host.Services` |
@@ -187,6 +187,10 @@ connection string to `appsettings.json` and its port to `run-e2e.sh`.
 
 ## Behaviour that is by design, and how scenarios assert it
 
+**A lock conflict is retried, anything else is dead-lettered**, on every transport. A message retried by one
+service goes back to that service only. The retry delay is 500 ms in these tests, on RabbitMQ and Kafka alike
+(100 ms in memory, its default).
+
 **A message for a saga that is not stored is dead-lettered at once, and never retried.** This holds for a saga
 that does not exist and for one that is only late. The late case: a message that starts several sagas is handled by
 one saga after the other, each stored on its own. What the first saga publishes can reach another host before the
@@ -208,7 +212,7 @@ asserts the same thing.
   are started: a host subscribes in the background.
   - RabbitMQ: a message published before the queue of a service is bound never reaches it, and the hosts of a
     service share its queues. The harness waits until each queue has a consumer for every host.
-  - Kafka: the hosts of a service are one consumer group, and a topic has 8 partitions
+  - Kafka: the hosts of a service are one consumer group, and a topic and its retry topic have 8 partitions
     (`KafkaTransport.Partitions`), so that each host is given some. The harness waits until the group is stable
     and every host has partitions; this takes a few seconds per group. A service cannot have more hosts than that.
     Messages of one type are spread over the partitions by their id, so messages for one saga can be consumed by

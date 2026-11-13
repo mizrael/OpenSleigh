@@ -61,22 +61,21 @@ its tolerance, or when a scenario that works on the base fails on the branch.
   within each round. Absolute numbers move a lot between runners; the difference within a round moves much less.
 - `benchmarks/gate.json` holds the tolerance (30% by default, per-scenario overrides), the minimum number of
   rounds, and lets a scenario be reported without gating (`"gate": false`).
-- The tolerance is relative, and a relative change means nothing between two values that are both next to zero.
-  `minimumDifference` in `gate.json` is the absolute floor under it, per unit and in that unit
-  (`"minimumDifference": { "ms": 0.005 }`): a change beyond the tolerance, for better or for worse, whose median
-  difference is smaller than the floor is reported as `ok: ... by less than the floor` and does not fail the job.
-  A unit that is not listed has no floor, and a scenario can set its own (`"minimumDifference": 0.01` next to its
-  `tolerance`). The summary shows the difference and the floor of every scenario.
-  - Why 0.005 ms: the two `dbcontext` scenarios measure 2 to 3 microseconds per context. Over 7 gate jobs that
-    compared identical code (35 paired rounds), base and head differed by up to 2.3 microseconds in a round and
-    by up to 1.1 in the median of a job, which was once 34% and failed the job. The floor is about twice the
-    largest difference seen in a round. Every other `ms` scenario measures more than a millisecond, where its
-    tolerance is hundreds of times the floor: the floor never decides for them.
-  - What it costs: a `dbcontext` scenario now fails only when a context gets more than 5 microseconds slower.
-    What those scenarios are there to catch (a context that is built, or a schema that is checked, per message)
-    costs far more than that.
-  - Throughput units have no floor: their scale differs by orders of magnitude between scenarios
-    (96 msg/s for one, 60,000 for another), so a floor per unit would be wrong for most of them.
+- The tolerance is relative, and a relative change means little between two values that are both next to zero.
+  A scenario that measures microseconds can have an absolute floor under its tolerance: `"minimumDifference"` next
+  to its `tolerance` in `gate.json`, in the unit of the scenario. A change beyond the tolerance, for better or for
+  worse, whose median difference is smaller than the floor is reported as `ok: ... by less than the floor` and
+  does not fail the job. The summary shows the difference and the floor of every scenario.
+  - A floor is set per scenario, never for a whole unit, and must be well below what the scenario measures:
+    a floor above the baseline would let a scenario get several times slower.
+  - Only the two `dbcontext` scenarios have one, of 0.0005 ms. They measure about 0.001 ms per context, so a
+    context that gets half again as slow still fails. With 200 contexts per sample the whole measurement took half
+    a millisecond, and identical code once differed by 34% and failed the job; they now resolve 20,000 per sample.
+  - Before adding a floor to another scenario, make it measure more per sample: that removes the noise instead
+    of hiding it.
+- The gate judges a branch by the `gate.json` of that branch, so that a branch can add a scenario together with
+  its settings. A branch can also loosen them: the summary says in bold when `gate.json` differs from the base
+  branch, for whoever reviews the result.
 - The harness may only use public API that exists on both sides. A scenario for something that only exists on the
   branch is compiled conditionally (see `RABBIT_CONSUMER_TUNING` in the project file) and reported as inconclusive.
 - Put `[bench-full]` in the message of the last commit to run the `full` suite instead, or
