@@ -94,31 +94,56 @@ public record SagaInstance : ISagaInstance
             await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                        .ConfigureAwait(false);
 
-            this.SetAsProcessed(messageContext);
-
-            await sagaExecutionService.CommitAsync(this, cancellationToken)
-                                      .ConfigureAwait(false);
-
-            // to be done after Commit, as it will be checked when releasing the state
-            this.LockId = string.Empty;
+            await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            if (!string.IsNullOrEmpty(this.LockId))
-            {
-                try
-                {
-                    await sagaExecutionService.ReleaseAsync(this, CancellationToken.None)
-                                              .ConfigureAwait(false);
-                }
-                catch
-                {
-                    // best effort: lock will expire via LockMaxDuration for SQL/Mongo
-                }
-                this.LockId = string.Empty;
-            }
+            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
             throw;
         }
+    }
+
+    private async ValueTask CommitAsProcessedAsync<TM>(
+        IMessageContext<TM> messageContext,
+        ISagaExecutionService sagaExecutionService,
+        CancellationToken cancellationToken) where TM : IMessage
+    {
+        this.SetAsProcessed(messageContext);
+
+        try
+        {
+            await sagaExecutionService.CommitAsync(this, cancellationToken)
+                                      .ConfigureAwait(false);
+        }
+        catch
+        {
+            // the messages were not stored: the message must not be released as processed, or a redelivery would
+            // be ignored and they would never go out
+            _processedMessages.Remove(messageContext.MessageId);
+            ClearOutbox();
+            throw;
+        }
+
+        // to be done after Commit, as it will be checked when releasing the state
+        this.LockId = string.Empty;
+    }
+
+    private async ValueTask TryReleaseAsync(ISagaExecutionService sagaExecutionService)
+    {
+        if (string.IsNullOrEmpty(this.LockId))
+            return;
+
+        try
+        {
+            await sagaExecutionService.ReleaseAsync(this, CancellationToken.None)
+                                      .ConfigureAwait(false);
+        }
+        catch
+        {
+            // best effort: lock will expire via LockMaxDuration for SQL/Mongo
+        }
+
+        this.LockId = string.Empty;
     }
 
     public string TriggerMessageId { get; }

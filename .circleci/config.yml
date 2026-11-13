@@ -25,6 +25,8 @@ jobs:
     resource_class: large
     environment:
       TARGET_FRAMEWORK: net10.0
+      # a named service container is reached by its name, not on localhost
+      ConnectionStrings__kafka: broker:29092
 
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
@@ -73,9 +75,10 @@ jobs:
             dotnet test --framework $TARGET_FRAMEWORK --filter "Category!=E2E&Category!=Integration"
       - run:
           name: Integration tests
+          # without the terminal logger: its output does not reach the job log, and a failed test would not be named
           command: |
             cd ./src            
-            dotnet test --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category=Integration"
+            dotnet test --framework $TARGET_FRAMEWORK --filter "FullyQualifiedName!~Cosmos&Category=Integration" -tl:off
 
   # the E2E tests run whole sagas on real hosts, against real services. They have a job of their own:
   # they take minutes rather than seconds, and a failure here should not hide the result of the build job
@@ -133,6 +136,8 @@ jobs:
     resource_class: large
     environment:
       TARGET_FRAMEWORK: net10.0
+      # a named service container is reached by its name, not on localhost
+      ConnectionStrings__kafka: broker:29092
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
       - image: 'mongo:latest'

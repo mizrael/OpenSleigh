@@ -77,6 +77,8 @@ public static class IChannelExtensions
                           arguments: null,
                           cancellationToken: cancellationToken);
 
+        // a message that waited for its retry goes back to the queue it came from, by the name of that queue:
+        // with the routing key of the message type it would reach every queue bound with it, one per service
         await channel.QueueDeclareAsync(queue: queueReferences.RetryQueueName,
                 durable: rabbitCfg.Durable,
                 exclusive: false,
@@ -85,11 +87,11 @@ public static class IChannelExtensions
                 {
                     {Headers.XMessageTTL, (int)rabbitCfg.RetryDelay.TotalMilliseconds },
                     {Headers.XDeadLetterExchange, queueReferences.ExchangeName},
-                    {Headers.XDeadLetterRoutingKey, queueReferences.RoutingKey}
+                    {Headers.XDeadLetterRoutingKey, queueReferences.QueueName}
                 }, cancellationToken: cancellationToken);
         await channel.QueueBindAsync(queue: queueReferences.RetryQueueName,
             exchange: queueReferences.RetryExchangeName,
-            routingKey: queueReferences.RoutingKey,
+            routingKey: queueReferences.RetryQueueName,
             arguments: null,
             cancellationToken: cancellationToken);
 
@@ -109,6 +111,13 @@ public static class IChannelExtensions
             routingKey: queueReferences.RoutingKey,
             arguments: null,
             cancellationToken: cancellationToken);
+
+        if (queueReferences.QueueName != queueReferences.RoutingKey)
+            await channel.QueueBindAsync(queue: queueReferences.QueueName,
+                exchange: queueReferences.ExchangeName,
+                routingKey: queueReferences.QueueName,
+                arguments: null,
+                cancellationToken: cancellationToken);
     }
 
     public static async ValueTask DeleteAsync(this IChannel channel, QueueReferences queueRef)
@@ -121,6 +130,7 @@ public static class IChannelExtensions
 
         await channel.ExchangeDeleteAsync(queueRef.RetryExchangeName);
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
+        await channel.QueueDeleteAsync(queueRef.LegacyRetryQueueName);
 
         var topologyKey = $"{queueRef.ExchangeName}|{queueRef.QueueName}";
         _initialized.TryRemove(topologyKey, out _);

@@ -174,8 +174,13 @@ internal sealed record TransportTarget(string Name, Action<IBusConfigurator> Con
         return new TransportTarget(
             "kafka",
             cfg => cfg.UseKafkaTransport(configuration),
-            () => CreateTopicsAsync(context.Settings.Kafka, messageTypes.Select(TopicName)));
+            () => CreateTopicsAsync(context.Settings.Kafka, messageTypes.SelectMany(messageType => TopicsOf(TopicName(messageType)))));
     }
+
+    // the retry topic only exists on a source tree that retries lock conflicts, where the consumer subscribes to it:
+    // created by that subscription, it would be assigned to the consumer in a second rebalance, inside the measurement
+    private static IEnumerable<string> TopicsOf(string topicName)
+        => [topicName, $"{topicName}.retry"];
 
     public static TransportTarget InMemory()
         => new("inmemory", cfg => cfg.UseInMemoryTransport(), () => Task.CompletedTask);

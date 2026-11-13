@@ -26,7 +26,8 @@ public class MessageHandlerManager : IMessageHandlerManager
             await handler.HandleAsync(messageContext, cancellationToken)
                         .ConfigureAwait(false);
         }
-        catch (Exception ex)
+        // a handler that was interrupted because the application is stopping has not failed: the message is delivered again
+        catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
         {
             _logger.LogError(
                 ex,

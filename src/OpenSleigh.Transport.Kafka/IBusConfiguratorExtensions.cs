@@ -28,6 +28,26 @@ public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator
     }
 
     private readonly TimeSpan _producerLinger = TimeSpan.Zero;
+
+    /// <summary>
+    /// how long a message waits before it is processed again after a lock conflict, that is when the saga instance
+    /// it is for was being processed by another worker. Defaults to 30 seconds.
+    /// The message waits in the retry topic of its type (see <see cref="QueueReferences.RetryTopicName"/>).
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">the value is negative.</exception>
+    public TimeSpan RetryDelay
+    {
+        get => _retryDelay;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _retryDelay = value;
+        }
+    }
+
+    private readonly TimeSpan _retryDelay = DefaultRetryDelay;
+
+    internal static readonly TimeSpan DefaultRetryDelay = TimeSpan.FromSeconds(30);
 }
 
 [ExcludeFromCodeCoverage]
