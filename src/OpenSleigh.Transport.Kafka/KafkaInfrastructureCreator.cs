@@ -29,6 +29,7 @@ internal class KafkaInfrastructureCreator<TM> : IInfrastructureCreator
         using var adminClient = builder.Build();
 
         await TryCreateTopicAsync(queueRef.TopicName, adminClient);
+        await TryCreateTopicAsync(queueRef.RetryTopicName, adminClient);
         await TryCreateTopicAsync(queueRef.DeadLetterTopicName, adminClient);
     }
 

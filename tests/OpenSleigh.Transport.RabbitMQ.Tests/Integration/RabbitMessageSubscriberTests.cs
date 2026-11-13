@@ -96,7 +96,166 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Assert.Equal(2, processCount);
     }
 
+    [Fact]
+    public async Task StartAsync_should_dead_letter_a_message_whose_handler_failed_without_retrying_it()
+    {
+        var processCount = 0;
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            Interlocked.Increment(ref processCount);
+            throw new SagaException("the handler failed", new InvalidOperationException("whoops"));
+        }, out var services);
+
+        await sut.StartAsync();
+
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
+
+        var deadLetterQueue = services.GetRequiredService<IQueueReferenceFactory>().Create(message).DeadLetterQueue;
+        var channel = await services.GetRequiredService<IChannelFactory>().GetPublishChannelAsync();
+        global::RabbitMQ.Client.BasicGetResult? deadLetter = null;
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (deadLetter is null && DateTime.UtcNow < deadline)
+        {
+            deadLetter = await channel.BasicGetAsync(deadLetterQueue, autoAck: true);
+            if (deadLetter is null)
+                await Task.Delay(50);
+        }
+
+        Assert.NotNull(deadLetter);
+        Assert.Equal(1, processCount);
+    }
+
+    [Fact]
+    public async Task StartAsync_should_retry_a_locked_message_only_in_the_service_that_could_not_process_it()
+    {
+        var exchangeName = NewExchangeName();
+        var conflictingServiceCount = 0;
+        var otherServiceCount = 0;
+        var processedAgain = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var (publisher, conflictingService) = CreateSUT(_ =>
+        {
+            if (Interlocked.Increment(ref conflictingServiceCount) == 1)
+                throw new LockException("whoops");
+
+            processedAgain.TrySetResult();
+        }, out _, exchangeName, clientGroup: "orders");
+        var (_, otherService) = CreateSUT(_ => Interlocked.Increment(ref otherServiceCount), out _, exchangeName, clientGroup: "billing");
+
+        await conflictingService.StartAsync();
+        await otherService.StartAsync();
+        await publisher.PublishAsync(CreateMessage());
+
+        await processedAgain.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        // time for a copy of the retried message to reach the other service, and to come back once more
+        await Task.Delay(_fixture.RabbitConfiguration.RetryDelay * 3);
+
+        Assert.Equal(2, conflictingServiceCount);
+        Assert.Equal(1, otherServiceCount);
+    }
+
+    [Fact]
+    public async Task StartAsync_should_work_on_the_topology_of_an_earlier_version_and_deliver_what_waits_in_its_retry_queue()
+    {
+        var exchangeName = NewExchangeName();
+        var references = DefaultReferences(exchangeName, "test");
+        var processCount = 0;
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            Interlocked.Increment(ref processCount);
+            processed.TrySetResult();
+        }, out _, exchangeName);
+
+        await using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        await DeclareRetryTopologyOfVersion330Async(channel, references);
+
+        // the message is taken out of its queue and put in the old retry queue, as a retry of that version would have
+        await publisher.PublishAsync(CreateMessage());
+        var waiting = await GetAsync(channel, references.QueueName);
+        Assert.NotNull(waiting);
+        await channel.BasicPublishAsync(
+            exchange: references.RetryExchangeName,
+            routingKey: references.RoutingKey,
+            mandatory: true,
+            basicProperties: new global::RabbitMQ.Client.BasicProperties(waiting.BasicProperties),
+            body: waiting.Body);
+
+        await sut.StartAsync();
+        await processed.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        await Task.Delay(_fixture.RabbitConfiguration.RetryDelay * 2);
+
+        Assert.Equal(1, processCount);
+    }
+
+    [Fact]
+    public async Task StartAsync_should_not_dead_letter_a_message_whose_processing_was_interrupted_by_a_stop()
+    {
+        using var stopping = new CancellationTokenSource();
+        var processCount = 0;
+        var interrupted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            Interlocked.Increment(ref processCount);
+            stopping.Cancel();
+            interrupted.TrySetResult();
+            throw new OperationCanceledException(stopping.Token);
+        }, out var services);
+
+        await sut.StartAsync(stopping.Token);
+        var message = CreateMessage();
+        await publisher.PublishAsync(message);
+        await interrupted.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        await Task.Delay(500);
+
+        // neither rejected, which would dead-letter it, nor given back to this consumer over and over:
+        // it stays unacknowledged until the channel closes
+        var deadLetterQueue = services.GetRequiredService<IQueueReferenceFactory>().Create(message).DeadLetterQueue;
+        var channel = await services.GetRequiredService<IChannelFactory>().GetPublishChannelAsync();
+        Assert.Null(await channel.BasicGetAsync(deadLetterQueue, autoAck: true));
+        Assert.Equal(1, processCount);
+    }
+
+    private async Task DeclareRetryTopologyOfVersion330Async(global::RabbitMQ.Client.IChannel channel, QueueReferences references)
+    {
+        var configuration = _fixture.RabbitConfiguration;
+        await channel.ExchangeDeclareAsync(references.ExchangeName, global::RabbitMQ.Client.ExchangeType.Topic, configuration.Durable, configuration.AutoDelete);
+        await channel.ExchangeDeclareAsync(references.RetryExchangeName, global::RabbitMQ.Client.ExchangeType.Topic, configuration.Durable, configuration.AutoDelete);
+        await channel.QueueDeclareAsync(references.LegacyRetryQueueName, configuration.Durable, exclusive: false, configuration.AutoDelete,
+            arguments: new System.Collections.Generic.Dictionary<string, object?>
+            {
+                { global::RabbitMQ.Client.Headers.XMessageTTL, (int)configuration.RetryDelay.TotalMilliseconds },
+                { global::RabbitMQ.Client.Headers.XDeadLetterExchange, references.ExchangeName },
+                { global::RabbitMQ.Client.Headers.XDeadLetterRoutingKey, references.RoutingKey }
+            });
+        await channel.QueueBindAsync(references.LegacyRetryQueueName, references.RetryExchangeName, references.RoutingKey);
+    }
+
+    private static async Task<global::RabbitMQ.Client.BasicGetResult?> GetAsync(global::RabbitMQ.Client.IChannel channel, string queueName)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(10);
+        while (DateTime.UtcNow < deadline)
+        {
+            var result = await channel.BasicGetAsync(queueName, autoAck: true);
+            if (result is not null)
+                return result;
+
+            await Task.Delay(50);
+        }
+
+        return null;
+    }
+
     private (IPublisher publisher, IMessageSubscriber sut) CreateSUT(Action<MessageEnvelope>? onMessage = null)
+        => CreateSUT(onMessage, out _);
+
+    private (IPublisher publisher, IMessageSubscriber sut) CreateSUT(
+        Action<MessageEnvelope>? onMessage,
+        out IServiceProvider provider,
+        string? exchangeName = null,
+        string clientGroup = "test")
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -107,22 +266,11 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         var busConfig = Substitute.For<IBusConfigurator>();
         busConfig.Services.Returns(services);
 
-        QueueReferencesCreator queueReferencesCreator = messageType =>
-        {
-#if NET9_0_OR_GREATER
-            var exchangeName = $"{messageType.Name.ToLower()}-{Guid.CreateVersion7().ToString("N")}";
-#else
-            var exchangeName = $"{messageType.Name.ToLower()}-{Guid.NewGuid().ToString("N")}";
-#endif
-            var queueName = $"{exchangeName}.workers";
-            var dlExchangeName = exchangeName + ".dead";
-            var dlQueueName = $"{dlExchangeName}.workers";
-            return new QueueReferences(exchangeName, queueName, exchangeName, dlExchangeName, dlQueueName);
-        };
-        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration, queueReferencesCreator);
+        exchangeName ??= NewExchangeName();
+        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration, _ => DefaultReferences(exchangeName, clientGroup));
 
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
-        sysInfo.ClientGroup.Returns("test");
+        sysInfo.ClientGroup.Returns(clientGroup);
 #if NET9_0_OR_GREATER
         sysInfo.ClientId.Returns(Guid.CreateVersion7().ToString("N"));
         sysInfo.Id.Returns(Guid.CreateVersion7().ToString("N"));
@@ -155,10 +303,30 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         services.AddSingleton(processor);
 
         var sp = services.BuildServiceProvider();
+        provider = sp;
 
         var sut = sp.GetRequiredService<IMessageSubscriber>();
         var publisher = sp.GetRequiredService<IPublisher>();
         return (publisher, sut);
+    }
+
+    private static string NewExchangeName()
+#if NET9_0_OR_GREATER
+        => $"{nameof(FakeSagaStarter).ToLower()}-{Guid.CreateVersion7():N}";
+#else
+        => $"{nameof(FakeSagaStarter).ToLower()}-{Guid.NewGuid():N}";
+#endif
+
+    // the names the default naming gives: one exchange and one routing key for the message type, one queue per client group
+    private static QueueReferences DefaultReferences(string exchangeName, string clientGroup)
+    {
+        var dlExchangeName = exchangeName + ".dead";
+        return new QueueReferences(
+            exchangeName,
+            $"{exchangeName}.{clientGroup}.workers",
+            exchangeName,
+            dlExchangeName,
+            $"{dlExchangeName}.{clientGroup}.workers");
     }
 
     private static MessageEnvelope CreateMessage()

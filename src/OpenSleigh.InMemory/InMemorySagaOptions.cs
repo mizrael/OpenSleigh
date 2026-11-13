@@ -7,6 +7,23 @@ public record InMemorySagaOptions
     /// </summary>
     public int SubscriberMaxMessagesBatchSize { get; }
 
+    /// <summary>
+    /// how long a message waits before it is processed again after a lock conflict, that is when the saga instance
+    /// it is for was being processed at the same time. Defaults to 100 milliseconds.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">the value is negative.</exception>
+    public TimeSpan SubscriberRetryDelay
+    {
+        get => _subscriberRetryDelay;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _subscriberRetryDelay = value;
+        }
+    }
+
+    private readonly TimeSpan _subscriberRetryDelay = Messaging.InMemorySubscriberOptions.Defaults.RetryDelay;
+
     public InMemorySagaOptions(int messagesBatchSize)
     {
         SubscriberMaxMessagesBatchSize = messagesBatchSize;

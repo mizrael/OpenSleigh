@@ -16,6 +16,20 @@ public class KeySerializerTests
     }
 
     [Fact]
+    public void Serialize_should_write_a_string_as_json_once_however_many_times_it_goes_through_a_consumer()
+    {
+        var sut = new KeySerializer<string>();
+
+        var published = sut.Serialize("lorem-ipsum", default);
+        var consumed = Confluent.Kafka.Deserializers.Utf8.Deserialize(published, false, default);
+        var publishedAgain = sut.Serialize(consumed, default);
+
+        // the format 3.3.0 writes, and the id its consumers have stored as processed
+        Assert.Equal("\"lorem-ipsum\"", consumed);
+        Assert.Equal(published, publishedAgain);
+    }
+
+    [Fact]
     public void Serialize_should_return_json_bytes_from_class()
     {
         var sut = new KeySerializer<DummyMessage>();
