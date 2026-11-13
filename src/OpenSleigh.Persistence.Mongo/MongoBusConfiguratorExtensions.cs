@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using MongoDB.Driver;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Outbox;
@@ -30,6 +31,10 @@ public static class MongoBusConfiguratorExtensions
             .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
             .AddTransient<IOutboxRepository, MongoOutboxRepository>()
             .AddTransient<ISagaStateQuery, MongoSagaStateQuery>();
+
+        // not replaced when the application, or a transport, has registered its own
+        busConfigurator.Services.TryAddSingleton<ITransactionManager, MongoTransactionManager>();
+
         return busConfigurator;
     }
 }
