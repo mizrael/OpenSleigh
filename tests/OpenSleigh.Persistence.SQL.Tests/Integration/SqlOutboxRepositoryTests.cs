@@ -162,11 +162,15 @@ public abstract class SqlOutboxRepositoryTests
     }
 
     [Fact]
-    public async Task ReadPendingAsync_should_return_the_delayed_messages_that_have_been_due_the_longest_first()
+    public async Task ReadPendingAsync_should_return_the_delayed_messages_that_have_been_due_the_longest_when_a_pass_cannot_take_them_all()
     {
-        var now = DateTimeOffset.UtcNow;
-        var dueTimes = new[] { now.AddMinutes(-1), now.AddMinutes(-3), now.AddMinutes(-2) };
-        var overdue = dueTimes.Select(CreateMessageDueAt).ToArray();
+        var batchSize = SqlOutboxRepositoryOptions.Default.MaxMessagesToPull;
+        var delayedShare = batchSize - batchSize / 2;
+
+        // stored from the last one that became due to the first
+        var overdue = Enumerable.Range(1, delayedShare + 2)
+            .Select(minutes => CreateMessageDueAt(DateTimeOffset.UtcNow.AddMinutes(-minutes)))
+            .ToArray();
 
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
@@ -175,8 +179,8 @@ public abstract class SqlOutboxRepositoryTests
         var messages = (await sut.ReadPendingAsync()).ToArray();
 
         Assert.Equal(
-            new[] { overdue[1].MessageId, overdue[2].MessageId, overdue[0].MessageId },
-            messages.Select(message => message.MessageId));
+            overdue.TakeLast(delayedShare).Select(message => message.MessageId).OrderBy(id => id),
+            messages.Select(message => message.MessageId).OrderBy(id => id));
     }
 
     [Fact]

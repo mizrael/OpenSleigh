@@ -9,21 +9,26 @@ namespace OpenSleigh.Persistence.SQLServer;
 internal class MSSqlOutboxRepository : SqlOutboxRepository
 {
     private const string Table = $"[{Constants.DbSchema}].[{OutboxMessage.TableName}]";
+    private const string MessageId = $"[{nameof(OutboxMessage.MessageId)}]";
     private const string DeliverAt = $"[{nameof(OutboxMessage.DeliverAt)}]";
     private const string Hints = $"WITH (UPDLOCK, READPAST, INDEX([{OutboxMessage.DeliverAtIndexName}]))";
 
     // two ranges of the index on the due time: the delayed messages that are due, and the messages without a delay.
     // A row that is waiting for its time is never read, however many there are. The index is named: left to choose,
     // SQL Server may scan the table, or sort it and lock every due row, depending on what it knew about the table
-    // when it compiled the query. The due time is sent by the application and compared with its own clock,
-    // like every other time in the outbox
+    // when it compiled the query. The messages of a pass are chosen, and locked, in the index alone, which has their key:
+    // only the ones that are returned are looked up in the table, and their bodies are not sorted.
+    // The due time is sent by the application and compared with its own clock, like every other time in the outbox
     private const string ReadQuery =
-        "SELECT TOP ({1}) * FROM (" +
-        $"SELECT * FROM (SELECT TOP ({{2}}) * FROM {Table} {Hints} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt}) AS due " +
+        $"SELECT message.* FROM (" +
+        $"SELECT TOP ({{1}}) pending.{MessageId} FROM (" +
+        $"SELECT {MessageId}, {DeliverAt} FROM (SELECT TOP ({{2}}) {MessageId}, {DeliverAt} FROM {Table} {Hints} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt}) AS due " +
         "UNION ALL " +
-        $"SELECT * FROM (SELECT TOP ({{1}}) * FROM {Table} {Hints} WHERE {DeliverAt} IS NULL) AS immediate" +
+        $"SELECT {MessageId}, {DeliverAt} FROM (SELECT TOP ({{1}}) {MessageId}, {DeliverAt} FROM {Table} {Hints} WHERE {DeliverAt} IS NULL) AS immediate" +
         ") AS pending " +
-        $"ORDER BY CASE WHEN {DeliverAt} IS NULL THEN 1 ELSE 0 END, {DeliverAt}";
+        $"ORDER BY CASE WHEN pending.{DeliverAt} IS NULL THEN 1 ELSE 0 END, pending.{DeliverAt}" +
+        ") AS chosen " +
+        $"INNER JOIN {Table} AS message ON message.{MessageId} = chosen.{MessageId}";
 
     public MSSqlOutboxRepository(
         SagaDbContext dbContext, 
