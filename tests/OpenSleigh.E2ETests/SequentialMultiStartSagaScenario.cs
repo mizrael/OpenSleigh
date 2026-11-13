@@ -58,10 +58,9 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
                 await firstHandled.Reached.WaitAsync(cancellationToken);
 
                 // the second message is published once the saga is stored and released by the first
-                var saga = await WaitForSagaAsync<MultiStartSaga>(services, correlationId,
+                await WaitForSagaAsync<MultiStartSaga>(services, correlationId,
                     stored => stored.ProcessedMessages.Count == 1 && !stored.IsLocked,
                     cancellationToken);
-                Console.WriteLine($"saga after its first message: {saga}, state: {saga.StateData}");
 
                 await bus.PublishAsync(last, cancellationToken);
                 await bothHandled.Reached.WaitAsync(cancellationToken);
