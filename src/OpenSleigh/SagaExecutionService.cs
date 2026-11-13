@@ -91,10 +91,10 @@ public class SagaExecutionService : ISagaExecutionService
     {
         ArgumentNullException.ThrowIfNull(context);
 
-        var hasNewMessages = context.Outbox.Any();
+        var hasNewMessages = context.Outbox.Count > 0;
 
         // a relay woken up for messages that are not due yet would read the outbox for nothing
-        var hasMessagesToRelayNow = context.Outbox.Any(message => message.DeliverAt is null);
+        var hasMessagesToRelayNow = hasNewMessages && context.Outbox.Any(message => message.DeliverAt is null);
 
         if (_sagaStateRepository is ISagaStateCommitter committer)
         {

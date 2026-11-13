@@ -109,8 +109,13 @@ public abstract class SqlSchemaInitializationTests
         using (var scope = provider.CreateScope())
             await scope.ServiceProvider.GetRequiredService<IOutboxRepository>().AppendAsync([delayed, immediate]);
 
+        // an instance of the released version that is still running does not send a due time
+        var storedByReleasedVersion = await InsertReleasedOutboxRowAsync(released.Admin);
+
         var pendingIds = (await ReadPendingAsync(provider)).Select(m => m.MessageId).OrderBy(id => id);
-        Assert.Equal(new[] { released.PendingMessageId, immediate.MessageId }.OrderBy(id => id), pendingIds);
+        Assert.Equal(
+            new[] { released.PendingMessageId, immediate.MessageId, storedByReleasedVersion }.OrderBy(id => id),
+            pendingIds);
     }
 
     [Fact]
