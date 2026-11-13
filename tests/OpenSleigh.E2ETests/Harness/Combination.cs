@@ -19,18 +19,26 @@ public sealed record Combination(
 
 /// <summary>
 /// the matrix: every store with every transport, plus in-memory.
-/// A new store or transport is one class and one line here.
+/// A new store or transport is one class and one line here, plus a name for each of its combinations.
 /// </summary>
 public static class Combinations
 {
-    public const string InMemory = "inmemory";
+    public const string Separator = "-";
+
     public const string PostgreSql = "postgresql";
     public const string SqlServer = "sqlserver";
     public const string MongoDb = "mongodb";
     public const string RabbitMq = "rabbitmq";
     public const string Kafka = "kafka";
 
-    private const char Separator = '-';
+    // the names of the combinations, for the attributes of the scenarios that run on a few of them
+    public const string InMemory = "inmemory";
+    public const string SqlServerRabbitMq = SqlServer + Separator + RabbitMq;
+    public const string SqlServerKafka = SqlServer + Separator + Kafka;
+    public const string PostgreSqlRabbitMq = PostgreSql + Separator + RabbitMq;
+    public const string PostgreSqlKafka = PostgreSql + Separator + Kafka;
+    public const string MongoDbRabbitMq = MongoDb + Separator + RabbitMq;
+    public const string MongoDbKafka = MongoDb + Separator + Kafka;
 
     private static readonly IReadOnlyList<(string Name, Func<RunContext, IStore> Create)> Stores =
     [
@@ -50,10 +58,8 @@ public static class Combinations
         new Combination(InMemory, HostsShareInfrastructure: false, _ => new InMemoryStore(), _ => new InMemoryTransport()),
         .. from store in Stores
            from transport in Transports
-           select new Combination(NameOf(store.Name, transport.Name), HostsShareInfrastructure: true, store.Create, transport.Create)
+           select new Combination(store.Name + Separator + transport.Name, HostsShareInfrastructure: true, store.Create, transport.Create)
     ];
-
-    public static string NameOf(string store, string transport) => $"{store}{Separator}{transport}";
 
     /// <summary>true when the combination uses the store or the transport of that name.</summary>
     public static bool Uses(string combination, string storeOrTransport)

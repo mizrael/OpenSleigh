@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport.RabbitMQ;
 using RabbitMQ.Client;
@@ -10,7 +9,8 @@ namespace OpenSleigh.E2ETests.Harness.Transports;
 
 /// <summary>
 /// an exchange per message type and a queue per service, all named after the run, like the default topology
-/// of the transport. Nothing is durable.
+/// of the transport. Nothing is durable, and nothing deletes itself: a queue that went away with the last host
+/// of its service would take its messages with it, and the host that replaces it would not declare it again.
 /// </summary>
 internal sealed class RabbitMqTransport : ITransport
 {
@@ -20,6 +20,9 @@ internal sealed class RabbitMqTransport : ITransport
 
     private readonly string _runId;
     private readonly RabbitConfiguration _configuration;
+
+    // everything a host of this run asked the references of, which is everything it can have declared:
+    // a host declares queues for the types it handles, and for its own service when it publishes a type
     private readonly ConcurrentDictionary<QueueReferences, Type> _queues = new();
 
     public RabbitMqTransport(RunContext context)
@@ -37,11 +40,16 @@ internal sealed class RabbitMqTransport : ITransport
             vhost: settings["VirtualHost"],
             retryDelay: TimeSpan.FromMilliseconds(retryDelay),
             durable: false,
-            autoDelete: true);
+            autoDelete: false);
     }
 
     public void Configure(IBusConfigurator bus, string service)
-        => bus.UseRabbitMQTransport(_configuration, messageType => CreateQueueReferences(messageType, service));
+        => bus.UseRabbitMQTransport(_configuration, messageType =>
+        {
+            var references = CreateQueueReferences(messageType, service);
+            _queues.TryAdd(references, messageType);
+            return references;
+        });
 
     private QueueReferences CreateQueueReferences(Type messageType, string service)
     {
@@ -56,45 +64,27 @@ internal sealed class RabbitMqTransport : ITransport
             deadLetterQueue: $"{deadLetterExchangeName}.{service}");
     }
 
-    public Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
-    {
-        var service = hostServices.GetServiceName();
-        foreach (var messageType in hostServices.GetHandledMessageTypes())
-            _queues.TryAdd(CreateQueueReferences(messageType, service), messageType);
+    public Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        return Task.CompletedTask;
-    }
-
-    // a message published to an exchange before the queue of a service is bound to it never reaches that service
-    public async Task WaitUntilSubscribedAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
+    // a message published to an exchange before the queue of a service is bound to it never reaches that service,
+    // and the hosts of a service share its queues: each of them has to be consuming
+    public async Task WaitUntilSubscribedAsync(IReadOnlyCollection<IServiceProvider> runningHosts, CancellationToken cancellationToken)
     {
-        if (hostServices.GetRequiredService<ISystemInfo>().PublishOnly)
+        var expectedConsumers = runningHosts
+            .Where(host => host.Consumes())
+            .SelectMany(host => host.GetHandledMessageTypes()
+                .Select(messageType => CreateQueueReferences(messageType, host.GetServiceName()).QueueName))
+            .GroupBy(queueName => queueName)
+            .ToDictionary(queue => queue.Key, queue => queue.Count());
+
+        if (expectedConsumers.Count == 0)
             return;
 
-        var service = hostServices.GetServiceName();
-        var queueNames = hostServices.GetHandledMessageTypes()
-            .Select(messageType => CreateQueueReferences(messageType, service).QueueName)
-            .ToArray();
-
         await using var connection = await CreateConnectionAsync(cancellationToken);
-        foreach (var queueName in queueNames)
+        foreach (var (queueName, expected) in expectedConsumers)
         {
-            while (await CountConsumersAsync(connection, queueName, cancellationToken) == 0)
+            while (((await FindQueueAsync(connection, queueName, cancellationToken))?.ConsumerCount ?? 0) < expected)
                 await Task.Delay(SubscriptionPollingInterval, cancellationToken);
-        }
-    }
-
-    private static async Task<uint> CountConsumersAsync(IConnection connection, string queueName, CancellationToken cancellationToken)
-    {
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
-        try
-        {
-            var queue = await channel.QueueDeclarePassiveAsync(queueName, cancellationToken);
-            return queue.ConsumerCount;
-        }
-        catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == Constants.NotFound)
-        {
-            return 0;
         }
     }
 
@@ -108,7 +98,7 @@ internal sealed class RabbitMqTransport : ITransport
         var deadLetters = new Dictionary<Type, long>();
         foreach (var (queue, messageType) in _queues)
         {
-            var count = await CountMessagesAsync(connection, queue.DeadLetterQueue, cancellationToken);
+            var count = (await FindQueueAsync(connection, queue.DeadLetterQueue, cancellationToken))?.MessageCount ?? 0;
             if (count > 0)
                 deadLetters[messageType] = deadLetters.GetValueOrDefault(messageType) + count;
         }
@@ -117,17 +107,16 @@ internal sealed class RabbitMqTransport : ITransport
     }
 
     // a channel is closed by the broker when it asks for a queue that does not exist: one channel per question
-    private static async Task<uint> CountMessagesAsync(IConnection connection, string queueName, CancellationToken cancellationToken)
+    private static async Task<QueueDeclareOk?> FindQueueAsync(IConnection connection, string queueName, CancellationToken cancellationToken)
     {
         await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
         try
         {
-            var queue = await channel.QueueDeclarePassiveAsync(queueName, cancellationToken);
-            return queue.MessageCount;
+            return await channel.QueueDeclarePassiveAsync(queueName, cancellationToken);
         }
         catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == Constants.NotFound)
         {
-            return 0;
+            return null;
         }
     }
 
@@ -136,23 +125,11 @@ internal sealed class RabbitMqTransport : ITransport
         if (_queues.IsEmpty)
             return;
 
-        // dead letter and retry queues never have a consumer, so the broker never deletes them by itself
+        // deleting what was never declared is not an error for the broker
         await using var connection = await CreateConnectionAsync(CancellationToken.None);
+        await using var channel = await connection.CreateChannelAsync();
         foreach (var queue in _queues.Keys)
-            await TryDeleteAsync(connection, queue);
-    }
-
-    private static async Task TryDeleteAsync(IConnection connection, QueueReferences queue)
-    {
-        try
-        {
-            await using var channel = await connection.CreateChannelAsync();
             await channel.DeleteAsync(queue);
-        }
-        catch (Exception e) when (e is OperationInterruptedException or AlreadyClosedException)
-        {
-            // what is left behind does not outlive the broker of the test run
-        }
     }
 
     private Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken)

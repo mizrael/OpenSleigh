@@ -15,10 +15,9 @@ public class RetryWithSeveralServicesScenario(ITestOutputHelper console) : Scena
 {
     private const string ServiceThatRetries = "billing";
     private const string OtherService = "shipping";
-    private const string PostgreSqlWithRabbitMq = Combinations.PostgreSql + "-" + Combinations.RabbitMq;
 
     [Theory]
-    [MatrixData(Only = [PostgreSqlWithRabbitMq], HostsCounts = [1])]
+    [MatrixData(RequiresSharedInfrastructure = true)]
     public async Task a_message_retried_by_one_service_is_not_delivered_again_to_the_other(string combination, int hostsCount)
     {
         var deliveries = new ConcurrentDictionary<string, int>();
@@ -33,19 +32,14 @@ public class RetryWithSeveralServicesScenario(ITestOutputHelper console) : Scena
                 .Decorate<IMessageProcessor>((_, inner) => new CountingProcessor(inner, service, deliveries, failsOnce))
         };
 
-        await using var run = CreateRun(combination);
-        await run.StartHostsAsync(hostsCount, SetupOf(ServiceThatRetries, bus => bus.AddSaga<SimpleSaga>(), failsOnce: true));
-        await run.StartHostsAsync(hostsCount, SetupOf(OtherService, bus => bus.AddSaga<OtherSimpleSaga>(), failsOnce: false));
-
-        await RunWithTimeoutAsync(async cancellationToken =>
+        await RunScenarioAsync(combination, async (run, cancellationToken) =>
         {
+            await run.StartHostsAsync(hostsCount, SetupOf(ServiceThatRetries, bus => bus.AddSaga<SimpleSaga>(), failsOnce: true));
+            await run.StartHostsAsync(hostsCount, SetupOf(OtherService, bus => bus.AddSaga<OtherSimpleSaga>(), failsOnce: false));
+
             await run.AnyHost.PublishAsync(new StartSimpleSaga(), cancellationToken);
             await handled.Reached.WaitAsync(cancellationToken);
         });
-
-        await ObserveAsync();
-        await AssertNothingIsLeftBehindAsync(run);
-        await run.StopHostsAsync();
 
         Assert.Equal(2, handled.Count);
         Assert.Equal(
@@ -53,7 +47,7 @@ public class RetryWithSeveralServicesScenario(ITestOutputHelper console) : Scena
             deliveries.OrderBy(entry => entry.Key));
     }
 
-    /// <summary>counts what its service is given to process, and can refuse the first as if its saga were locked.</summary>
+    /// <summary>counts what its service is given to process, and refuses the first as if its saga were locked.</summary>
     private sealed class CountingProcessor(
         IMessageProcessor inner,
         string service,

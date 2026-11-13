@@ -25,6 +25,9 @@ public sealed class ScenarioHost
 
     public bool IsRunning { get; private set; }
 
+    /// <summary>true once the host was asked to stop: it is not started again.</summary>
+    internal bool IsStopped => Volatile.Read(ref _stopped) != 0;
+
     /// <summary>
     /// publishes a message the way an application does: through the bus of this host, into its outbox.
     /// </summary>

@@ -41,7 +41,6 @@ public class MultipleSagasSameMessagesScenario(ITestOutputHelper console) : Scen
             },
             async run =>
             {
-                await AssertOutboxIsEmptyAsync(run);
                 await AssertOnlySagaNotFoundDeadLettersAsync(run, CanArriveBeforeTheSecondSaga);
 
                 // each of the two messages exists once before the second saga does

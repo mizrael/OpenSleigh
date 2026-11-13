@@ -23,6 +23,11 @@ public sealed class ScenarioRun : IAsyncDisposable
     private static readonly TimeSpan OutboxInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(50);
 
+    private static readonly TimeSpan CleanUpTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>what the output of a test starts a line with when its run could not be cleaned up.</summary>
+    public const string CleanUpFailed = "CLEAN-UP FAILED";
+
     private const string ClientGroupSetting = "OpenSleigh:ClientGroup";
 
     private readonly ITestOutputHelper _console;
@@ -32,21 +37,26 @@ public sealed class ScenarioRun : IAsyncDisposable
     private readonly object _hostsGate = new();
     private readonly ConcurrentQueue<ProcessingFailure> _processingFailures = new();
 
-    private ScenarioRun(Combination combination, RunContext context, ITestOutputHelper console)
+    private readonly bool _prepareStore;
+
+    private ScenarioRun(Combination combination, RunContext context, ITestOutputHelper console, bool prepareStore)
     {
         Combination = combination;
         RunId = context.RunId;
         _console = console;
+        _prepareStore = prepareStore;
         _store = combination.CreateStore(context);
         _transport = combination.CreateTransport(context);
     }
 
-    internal static ScenarioRun Create(Combination combination, ITestOutputHelper console)
+    /// <param name="prepareStore">false for a scenario about hosts that start on a database nobody prepared:
+    /// the first hosts then create it themselves, together.</param>
+    internal static ScenarioRun Create(Combination combination, ITestOutputHelper console, bool prepareStore = true)
     {
         ArgumentNullException.ThrowIfNull(combination);
         ArgumentNullException.ThrowIfNull(console);
 
-        return new ScenarioRun(combination, RunContext.Create(), console);
+        return new ScenarioRun(combination, RunContext.Create(), console, prepareStore);
     }
 
     public Combination Combination { get; }
@@ -80,27 +90,33 @@ public sealed class ScenarioRun : IAsyncDisposable
         ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
         ArgumentNullException.ThrowIfNull(setup);
 
-        if (count > 1 && !Combination.HostsShareInfrastructure)
-            throw new InvalidOperationException(
-                $"hosts on '{Combination.Name}' share nothing: a scenario cannot use more than one.");
-
-        var hosts = Enumerable.Range(0, count).Select(_ => new ScenarioHost(BuildHost(setup))).ToArray();
+        ScenarioHost[] hosts;
         lock (_hostsGate)
+        {
+            // hosts that share nothing cannot take part in one scenario, however they were started
+            var running = _hosts.Count(host => !host.IsStopped);
+            if (running + count > 1 && !Combination.HostsShareInfrastructure)
+                throw new InvalidOperationException(
+                    $"hosts on '{Combination.Name}' share nothing: a scenario cannot have more than one running.");
+
+            hosts = Enumerable.Range(0, count).Select(_ => new ScenarioHost(BuildHost(setup))).ToArray();
             _hosts.AddRange(hosts);
+        }
 
         using var timeout = new CancellationTokenSource(StartupTimeout);
         try
         {
             foreach (var host in hosts)
             {
-                await _store.PrepareAsync(host.Services, timeout.Token);
+                if (_prepareStore)
+                    await _store.PrepareAsync(host.Services, timeout.Token);
                 await _transport.PrepareAsync(host.Services, timeout.Token);
             }
 
             await Task.WhenAll(hosts.Select(host => host.StartAsync(timeout.Token)));
 
-            foreach (var host in hosts)
-                await _transport.WaitUntilSubscribedAsync(host.Services, timeout.Token);
+            var runningHosts = Hosts.Where(host => host.IsRunning).Select(host => host.Services).ToArray();
+            await _transport.WaitUntilSubscribedAsync(runningHosts, timeout.Token);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -139,7 +155,10 @@ public sealed class ScenarioRun : IAsyncDisposable
     /// <summary>reads a saga from the store. Null when it is not there.</summary>
     public async Task<SagaInstanceInfo?> FindSagaAsync<TSaga>(string correlationId, CancellationToken cancellationToken)
     {
-        await using var scope = AnyHost.Services.CreateAsyncScope();
+        // a host that does not have the saga cannot tell the type of its state, and returns it without
+        var host = Hosts.FirstOrDefault(host => host.IsRunning && host.Services.HasSaga(typeof(TSaga))) ?? AnyHost;
+
+        await using var scope = host.Services.CreateAsyncScope();
         var query = scope.ServiceProvider.GetRequiredService<ISagaStateQuery>();
         return await query.GetByCorrelationIdAsync(correlationId, typeof(TSaga).FullName!, cancellationToken);
     }
@@ -197,8 +216,23 @@ public sealed class ScenarioRun : IAsyncDisposable
             _console.WriteLine($"the hosts did not stop cleanly: {e}");
         }
 
-        await _transport.DisposeAsync();
-        await _store.DisposeAsync();
+        await CleanUpAsync("transport", _transport);
+        await CleanUpAsync("store", _store);
+    }
+
+    // one policy for whatever a store or a transport does to remove what it created: it gets a bounded time,
+    // and what goes wrong is written to the output of the test. It never replaces what the scenario failed with,
+    // and never keeps the next one from being cleaned up
+    private async Task CleanUpAsync(string what, IAsyncDisposable disposable)
+    {
+        try
+        {
+            await disposable.DisposeAsync().AsTask().WaitAsync(CleanUpTimeout);
+        }
+        catch (Exception e)
+        {
+            _console.WriteLine($"{CleanUpFailed}: the {what} of run '{RunId}' on '{Combination.Name}' may have left something behind. {e}");
+        }
     }
 
     private IHost BuildHost(HostSetup setup)

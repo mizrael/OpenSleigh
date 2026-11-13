@@ -1,7 +1,10 @@
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
+using OpenSleigh.E2ETests.Harness.Stores;
 using OpenSleigh.Outbox;
+using OpenSleigh.Persistence;
 using OpenSleigh.Transport;
 using Xunit.Abstractions;
 
@@ -12,6 +15,8 @@ namespace OpenSleigh.E2ETests.Harness;
 /// </summary>
 public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
 {
+    private static readonly TimeSpan DeadLettersPollingInterval = TimeSpan.FromMilliseconds(100);
+
     [Fact]
     public void every_known_defect_excludes_at_least_one_case()
     {
@@ -39,19 +44,50 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
         string[] expected =
         [
             Combinations.InMemory,
-            Combinations.NameOf(Combinations.SqlServer, Combinations.RabbitMq),
-            Combinations.NameOf(Combinations.SqlServer, Combinations.Kafka),
-            Combinations.NameOf(Combinations.PostgreSql, Combinations.RabbitMq),
-            Combinations.NameOf(Combinations.PostgreSql, Combinations.Kafka),
-            Combinations.NameOf(Combinations.MongoDb, Combinations.RabbitMq),
-            Combinations.NameOf(Combinations.MongoDb, Combinations.Kafka),
+            Combinations.SqlServerRabbitMq,
+            Combinations.SqlServerKafka,
+            Combinations.PostgreSqlRabbitMq,
+            Combinations.PostgreSqlKafka,
+            Combinations.MongoDbRabbitMq,
+            Combinations.MongoDbKafka,
         ];
 
         Assert.Equal(expected, Combinations.All.Select(combination => combination.Name));
     }
 
     [Fact]
-    public async Task a_decorated_service_replaces_the_one_of_the_library_and_a_stopped_host_can_be_replaced()
+    public void a_matrix_that_is_wrong_or_empty_fails_instead_of_being_skipped()
+    {
+        Assert.Throws<InvalidOperationException>(() => new MatrixDataAttribute { Only = ["postgresql_rabbitmq"] }.AllCases());
+        Assert.Throws<InvalidOperationException>(() => new MatrixDataAttribute { Only = [] }.AllCases());
+        Assert.Throws<InvalidOperationException>(() => new MatrixDataAttribute { Only = [Combinations.InMemory], HostsCounts = [2] }.AllCases());
+        Assert.Throws<InvalidOperationException>(() => new MatrixDataAttribute { Only = [Combinations.InMemory], RequiresSharedInfrastructure = true }.AllCases());
+
+        // hosts that share nothing take no part in a scenario that needs several
+        var severalHosts = new MatrixDataAttribute { HostsCounts = [2, 5] }.AllCases();
+        Assert.DoesNotContain(severalHosts, matrixCase => matrixCase.Combination == Combinations.InMemory);
+        Assert.Equal(2 * (Combinations.All.Count - 1), severalHosts.Count);
+    }
+
+    [Fact]
+    public async Task hosts_that_share_nothing_cannot_run_together_however_they_are_started()
+    {
+        var setup = new HostSetup(bus => bus.AddSaga<ChildSaga>());
+
+        await RunScenarioAsync(Combinations.InMemory, async (run, _) =>
+        {
+            var first = await run.StartHostAsync(setup);
+            await Assert.ThrowsAsync<InvalidOperationException>(() => run.StartHostAsync(setup));
+
+            await first.StopAsync();
+            await run.StartHostAsync(setup);
+        });
+    }
+
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory, Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
+    public async Task a_decorated_service_replaces_the_one_of_the_library_and_the_last_host_of_a_service_can_be_replaced(
+        string combination, int hostsCount)
     {
         var published = new Expectation(2);
         var firstReceived = new Expectation(1);
@@ -69,68 +105,67 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
                 .Decorate<IPublisher>((_, inner) => new CountingPublisher(inner, published))
         };
 
-        await using var run = CreateRun(Combinations.InMemory);
-
-        var first = await run.StartHostAsync(setup);
-        await RunWithTimeoutAsync(async cancellationToken =>
+        await RunScenarioAsync(combination, async (run, cancellationToken) =>
         {
+            var first = (await run.StartHostsAsync(hostsCount, setup))[0];
             await first.PublishAsync(new StartSimpleSaga(), cancellationToken);
             await firstReceived.Reached.WaitAsync(cancellationToken);
-        });
 
-        await first.StopAsync();
-        Assert.False(first.IsRunning);
+            await first.StopAsync();
+            Assert.False(first.IsRunning);
 
-        var second = await run.StartHostAsync(setup);
-        Assert.Same(second, run.AnyHost);
+            var second = await run.StartHostAsync(setup);
+            Assert.Same(second, run.AnyHost);
 
-        await RunWithTimeoutAsync(async cancellationToken =>
-        {
             await second.PublishAsync(new StartSimpleSaga(), cancellationToken);
             await bothReceived.Reached.WaitAsync(cancellationToken);
             await published.Reached.WaitAsync(cancellationToken);
+
+            Assert.Equal(2, run.Hosts.Count);
         });
 
-        await run.StopHostsAsync();
-
-        Assert.Equal(2, run.Hosts.Count);
+        Assert.Equal(2, bothReceived.Count);
         Assert.Equal(2, published.Count);
     }
 
-    private const string PostgreSqlWithRabbitMq = Combinations.PostgreSql + "-" + Combinations.RabbitMq;
-    private const string PostgreSqlWithKafka = Combinations.PostgreSql + "-" + Combinations.Kafka;
-    private static readonly TimeSpan DeadLettersPollingInterval = TimeSpan.FromMilliseconds(100);
-
     [Theory]
-    [MatrixData(Only = [PostgreSqlWithRabbitMq, PostgreSqlWithKafka], HostsCounts = [1])]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
     public async Task a_message_for_a_saga_that_does_not_exist_is_read_as_a_dead_letter(string combination, int hostsCount)
     {
         // the child saga handles this message and is not started by it
         var setup = new HostSetup(bus => bus.AddSaga<ChildSaga>());
 
-        await using var run = CreateRun(combination);
-        await run.StartHostsAsync(hostsCount, setup);
+        await RunScenarioAsync(combination, hostsCount, setup,
+            async (run, cancellationToken) =>
+            {
+                Assert.True(run.SupportsDeadLetters);
+                Assert.Empty(await run.ReadDeadLettersAsync(cancellationToken));
 
-        Assert.True(run.SupportsDeadLetters);
+                await run.AnyHost.PublishAsync(new ProcessChildSaga(), cancellationToken);
 
-        await RunWithTimeoutAsync(async cancellationToken =>
-        {
-            Assert.Empty(await run.ReadDeadLettersAsync(cancellationToken));
+                while ((await run.ReadDeadLettersAsync(cancellationToken)).Count == 0)
+                    await Task.Delay(DeadLettersPollingInterval, cancellationToken);
+            },
+            async run =>
+            {
+                await AssertOnlySagaNotFoundDeadLettersAsync(run, typeof(ProcessChildSaga));
 
-            await run.AnyHost.PublishAsync(new ProcessChildSaga(), cancellationToken);
+                var failure = Assert.Single(run.ProcessingFailures);
+                Assert.True(failure.IsSagaNotFound);
+                Assert.False(failure.IsLockConflict);
+            });
+    }
 
-            while ((await run.ReadDeadLettersAsync(cancellationToken)).Count == 0)
-                await Task.Delay(DeadLettersPollingInterval, cancellationToken);
-        });
+    [Fact]
+    public void the_workaround_for_mongodb_is_still_needed()
+    {
+        var services = new ServiceCollection();
+        services.AddOpenSleigh(bus => MongoStore.UseMongoPersistence(bus, "mongodb://not-used", "not-used"));
 
-        await AssertOutboxIsEmptyAsync(run);
-        await AssertOnlySagaNotFoundDeadLettersAsync(run, typeof(ProcessChildSaga));
-
-        var failure = Assert.Single(run.ProcessingFailures);
-        Assert.True(failure.IsSagaNotFound);
-        Assert.False(failure.IsLockConflict);
-
-        await run.StopHostsAsync();
+        Assert.False(
+            services.Any(descriptor => descriptor.ServiceType == typeof(ITransactionManager)),
+            $"UseMongoPersistence registers a transaction manager now: delete the workaround in {nameof(MongoStore)}, " +
+            $"{nameof(KnownDefects)}.{nameof(KnownDefects.MongoRegistersNoTransactionManager)} and this test.");
     }
 
     private static IEnumerable<string> ScenarioClassNames()

@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Persistence.SQL;
@@ -10,4 +11,7 @@ internal sealed class PostgreSqlStore(RunContext context) : SqlStore(context, Co
 
     protected override void UsePersistence(IBusConfigurator bus, SqlConfiguration configuration)
         => bus.UsePostgreSqlPersistence(configuration);
+
+    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString)
+        => options.UseNpgsql(connectionString);
 }

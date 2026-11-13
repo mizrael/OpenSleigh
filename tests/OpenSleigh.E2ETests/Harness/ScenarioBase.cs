@@ -6,8 +6,7 @@ namespace OpenSleigh.E2ETests.Harness;
 
 /// <summary>
 /// the base of every scenario class. A scenario is a theory with <see cref="MatrixDataAttribute"/>
-/// that calls <see cref="RunScenarioAsync"/>, or drives a <see cref="ScenarioRun"/> of its own
-/// from <see cref="CreateRun"/> when it needs hosts with different roles or lifetimes.
+/// that calls one of the <c>RunScenarioAsync</c> methods: both end with the same checks.
 /// </summary>
 [Category(E2ECategory)]
 [Trait("Category", E2ECategory)]
@@ -18,6 +17,7 @@ public abstract class ScenarioBase
     // an upper bound, spent only by a scenario that fails: one that works ends as soon as what it expects has happened
     private static readonly TimeSpan ScenarioTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan ChecksTimeout = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ChecksPollingInterval = TimeSpan.FromMilliseconds(50);
 
     // how long the hosts are left running once the scenario is over, for a message that should not
     // have been delivered, or delivered again, to show up. It spans several outbox passes and transport retries
@@ -31,65 +31,83 @@ public abstract class ScenarioBase
     }
 
     /// <summary>
-    /// a run with no hosts yet, for a scenario that starts and stops them itself. Dispose it.
+    /// runs a scenario that starts its own hosts, with whatever roles and lifetimes it needs, and ends it the way
+    /// every scenario ends: the hosts are left running for the observation window, the outbox must be empty,
+    /// the dead letters must be the expected ones, and the hosts must stop cleanly.
     /// </summary>
-    protected ScenarioRun CreateRun(string combination)
-        => ScenarioRun.Create(Combinations.Get(combination), Console);
-
-    /// <summary>
-    /// starts identical hosts on a combination, runs the scenario, keeps the hosts running for the observation
-    /// window, checks that nothing is left in the outbox or was dead-lettered (or what <paramref name="verify"/> says),
-    /// and stops the hosts.
-    /// </summary>
-    /// <param name="scenario">publishes the messages and waits for what it expects to happen.
-    /// Its token is cancelled when the scenario takes too long.</param>
-    /// <param name="verify">what must hold once the observation window is over, while the hosts still run.
-    /// <see cref="AssertNothingIsLeftBehindAsync"/> when not given: a scenario that expects dead letters says which.</param>
+    /// <param name="scenario">starts the hosts, publishes the messages and waits for what it expects to happen.
+    /// Its token is cancelled when the scenario takes too long. A host must be running when it returns.</param>
+    /// <param name="assertDeadLetters">what the scenario expects to find dead-lettered.
+    /// <see cref="AssertNoDeadLettersAsync"/> when not given.</param>
+    /// <param name="prepareStore">false for a scenario about hosts that start on a database nobody prepared.</param>
     /// <exception cref="TimeoutException">the scenario did not finish in time.</exception>
     protected async Task RunScenarioAsync(
         string combination,
-        int hostsCount,
-        HostSetup setup,
         Func<ScenarioRun, CancellationToken, Task> scenario,
-        Func<ScenarioRun, Task>? verify = null)
+        Func<ScenarioRun, Task>? assertDeadLetters = null,
+        bool prepareStore = true)
     {
         ArgumentNullException.ThrowIfNull(scenario);
 
-        // when anything below fails, disposing the run stops the hosts and what it has to say about it is only logged:
-        // what failed is what the test reports
-        await using var run = CreateRun(combination);
-
-        await run.StartHostsAsync(hostsCount, setup);
+        // when anything below fails, disposing the run stops the hosts and cleans up, and what that has to say
+        // is only written to the output: what failed is what the test reports
+        await using var run = ScenarioRun.Create(Combinations.Get(combination), Console, prepareStore);
 
         await RunWithTimeoutAsync(token => scenario(run, token));
 
         await Task.Delay(ObservationWindow);
-        await (verify ?? AssertNothingIsLeftBehindAsync)(run);
+        await AssertOutboxIsEmptyAsync(run);
+        await (assertDeadLetters ?? AssertNoDeadLettersAsync)(run);
 
         await run.StopHostsAsync();
     }
 
     /// <summary>
-    /// every message was relayed, and none was given up on.
+    /// the same, for a scenario whose hosts are identical and all start before it does.
     /// </summary>
-    protected static async Task AssertNothingIsLeftBehindAsync(ScenarioRun run)
-    {
-        await AssertOutboxIsEmptyAsync(run);
+    protected Task RunScenarioAsync(
+        string combination,
+        int hostsCount,
+        HostSetup setup,
+        Func<ScenarioRun, CancellationToken, Task> scenario,
+        Func<ScenarioRun, Task>? assertDeadLetters = null)
+        => RunScenarioAsync(
+            combination,
+            async (run, cancellationToken) =>
+            {
+                await run.StartHostsAsync(hostsCount, setup);
+                await scenario(run, cancellationToken);
+            },
+            assertDeadLetters);
 
+    // the relay publishes a message before it removes it from the outbox: a message that was handled
+    // can still be in there for a moment
+    private static async Task AssertOutboxIsEmptyAsync(ScenarioRun run)
+    {
+        var waited = Stopwatch.StartNew();
+
+        long left;
+        do
+        {
+            using var timeout = new CancellationTokenSource(ChecksTimeout);
+            left = await run.CountOutboxMessagesAsync(timeout.Token);
+            if (left > 0)
+                await Task.Delay(ChecksPollingInterval);
+        } while (left > 0 && waited.Elapsed < ChecksTimeout);
+
+        Assert.Equal(0, left);
+    }
+
+    /// <summary>
+    /// no message was given up on.
+    /// </summary>
+    protected static async Task AssertNoDeadLettersAsync(ScenarioRun run)
+    {
         if (!run.SupportsDeadLetters)
             return;
 
         using var timeout = new CancellationTokenSource(ChecksTimeout);
         Assert.Empty(await run.ReadDeadLettersAsync(timeout.Token));
-    }
-
-    /// <summary>
-    /// every message was relayed.
-    /// </summary>
-    protected static async Task AssertOutboxIsEmptyAsync(ScenarioRun run)
-    {
-        using var timeout = new CancellationTokenSource(ChecksTimeout);
-        Assert.Equal(0, await run.CountOutboxMessagesAsync(timeout.Token));
     }
 
     /// <summary>
@@ -116,13 +134,7 @@ public abstract class ScenarioBase
             deadLetters.OrderBy(entry => entry.Key.FullName));
     }
 
-    /// <summary>
-    /// leaves the hosts running for a message that should not be delivered, or delivered again, to show up.
-    /// </summary>
-    protected static Task ObserveAsync() => Task.Delay(ObservationWindow);
-
-    /// <exception cref="TimeoutException">the scenario did not finish in time.</exception>
-    protected static async Task RunWithTimeoutAsync(Func<CancellationToken, Task> scenario)
+    private static async Task RunWithTimeoutAsync(Func<CancellationToken, Task> scenario)
     {
         using var timeout = new CancellationTokenSource(Debugger.IsAttached ? Timeout.InfiniteTimeSpan : ScenarioTimeout);
         try

@@ -18,6 +18,8 @@ internal sealed class MongoStore : IStore
 
     private readonly string _connectionString;
     private readonly string _databaseName;
+    private readonly SemaphoreSlim _indexesGate = new(1, 1);
+    private bool _indexesCreated;
 
     public MongoStore(RunContext context)
     {
@@ -28,14 +30,39 @@ internal sealed class MongoStore : IStore
 
     public void Configure(IBusConfigurator bus)
     {
-        bus.UseMongoPersistence(new MongoConfiguration(_connectionString, _databaseName));
+        UseMongoPersistence(bus, _connectionString, _databaseName);
 
-        // KNOWN DEFECT WORKAROUND (KnownDefects.MongoRegistersNoTransactionManager): remove with the defect.
-        // It adds nothing once UseMongoPersistence registers a transaction manager of its own
-        bus.Services.TryAddSingleton<ITransactionManager, NoTransactionManager>();
+        if (!KnownDefects.AreIncluded)
+            WorkAroundMissingTransactionManager(bus.Services);
     }
 
-    public Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
+    internal static void UseMongoPersistence(IBusConfigurator bus, string connectionString, string databaseName)
+        => bus.UseMongoPersistence(new MongoConfiguration(connectionString, databaseName));
+
+    /// <summary>
+    /// the workaround for <see cref="KnownDefects.MongoRegistersNoTransactionManager"/>: without it no host
+    /// on MongoDB can relay its outbox. It adds nothing once the product registers a transaction manager of its own.
+    /// </summary>
+    private static void WorkAroundMissingTransactionManager(IServiceCollection services)
+        => services.TryAddSingleton<ITransactionManager, NoTransactionManager>();
+
+    // the first host creates the collections and their indexes, before any host starts: a context does that when it is created
+    public async Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
+    {
+        await _indexesGate.WaitAsync(cancellationToken);
+        try
+        {
+            if (_indexesCreated)
+                return;
+
+            hostServices.GetRequiredService<IDbContext>();
+            _indexesCreated = true;
+        }
+        finally
+        {
+            _indexesGate.Release();
+        }
+    }
 
     public Task<long> CountOutboxMessagesAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
         => hostServices.GetRequiredService<IDbContext>()
@@ -51,15 +78,6 @@ internal sealed class MongoStore : IStore
     private sealed class NoTransactionManager : ITransactionManager
     {
         public ValueTask<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<ITransaction>(new NoTransaction());
-    }
-
-    private sealed class NoTransaction : ITransaction
-    {
-        public ValueTask CommitAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-        public ValueTask RollbackAsync(CancellationToken cancellationToken = default) => ValueTask.CompletedTask;
-
-        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+            => ValueTask.FromResult<ITransaction>(NoOpTransaction.Instance);
     }
 }

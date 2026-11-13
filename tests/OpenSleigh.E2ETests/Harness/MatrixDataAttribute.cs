@@ -15,8 +15,8 @@ public sealed class MatrixDataAttribute : DataAttribute
 {
     public const string CombinationsVariable = "E2E_COMBINATIONS";
 
-    private static readonly int[] DefaultHostsCounts = [1, 2, 5];
-    private static readonly int[] SingleHost = [1];
+    private const int OneHost = 1;
+    private static readonly int[] DefaultHostsCounts = [OneHost, 2, 5];
 
     private const string NotRun = "not-run";
     private static readonly char[] PathSeparators = ['/', '\\'];
@@ -38,14 +38,24 @@ public sealed class MatrixDataAttribute : DataAttribute
     /// <summary>the combinations the scenario runs on. All of them when not set.</summary>
     public string[]? Only { get; set; }
 
-    /// <summary>the numbers of hosts the scenario runs with, where hosts share their infrastructure.</summary>
+    /// <summary>
+    /// the numbers of hosts the scenario runs with. Where hosts share nothing it runs with one host,
+    /// or not at all when one host is not among them.
+    /// </summary>
     public int[]? HostsCounts { get; set; }
 
     /// <summary>
-    /// set when no case of the scenario is run: E2E_COMBINATIONS asks for none of its combinations,
-    /// or all of them are excluded by a known defect. The scenario is then reported as skipped, with the reason,
-    /// instead of failing for having no rows.
+    /// true for a scenario with hosts that have to reach each other, such as two services:
+    /// it does not run where hosts share nothing.
     /// </summary>
+    public bool RequiresSharedInfrastructure { get; set; }
+
+    /// <summary>
+    /// set when no case of the scenario is run: E2E_COMBINATIONS asks for none of its combinations,
+    /// or all of those it asks for are excluded by a known defect. The scenario is then reported as skipped,
+    /// with the reason, instead of failing for having no rows.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the scenario has no case at all: its matrix is wrong.</exception>
     public override string? Skip
     {
         get
@@ -53,8 +63,8 @@ public sealed class MatrixDataAttribute : DataAttribute
             if (CasesToRun().Any())
                 return base.Skip;
 
-            var defect = AllCases().Select(KnownDefects.Find).FirstOrDefault(found => found is not null);
-            return defect is not null && RequestedCases().Any()
+            var defect = RequestedCases().Select(KnownDefects.Find).FirstOrDefault(found => found is not null);
+            return defect is not null
                 ? $"known defect '{defect.Id}': {defect.Reason}"
                 : $"{CombinationsVariable} asks for none of the combinations this scenario runs on.";
         }
@@ -72,11 +82,41 @@ public sealed class MatrixDataAttribute : DataAttribute
     }
 
     /// <summary>every case of the scenario, whatever the environment asks for and known defects included.</summary>
-    public IEnumerable<MatrixCase> AllCases()
-        => from combination in Combinations.All
-           where Only is null || Only.Contains(combination.Name)
-           from hostsCount in combination.HostsShareInfrastructure ? HostsCounts ?? DefaultHostsCounts : SingleHost
-           select new MatrixCase(_scenario, _method, combination.Name, hostsCount);
+    /// <exception cref="InvalidOperationException">a name in <see cref="Only"/> is not a combination,
+    /// or the scenario has no case: it would be skipped for ever without anybody noticing.</exception>
+    public IReadOnlyList<MatrixCase> AllCases()
+    {
+        var combinations = Only is null ? Combinations.All : Only.Select(GetCombination).ToArray();
+
+        var cases = (from combination in combinations
+                     where combination.HostsShareInfrastructure || !RequiresSharedInfrastructure
+                     from hostsCount in HostsCountsOn(combination)
+                     select new MatrixCase(_scenario, _method, combination.Name, hostsCount)).ToArray();
+
+        return cases.Length > 0
+            ? cases
+            : throw new InvalidOperationException($"the matrix of {_scenario}.{_method} has no case.");
+    }
+
+    private Combination GetCombination(string name)
+    {
+        try
+        {
+            return Combinations.Get(name);
+        }
+        catch (ArgumentException e)
+        {
+            throw new InvalidOperationException($"the matrix of {_scenario}.{_method} is wrong: {e.Message}", e);
+        }
+    }
+
+    private IEnumerable<int> HostsCountsOn(Combination combination)
+    {
+        var hostsCounts = HostsCounts ?? DefaultHostsCounts;
+        return combination.HostsShareInfrastructure
+            ? hostsCounts
+            : hostsCounts.Where(hostsCount => hostsCount == OneHost);
+    }
 
     private IEnumerable<MatrixCase> RequestedCases()
     {

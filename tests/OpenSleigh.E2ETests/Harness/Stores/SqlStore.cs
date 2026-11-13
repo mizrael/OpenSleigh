@@ -6,14 +6,10 @@ using OpenSleigh.Persistence.SQL;
 namespace OpenSleigh.E2ETests.Harness.Stores;
 
 /// <summary>
-/// a database per run, on a server shared by the suite. The database and its schema are created
-/// before the first host starts: several hosts creating them at the same time is a scenario of its own.
+/// a database per run, on a server shared by the suite.
 /// </summary>
 internal abstract class SqlStore : IStore
 {
-    private const int DropAttempts = 3;
-    private static readonly TimeSpan DropRetryDelay = TimeSpan.FromMilliseconds(500);
-
     private readonly string _connectionString;
     private readonly SemaphoreSlim _schemaGate = new(1, 1);
     private bool _schemaCreated;
@@ -29,6 +25,10 @@ internal abstract class SqlStore : IStore
 
     protected abstract void UsePersistence(IBusConfigurator bus, SqlConfiguration configuration);
 
+    protected abstract void UseProvider(DbContextOptionsBuilder options, string connectionString);
+
+    // the first host creates the database and its schema, before any host starts.
+    // The others find them there: their own check, at their first context, changes nothing
     public async Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
     {
         await _schemaGate.WaitAsync(cancellationToken);
@@ -55,32 +55,13 @@ internal abstract class SqlStore : IStore
         return await dbContext.OutboxMessages.LongCountAsync(cancellationToken);
     }
 
+    // through a context with no model: one of the library would create the database it is about to drop
     public async ValueTask DisposeAsync()
     {
-        if (!_schemaCreated)
-            return;
+        var options = new DbContextOptionsBuilder();
+        UseProvider(options, _connectionString);
 
-        // the hosts are gone by now, with their services: the database is dropped through services of its own
-        var services = new ServiceCollection();
-        services.AddLogging();
-        services.AddOpenSleigh(Configure);
-
-        await using var provider = services.BuildServiceProvider();
-        await using var scope = provider.CreateAsyncScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
-
-        for (var attempt = 1; attempt <= DropAttempts; attempt++)
-        {
-            try
-            {
-                await dbContext.Database.EnsureDeletedAsync();
-                return;
-            }
-            catch (Exception) when (attempt < DropAttempts)
-            {
-                // a connection of a host that has just stopped can still be closing
-                await Task.Delay(DropRetryDelay);
-            }
-        }
+        await using var database = new DbContext(options.Options);
+        await database.Database.EnsureDeletedAsync();
     }
 }

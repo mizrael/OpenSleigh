@@ -19,4 +19,13 @@ internal static class HostServicesExtensions
 
     public static string GetServiceName(this IServiceProvider hostServices)
         => hostServices.GetRequiredService<HostIdentity>().Service;
+
+    /// <summary>false for a host that only publishes: it subscribes to nothing.</summary>
+    public static bool Consumes(this IServiceProvider hostServices)
+        => !hostServices.GetRequiredService<ISystemInfo>().PublishOnly
+           && hostServices.GetHandledMessageTypes().Count > 0;
+
+    /// <summary>true when the saga was added to the bus of the host.</summary>
+    public static bool HasSaga(this IServiceProvider hostServices, Type sagaType)
+        => hostServices.GetRequiredService<IServiceProviderIsService>().IsService(sagaType);
 }

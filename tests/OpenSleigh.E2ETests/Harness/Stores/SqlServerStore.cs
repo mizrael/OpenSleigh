@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQLServer;
@@ -10,4 +11,7 @@ internal sealed class SqlServerStore(RunContext context) : SqlStore(context, Con
 
     protected override void UsePersistence(IBusConfigurator bus, SqlConfiguration configuration)
         => bus.UseSqlServerPersistence(configuration);
+
+    protected override void UseProvider(DbContextOptionsBuilder options, string connectionString)
+        => options.UseSqlServer(connectionString);
 }

@@ -13,7 +13,8 @@ internal sealed class InMemoryTransport : ITransport
     public Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
 
     // what is published before the subscriber reads waits in the channel
-    public Task WaitUntilSubscribedAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task WaitUntilSubscribedAsync(IReadOnlyCollection<IServiceProvider> runningHosts, CancellationToken cancellationToken)
+        => Task.CompletedTask;
 
     public bool SupportsDeadLetters => false;
 
