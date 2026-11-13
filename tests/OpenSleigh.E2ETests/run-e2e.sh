@@ -25,9 +25,11 @@ wait_for_port() {
   done
 }
 
+kafka="${ConnectionStrings__kafka:-127.0.0.1:9092}"
+
 wait_for_port 127.0.0.1 5432 || exit 1
 wait_for_port 127.0.0.1 5672 || exit 1
-wait_for_port 127.0.0.1 9092 || exit 1
+wait_for_port "${kafka%%:*}" "${kafka##*:}" || exit 1
 
 failed_runs=0
 for run in $(seq 1 "$repetitions"); do

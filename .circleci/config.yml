@@ -85,6 +85,8 @@ jobs:
       TARGET_FRAMEWORK: net10.0
       E2E_REPETITIONS: "<< pipeline.parameters.e2e_repetitions >>"
       E2E_RESULTS_DIR: /tmp/e2e-results
+      # a named service container is reached by its name, not on localhost
+      ConnectionStrings__kafka: broker:29092
 
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
