@@ -16,12 +16,12 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
     // locked, on its own: PostgreSQL does not lock the rows of a union.
     // The delayed ones are asked for in the order of the index, the longest due first. The others are not asked for
     // in any order: an order the planner cannot tell from the index makes it sort all of them at every pass.
+    // They get what the delayed ones leave of a pass, so that no row is locked without being returned.
     // The due time is sent by the application and compared with its own clock, like every other time in the outbox
     private const string ReadQuery =
         $"WITH due AS (SELECT * FROM {Table} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt} LIMIT {{2}} FOR UPDATE SKIP LOCKED), " +
-        $"immediate AS (SELECT * FROM {Table} WHERE {DeliverAt} IS NULL LIMIT {{1}} FOR UPDATE SKIP LOCKED) " +
-        "SELECT * FROM (SELECT * FROM due UNION ALL SELECT * FROM immediate) AS pending " +
-        $"ORDER BY {DeliverAt} NULLS LAST LIMIT {{1}}";
+        $"immediate AS (SELECT * FROM {Table} WHERE {DeliverAt} IS NULL LIMIT ({{1}} - (SELECT count(*) FROM due)) FOR UPDATE SKIP LOCKED) " +
+        "SELECT * FROM due UNION ALL SELECT * FROM immediate";
 
     public PostgreSQLOutboxRepository(
         SqlOutboxRepositoryOptions options, 
