@@ -94,6 +94,41 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
         Assert.Equal(2, published.Count);
     }
 
+    private const string PostgreSqlWithRabbitMq = Combinations.PostgreSql + "-" + Combinations.RabbitMq;
+    private const string PostgreSqlWithKafka = Combinations.PostgreSql + "-" + Combinations.Kafka;
+    private static readonly TimeSpan DeadLettersPollingInterval = TimeSpan.FromMilliseconds(100);
+
+    [Theory]
+    [MatrixData(Only = [PostgreSqlWithRabbitMq, PostgreSqlWithKafka], HostsCounts = [1])]
+    public async Task a_message_whose_handler_fails_is_counted_as_dead_lettered(string combination, int hostsCount)
+    {
+        var attempted = new Expectation(1);
+        Action<IMessageContext<StartFailingSaga>> onMessage = _ => attempted.Signal();
+
+        var setup = new HostSetup(bus => bus.AddSaga<FailingSaga>())
+        {
+            ConfigureServices = services => services.AddSingleton(onMessage)
+        };
+
+        await using var run = CreateRun(combination);
+        await run.StartHostsAsync(hostsCount, setup);
+
+        Assert.True(run.SupportsDeadLetters);
+
+        await RunWithTimeoutAsync(async cancellationToken =>
+        {
+            Assert.Equal(0, await run.CountDeadLettersAsync(cancellationToken));
+
+            await run.AnyHost.PublishAsync(new StartFailingSaga(), cancellationToken);
+            await attempted.Reached.WaitAsync(cancellationToken);
+
+            while (await run.CountDeadLettersAsync(cancellationToken) != 1)
+                await Task.Delay(DeadLettersPollingInterval, cancellationToken);
+        });
+
+        await run.StopHostsAsync();
+    }
+
     private static IEnumerable<MatrixCase> AllCases()
         => from type in typeof(HarnessTests).Assembly.GetTypes()
            where !type.IsAbstract

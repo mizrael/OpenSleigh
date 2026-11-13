@@ -17,20 +17,46 @@ public sealed class MatrixDataAttribute : DataAttribute
     private static readonly int[] DefaultHostsCounts = [1, 2, 5];
     private static readonly int[] SingleHost = [1];
 
+    private const string NotRequested = "not-requested";
+
     /// <summary>the combinations the scenario runs on. All of them when not set.</summary>
     public string[]? Only { get; set; }
 
     /// <summary>the numbers of hosts the scenario runs with, where hosts share their infrastructure.</summary>
     public int[]? HostsCounts { get; set; }
 
+    /// <summary>
+    /// set when E2E_COMBINATIONS asks for none of the combinations of the scenario:
+    /// the scenario is reported as skipped, instead of failing for having no rows.
+    /// </summary>
+    public override string? Skip
+    {
+        get => IsRequested()
+            ? base.Skip
+            : $"{CombinationsVariable} asks for none of the combinations this scenario runs on.";
+        set => base.Skip = value;
+    }
+
     public override IEnumerable<object[]> GetData(MethodInfo testMethod)
     {
+        // a theory needs a row to be reported at all, skipped or not
+        if (!IsRequested())
+            return [[NotRequested, 0]];
+
         var requested = RequestedCombinations();
 
         return GetCases(testMethod)
             .Where(matrixCase => requested is null || requested.Contains(matrixCase.Combination))
             .Where(matrixCase => KnownDefects.AreIncluded || KnownDefects.Find(matrixCase) is null)
             .Select(matrixCase => new object[] { matrixCase.Combination, matrixCase.HostsCount });
+    }
+
+    private bool IsRequested()
+    {
+        var requested = RequestedCombinations();
+        return requested is null
+               || Combinations.All.Any(combination => requested.Contains(combination.Name)
+                                                      && (Only is null || Only.Contains(combination.Name)));
     }
 
     /// <summary>every case of the scenario, whatever the environment asks for and known defects included.</summary>

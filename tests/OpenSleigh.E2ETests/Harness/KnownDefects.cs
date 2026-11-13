@@ -26,7 +26,18 @@ public static class KnownDefects
     /// </summary>
     public const string MongoRegistersNoTransactionManager = "mongo-registers-no-transaction-manager";
 
-    public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
+    public static readonly IReadOnlyList<KnownDefect> Exclusions =
+    [
+        new KnownDefect(
+            Id: "message-for-a-saga-not-stored-yet-is-dead-lettered",
+            Reason: "A message that starts two sagas is handled by one saga after the other, each committed on its own. " +
+                    "What the first saga publishes can reach another host before the second saga is stored: " +
+                    "that host fails with \"unable to locate state for Saga\" and the message is dead-lettered, " +
+                    "after the first saga has already handled it. Needs two hosts or more; seen in 4 of 40 runs " +
+                    "on SQL Server with RabbitMQ, and possible wherever hosts share a transport.",
+            Affects: matrixCase => matrixCase.Scenario == nameof(Scenarios.MultipleSagasSameMessagesScenario)
+                                   && matrixCase.HostsCount > 1),
+    ];
 
     public static bool AreIncluded
         => bool.TryParse(Environment.GetEnvironmentVariable(IncludeVariable), out var included) && included;
