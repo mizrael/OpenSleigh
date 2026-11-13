@@ -13,9 +13,7 @@ public abstract class ParentChildScenario : E2ETestsBase
     public ParentChildScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_parent_child_scenario(int hostsCount)
     {
         var message = new StartParentSaga();

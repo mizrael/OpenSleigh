@@ -13,9 +13,7 @@ public abstract class SimpleSagaScenario : E2ETestsBase
     public SimpleSagaScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_single_message_scenario(int hostsCount)
     {
         var message = new StartSimpleSaga();

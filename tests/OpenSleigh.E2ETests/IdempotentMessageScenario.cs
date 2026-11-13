@@ -17,9 +17,7 @@ public abstract class IdempotentMessageScenario : E2ETestsBase
     protected IdempotentMessageScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_idempotent_message_scenario(int hostsCount)
     {
 #if NET9_0_OR_GREATER

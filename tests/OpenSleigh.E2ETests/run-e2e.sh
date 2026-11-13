@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # runs the E2E suite E2E_REPETITIONS times, keeps one trx file per run and a summary of the
-# tests that failed, and exits non-zero when any run failed.
+# tests that failed, and exits non-zero when any run failed or ran no test.
 # Expects the E2E project to be built already for TARGET_FRAMEWORK.
 set -u
 
@@ -11,7 +11,16 @@ filter="${E2E_FILTER:-Category=E2E}"
 project="$(dirname "$0")/OpenSleigh.E2ETests.csproj"
 summary="$results_dir/summary.txt"
 
+case "$repetitions" in
+  ''|*[!0-9]*|0)
+    echo "E2E_REPETITIONS must be a number of runs, 1 or more: '$repetitions'" >&2
+    exit 2
+    ;;
+esac
+
 mkdir -p "$results_dir"
+# what an earlier invocation left behind would be counted as runs of this one
+rm -f "$results_dir"/run-*.trx "$summary"
 
 wait_for_port() {
   local host="$1" port="$2" attempts=60
@@ -37,7 +46,8 @@ for run in $(seq 1 "$repetitions"); do
   started=$(date +%s)
   if ! dotnet test "$project" --no-build --framework "$framework" --filter "$filter" \
       --logger "trx;LogFileName=run-$run.trx" --results-directory "$results_dir" \
-      --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none; then
+      --blame-hang --blame-hang-timeout 15m --blame-hang-dump-type none \
+      -- RunConfiguration.TreatNoTestsAsError=true; then
     failed_runs=$((failed_runs + 1))
   fi
   echo "run $run took $(( $(date +%s) - started ))s" | tee -a "$summary"

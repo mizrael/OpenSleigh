@@ -4,6 +4,7 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
+[SingleHost]
 public class InMemoryMultipleSagasSameMessagesScenario : MultipleSagasSameMessagesScenario
 {
     public InMemoryMultipleSagasSameMessagesScenario(ITestOutputHelper console) : base(console) { }

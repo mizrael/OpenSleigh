@@ -4,6 +4,7 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
+[SingleHost]
 public class InMemoryParentChildScenario : ParentChildScenario
 {
     public InMemoryParentChildScenario(ITestOutputHelper console) : base(console) { }

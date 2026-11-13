@@ -16,9 +16,7 @@ public abstract class MultipleSagasSameMessagesScenario : E2ETestsBase
     public MultipleSagasSameMessagesScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_multiple_sagas_same_messages_scenario(int hostsCount)
     {
         var message = new StartMultipleSagas();

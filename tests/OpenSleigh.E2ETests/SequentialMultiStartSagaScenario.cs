@@ -17,9 +17,7 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
     public SequentialMultiStartSagaScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_multiple_start_messages_scenario(int hostsCount)
     {
         var correlationId = Faker.Random.Guid().ToString();
