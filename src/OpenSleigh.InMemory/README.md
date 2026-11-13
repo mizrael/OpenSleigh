@@ -26,6 +26,18 @@ Host.CreateDefaultBuilder(args)
 
 Of course it can be used in conjunction with any other library as well (eg. InMemory Transport + MongoDb Persistence).
 
+### When a message cannot be processed
+
+- When the saga instance a message is for is being processed at the same time (a lock conflict), the message is processed again after a delay, 100 milliseconds by default. This repeats for as long as the conflict lasts.
+- On any other failure the message is not processed again. It is kept, with the exception, in `InMemoryDeadLetters`, a singleton that holds the last 1000 of them:
+
+```
+cfg.UseInMemoryTransport(new InMemorySagaOptions(5) { SubscriberRetryDelay = TimeSpan.FromMilliseconds(500) });
+
+// later, for instance in a test
+var deadLetters = host.Services.GetRequiredService<InMemoryDeadLetters>().Messages;
+```
+
 If you decide to use the InMemory Transport, you also have to configure each Saga :
 
 

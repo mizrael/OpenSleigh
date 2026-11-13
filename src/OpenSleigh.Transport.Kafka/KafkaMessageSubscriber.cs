@@ -17,6 +17,8 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     private readonly string[] _topicNames;
 
     private readonly IConsumer<string, byte[]> _consumer;
+    private readonly HeldMessages _heldMessages = new();
+    private bool _storesOffsets = true;
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
     private int _consumerClosed;
@@ -39,9 +41,20 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         _consumer = builder.Build();
 
         var messageTypes = sagaDescriptorsResolver.GetRegisteredMessageTypes();
-        _topicNames = messageTypes.Select(mt => queueReferenceFactory.Create(mt).TopicName).ToArray();
+        _topicNames = messageTypes.Select(messageType => queueReferenceFactory.Create(messageType))
+                                  .SelectMany(TopicsToConsume)
+                                  .Distinct()
+                                  .ToArray();
         _messageHandler = messageHandler ?? throw new ArgumentNullException(nameof(messageHandler));
         _config = config ?? KafkaSubscriberConfig.Default;
+    }
+
+    private static IEnumerable<string> TopicsToConsume(QueueReferences queueReferences)
+    {
+        yield return queueReferences.TopicName;
+
+        if (!string.IsNullOrWhiteSpace(queueReferences.RetryTopicName))
+            yield return queueReferences.RetryTopicName;
     }
 
     public ValueTask StartAsync(CancellationToken cancellationToken = default)
@@ -73,23 +86,117 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     }
 
     /// <summary>
-    /// consumes a single message 
+    /// consumes a single message, after processing the held ones whose time has come
     /// </summary>
-    /// <returns>false if consumer loop should be stopped</returns>
     private async ValueTask ConsumeMessageAsync(CancellationToken stoppingToken)
     {
         try
         {
-            var result = _consumer.Consume((int)_config.ConsumeTimeout.TotalMilliseconds);
+            var consumeTimeout = _config.ConsumeTimeout;
+            if (!_heldMessages.IsEmpty)
+            {
+                await ProcessDueMessagesAsync(stoppingToken);
+                consumeTimeout = Min(consumeTimeout, _heldMessages.TimeToNextDue(DateTimeOffset.UtcNow));
+            }
+
+            var result = _consumer.Consume((int)consumeTimeout.TotalMilliseconds);
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if (canProcess)
+            if (canProcess && !TryHold(result!))
+            {
                 await _messageHandler.HandleAsync(result!, stoppingToken);
+                StoreOffset(result!, stoppingToken);
+            }
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
         {
             // seems to be a known issue in the c# Kafka driver, occurring when consumers are started before producers.
             // The error comes back without waiting for the consume timeout, so the loop waits here instead
             await Task.Delay(_config.ConsumeTimeout, stoppingToken);
+        }
+    }
+
+    private static TimeSpan Min(TimeSpan first, TimeSpan second) => first < second ? first : second;
+
+    /// <returns>true when the message has to wait: it is kept, and processed when its time comes.</returns>
+    private bool TryHold(ConsumeResult<string, byte[]> result)
+    {
+        // a broker may still deliver what it had sent before the partition was paused: it waits its turn behind the held message
+        if (!_heldMessages.IsEmpty && _heldMessages.IsHolding(result.TopicPartition))
+        {
+            _heldMessages.Hold(result, NotBeforeOf(result));
+            return true;
+        }
+
+        if (!RetrySchedule.TryGetNotBefore(result.Message?.Headers, out var notBefore) || notBefore <= DateTimeOffset.UtcNow)
+            return false;
+
+        HoldAndPausePartition(result, notBefore);
+        return true;
+    }
+
+    private static DateTimeOffset NotBeforeOf(ConsumeResult<string, byte[]> result)
+        => RetrySchedule.TryGetNotBefore(result.Message?.Headers, out var notBefore) ? notBefore : DateTimeOffset.MinValue;
+
+    // a retry topic only receives messages that have to wait for the same delay, so the first one is the first to be due:
+    // nothing else is fetched from its partition until then, while the other partitions keep flowing
+    private void HoldAndPausePartition(ConsumeResult<string, byte[]> result, DateTimeOffset notBefore)
+    {
+        _heldMessages.Hold(result, notBefore);
+
+        try
+        {
+            _consumer.Pause([result.TopicPartition]);
+        }
+        catch (KafkaException)
+        {
+            // the partition was taken away in the meantime: whatever still arrives from it is held as well
+        }
+    }
+
+    private async ValueTask ProcessDueMessagesAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested
+               && _heldMessages.TryTakeDue(DateTimeOffset.UtcNow, out var result, out var isLastOfPartition))
+        {
+            await _messageHandler.HandleAsync(result, stoppingToken);
+            StoreOffset(result, stoppingToken);
+
+            if (isLastOfPartition)
+                ResumePartition(result.TopicPartition);
+        }
+    }
+
+    private void ResumePartition(TopicPartition partition)
+    {
+        try
+        {
+            _consumer.Resume([partition]);
+        }
+        catch (KafkaException)
+        {
+            // the partition was taken away in the meantime, and whoever has it now is not paused
+        }
+    }
+
+    // the offset of a message is stored, and later committed, only once the message was dealt with:
+    // one that was not, because the process died or stopped or because it is still held, is delivered again
+    private void StoreOffset(ConsumeResult<string, byte[]> result, CancellationToken stoppingToken)
+    {
+        if (!_storesOffsets || stoppingToken.IsCancellationRequested)
+            return;
+
+        try
+        {
+            _consumer.StoreOffset(result);
+        }
+        catch (KafkaException ex) when (ex.Error?.Code == ErrorCode.Local_InvalidArg)
+        {
+            // the consumer was built by a custom factory that left enable.auto.offset.store on, and stores offsets by itself
+            _storesOffsets = false;
+        }
+        catch (KafkaException)
+        {
+            // the partition was taken away in the meantime: its next consumer starts from the last committed offset
         }
     }
 

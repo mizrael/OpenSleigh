@@ -1,6 +1,7 @@
 using Confluent.Kafka;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Threading;
@@ -136,6 +137,115 @@ public class KafkaMessageSubscriberTests
 
         consumer.Received(1).Close();
         consumer.Received(1).Dispose();
+    }
+
+    [Fact]
+    public async Task StartAsync_should_subscribe_to_the_topic_and_to_the_retry_topic_of_every_message_type()
+    {
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>()).Returns((ConsumeResult<string, byte[]>?)null);
+
+        var builderFactory = Substitute.For<IConsumerBuilderFactory>();
+        builderFactory.Create<string, byte[]>().Returns(new StubConsumerBuilder(consumer));
+        var descriptorsResolver = Substitute.For<ISagaDescriptorsResolver>();
+        descriptorsResolver.GetRegisteredMessageTypes().Returns(new[] { typeof(DummyMessage) });
+        var queueReferenceFactory = Substitute.For<IQueueReferenceFactory>();
+        queueReferenceFactory.Create(typeof(DummyMessage)).Returns(new QueueReferences("lorem", "lorem.dead"));
+
+        var sut = new KafkaMessageSubscriber(builderFactory, descriptorsResolver, queueReferenceFactory, Substitute.For<IKafkaMessageHandler>());
+
+        await sut.StartAsync();
+        await Task.Delay(100);
+        await sut.StopAsync();
+
+        consumer.Received(1).Subscribe(Arg.Is<IEnumerable<string>>(topics => topics.SequenceEqual(new[] { "lorem", "lorem.retry" })));
+    }
+
+    [Fact]
+    public async Task StartAsync_should_hold_a_retried_message_until_it_is_due_without_keeping_the_other_partitions_waiting()
+    {
+        var retryDelay = TimeSpan.FromMilliseconds(600);
+        var notBefore = DateTimeOffset.UtcNow + retryDelay;
+        var retried = new ConsumeResult<string, byte[]>
+        {
+            Topic = "lorem.retry",
+            Partition = 0,
+            Offset = 7,
+            Message = new Message<string, byte[]> { Headers = new Headers { RetrySchedule.CreateHeader(notBefore) } }
+        };
+        var other = new ConsumeResult<string, byte[]> { Topic = "lorem", Partition = 0, Offset = 3, Message = new Message<string, byte[]>() };
+        var pending = new ConcurrentQueue<ConsumeResult<string, byte[]>>(new[] { retried, other });
+
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>())
+            .Returns(_ => pending.TryDequeue(out var result) ? result : null);
+
+        var handledAt = new ConcurrentDictionary<ConsumeResult<string, byte[]>, DateTimeOffset>();
+        var allHandled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var storedBeforeHandling = false;
+        consumer.When(c => c.StoreOffset(Arg.Any<ConsumeResult<string, byte[]>>()))
+                .Do(call => storedBeforeHandling |= !handledAt.ContainsKey(call.Arg<ConsumeResult<string, byte[]>>()));
+        var handler = Substitute.For<IKafkaMessageHandler>();
+        handler.HandleAsync(Arg.Any<ConsumeResult<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(call =>
+            {
+                handledAt[call.Arg<ConsumeResult<string, byte[]>>()] = DateTimeOffset.UtcNow;
+                if (handledAt.Count == 2)
+                    allHandled.TrySetResult();
+                return ValueTask.FromResult(true);
+            });
+
+        var sut = CreateSut(consumer, handler, new KafkaSubscriberConfig(TimeSpan.Zero, TimeSpan.FromMilliseconds(20)));
+
+        await sut.StartAsync();
+        await allHandled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await sut.StopAsync();
+
+        Assert.True(handledAt[retried] >= notBefore, $"handled {notBefore - handledAt[retried]} early");
+        Assert.True(handledAt[other] < notBefore, "the other partition waited for the retried message");
+        Assert.False(storedBeforeHandling);
+
+        var retryPartition = new TopicPartition("lorem.retry", 0);
+        Received.InOrder(() =>
+        {
+            consumer.Pause(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == retryPartition));
+            consumer.StoreOffset(other);
+            consumer.StoreOffset(retried);
+            consumer.Resume(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == retryPartition));
+        });
+    }
+
+    [Fact]
+    public async Task StartAsync_should_keep_consuming_when_the_consumer_stores_offsets_by_itself()
+    {
+        const int messagesCount = 3;
+        var pending = new ConcurrentQueue<ConsumeResult<string, byte[]>>(
+            Enumerable.Range(0, messagesCount).Select(_ => new ConsumeResult<string, byte[]>()));
+
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>())
+            .Returns(_ => pending.TryDequeue(out var result) ? result : null);
+        consumer.When(c => c.StoreOffset(Arg.Any<ConsumeResult<string, byte[]>>()))
+                .Do(_ => throw new KafkaException(new Error(ErrorCode.Local_InvalidArg, "enable.auto.offset.store is on")));
+
+        var handled = 0;
+        var allHandled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var handler = Substitute.For<IKafkaMessageHandler>();
+        handler.HandleAsync(Arg.Any<ConsumeResult<string, byte[]>>(), Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                if (Interlocked.Increment(ref handled) == messagesCount)
+                    allHandled.TrySetResult();
+                return ValueTask.FromResult(true);
+            });
+
+        var sut = CreateSut(consumer, handler);
+
+        await sut.StartAsync();
+        await allHandled.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await sut.StopAsync();
+
+        consumer.Received(1).StoreOffset(Arg.Any<ConsumeResult<string, byte[]>>());
     }
 
     private static KafkaMessageSubscriber CreateSut(

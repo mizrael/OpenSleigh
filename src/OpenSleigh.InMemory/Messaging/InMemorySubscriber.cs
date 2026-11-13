@@ -13,6 +13,7 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
     private readonly ILogger<InMemorySubscriber> _logger;
     private readonly IPublisher _publisher;
     private readonly InMemorySubscriberOptions _options;
+    private readonly InMemoryDeadLetters? _deadLetters;
     
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
@@ -23,17 +24,20 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
     /// with its own <see cref="IMessageProcessor"/>: messages are processed several at a time,
     /// and what processes one of them is not built to be shared.
     /// </summary>
+    /// <param name="deadLetters">where the messages that could not be processed end up. When missing, they are only logged.</param>
     public InMemorySubscriber(IServiceScopeFactory scopeFactory,
         ChannelReader<MessageEnvelope> reader,
         ILogger<InMemorySubscriber> logger,
         IPublisher publisher,
-        InMemorySubscriberOptions? options = null)
+        InMemorySubscriberOptions? options = null,
+        InMemoryDeadLetters? deadLetters = null)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options ?? InMemorySubscriberOptions.Defaults;
+        _deadLetters = deadLetters;
     }
 
     public ValueTask StartAsync(CancellationToken cancellationToken = default)
@@ -59,17 +63,53 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
                 }
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
-                    _logger.LogError(e,
-                        "an exception has occurred while processing message '{MessageId}': {Error}",
-                        outboxMessage.MessageId,
-                        e.Message);
-                    await Task.Delay(100, cancellationToken).ConfigureAwait(false);
-                    await _publisher.PublishAsync(outboxMessage, cancellationToken)
-                                    .ConfigureAwait(false);
+                    HandleFailure(outboxMessage, e, cancellationToken);
                 }
             }).ToArray();
 
             await Task.WhenAll(tasks);
+        }
+    }
+
+    private void HandleFailure(MessageEnvelope message, Exception error, CancellationToken cancellationToken)
+    {
+        if (error.IsLockConflict())
+        {
+            _logger.LogWarning(error,
+                "message '{MessageId}' could not be processed because of a lock conflict, it is going to be processed again: {Error}",
+                message.MessageId,
+                error.Message);
+
+            // not awaited: the messages that follow are not kept waiting for this one
+            _ = PublishAgainLaterAsync(message, cancellationToken);
+            return;
+        }
+
+        _logger.LogError(error,
+            "an exception has occurred while processing message '{MessageId}', it is not going to be processed again: {Error}",
+            message.MessageId,
+            error.Message);
+        _deadLetters?.Add(message, error);
+    }
+
+    private async Task PublishAgainLaterAsync(MessageEnvelope message, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(_options.RetryDelay, cancellationToken).ConfigureAwait(false);
+            await _publisher.PublishAsync(message, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // the subscriber was stopped
+        }
+        catch (Exception e)
+        {
+            _logger.LogError(e,
+                "an exception has occurred while publishing message '{MessageId}' again: {Error}",
+                message.MessageId,
+                e.Message);
+            _deadLetters?.Add(message, e);
         }
     }
 

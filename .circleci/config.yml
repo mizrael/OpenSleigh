@@ -25,6 +25,8 @@ jobs:
     resource_class: large
     environment:
       TARGET_FRAMEWORK: net10.0
+      # a named service container is reached by its name, not on localhost
+      ConnectionStrings__kafka: broker:29092
 
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
@@ -133,6 +135,8 @@ jobs:
     resource_class: large
     environment:
       TARGET_FRAMEWORK: net10.0
+      # a named service container is reached by its name, not on localhost
+      ConnectionStrings__kafka: broker:29092
     docker:
       - image: mcr.microsoft.com/dotnet/sdk:10.0.103
       - image: 'mongo:latest'

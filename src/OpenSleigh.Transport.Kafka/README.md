@@ -30,6 +30,19 @@ The producer sends every message as soon as it is published. If something in you
 var kafkaConfig = new KafkaConfiguration(connectionString) { ProducerLinger = TimeSpan.FromMilliseconds(5) };
 ```
 
+### When a message cannot be processed
+
+- When the saga instance a message is for is being processed by another worker (a lock conflict), the message is published to the retry topic of its type and processed again after `RetryDelay`, which defaults to 30 seconds. This repeats for as long as the conflict lasts. The messages that follow are not kept waiting, so a retried message is processed after messages that were published later.
+- On any other failure the message is published to the dead letter topic, with the reason in the `error` header, and is not processed again.
+
+```
+var kafkaConfig = new KafkaConfiguration(connectionString) { RetryDelay = TimeSpan.FromSeconds(5) };
+```
+
+The retry topic is named after the topic, followed by `.retry`; set `RetryTopicName` on `QueueReferences` to change it. The consumer asks the broker to create the topics it subscribes to, which works when the broker allows it (`auto.create.topics.enable`). If yours does not, create the retry topics along with the others.
+
+A message is marked as consumed only after it has been processed, or published to its retry or dead letter topic: one that was being processed when the application stopped is delivered again. A custom `IConsumerBuilderFactory` has to set `enable.auto.offset.store` to `false` to keep this.
+
 It is also possible to use a custom naming policy to customize the name of the Topic and the Dead Letter Queue:
 
 ```

@@ -74,6 +74,103 @@ public class InMemorySubscriberTests
     }
 
     [Fact]
+    public async Task Should_publish_a_message_again_after_the_retry_delay_on_a_lock_conflict()
+    {
+        var channel = Channel.CreateUnbounded<MessageEnvelope>();
+        var retryDelay = TimeSpan.FromMilliseconds(300);
+        var deadLetters = new InMemoryDeadLetters();
+        var failedAt = DateTimeOffset.MaxValue;
+        var messageProcessor = Substitute.For<IMessageProcessor>();
+        messageProcessor.ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
+                        .Returns(_ =>
+                        {
+                            failedAt = DateTimeOffset.UtcNow;
+                            return ValueTask.FromException(new LockException("locked by someone else"));
+                        });
+        var publishedAt = new TaskCompletionSource<DateTimeOffset>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var publisher = Substitute.For<IPublisher>();
+        var envelope = DummyMessage.CreateEnvelope();
+        publisher.PublishAsync(envelope, Arg.Any<CancellationToken>())
+                 .Returns(_ =>
+                 {
+                     publishedAt.TrySetResult(DateTimeOffset.UtcNow);
+                     return ValueTask.CompletedTask;
+                 });
+        using var sut = new InMemorySubscriber(
+            ScopeFactoryFor(() => messageProcessor),
+            channel.Reader,
+            Substitute.For<ILogger<InMemorySubscriber>>(),
+            publisher,
+            InMemorySubscriberOptions.Defaults with { RetryDelay = retryDelay },
+            deadLetters);
+
+        await channel.Writer.WriteAsync(envelope);
+        await sut.StartAsync(CancellationToken.None);
+        var republishedAt = await publishedAt.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await sut.StopAsync(CancellationToken.None);
+
+        // timers may fire a few milliseconds early
+        Assert.True(republishedAt - failedAt >= retryDelay - TimeSpan.FromMilliseconds(50), $"published again after {republishedAt - failedAt}");
+        Assert.Empty(deadLetters.Messages);
+    }
+
+    [Fact]
+    public async Task Should_dead_letter_a_message_without_publishing_it_again_on_any_other_failure()
+    {
+        var channel = Channel.CreateUnbounded<MessageEnvelope>();
+        var deadLetters = new InMemoryDeadLetters();
+        var failure = new InvalidOperationException("whoops");
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var messageProcessor = Substitute.For<IMessageProcessor>();
+        messageProcessor.ProcessAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
+                        .Returns(_ =>
+                        {
+                            processed.TrySetResult();
+                            return ValueTask.FromException(failure);
+                        });
+        var publisher = Substitute.For<IPublisher>();
+        using var sut = new InMemorySubscriber(
+            ScopeFactoryFor(() => messageProcessor),
+            channel.Reader,
+            Substitute.For<ILogger<InMemorySubscriber>>(),
+            publisher,
+            InMemorySubscriberOptions.Defaults with { RetryDelay = TimeSpan.Zero },
+            deadLetters);
+
+        var envelope = DummyMessage.CreateEnvelope();
+        await channel.Writer.WriteAsync(envelope);
+        await sut.StartAsync(CancellationToken.None);
+        await processed.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await Task.Delay(200);
+        await sut.StopAsync(CancellationToken.None);
+
+        var deadLetter = Assert.Single(deadLetters.Messages);
+        Assert.Same(envelope, deadLetter.Message);
+        Assert.Same(failure, deadLetter.Error);
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default);
+        await messageProcessor.Received(1).ProcessAsync(envelope, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public void Dead_letters_should_keep_the_newest_messages_when_full()
+    {
+        var sut = new InMemoryDeadLetters();
+        var failure = new InvalidOperationException("whoops");
+        var first = DummyMessage.CreateEnvelope();
+        var last = DummyMessage.CreateEnvelope();
+
+        sut.Add(first, failure);
+        for (var i = 0; i < InMemoryDeadLetters.Capacity - 1; i++)
+            sut.Add(DummyMessage.CreateEnvelope(), failure);
+        sut.Add(last, failure);
+
+        var messages = sut.Messages;
+        Assert.Equal(InMemoryDeadLetters.Capacity, messages.Count);
+        Assert.DoesNotContain(messages, deadLetter => ReferenceEquals(deadLetter.Message, first));
+        Assert.Same(last, messages.Last().Message);
+    }
+
+    [Fact]
     public void Ctor_should_throw_when_scopeFactory_is_null()
     {
         var channel = Channel.CreateUnbounded<MessageEnvelope>();

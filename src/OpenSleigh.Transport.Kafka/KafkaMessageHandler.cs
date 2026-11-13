@@ -14,6 +14,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
     private readonly ILogger<KafkaMessageHandler> _logger;
     private readonly ISystemInfo _systemInfo;
     private readonly IQueueReferenceFactory _queueReferenceFactory;
+    private readonly KafkaConfiguration _configuration;
 
     /// <summary>
     /// creates a handler that processes every message in its own dependency injection scope,
@@ -24,8 +25,10 @@ public class KafkaMessageHandler : IKafkaMessageHandler
                                 IKafkaPublisherExecutor publisher,
                                 ILogger<KafkaMessageHandler> logger,
                                 ISystemInfo systemInfo,
-                                IQueueReferenceFactory queueReferenceFactory)
+                                IQueueReferenceFactory queueReferenceFactory,
+                                KafkaConfiguration configuration)
     {
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _messageParser = messageParser ?? throw new ArgumentNullException(nameof(messageParser));
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
@@ -86,6 +89,7 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         {
             await ProcessInOwnScopeAsync(message, cancellationToken);
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (TaskCanceledException) { }
         catch (Exception ex)
         {
@@ -99,7 +103,37 @@ public class KafkaMessageHandler : IKafkaMessageHandler
         _logger.LogWarning(ex, "an exception has occurred while consuming message '{MessageId}': {Exception}",
                            message.MessageId, ex.Message);
 
-        return PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
+        return ex.IsLockConflict() && !string.IsNullOrWhiteSpace(queueReferences.RetryTopicName)
+            ? PublishToRetryTopicAsync(message, queueReferences, ex, cancellationToken)
+            : PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
+    }
+
+    private async ValueTask PublishToRetryTopicAsync(MessageEnvelope message, QueueReferences queueReferences, Exception ex,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            _logger.LogInformation("pushing message '{MessageId}' to retry topic '{RetryTopic}' ...",
+                message.MessageId, queueReferences.RetryTopicName);
+
+            await _publisher.PublishAsync(message, queueReferences.RetryTopicName,
+                additionalHeaders:
+                [
+                    RetrySchedule.CreateHeader(DateTimeOffset.UtcNow + _configuration.RetryDelay)
+                ],
+                cancellationToken: cancellationToken);
+        }
+        catch (Exception retryEx)
+        {
+            _logger.LogWarning(retryEx,
+                "an exception has occurred while publishing message '{MessageId}' to retry topic '{RetryTopic}': {Exception}",
+                message.MessageId,
+                queueReferences.RetryTopicName,
+                retryEx.Message);
+
+            // the message cannot wait for its retry: it is kept where it can be found, instead of being lost
+            await PublishToDLQAsync(message, queueReferences, ex, cancellationToken);
+        }
     }
 
     private async ValueTask PublishToDLQAsync(MessageEnvelope message, QueueReferences queueReferences, Exception ex,

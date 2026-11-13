@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory.Messaging;
 using OpenSleigh.InMemory.Outbox;
@@ -32,8 +33,12 @@ public static class InMemoryBusConfiguratorExtensions
     {
         options ??= InMemorySagaOptions.Defaults;
 
+        // subscriber options registered by the application are left alone
+        busConfigurator.Services.TryAddSingleton(InMemorySubscriberOptions.Defaults with { RetryDelay = options.SubscriberRetryDelay });
+
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)
+                                .AddSingleton<InMemoryDeadLetters>()
                                 .AddSingleton<ITransactionManager, InMemoryTransactionManager>()
                                 .AddSingleton<Channel<MessageEnvelope>>(ctx => Channel.CreateBounded<MessageEnvelope>(options.SubscriberMaxMessagesBatchSize))
                                 .AddSingleton<ChannelReader<MessageEnvelope>>(ctx =>

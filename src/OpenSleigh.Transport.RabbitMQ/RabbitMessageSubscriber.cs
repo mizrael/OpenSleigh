@@ -117,21 +117,9 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
 
             await WithChannelAsync(() => channel.BasicAckAsync(eventArgs.DeliveryTag, multiple: false));
         }
-        catch (LockException lockEx)
-        {
-            await HandleConsumerException(lockEx, eventArgs, channel, queueReference, message, true);
-        }
-        catch (OptimisticLockException lockEx)
-        {
-            await HandleConsumerException(lockEx, eventArgs, channel, queueReference, message, true);
-        }
-        catch (AggregateException aggEx) when (aggEx.InnerExceptions.Any(ex => ex is LockException or OptimisticLockException))
-        {
-            await HandleConsumerException(aggEx, eventArgs, channel, queueReference, message, true);
-        }
         catch (Exception ex)
         {
-            await HandleConsumerException(ex, eventArgs, channel, queueReference, message, false);
+            await HandleConsumerException(ex, eventArgs, channel, queueReference, message, requeue: ex.IsLockConflict());
         }
     }
 
