@@ -26,22 +26,24 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     /// </summary>
     public Action<IServiceProvider> Prepare { get; init; } = _ => { };
 
-    public static PersistenceTarget SqlServer(ScenarioContext context)
+    /// <param name="outboxBatchSize">rows the relay reads at once; the provider's default when omitted.</param>
+    public static PersistenceTarget SqlServer(ScenarioContext context, int? outboxBatchSize = null)
     {
         var connectionString = string.Format(context.Settings.SqlServer, DatabaseName(context));
         return new PersistenceTarget(
             "sqlserver",
-            cfg => cfg.UseSqlServerPersistence(new SqlConfiguration(connectionString)),
+            cfg => cfg.UseSqlServerPersistence(SqlConfigurationFor(connectionString, outboxBatchSize)),
             DropSqlDatabaseAsync)
         { Prepare = CreateSqlSchema };
     }
 
-    public static PersistenceTarget Postgres(ScenarioContext context)
+    /// <param name="outboxBatchSize">rows the relay reads at once; the provider's default when omitted.</param>
+    public static PersistenceTarget Postgres(ScenarioContext context, int? outboxBatchSize = null)
     {
         var connectionString = string.Format(context.Settings.Postgres, DatabaseName(context));
         return new PersistenceTarget(
             "postgres",
-            cfg => cfg.UsePostgreSqlPersistence(new SqlConfiguration(connectionString)),
+            cfg => cfg.UsePostgreSqlPersistence(SqlConfigurationFor(connectionString, outboxBatchSize)),
             DropSqlDatabaseAsync)
         { Prepare = CreateSqlSchema };
     }
@@ -61,25 +63,47 @@ internal sealed record PersistenceTarget(string Name, Action<IBusConfigurator> C
     /// <summary>
     /// The SQL saga state repository on a local SQLite file: the library's own EF Core code, without a server.
     /// </summary>
-    public static PersistenceTarget SqliteSagaState(ScenarioContext context)
+    /// <param name="pooled">keep connections open between operations, so that what is measured is the client side.</param>
+    public static PersistenceTarget SqliteSagaState(ScenarioContext context, bool pooled = false)
     {
         var databasePath = Path.Combine(Path.GetTempPath(), $"{DatabaseName(context)}.db");
         return new PersistenceTarget(
             "sqlite",
-            cfg => cfg.Services
-                .AddSingleton(SqlSagaStateRepositoryOptions.Default)
-                .AddDbContext<SagaDbContext>(
-                    builder => builder.UseSqlite($"Data Source={databasePath};Pooling=False"),
-                    contextLifetime: ServiceLifetime.Transient)
-                .AddTransient<ISagaStateRepository, SqlSagaStateRepository>(),
+            cfg =>
+            {
+                cfg.Services
+                    .AddSingleton(SqlSagaStateRepositoryOptions.Default)
+                    .AddSingleton<SagaDbSchemaInitializer>()
+                    .AddTransient<ISagaStateRepository, SqlSagaStateRepository>();
+                AddSqliteDbContext(cfg.Services, $"Data Source={databasePath};Pooling={pooled}");
+            },
             _ =>
             {
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
                 File.Delete(databasePath);
                 return Task.CompletedTask;
             });
     }
 
     private static string DatabaseName(ScenarioContext context) => $"osb_{context.RunId}";
+
+    // the context is registered the way the SQL providers of the checkout being measured register theirs
+    private static void AddSqliteDbContext(IServiceCollection services, string connectionString)
+    {
+#if SAGA_DBCONTEXT_POOL
+        services.AddPooledSagaDbContext(builder => builder.UseSqlite(connectionString));
+#else
+        services.AddDbContext<SagaDbContext>(builder => builder.UseSqlite(connectionString), contextLifetime: ServiceLifetime.Transient);
+#endif
+    }
+
+    private static SqlConfiguration SqlConfigurationFor(string connectionString, int? outboxBatchSize)
+        => outboxBatchSize is null
+            ? new SqlConfiguration(connectionString)
+            : new SqlConfiguration(
+                connectionString,
+                SqlSagaStateRepositoryOptions.Default,
+                SqlOutboxRepositoryOptions.Default with { MaxMessagesToPull = outboxBatchSize.Value });
 
     private static void CreateSqlSchema(IServiceProvider services)
     {

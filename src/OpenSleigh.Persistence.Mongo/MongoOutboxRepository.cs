@@ -63,13 +63,10 @@ public class MongoOutboxRepository : IOutboxRepository
     {
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
-        var entity = await _dbContext.OutboxMessages.FindOneAsync(filter, cancellationToken)
+        var result = await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
                                                     .ConfigureAwait(false);
-        if (entity is null)
+        if (result.IsAcknowledged && result.DeletedCount == 0)
             throw new ArgumentException($"message '{message.MessageId}' not found");
-
-        await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
-                                       .ConfigureAwait(false);
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)

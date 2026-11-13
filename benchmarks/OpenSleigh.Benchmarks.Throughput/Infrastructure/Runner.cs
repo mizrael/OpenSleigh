@@ -81,6 +81,22 @@ internal static class Runner
         return double.IsNaN(spread) ? "n/a" : spread.ToString("0%", System.Globalization.CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// One table per profiled run. Stage times are wall-clock time inside the call and overlap between
+    /// the publishing callers, the relay and the consumer, so they do not add up to the elapsed time.
+    /// </summary>
+    public static IEnumerable<string> ProfileToMarkdown(string variant, string name, EndToEndProfile profile)
+    {
+        var culture = System.Globalization.CultureInfo.InvariantCulture;
+        yield return $"Variant `{variant}`, {name}: {profile.Sagas} sagas in {profile.ElapsedMilliseconds.ToString("N0", culture)} ms";
+        yield return string.Empty;
+        yield return "| Call | Calls | Total ms | Mean ms | ms per saga |";
+        yield return "|---|---:|---:|---:|---:|";
+
+        foreach (var (stage, calls, total) in profile.Stages)
+            yield return $"| {stage} | {calls} | {total.ToString("N0", culture)} | {(total / Math.Max(calls, 1)).ToString("N3", culture)} | {(total / Math.Max(profile.Sagas, 1)).ToString("N3", culture)} |";
+    }
+
     private static string DescribeMachine()
         => $"{RuntimeInformation.OSDescription} {RuntimeInformation.ProcessArchitecture}, {Environment.ProcessorCount} logical cores, {RuntimeInformation.FrameworkDescription}";
 }

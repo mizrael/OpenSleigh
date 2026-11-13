@@ -67,6 +67,30 @@ public class SagaDbContextRegistrationTests
         Assert.NotNull(context);
     }
 
+    [Fact]
+    public void AddPooledSagaDbContext_should_give_every_consumer_its_own_context_and_reuse_it_once_disposed()
+    {
+        var services = CreateServices(withSchemaInitializer: true)
+            .AddPooledSagaDbContext(UseInMemoryDatabase);
+        using var provider = services.BuildServiceProvider();
+
+        SagaDbContext first;
+        using (var scope = provider.CreateScope())
+        {
+            first = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
+            var second = scope.ServiceProvider.GetRequiredService<SagaDbContext>();
+            Assert.NotSame(first, second);
+        }
+
+        using var laterScope = provider.CreateScope();
+        var reused = new[]
+        {
+            laterScope.ServiceProvider.GetRequiredService<SagaDbContext>(),
+            laterScope.ServiceProvider.GetRequiredService<SagaDbContext>()
+        };
+        Assert.Contains(first, reused);
+    }
+
     private static IServiceCollection CreateServices(bool withSchemaInitializer)
     {
         var services = new ServiceCollection();

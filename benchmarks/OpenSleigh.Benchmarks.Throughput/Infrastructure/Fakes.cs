@@ -30,6 +30,79 @@ internal sealed class CountingPublisher : IPublisher
 }
 
 /// <summary>
+/// Publishes for real, and records which messages were relayed and when.
+/// </summary>
+internal sealed class TrackingPublisher : IPublisher
+{
+    private readonly IPublisher _inner;
+    private readonly WorkTracker _tracker;
+
+    public TrackingPublisher(IPublisher inner, WorkTracker tracker)
+    {
+        _inner = inner;
+        _tracker = tracker;
+    }
+
+    public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
+    {
+        await _inner.PublishAsync(envelope, cancellationToken).ConfigureAwait(false);
+        _tracker.Complete(envelope.MessageId);
+    }
+}
+
+/// <summary>
+/// When the relay last committed a pass: a message is out of the outbox then, not when it is published.
+/// </summary>
+internal sealed class CommitClock
+{
+    private long _last;
+
+    public long Last => Interlocked.Read(ref _last);
+
+    public void Tick() => Interlocked.Exchange(ref _last, System.Diagnostics.Stopwatch.GetTimestamp());
+
+    public void Reset() => Interlocked.Exchange(ref _last, 0);
+}
+
+internal sealed class CommitTrackingTransactionManager : OpenSleigh.Persistence.ITransactionManager
+{
+    private readonly OpenSleigh.Persistence.ITransactionManager _inner;
+    private readonly CommitClock _clock;
+
+    public CommitTrackingTransactionManager(OpenSleigh.Persistence.ITransactionManager inner, CommitClock clock)
+    {
+        _inner = inner;
+        _clock = clock;
+    }
+
+    public async ValueTask<OpenSleigh.Persistence.ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
+        => new Transaction(await _inner.StartTransactionAsync(cancellationToken).ConfigureAwait(false), _clock);
+
+    private sealed class Transaction : OpenSleigh.Persistence.ITransaction
+    {
+        private readonly OpenSleigh.Persistence.ITransaction _inner;
+        private readonly CommitClock _clock;
+
+        public Transaction(OpenSleigh.Persistence.ITransaction inner, CommitClock clock)
+        {
+            _inner = inner;
+            _clock = clock;
+        }
+
+        public async ValueTask CommitAsync(CancellationToken cancellationToken = default)
+        {
+            await _inner.CommitAsync(cancellationToken).ConfigureAwait(false);
+            _clock.Tick();
+        }
+
+        public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
+            => _inner.RollbackAsync(cancellationToken);
+
+        public ValueTask DisposeAsync() => _inner.DisposeAsync();
+    }
+}
+
+/// <summary>
 /// In-process outbox that hands out pending messages in fixed-size batches, in insertion order,
 /// the way a SQL outbox with a row limit does.
 /// </summary>

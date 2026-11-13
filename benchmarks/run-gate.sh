@@ -66,6 +66,14 @@ for round in $(seq 1 "$ROUNDS"); do
 done
 echo "== measured for $((SECONDS - started))s"
 
+# where the time of an end-to-end saga goes on each side, call by call: printed and stored, never judged
+if [ "$SUITE" = "full" ] && [ -z "$SCENARIOS" ]; then
+  for variant in base head; do
+    echo "== profile: $variant"
+    dotnet "$OUT_DIR/bin/$variant/$ASSEMBLY" profile --variant "$variant" --out "$RESULTS_DIR/profile-$variant.md" || true
+  done
+fi
+
 compare_args=(--results "$RESULTS_DIR" --config "$REPO_ROOT/benchmarks/gate.json" --markdown "$OUT_DIR/summary.md")
 if [ "${BENCH_REPORT_ONLY:-false}" = "true" ]; then compare_args+=(--no-fail); fi
 

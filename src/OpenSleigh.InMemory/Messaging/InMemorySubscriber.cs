@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
 using System.Threading.Channels;
@@ -7,7 +8,7 @@ namespace OpenSleigh.InMemory.Messaging;
 
 public class InMemorySubscriber : IMessageSubscriber, IDisposable
 {
-    private readonly IMessageProcessor _messageProcessor;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ChannelReader<MessageEnvelope> _reader;
     private readonly ILogger<InMemorySubscriber> _logger;
     private readonly IPublisher _publisher;
@@ -17,13 +18,18 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
     private Task? _consumerTask;
     private bool disposedValue;
 
-    public InMemorySubscriber(IMessageProcessor messageProcessor,
+    /// <summary>
+    /// creates a subscriber that processes every message in its own dependency injection scope,
+    /// with its own <see cref="IMessageProcessor"/>: messages are processed several at a time,
+    /// and what processes one of them is not built to be shared.
+    /// </summary>
+    public InMemorySubscriber(IServiceScopeFactory scopeFactory,
         ChannelReader<MessageEnvelope> reader,
         ILogger<InMemorySubscriber> logger,
         IPublisher publisher,
         InMemorySubscriberOptions? options = null)
     {
-        _messageProcessor = messageProcessor ?? throw new ArgumentNullException(nameof(messageProcessor));
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _reader = reader ?? throw new ArgumentNullException(nameof(reader));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
@@ -49,8 +55,7 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
             {
                 try
                 {
-                    await _messageProcessor.ProcessAsync(outboxMessage, cancellationToken)
-                                           .ConfigureAwait(false);
+                    await ProcessInOwnScopeAsync(outboxMessage, cancellationToken).ConfigureAwait(false);
                 }
                 catch (Exception e) when (e is not OperationCanceledException)
                 {
@@ -66,6 +71,13 @@ public class InMemorySubscriber : IMessageSubscriber, IDisposable
 
             await Task.WhenAll(tasks);
         }
+    }
+
+    private async ValueTask ProcessInOwnScopeAsync(MessageEnvelope message, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var messageProcessor = scope.ServiceProvider.GetRequiredService<IMessageProcessor>();
+        await messageProcessor.ProcessAsync(message, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)

@@ -1,5 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using OpenSleigh.Persistence;
 using OpenSleigh.Benchmarks.Throughput.Infrastructure;
 using OpenSleigh.Benchmarks.Throughput.Workload;
 using OpenSleigh.DependencyInjection;
@@ -15,6 +17,8 @@ namespace OpenSleigh.Benchmarks.Throughput.Scenarios;
 internal static class PipelineScenarios
 {
     private static readonly TimeSpan WarmUpTimeout = TimeSpan.FromSeconds(90);
+    private static readonly TimeSpan RelaySettleTime = TimeSpan.FromSeconds(2);
+    private const int RelayWarmUpMessages = 30;
     private const int PublishParallelism = 8;
 
     /// <summary>
@@ -30,7 +34,8 @@ internal static class PipelineScenarios
 
         try
         {
-            await PublishStartAsync(host.Services);
+            // every caller opens its connection and compiles what it runs before the measurement starts
+            await BenchHost.RunConcurrentlyAsync(parallelism * 4, parallelism, _ => PublishStartAsync(host.Services));
 
             var stopwatch = Stopwatch.StartNew();
             await BenchHost.RunConcurrentlyAsync(messages, parallelism, _ => PublishStartAsync(host.Services));
@@ -45,34 +50,194 @@ internal static class PipelineScenarios
     }
 
     /// <summary>
-    /// Pre-filled outbox drained by the real OutboxBackgroundService into a publisher that does nothing.
+    /// Pre-filled outbox drained by the real OutboxBackgroundService into a publisher that does nothing,
+    /// or into the publisher of <paramref name="transport"/> when one is given. Nothing consumes what it publishes.
     /// </summary>
-    public static async Task<double> OutboxRelayAsync(
+    public static Task<double> OutboxRelayAsync(
         ScenarioContext context,
         PersistenceTarget persistence,
         int messages,
-        TimeSpan cap)
+        TimeSpan cap,
+        TransportTarget? transport = null)
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+            instrument: null,
+            completed: (_, relayed, elapsed) => elapsed > TimeSpan.Zero ? relayed / elapsed.TotalSeconds : 0);
+
+    /// <summary>
+    /// The same run as <see cref="OutboxRelayAsync"/>, reporting how long the relay spent in each call.
+    /// </summary>
+    public static Task<EndToEndProfile> ProfileOutboxRelayAsync(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        int messages,
+        TimeSpan cap,
+        TransportTarget? transport = null)
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+            instrument: StageTimings.Instrument,
+            completed: (services, relayed, elapsed) => new EndToEndProfile(
+                relayed,
+                elapsed.TotalMilliseconds,
+                services.GetRequiredService<StageTimings>().Snapshot()));
+
+    private static async Task<T> RunOutboxRelayAsync<T>(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        int messages,
+        TimeSpan cap,
+        TransportTarget? transport,
+        Action<IServiceCollection>? instrument,
+        Func<IServiceProvider, int, TimeSpan, T> completed)
     {
+        if (transport is not null)
+            await transport.PrepareAsync();
+
+        var commits = new CommitClock();
+
         var host = BenchHost.Build(context, cfg =>
         {
             persistence.Configure(cfg);
+            transport?.Configure(cfg);
             cfg.AddSaga<BenchSaga, BenchState>();
-        }, services => services.AddSingleton<IPublisher, CountingPublisher>());
+            cfg.SetPublishOnly();
+        }, services =>
+        {
+            if (transport is null)
+                services.AddSingleton<IPublisher, CountingPublisher>();
+            else
+                services.TryDecorate<IPublisher>((provider, inner)
+                    => new TrackingPublisher(inner, provider.GetRequiredService<WorkTracker>()));
+
+            services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+            services.TryDecorate<ITransactionManager>((_, inner) => new CommitTrackingTransactionManager(inner, commits));
+            instrument?.Invoke(services);
+        });
 
         try
         {
-            await SeedOutboxAsync(host.Services, messages);
-
             var tracker = host.Services.GetRequiredService<WorkTracker>();
+
+            // the first publish declares exchanges and queues
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+            await host.Services.GetRequiredService<IPublisher>().PublishAsync(NewStart(systemInfo));
+            tracker.Reset();
+
+            // the first passes compile queries and code that every later pass reuses: they are not what is measured.
+            // They run here, before the relay is started, so that it cannot take measured messages early
+            await SeedOutboxAsync(host.Services, RelayWarmUpMessages);
+            await RelayUntilAsync(host.Services, () => tracker.Count >= RelayWarmUpMessages);
+
+            await SeedOutboxAsync(host.Services, messages);
+            tracker.Reset();
+            commits.Reset();
+            host.Services.GetService<StageTimings>()?.Reset();
+
             var start = Stopwatch.GetTimestamp();
             await host.StartAsync();
             await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
 
-            return tracker.RateSince(start);
+            // a message is relayed once its pass has removed it from the outbox and committed, not when it is published
+            await BenchHost.WaitUntilAsync(() => commits.Last >= tracker.LastCompletion, RelaySettleTime);
+
+            return completed(host.Services, tracker.Count, Stopwatch.GetElapsedTime(start, Math.Max(commits.Last, tracker.LastCompletion)));
         }
         finally
         {
             await BenchHost.StopAndDisposeAsync(host, persistence.DropAsync);
+        }
+    }
+
+    /// <summary>
+    /// Messages that are all in the broker before the subscriber starts, consumed into a one-message saga
+    /// on the in-memory persistence: the consumer never waits for a publisher.
+    /// </summary>
+    public static async Task<double> ConsumeBacklogAsync(
+        ScenarioContext context,
+        TransportTarget transport,
+        int messages,
+        int publishParallelism,
+        TimeSpan cap)
+    {
+        await transport.PrepareAsync();
+
+        var host = BenchHost.Build(context, cfg =>
+        {
+            PersistenceTarget.InMemory(context).Configure(cfg);
+            transport.Configure(cfg);
+            cfg.AddSaga<PingSaga>();
+        });
+
+        try
+        {
+            var tracker = host.Services.GetRequiredService<WorkTracker>();
+            var publisher = host.Services.GetRequiredService<IPublisher>();
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+
+            await BenchHost.RunConcurrentlyAsync(messages, publishParallelism,
+                async _ => await publisher.PublishAsync(NewPing(systemInfo)));
+
+            await host.StartAsync();
+            await BenchHost.WaitUntilAsync(() => tracker.Count >= messages, cap);
+
+            return tracker.RateBetweenFirstAndLast();
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host);
+        }
+    }
+
+    /// <summary>
+    /// Messages handed to the transport's publisher by concurrent callers, each waiting for its acknowledgement.
+    /// Nothing consumes them.
+    /// </summary>
+    public static async Task<double> PublishConcurrentlyAsync(ScenarioContext context, TransportTarget transport, int messages, int parallelism)
+    {
+        await transport.PrepareAsync();
+
+        var host = BenchHost.Build(context, cfg =>
+        {
+            PersistenceTarget.InMemory(context).Configure(cfg);
+            transport.Configure(cfg);
+            cfg.AddSaga<PingSaga>();
+            cfg.SetPublishOnly();
+        });
+
+        try
+        {
+            var publisher = host.Services.GetRequiredService<IPublisher>();
+            var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
+
+            await publisher.PublishAsync(NewPing(systemInfo));
+
+            var stopwatch = Stopwatch.StartNew();
+            await BenchHost.RunConcurrentlyAsync(messages, parallelism,
+                async _ => await publisher.PublishAsync(NewPing(systemInfo)));
+            stopwatch.Stop();
+
+            return messages / stopwatch.Elapsed.TotalSeconds;
+        }
+        finally
+        {
+            await BenchHost.StopAndDisposeAsync(host);
+        }
+    }
+
+    /// <summary>
+    /// Messages handed to the transport's publisher one after the other, the way the relay does. Nothing consumes them.
+    /// </summary>
+    public static Task<double> PublishAsync(ScenarioContext context, TransportTarget transport, int messages)
+        => PublishConcurrentlyAsync(context, transport, messages, parallelism: 1);
+
+    private static async Task RelayUntilAsync(IServiceProvider services, Func<bool> done)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (!done())
+        {
+            if (stopwatch.Elapsed > WarmUpTimeout)
+                throw new TimeoutException("warm-up messages were not relayed");
+
+            using var scope = services.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<IOutboxProcessor>().RelayPendingMessagesAsync();
         }
     }
 
@@ -128,12 +293,44 @@ internal static class PipelineScenarios
     /// <summary>
     /// Whole two-hop sagas: publish, outbox, relay, broker, consumer, saga state, and back again for the second hop.
     /// </summary>
-    public static async Task<double> EndToEndAsync(
+    public static Task<double> EndToEndAsync(
         ScenarioContext context,
         PersistenceTarget persistence,
         TransportTarget transport,
         int sagas,
         TimeSpan cap)
+        => RunEndToEndAsync(context, persistence, transport, sagas, cap,
+            instrument: null,
+            warmedUp: _ => { },
+            completed: (_, tracker, start) => tracker.RateSince(start));
+
+    /// <summary>
+    /// The same run as <see cref="EndToEndAsync"/>, reporting how long the pipeline spent in each call
+    /// to its persistence and transport.
+    /// </summary>
+    public static Task<EndToEndProfile> ProfileEndToEndAsync(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        TransportTarget transport,
+        int sagas,
+        TimeSpan cap)
+        => RunEndToEndAsync(context, persistence, transport, sagas, cap,
+            instrument: StageTimings.Instrument,
+            warmedUp: services => services.GetRequiredService<StageTimings>().Reset(),
+            completed: (services, tracker, start) => new EndToEndProfile(
+                tracker.Count,
+                tracker.Count / Math.Max(tracker.RateSince(start), double.Epsilon) * 1000,
+                services.GetRequiredService<StageTimings>().Snapshot()));
+
+    private static async Task<T> RunEndToEndAsync<T>(
+        ScenarioContext context,
+        PersistenceTarget persistence,
+        TransportTarget transport,
+        int sagas,
+        TimeSpan cap,
+        Action<IServiceCollection>? instrument,
+        Action<IServiceProvider> warmedUp,
+        Func<IServiceProvider, WorkTracker, long, T> completed)
     {
         await transport.PrepareAsync();
 
@@ -142,7 +339,7 @@ internal static class PipelineScenarios
             persistence.Configure(cfg);
             transport.Configure(cfg);
             cfg.AddSaga<BenchSaga, BenchState>();
-        });
+        }, instrument);
 
         try
         {
@@ -150,12 +347,13 @@ internal static class PipelineScenarios
             await StartAndWarmUpAsync(host, persistence, tracker);
 
             tracker.Reset();
+            warmedUp(host.Services);
 
             var start = Stopwatch.GetTimestamp();
             await BenchHost.RunConcurrentlyAsync(sagas, PublishParallelism, _ => PublishStartAsync(host.Services));
             await BenchHost.WaitUntilAsync(() => tracker.Count >= sagas, cap - Stopwatch.GetElapsedTime(start));
 
-            return tracker.RateSince(start);
+            return completed(host.Services, tracker, start);
         }
         finally
         {
@@ -227,6 +425,9 @@ internal static class PipelineScenarios
     private static MessageEnvelope NewPing(ISystemInfo systemInfo)
         => MessageEnvelope.Create(new Ping { CorrelationId = Guid.NewGuid().ToString() }, systemInfo);
 
+    private static MessageEnvelope NewStart(ISystemInfo systemInfo)
+        => MessageEnvelope.Create(new StartBench { CorrelationId = Guid.NewGuid().ToString() }, systemInfo);
+
     private static async Task SeedOutboxAsync(IServiceProvider services, int messages)
     {
         const int chunkSize = 50;
@@ -237,9 +438,17 @@ internal static class PipelineScenarios
             using var scope = services.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
             var chunk = Enumerable.Range(0, Math.Min(chunkSize, messages - seeded))
-                .Select(_ => MessageEnvelope.Create(new StartBench { CorrelationId = Guid.NewGuid().ToString() }, systemInfo))
+                .Select(_ => NewStart(systemInfo))
                 .ToArray();
             await repository.AppendAsync(chunk);
         }
     }
 }
+
+/// <param name="Sagas">sagas that completed.</param>
+/// <param name="ElapsedMilliseconds">from the first publish to the last completion.</param>
+/// <param name="Stages">calls and total time per wrapped call.</param>
+internal sealed record EndToEndProfile(
+    int Sagas,
+    double ElapsedMilliseconds,
+    IReadOnlyList<(string Stage, int Calls, double TotalMilliseconds)> Stages);

@@ -7,6 +7,7 @@ using System.Text.Json;
 //   run     [--suite local|gate|full] [--scenario a,b] [--runs N] [--variant NAME] [--round N] [--out FILE.json]
 //   compare --results DIR [--config gate.json] [--markdown FILE.md] [--no-fail]
 //   wait    [--timeout SECONDS]
+//   profile [--suite local|full] [--variant NAME] [--out FILE.md]
 //   list
 
 var jsonOptions = new JsonSerializerOptions { WriteIndented = true, PropertyNameCaseInsensitive = true };
@@ -21,6 +22,8 @@ switch (command)
         return Compare();
     case "wait":
         return await WaitForInfrastructureAsync();
+    case "profile":
+        return await ProfileAsync();
     case "list":
         foreach (var scenario in Catalogue.All)
             Console.WriteLine($"{scenario.Name,-28} [{string.Join(",", scenario.Suites)}] {scenario.Unit}: {scenario.Workload}");
@@ -87,6 +90,41 @@ int Compare()
 
     Console.WriteLine($"Benchmark gate: {failures.Length} scenario(s) got worse than the base beyond tolerance: {string.Join(", ", failures)}");
     return options.ContainsKey("no-fail") ? 0 : 1;
+}
+
+async Task<int> ProfileAsync()
+{
+    var variant = options.GetValueOrDefault("variant", "local")!;
+    var settings = Settings.FromEnvironment();
+    var local = options.GetValueOrDefault("suite", Suites.Full) == Suites.Local;
+    var lines = new List<string>();
+
+    foreach (var (name, _, runAsync) in Catalogue.Profiles.Where(profile => profile.NeedsInfrastructure != local))
+    {
+        var problems = new ProblemLog();
+        try
+        {
+            var profile = await runAsync(new ScenarioContext(settings, problems)).WaitAsync(TimeSpan.FromMinutes(4));
+            lines.AddRange(Runner.ProfileToMarkdown(variant, name, profile));
+        }
+        catch (Exception ex)
+        {
+            lines.Add($"`{variant}` {name}: FAILED {ex.GetType().Name}: {ex.Message} {problems.Describe()}".Trim());
+        }
+        lines.Add(string.Empty);
+    }
+
+    var markdown = string.Join(Environment.NewLine, lines);
+    Console.WriteLine(markdown);
+
+    if (options.TryGetValue("out", out var outputPath) && !string.IsNullOrWhiteSpace(outputPath))
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
+        File.WriteAllText(outputPath, markdown);
+    }
+
+    // a profile describes, it does not judge
+    return 0;
 }
 
 async Task<int> WaitForInfrastructureAsync()

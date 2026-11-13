@@ -14,6 +14,7 @@ internal static class Catalogue
     private static readonly string[] FullOnly = [Suites.Full];
 
     private const int SqlDefaultBatchSize = 10;
+    private const int LargeSqlBatchSize = 100;
 
     public static IReadOnlyList<Scenario> All { get; } = Build();
 
@@ -44,6 +45,10 @@ internal static class Catalogue
             "find/lock/release cycle on a saga with 300 processed messages, SQL repository on a SQLite file; mean of 40 cycles",
             ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqliteSagaState(ctx), 300, 40)),
 
+        new("local-sqlite-state-find", LocalOnly, Milliseconds, false,
+            "FindAsync on a saga with 10 processed messages, SQL repository on a pooled SQLite file: the client side of the query; mean of 2000",
+            ctx => SagaStateScenarios.FindAsync(ctx, PersistenceTarget.SqliteSagaState(ctx, pooled: true), 10, 2000)),
+
         // ---- real infrastructure ----
         new("sqlserver-dbcontext", GateAndFull, Milliseconds, false,
             "resolve 200 SagaDbContext from new DI scopes; mean per context",
@@ -54,16 +59,16 @@ internal static class Catalogue
             ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.Postgres(ctx), 200)),
 
         new("sqlserver-outbox-append", GateAndFull, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.SqlServer(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.SqlServer(ctx), 2000, 16)),
 
         new("postgres-outbox-append", GateAndFull, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Postgres(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Postgres(ctx), 2000, 16)),
 
         new("mongo-outbox-append", FullOnly, MessagesPerSecond, true,
-            "400 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each",
-            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Mongo(ctx), 400, 16)),
+            "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",
+            ctx => PipelineScenarios.OutboxAppendAsync(ctx, PersistenceTarget.Mongo(ctx), 2000, 16)),
 
         new("sqlserver-outbox-relay", GateAndFull, MessagesPerSecond, true,
             "500 pending outbox rows relayed to a no-op publisher; rate until drained or 10 s",
@@ -97,9 +102,11 @@ internal static class Catalogue
             "400 messages consumed from RabbitMQ, handler awaits 10 ms, in-memory persistence; rate until consumed or 10 s",
             ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.Rabbit(ctx), 400, 1, TimeSpan.FromMilliseconds(10), TimeSpan.FromSeconds(10))),
 
+        // the messages are in the broker before the subscriber starts: fed by a publisher while it runs,
+        // the consumer only ever shows how fast that publisher is
         new("kafka-consume", GateAndFull, MessagesPerSecond, true,
-            "400 messages consumed from Kafka, in-memory persistence; rate until consumed or 10 s",
-            ctx => PipelineScenarios.ConsumeAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 400, 32, TimeSpan.Zero, TimeSpan.FromSeconds(10))),
+            "5000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 30 s",
+            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 5000, 32, TimeSpan.FromSeconds(30))),
 
         new("postgres-rabbit-e2e", GateAndFull, SagasPerSecond, true,
             "200 two-hop sagas on PostgreSQL + RabbitMQ; rate until completed or 15 s",
@@ -117,6 +124,18 @@ internal static class Catalogue
             "200 two-hop sagas on PostgreSQL + Kafka; rate until completed or 15 s",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
 
+        new("sqlserver-kafka-e2e", FullOnly, SagasPerSecond, true,
+            "200 two-hop sagas on SQL Server + Kafka; rate until completed or 15 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+
+        new("mongo-kafka-e2e", FullOnly, SagasPerSecond, true,
+            "200 two-hop sagas on MongoDB + Kafka; rate until completed or 15 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+
+        new("sqlserver-kafka-latency", FullOnly, Milliseconds, false,
+            "one two-hop saga at a time on SQL Server + Kafka; median of 5",
+            ctx => PipelineScenarios.EndToEndLatencyAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 5)),
+
         new("postgres-rabbit-latency", FullOnly, Milliseconds, false,
             "one two-hop saga at a time on PostgreSQL + RabbitMQ; median of 5",
             ctx => PipelineScenarios.EndToEndLatencyAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Rabbit(ctx), 5)),
@@ -130,6 +149,89 @@ internal static class Catalogue
             "as postgres-rabbit-e2e, with ConsumerDispatchConcurrency = 16 and PrefetchCount = 64",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
 #endif
+
+        // ---- what the remaining findings are measured with ----
+        new("postgres-state-shortsaga", GateAndFull, Milliseconds, false,
+            "find/lock/release cycle on a saga with no processed messages to start with; mean of 40 cycles",
+            ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.Postgres(ctx), 0, 40)),
+
+        new("sqlserver-state-shortsaga", FullOnly, Milliseconds, false,
+            "find/lock/release cycle on a saga with no processed messages to start with; mean of 40 cycles",
+            ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqlServer(ctx), 0, 40)),
+
+        new("postgres-outbox-relay-batch100", FullOnly, MessagesPerSecond, true,
+            "as postgres-outbox-relay, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), 500, TimeSpan.FromSeconds(10))),
+
+        new("sqlserver-outbox-relay-batch100", FullOnly, MessagesPerSecond, true,
+            "as sqlserver-outbox-relay, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx, LargeSqlBatchSize), 500, TimeSpan.FromSeconds(10))),
+
+        new("rabbit-publish", FullOnly, MessagesPerSecond, true,
+            "2000 messages handed to the RabbitMQ publisher one after the other, nothing consuming",
+            ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Rabbit(ctx), 2000)),
+
+        new("kafka-publish", FullOnly, MessagesPerSecond, true,
+            "300 messages handed to the Kafka publisher one after the other, nothing consuming",
+            ctx => PipelineScenarios.PublishAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 300)),
+
+        new("kafka-publish-concurrent", FullOnly, MessagesPerSecond, true,
+            "400 messages handed to the Kafka publisher by 32 concurrent callers, each waiting for its acknowledgement, nothing consuming",
+            ctx => PipelineScenarios.PublishConcurrentlyAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 400, 32)),
+
+        new("postgres-kafka-relay", FullOnly, MessagesPerSecond, true,
+            "300 pending outbox rows relayed to Kafka, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 300, TimeSpan.FromSeconds(10), TransportTarget.Kafka(ctx, typeof(StartBench)))),
+
+        new("postgres-rabbit-relay", FullOnly, MessagesPerSecond, true,
+            "500 pending outbox rows relayed to RabbitMQ, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+
+        new("mongo-rabbit-relay", FullOnly, MessagesPerSecond, true,
+            "500 pending outbox documents relayed to RabbitMQ, nothing consuming; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+
+#if RABBIT_CONSUMER_TUNING
+        new("mongo-rabbit-e2e-concurrent", FullOnly, SagasPerSecond, true,
+            "as mongo-rabbit-e2e, with ConsumerDispatchConcurrency = 16 and PrefetchCount = 64",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
+
+        new("postgres-rabbit-e2e-concurrent-batch100", FullOnly, SagasPerSecond, true,
+            "as postgres-rabbit-e2e-concurrent, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), TransportTarget.RabbitConcurrent(ctx, 16, 64), 200, TimeSpan.FromSeconds(15))),
+
+        // 200 sagas are over before connection pools and thread pool have grown: these run long enough to show the steady rate
+        new("postgres-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
+            "2000 two-hop sagas on PostgreSQL + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+
+        new("postgres-rabbit-e2e-concurrent-long-batch100", FullOnly, SagasPerSecond, true,
+            "as postgres-rabbit-e2e-concurrent-long, with MaxMessagesToPull = 100 instead of the default 10",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Postgres(ctx, LargeSqlBatchSize), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+
+        new("mongo-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
+            "2000 two-hop sagas on MongoDB + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
+            ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+#endif
+    ];
+
+    /// <summary>
+    /// The end-to-end runs that are profiled: where the time of a saga goes, call by call.
+    /// </summary>
+    public static IReadOnlyList<(string Name, bool NeedsInfrastructure, Func<ScenarioContext, Task<EndToEndProfile>> RunAsync)> Profiles { get; } =
+    [
+#if RABBIT_CONSUMER_TUNING
+        ("postgres-rabbit-e2e-concurrent-long", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+        ("mongo-rabbit-e2e-concurrent-long", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+#endif
+        ("local-inmemory-e2e", false, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.InMemory(ctx), TransportTarget.InMemory(), 2000, TimeSpan.FromSeconds(30))),
+        ("postgres-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Postgres(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("sqlserver-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("sqlserver-kafka-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.SqlServer(ctx), TransportTarget.Kafka(ctx, typeof(StartBench), typeof(BenchStep)), 200, TimeSpan.FromSeconds(15))),
+        ("mongo-rabbit-e2e", true, ctx => PipelineScenarios.ProfileEndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.Rabbit(ctx), 200, TimeSpan.FromSeconds(15))),
+        ("postgres-outbox-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10))),
+        ("postgres-rabbit-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), TransportTarget.Rabbit(ctx))),
+        ("sqlserver-outbox-relay", true, ctx => PipelineScenarios.ProfileOutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10))),
     ];
 
     public static IReadOnlyList<Scenario> Select(string? suite, string? names)

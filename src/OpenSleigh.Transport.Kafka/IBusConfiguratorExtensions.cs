@@ -5,8 +5,30 @@ using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Transport.Kafka;
 
+/// <param name="ConnectionString">the bootstrap servers.</param>
+/// <param name="DefaultQueueReferenceCreator">optional. Decides the topics of a message type.</param>
 [ExcludeFromCodeCoverage]
-public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator? DefaultQueueReferenceCreator = null);
+public record KafkaConfiguration(string ConnectionString, QueueReferencesCreator? DefaultQueueReferenceCreator = null)
+{
+    /// <summary>
+    /// how long the producer holds a message back, waiting for others to send in the same request (linger.ms).
+    /// Defaults to zero: the outbox relay publishes one message at a time and waits for each to be acknowledged,
+    /// so every millisecond here is added to every message. Raise it only when something else publishes
+    /// many messages at once through the same producer.
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">the value is negative.</exception>
+    public TimeSpan ProducerLinger
+    {
+        get => _producerLinger;
+        init
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            _producerLinger = value;
+        }
+    }
+
+    private readonly TimeSpan _producerLinger = TimeSpan.Zero;
+}
 
 [ExcludeFromCodeCoverage]
 public static class IBusConfiguratorExtensions
@@ -32,7 +54,11 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton(ctx =>
         {
             var kafkaConfig = ctx.GetRequiredService<KafkaConfiguration>();
-            return new ProducerConfig() { BootstrapServers = kafkaConfig.ConnectionString };
+            return new ProducerConfig()
+            {
+                BootstrapServers = kafkaConfig.ConnectionString,
+                LingerMs = kafkaConfig.ProducerLinger.TotalMilliseconds
+            };
         });
         busConfigurator.Services.AddSingleton(ctx =>
         {
