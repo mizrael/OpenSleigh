@@ -53,6 +53,13 @@ public class MessageEnvelope
             return false;
         }
 
+        // the type is named by whoever sent the message: nothing else is built from the body
+        if (!typeof(IMessage).IsAssignableFrom(messageType))
+        {
+            result = null;
+            return false;
+        }
+
         var message = serializer.Deserialize(body, messageType) as IMessage;
         if (message is null)
         {

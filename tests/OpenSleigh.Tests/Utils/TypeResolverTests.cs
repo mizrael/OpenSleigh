@@ -51,6 +51,17 @@ public class TypeResolverTests
         Assert.Null(result);
     }
 
+    [Theory]
+    [InlineData("Some.Type, SomeAssembly")]
+    [InlineData("Some.Type[")]
+    public void Resolve_should_return_null_for_a_name_an_assembly_refuses_when_throwOnError_is_false(string typeName)
+    {
+        var sut = new TypeResolver();
+        sut.Register(typeof(FakeSagaStarter));
+
+        Assert.Null(sut.Resolve(typeName, throwOnError: false));
+    }
+
     [Fact]
     public void Register_should_not_duplicate_assembly_on_second_call()
     {

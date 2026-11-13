@@ -4,6 +4,7 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
+[SingleHost]
 public class InMemoryParallelMultiStartSagaScenario : ParallelMultiStartSagaScenario
 {
     public InMemoryParallelMultiStartSagaScenario(ITestOutputHelper console) : base(console)

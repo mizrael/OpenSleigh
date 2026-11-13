@@ -4,6 +4,7 @@ using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.InMemory;
 
+[SingleHost]
 public class InMemorySimpleSagaScenario : SimpleSagaScenario
 {
     public InMemorySimpleSagaScenario(ITestOutputHelper console) : base(console) { }

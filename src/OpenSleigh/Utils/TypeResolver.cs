@@ -31,7 +31,7 @@ public class TypeResolver : ITypeResolver
 
         foreach (var assembly in _assemblies)
         {
-            dataType = assembly.Key.GetType(typeName, throwOnError: false, ignoreCase: true);
+            dataType = FindIn(assembly.Key, typeName, throwOnError);
             if (dataType is not null)
                 break;
         }
@@ -46,6 +46,20 @@ public class TypeResolver : ITypeResolver
     }
 
     internal int CachedNamesCount => _typesByName.Count;
+
+    // an assembly refuses some names outright, whatever it is told about errors: one that names an assembly,
+    // or that it cannot parse. When errors are not wanted, those names are types that were not found
+    private static Type? FindIn(Assembly assembly, string typeName, bool throwOnError)
+    {
+        try
+        {
+            return assembly.GetType(typeName, throwOnError: false, ignoreCase: true);
+        }
+        catch (Exception e) when (!throwOnError && e is ArgumentException or TypeLoadException or IOException or BadImageFormatException)
+        {
+            return null;
+        }
+    }
 
     // type names arrive in message headers, and unlimited names resolve to a type: other spellings of one type
     // (padding, array and pointer suffixes) and constructed generics, which are a new type for every type argument.

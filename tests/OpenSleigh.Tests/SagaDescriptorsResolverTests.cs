@@ -38,6 +38,24 @@ public class SagaDescriptorsResolverTests
     }
 
     [Fact]
+    public void Register_stateful_should_make_the_state_type_resolvable_by_its_full_name_only_as_a_state_type()
+    {
+        var typeResolver = new TypeResolver();
+        var sut = new SagaDescriptorsResolver(typeResolver);
+
+        sut.Register<FakeSagaWithState, int>();
+
+        ISagaStateTypeResolver stateTypes = sut;
+        Assert.Equal(typeof(int), stateTypes.Resolve(typeof(int).FullName!));
+        Assert.Null(stateTypes.Resolve(typeof(long).FullName!));
+        Assert.Null(stateTypes.Resolve(typeof(FakeSagaStarter).FullName!));
+
+        // a name from a message header must not reach the state type, nor the rest of its assembly
+        Assert.Null(typeResolver.Resolve(typeof(int).FullName!, throwOnError: false));
+        Assert.Null(typeResolver.Resolve(typeof(System.Text.StringBuilder).FullName!, throwOnError: false));
+    }
+
+    [Fact]
     public void Resolve_should_return_descriptors_for_registered_message()
     {
         var typeResolver = Substitute.For<ITypeResolver>();

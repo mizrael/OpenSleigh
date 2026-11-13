@@ -26,6 +26,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ISerializer, JsonSerializer>()
             .AddSingleton<ITypeResolver>(typeResolver)
             .AddSingleton<ISagaDescriptorsResolver>(sagaDescriptorResolver)
+            .AddSingleton<ISagaStateTypeResolver>(sagaDescriptorResolver)
 
             .AddTransient<IMessageBus, DefaultMessageBus>()
             .AddTransient<ISagaRunner, SagaRunner>()

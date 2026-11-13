@@ -7,9 +7,10 @@ using System.Runtime.CompilerServices;
 [assembly: InternalsVisibleTo("OpenSleigh.Benchmarks")]
 namespace OpenSleigh;
 
-internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
+internal class SagaDescriptorsResolver : ISagaDescriptorsResolver, ISagaStateTypeResolver
 {
     private readonly ConcurrentDictionary<Type, ICollection<SagaDescriptor>> _descriptorsByMessage = new();
+    private readonly ConcurrentDictionary<string, Type> _stateTypesByName = new(StringComparer.Ordinal);
     private ITypeResolver _typeResolver;
 
     public SagaDescriptorsResolver(ITypeResolver typeResolver)
@@ -56,7 +57,18 @@ internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
         {
             Register(messageType, descriptor);
         }
+
+        // sagas are stored with the full name of their state type. It is kept apart from the message types:
+        // those are looked up by names that arrive from a broker
+        if (descriptor.SagaStateType?.FullName is { } stateTypeName)
+            _stateTypesByName.TryAdd(stateTypeName, descriptor.SagaStateType);
     }
+
+    /// <inheritdoc/>
+    Type? ISagaStateTypeResolver.Resolve(string stateTypeName)
+        => !string.IsNullOrEmpty(stateTypeName) && _stateTypesByName.TryGetValue(stateTypeName, out var stateType)
+            ? stateType
+            : null;
 
     private void Register(Type messageType, SagaDescriptor descriptor)
     {

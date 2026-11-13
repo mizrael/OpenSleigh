@@ -8,11 +8,16 @@ public class SqlSagaStateQuery : ISagaStateQuery
 {
     private readonly SagaDbContext _dbContext;
     private readonly ISerializer _serializer;
+    private readonly ISagaStateTypeResolver? _stateTypes;
 
-    public SqlSagaStateQuery(SagaDbContext dbContext, ISerializer serializer)
+    /// <param name="stateTypes">turns the name a saga's state type is stored with back into the type.
+    /// <c>AddOpenSleigh</c> registers one that knows the state types of the registered sagas.
+    /// Without it the query returns sagas without their state.</param>
+    public SqlSagaStateQuery(SagaDbContext dbContext, ISerializer serializer, ISagaStateTypeResolver? stateTypes = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        _stateTypes = stateTypes;
     }
 
     public async ValueTask<SagaInstanceInfo?> GetByInstanceIdAsync(
@@ -79,7 +84,7 @@ public class SqlSagaStateQuery : ISagaStateQuery
         object? stateData = null;
         if (entity.StateData is not null && entity.StateData.Length > 0 && entity.SagaStateType is not null)
         {
-            var stateType = Type.GetType(entity.SagaStateType);
+            var stateType = _stateTypes?.Resolve(entity.SagaStateType);
             if (stateType is not null)
             {
                 try { stateData = _serializer.Deserialize(entity.StateData, stateType); }

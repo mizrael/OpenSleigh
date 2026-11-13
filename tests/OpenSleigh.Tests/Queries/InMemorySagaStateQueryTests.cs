@@ -42,6 +42,26 @@ public class InMemorySagaStateQueryTests
     #region GetByInstanceIdAsync
 
     [Fact]
+    public async Task GetByInstanceIdAsync_should_return_the_messages_processed_when_the_saga_was_last_released()
+    {
+        var instance = CreateInstance(instanceId: "inst-processing");
+        var messageContext = Substitute.For<OpenSleigh.Transport.IMessageContext<FakeSagaStarter>>();
+        messageContext.MessageId.Returns("message-1");
+
+        await _repo.LockAsync(instance);
+        instance.SetAsProcessed(messageContext);
+
+        // the owner of the lock is still at work: its message is not there for anyone else yet
+        var whileLocked = await Query.GetByInstanceIdAsync("inst-processing");
+        Assert.Empty(whileLocked!.ProcessedMessages);
+
+        await _repo.ReleaseAsync(instance);
+
+        var released = await Query.GetByInstanceIdAsync("inst-processing");
+        Assert.Equal("message-1", Assert.Single(released!.ProcessedMessages).MessageId);
+    }
+
+    [Fact]
     public async Task GetByInstanceIdAsync_should_return_info_when_instance_exists()
     {
         var instance = CreateInstance(instanceId: "inst-1", correlationId: "corr-1");

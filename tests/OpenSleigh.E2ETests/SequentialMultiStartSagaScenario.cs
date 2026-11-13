@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using Bogus;
 using Xunit.Abstractions;
@@ -16,12 +17,11 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
     public SequentialMultiStartSagaScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_multiple_start_messages_scenario(int hostsCount)
     {
         var correlationId = Faker.Random.Guid().ToString();
+
         var foo = Faker.Random.Int();
         var bar = Faker.Lorem.Slug(5);
 
@@ -31,35 +31,21 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
         IMessage first = Faker.Random.Bool() ? start : alsoStart;
         IMessage last = ReferenceEquals(first, start) ? alsoStart : start;
 
-        var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+        var firstHandled = new Expectation(1);
+        var bothHandled = new Expectation(2);
+        ConcurrentBag<string> instanceIds = [];
 
-        MultiStartSagaState state = null!;
-        var handled = 0;
-
-        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (_, inst) =>
+        void OnHandled(ISagaInstance instance)
         {
-            Interlocked.Increment(ref receivedCount);
-            Volatile.Write(ref handled, 1);
-            if (ReferenceEquals(last, start))
-            {
-                state = inst.State;
-                // ReSharper disable once AccessToDisposedClosure
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            }
-        };
+            instanceIds.Add(instance.InstanceId);
+            firstHandled.Signal();
+            bothHandled.Signal();
+        }
 
-        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, inst) =>
-        {
-            Interlocked.Increment(ref receivedCount);
-            Volatile.Write(ref handled, 1);
-            if (ReferenceEquals(last, alsoStart))
-            {
-                state = inst.State;
-                // ReSharper disable once AccessToDisposedClosure
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            }
-        };
+        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (_, instance) => OnHandled(instance);
+        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, instance) => OnHandled(instance);
+
+        object? storedState = null;
 
         await RunScenarioAsync(hostsCount,
             (_, services) =>
@@ -67,27 +53,29 @@ public abstract class SequentialMultiStartSagaScenario : E2ETestsBase
                 services.AddSingleton(onStart);
                 services.AddSingleton(onAlsoStart);
             },
-            async bus =>
+            async (services, cancellationToken) =>
             {
-                await bus.PublishAsync(first, tokenSource.Token);
+                var bus = services.GetRequiredService<IMessageBus>();
 
-                while (Volatile.Read(ref handled) == 0)
-                    await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+                await bus.PublishAsync(first, cancellationToken);
+                await firstHandled.Reached.WaitAsync(cancellationToken);
 
-                // wait one more second for unlocking
-                await Task.Delay(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+                // the second message is published once the saga is stored and released by the first
+                await WaitForSagaAsync<MultiStartSaga>(services, correlationId,
+                    stored => stored.ProcessedMessages.Count == 1 && !stored.IsLocked,
+                    cancellationToken);
 
-                await bus.PublishAsync(last, tokenSource.Token);
-            },
-            tokenSource);
+                await bus.PublishAsync(last, cancellationToken);
+                await bothHandled.Reached.WaitAsync(cancellationToken);
 
-        Assert.Equal(2, receivedCount);
+                storedState = (await WaitForSagaAsync<MultiStartSaga>(services, correlationId,
+                    stored => stored.ProcessedMessages.Count == 2 && !stored.IsLocked,
+                    cancellationToken)).StateData;
+            });
 
-        // These work correctly for in-memory scenarios because the object is always the same
-        // Not having access to the host's container, I'm not sure if there's an appropriate way to get at the
-        // saga state in the physical-persistence scenarios
-        // Assert.Equal(foo, state.Foo);
-        // Assert.Equal(bar, state.Bar);
+        Assert.Equal(2, bothHandled.Count);
+        Assert.Single(instanceIds.Distinct());
+        Assert.Equal(new MultiStartSagaState { Foo = foo, Bar = bar }, storedState);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

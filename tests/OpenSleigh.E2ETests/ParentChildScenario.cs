@@ -13,29 +13,24 @@ public abstract class ParentChildScenario : E2ETestsBase
     public ParentChildScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_parent_child_scenario(int hostsCount)
     {
         var message = new StartParentSaga();
+        var completed = new Expectation(1);
 
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(100) * hostsCount);
-
-        var contexts = new List<IMessageContext<ParentSagaCompleted>>();
-
-        Action<IMessageContext<ParentSagaCompleted>> onMessage = ctx =>
-        {
-            contexts.Add(ctx);
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
-        };
+        Action<IMessageContext<ParentSagaCompleted>> onMessage = _ => completed.Signal();
 
         await RunScenarioAsync(hostsCount,
             (ctx, services) => services.AddSingleton(onMessage),
-            async bus => await bus.PublishAsync(message, tokenSource.Token),
-            tokenSource);
+            async (services, cancellationToken) =>
+            {
+                var bus = services.GetRequiredService<IMessageBus>();
+                await bus.PublishAsync(message, cancellationToken);
+                await completed.Reached.WaitAsync(cancellationToken);
+            });
 
-        Assert.Single(contexts);
+        Assert.Equal(1, completed.Count);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

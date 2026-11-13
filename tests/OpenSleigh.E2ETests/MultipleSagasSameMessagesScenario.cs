@@ -10,32 +10,30 @@ namespace OpenSleigh.E2ETests;
 [Trait("Category", "E2E")]
 public abstract class MultipleSagasSameMessagesScenario : E2ETestsBase
 {
+    // the start message starts two sagas, and each of them completes once
+    private const int SagasCount = 2;
+
     public MultipleSagasSameMessagesScenario(ITestOutputHelper console) : base(console) { }
 
     [Theory]
-    [InlineData(1)]
-    [InlineData(2)]
-    [InlineData(5)]
+    [HostsCountData]
     public async Task run_multiple_sagas_same_messages_scenario(int hostsCount)
     {
         var message = new StartMultipleSagas();
+        var completed = new Expectation(SagasCount);
 
-        var receivedCount = 0;
-        var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
-
-        Action<IMessageContext<SagaCompleted>> onMessage = ctx =>
-        {
-            receivedCount++;
-            if (receivedCount >= hostsCount)
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(10));
-        };
+        Action<IMessageContext<SagaCompleted>> onMessage = _ => completed.Signal();
 
         await RunScenarioAsync(hostsCount,
             (ctx, services) => services.AddSingleton(onMessage),
-            async bus => await bus.PublishAsync(message, tokenSource.Token),
-            tokenSource);
+            async (services, cancellationToken) =>
+            {
+                var bus = services.GetRequiredService<IMessageBus>();
+                await bus.PublishAsync(message, cancellationToken);
+                await completed.Reached.WaitAsync(cancellationToken);
+            });
 
-        Assert.Equal(2, receivedCount);
+        Assert.Equal(SagasCount, completed.Count);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

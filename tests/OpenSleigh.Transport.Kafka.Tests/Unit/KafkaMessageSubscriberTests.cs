@@ -81,6 +81,63 @@ public class KafkaMessageSubscriberTests
         Assert.InRange(calls, 1, 6);
     }
 
+    [Fact]
+    public async Task Dispose_should_not_close_the_consumer_again_after_StopAsync()
+    {
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>()).Returns((ConsumeResult<string, byte[]>?)null);
+
+        var sut = CreateSut(consumer, Substitute.For<IKafkaMessageHandler>());
+
+        await sut.StartAsync();
+        await sut.StopAsync();
+        sut.Dispose();
+
+        consumer.Received(1).Close();
+    }
+
+    [Fact]
+    public async Task Dispose_alone_should_close_the_consumer_once_after_the_consume_loop_has_ended()
+    {
+        var consuming = 0;
+        var closedWhileConsuming = false;
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>()).Returns(_ =>
+        {
+            Interlocked.Exchange(ref consuming, 1);
+            Thread.Sleep(50);
+            Interlocked.Exchange(ref consuming, 0);
+            return (ConsumeResult<string, byte[]>?)null;
+        });
+        consumer.When(c => c.Close()).Do(_ => closedWhileConsuming |= Volatile.Read(ref consuming) == 1);
+
+        var sut = CreateSut(consumer, Substitute.For<IKafkaMessageHandler>());
+
+        await sut.StartAsync();
+        await Task.Delay(100);
+        sut.Dispose();
+
+        consumer.Received(1).Close();
+        Assert.False(closedWhileConsuming);
+    }
+
+    [Fact]
+    public async Task Dispose_and_StopAsync_should_be_harmless_after_Dispose()
+    {
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>()).Returns((ConsumeResult<string, byte[]>?)null);
+
+        var sut = CreateSut(consumer, Substitute.For<IKafkaMessageHandler>());
+
+        await sut.StartAsync();
+        sut.Dispose();
+        sut.Dispose();
+        await sut.StopAsync();
+
+        consumer.Received(1).Close();
+        consumer.Received(1).Dispose();
+    }
+
     private static KafkaMessageSubscriber CreateSut(
         IConsumer<string, byte[]> consumer,
         IKafkaMessageHandler handler,

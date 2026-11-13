@@ -19,6 +19,10 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     private readonly IConsumer<string, byte[]> _consumer;
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
+    private int _consumerClosed;
+    private int _disposed;
+
+    private static readonly TimeSpan ConsumeLoopStopTimeout = TimeSpan.FromSeconds(10);
 
     public KafkaMessageSubscriber(
         IConsumerBuilderFactory builderFactory,
@@ -91,7 +95,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     public async ValueTask StopAsync(CancellationToken cancellationToken = default)
     {
-        _stoppingCts?.Cancel();
+        RequestStop(Volatile.Read(ref _stoppingCts));
 
         if (_consumerTask is not null)
         {
@@ -105,14 +109,56 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             }
         }
 
-        _consumer.Close();
+        // the wait above was given up on: the loop is still using the consumer, which is left for Dispose to close
+        if (_consumerTask is null || _consumerTask.IsCompleted)
+            CloseConsumer();
+    }
+
+    private static void RequestStop(CancellationTokenSource? stoppingCts)
+    {
+        try
+        {
+            stoppingCts?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // disposed in the meantime, by a Dispose that has already asked the loop to stop
+        }
+    }
+
+    // closing a consumer also disposes it, and a disposed consumer cannot be closed again:
+    // a host stops its subscribers and then disposes them
+    private void CloseConsumer()
+    {
+        if (Interlocked.Exchange(ref _consumerClosed, 1) == 0)
+            _consumer.Close();
+    }
+
+    // the loop ends within a consume timeout once it is asked to, unless a handler is at work and ignores
+    // the request: Dispose does not wait for that one for ever
+    private void WaitForConsumeLoop()
+    {
+        try
+        {
+            _consumerTask?.Wait(ConsumeLoopStopTimeout);
+        }
+        catch (AggregateException)
+        {
+            // the loop ended by being cancelled, or failed: either way it is no longer using the consumer
+        }
     }
 
     public void Dispose()
     {
-        _stoppingCts?.Cancel();
-        _stoppingCts?.Dispose();
-        _consumer.Close();
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+
+        var stoppingCts = Interlocked.Exchange(ref _stoppingCts, null);
+        RequestStop(stoppingCts);
+        WaitForConsumeLoop();
+        stoppingCts?.Dispose();
+
+        CloseConsumer();
         _consumer.Dispose();
     }
 }

@@ -19,7 +19,14 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     private MongoSagaStateQuery CreateSut(IDbContext db)
-        => new MongoSagaStateQuery(db, _serializer);
+        => new MongoSagaStateQuery(db, _serializer, new StubStateTypeResolver([typeof(DummyState)]));
+
+    private sealed class StubStateTypeResolver(IEnumerable<Type> stateTypes) : ISagaStateTypeResolver
+    {
+        private readonly Dictionary<string, Type> _byName = stateTypes.ToDictionary(type => type.FullName!);
+
+        public Type? Resolve(string stateTypeName) => _byName.GetValueOrDefault(stateTypeName);
+    }
 
     private async Task<Entities.SagaState> InsertSagaState(
         IDbContext db,
@@ -111,7 +118,7 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
         var stateData = _serializer.Serialize(state);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: typeof(DummyState).AssemblyQualifiedName,
+            sagaStateType: typeof(DummyState).FullName,
             stateData: stateData);
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
@@ -125,14 +132,14 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task GetByInstanceIdAsync_should_return_null_state_when_data_corrupted()
+    public async Task GetByInstanceIdAsync_should_return_null_state_without_a_state_type_resolver()
     {
         var db = _fixture.CreateDbContext();
-        var sut = CreateSut(db);
+        var sut = new MongoSagaStateQuery(db, _serializer);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: typeof(DummyState).AssemblyQualifiedName,
-            stateData: new byte[] { 0xFF, 0xFE });
+            sagaStateType: typeof(DummyState).FullName,
+            stateData: _serializer.Serialize(DummyState.New()));
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
 
@@ -141,14 +148,33 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task GetByInstanceIdAsync_should_return_null_state_when_type_unknown()
+    public async Task GetByInstanceIdAsync_should_return_null_state_when_data_corrupted()
     {
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
         var entity = await InsertSagaState(db,
-            sagaStateType: "Some.NonExistent.Type, FakeAssembly",
-            stateData: new byte[] { 0x01 });
+            sagaStateType: typeof(DummyState).FullName,
+            stateData: new byte[] { 0xFF, 0xFE });
+
+        var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
+
+        Assert.NotNull(result);
+        Assert.Null(result.StateData);
+    }
+
+    [Theory]
+    [InlineData("Some.NonExistent.Type")]
+    [InlineData("System.Text.StringBuilder")]
+    [InlineData("System.Text.StringBuilder, System.Private.CoreLib")]
+    public async Task GetByInstanceIdAsync_should_return_null_state_when_the_type_is_not_a_known_state_type(string storedTypeName)
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+
+        var entity = await InsertSagaState(db,
+            sagaStateType: storedTypeName,
+            stateData: "{}"u8.ToArray());
 
         var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
 
