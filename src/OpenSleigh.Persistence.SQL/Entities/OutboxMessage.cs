@@ -7,6 +7,15 @@ namespace OpenSleigh.Persistence.SQL.Entities;
 
 public record OutboxMessage
 {
+    public const string TableName = "OutboxMessages";
+    public const string DeliverAtIndexName = "IX_OutboxMessages_DeliverAt";
+
+    /// <summary>
+    /// the due time of a message that has no delay: a time that has always passed.
+    /// Every message has a due time, so that the relay finds the ones to publish with one range on one index.
+    /// </summary>
+    public static readonly DateTimeOffset DueImmediately = DateTimeOffset.UnixEpoch;
+
     public required string CorrelationId { get; set; }
     public required byte[] Body { get; set; }
     public required string MessageId { get; set; }
@@ -14,6 +23,11 @@ public record OutboxMessage
     public required DateTimeOffset CreatedAt { get; set; }
     public string? ParentId { get; set; }
     public required string SenderId { get; set; }
+
+    /// <summary>
+    /// the earliest time, in UTC, at which the relay publishes the message.
+    /// </summary>
+    public DateTimeOffset DeliverAt { get; set; } = DueImmediately;
 
     public bool TryMap(
         ITypeResolver typeResolver, 
@@ -36,6 +50,7 @@ public record OutboxMessage
             CreatedAt,
             type,
             senderId: SenderId,
+            deliverAt: DeliverAt > DueImmediately ? DeliverAt : null,
             serializer,
             out envelope);
     }
@@ -55,6 +70,7 @@ public record OutboxMessage
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName,
             SenderId = message.SenderId,
+            DeliverAt = message.DeliverAt ?? DueImmediately,
         };
     }
 }
@@ -63,8 +79,17 @@ internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfigurat
 {
     public void Configure(EntityTypeBuilder<OutboxMessage> builder)
     {
-        builder.ToTable("OutboxMessages", Constants.DbSchema);
+        builder.ToTable(OutboxMessage.TableName, Constants.DbSchema);
 
         builder.HasKey(e => e.MessageId);
+
+        // the default is for rows written by a version of the library that does not know the column.
+        // The value is always sent: left to the database, it would have to be read back after every insert
+        builder.Property(e => e.DeliverAt)
+            .HasDefaultValue(OutboxMessage.DueImmediately)
+            .ValueGeneratedNever();
+
+        builder.HasIndex(e => e.DeliverAt)
+            .HasDatabaseName(OutboxMessage.DeliverAtIndexName);
     }
 }

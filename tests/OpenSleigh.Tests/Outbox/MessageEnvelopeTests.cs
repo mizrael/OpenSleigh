@@ -353,6 +353,61 @@ public class MessageEnvelopeTests
         Assert.Equal(sagaCorrelationId, envelope.CorrelationId);
     }
 
+    [Fact]
+    public void Create_ShouldNotSetADueTime_WhenThereIsNoDelay()
+    {
+        var systemInfo = Substitute.For<ISystemInfo>();
+        systemInfo.Id.Returns("system-id");
+
+        Assert.Null(MessageEnvelope.Create(new DummyMessage(), systemInfo).DeliverAt);
+        Assert.Null(MessageEnvelope.Create(new DummyMessage(), systemInfo, TimeSpan.Zero).DeliverAt);
+    }
+
+    [Fact]
+    public void Create_ShouldSetTheDueTimeInUtc_WhenThereIsADelay()
+    {
+        var systemInfo = Substitute.For<ISystemInfo>();
+        systemInfo.Id.Returns("system-id");
+        var delay = TimeSpan.FromSeconds(30);
+
+        var envelope = MessageEnvelope.Create(new DummyMessage(), systemInfo, delay);
+
+        Assert.Equal(envelope.CreatedAt + delay, envelope.DeliverAt);
+        Assert.Equal(TimeSpan.Zero, envelope.DeliverAt!.Value.Offset);
+    }
+
+    [Fact]
+    public void Create_ShouldThrow_WhenTheDelayIsNegative()
+    {
+        var systemInfo = Substitute.For<ISystemInfo>();
+        var sagaInstance = Substitute.For<ISagaInstance>();
+        var delay = TimeSpan.FromTicks(-1);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => MessageEnvelope.Create(new DummyMessage(), systemInfo, delay));
+        Assert.Throws<ArgumentOutOfRangeException>(() => MessageEnvelope.Create(new DummyMessage(), sagaInstance, delay));
+    }
+
+    [Fact]
+    public void TryCreate_ShouldKeepTheDueTime_InUtc()
+    {
+        var dueTime = new DateTimeOffset(2030, 1, 2, 3, 4, 5, TimeSpan.FromHours(2));
+
+        var result = MessageEnvelope.TryCreate(
+            [1, 2, 3],
+            "messageId",
+            "correlationId",
+            DateTimeOffset.UtcNow,
+            typeof(DummyMessage),
+            "senderId",
+            dueTime,
+            new MockSerializer(new DummyMessage()),
+            out var envelope);
+
+        Assert.True(result);
+        Assert.Equal(dueTime, envelope!.DeliverAt);
+        Assert.Equal(TimeSpan.Zero, envelope.DeliverAt!.Value.Offset);
+    }
+
     #region Helper Classes
 
     private class MessageWithCorrelationId : IMessage, IHasCorrelationId

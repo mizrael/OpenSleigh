@@ -26,7 +26,13 @@ public class MessageEnvelope
     public required string CorrelationId { get; init; }
     public required string MessageId { get; init; }
     public required DateTimeOffset CreatedAt { get; init; }
-    public required string SenderId { get; init; }        
+    public required string SenderId { get; init; }
+
+    /// <summary>
+    /// the earliest time, in UTC, at which the outbox relay publishes the message.
+    /// Null when the message is published as soon as the relay reads it.
+    /// </summary>
+    public DateTimeOffset? DeliverAt { get; init; }
 
     #region Factory
 
@@ -37,6 +43,19 @@ public class MessageEnvelope
         DateTimeOffset createdAt,
         Type messageType,
         string senderId,
+        ISerializer serializer,
+        [NotNullWhen(true)] out MessageEnvelope? result)
+        => TryCreate(body, messageId, correlationId, createdAt, messageType, senderId, deliverAt: null, serializer, out result);
+
+    /// <param name="deliverAt">the earliest time at which the relay publishes the message, null for no delay.</param>
+    public static bool TryCreate(
+        ReadOnlySpan<byte> body,
+        string messageId,
+        string correlationId,
+        DateTimeOffset createdAt,
+        Type messageType,
+        string senderId,
+        DateTimeOffset? deliverAt,
         ISerializer serializer,
         [NotNullWhen(true)] out MessageEnvelope? result)
     {
@@ -73,7 +92,8 @@ public class MessageEnvelope
             MessageId = messageId,
             CorrelationId = correlationId,
             CreatedAt = createdAt,
-            SenderId = senderId
+            SenderId = senderId,
+            DeliverAt = deliverAt?.ToUniversalTime()
         };
         return true;
     }
@@ -81,8 +101,16 @@ public class MessageEnvelope
     public static MessageEnvelope Create(
        IMessage message,
        ISystemInfo systemInfo)
+        => Create(message, systemInfo, TimeSpan.Zero);
+
+    /// <param name="delay">how long the relay waits before it publishes the message. Zero for no delay.</param>
+    public static MessageEnvelope Create(
+       IMessage message,
+       ISystemInfo systemInfo,
+       TimeSpan delay)
     {
         ArgumentNullException.ThrowIfNull(message);
+        ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
 
         var correlationId = message is IHasCorrelationId cm
             ? cm.CorrelationId
@@ -100,22 +128,33 @@ public class MessageEnvelope
             : Guid.NewGuid().ToString("N");
 #endif
 
+        var createdAt = DateTimeOffset.UtcNow;
+
         return new MessageEnvelope()
         {
             CorrelationId = correlationId,
             SenderId = systemInfo.Id,
             MessageId = messageId,
             Message = message,
-            CreatedAt = DateTimeOffset.UtcNow
+            CreatedAt = createdAt,
+            DeliverAt = DueTime(createdAt, delay)
         };
     }
 
     public static MessageEnvelope Create(
         IMessage message,
         ISagaInstance sagaInstance)
+        => Create(message, sagaInstance, TimeSpan.Zero);
+
+    /// <param name="delay">how long the relay waits before it publishes the message. Zero for no delay.</param>
+    public static MessageEnvelope Create(
+        IMessage message,
+        ISagaInstance sagaInstance,
+        TimeSpan delay)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(sagaInstance);
+        ArgumentOutOfRangeException.ThrowIfLessThan(delay, TimeSpan.Zero);
 
         var correlationId = message is IHasCorrelationId cm ?
             cm.CorrelationId : sagaInstance.CorrelationId;
@@ -128,15 +167,21 @@ public class MessageEnvelope
             : Guid.NewGuid().ToString("N");
 #endif
 
+        var createdAt = DateTimeOffset.UtcNow;
+
         return new MessageEnvelope()
         {
             Message = message,
-            CreatedAt = DateTimeOffset.UtcNow,
+            CreatedAt = createdAt,
             MessageId = messageId,
             CorrelationId = sagaInstance.CorrelationId,
-            SenderId = sagaInstance.InstanceId
+            SenderId = sagaInstance.InstanceId,
+            DeliverAt = DueTime(createdAt, delay)
         };
     }
+
+    private static DateTimeOffset? DueTime(DateTimeOffset createdAt, TimeSpan delay)
+        => delay == TimeSpan.Zero ? null : createdAt + delay;
 
     #endregion Factory
 }

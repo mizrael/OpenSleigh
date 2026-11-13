@@ -93,6 +93,9 @@ public class SagaExecutionService : ISagaExecutionService
 
         var hasNewMessages = context.Outbox.Any();
 
+        // a relay woken up for messages that are not due yet would read the outbox for nothing
+        var hasMessagesToRelayNow = context.Outbox.Any(message => message.DeliverAt is null);
+
         if (_sagaStateRepository is ISagaStateCommitter committer)
         {
             // messages and release are stored together: a relay cannot hand a message back to this saga
@@ -114,7 +117,7 @@ public class SagaExecutionService : ISagaExecutionService
                                       .ConfigureAwait(false);
         }
 
-        if (hasNewMessages)
+        if (hasMessagesToRelayNow)
             _outboxSignal?.NotifyPendingMessages();
     }
 

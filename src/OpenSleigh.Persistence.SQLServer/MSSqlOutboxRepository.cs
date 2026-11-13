@@ -8,6 +8,16 @@ namespace OpenSleigh.Persistence.SQLServer;
 
 internal class MSSqlOutboxRepository : SqlOutboxRepository
 {
+    // the due time is sent by the application and compared with its own clock, like every other time in the outbox.
+    // The rows are taken from the index on the due time, in its order: a read stops at the first row that is not due,
+    // however many of those there are, and only locks the rows it returns. Left to choose, SQL Server may scan the table,
+    // or sort it and lock every due row, depending on what it knew about the table when it compiled the query
+    private const string ReadQuery =
+        $"SELECT TOP ({{1}}) * FROM [{Constants.DbSchema}].[{OutboxMessage.TableName}] " +
+        $"WITH (UPDLOCK, READPAST, INDEX([{OutboxMessage.DeliverAtIndexName}])) " +
+        $"WHERE [{nameof(OutboxMessage.DeliverAt)}] <= {{0}} " +
+        $"ORDER BY [{nameof(OutboxMessage.DeliverAt)}]";
+
     public MSSqlOutboxRepository(
         SagaDbContext dbContext, 
         ITypeResolver typeResolver, 
@@ -21,11 +31,8 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
     public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var entities = await RelayDbContext.OutboxMessages
+           .FromSqlRaw(ReadQuery, DateTimeOffset.UtcNow, _options.MaxMessagesToPull)
            .AsNoTracking()
-           .Take(_options.MaxMessagesToPull)
-             // make sure the QueryHintInterceptor is registered on the DbContext
-             .WithHint(TableHints.UpdLock)
-             .WithHint(TableHints.ReadPast)
            .ToListAsync(cancellationToken);
 
         var messages = new List<MessageEnvelope>(entities.Count);

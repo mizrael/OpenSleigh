@@ -72,13 +72,7 @@ public class MongoOutboxRepository : IOutboxRepository
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
-        var maxLockDate = now - _options.LockMaxDuration;
-
-        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
-        var available = filterBuilder.Or(
-                        filterBuilder.Eq(e => e.LockId, null),
-                        filterBuilder.Lt(e => e.LockTime, maxLockDate)
-                    );
+        var available = Available(now, _options.LockMaxDuration);
 
         // the messages are claimed before they are read, so that another relay reading at the same time
         // does not publish them too. A claim that is not followed by a delete expires after LockMaxDuration
@@ -91,7 +85,7 @@ public class MongoOutboxRepository : IOutboxRepository
         if (claimed.IsAcknowledged && claimed.ModifiedCount == 0)
             return Enumerable.Empty<MessageEnvelope>();
 
-        var filter = filterBuilder.Eq(e => e.LockId, claimId);
+        var filter = ClaimedBy(claimId, now);
         var cursor = await _dbContext.OutboxMessages.FindAsync(filter, cancellationToken: cancellationToken)
                                                      .ConfigureAwait(false);
         var entities = await cursor.ToListAsync(cancellationToken)
@@ -107,5 +101,40 @@ public class MongoOutboxRepository : IOutboxRepository
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// the messages a relay reading at <paramref name="now"/> can claim: due, and not claimed or with an expired claim.
+    /// </summary>
+    internal static FilterDefinition<Entities.OutboxMessage> Available(DateTimeOffset now, TimeSpan lockMaxDuration)
+    {
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+        var maxLockDate = now - lockMaxDuration;
+
+        return filterBuilder.And(
+            Due(now),
+            filterBuilder.Or(
+                filterBuilder.Eq(e => e.LockId, null),
+                filterBuilder.Lt(e => e.LockTime, maxLockDate)));
+    }
+
+    // the claimed messages were due when they were claimed: saying so again lets the server look them up
+    // among the due ones only, instead of going through every message that is waiting for its time
+    internal static FilterDefinition<Entities.OutboxMessage> ClaimedBy(string claimId, DateTimeOffset now)
+    {
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+
+        return filterBuilder.And(
+            Due(now),
+            filterBuilder.Eq(e => e.LockId, claimId));
+    }
+
+    // "not later than now" rather than "null or up to now": one condition on the field, that also holds for a message
+    // stored without a due time, and that the server answers with one range of the index on it
+    internal static FilterDefinition<Entities.OutboxMessage> Due(DateTimeOffset now)
+    {
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+
+        return filterBuilder.Not(filterBuilder.Gt(e => e.DeliverAt, now.UtcDateTime));
     }
 }

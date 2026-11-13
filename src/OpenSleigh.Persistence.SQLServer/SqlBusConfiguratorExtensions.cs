@@ -18,6 +18,7 @@ public static class SqlBusConfiguratorExtensions
         busConfigurator.Services
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
+            .AddSingleton<SagaDbSchemaUpgrade, SqlServerSchemaUpgrade>()
             .AddSingleton<SagaDbSchemaInitializer>()
             .AddPooledSagaDbContext(builder =>
             {

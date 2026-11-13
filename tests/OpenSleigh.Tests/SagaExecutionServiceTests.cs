@@ -221,6 +221,32 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task CommitAsync_should_not_signal_pending_messages_when_none_of_them_is_due_yet()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxRepository = Substitute.For<IOutboxRepository>();
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance, TimeSpan.FromMinutes(1)));
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(),
+            sagaStateRepository,
+            outboxRepository,
+            outboxSignal);
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        await outboxRepository.Received(1).AppendAsync(Arg.Any<IEnumerable<MessageEnvelope>>(), Arg.Any<CancellationToken>());
+        outboxSignal.DidNotReceive().NotifyPendingMessages();
+    }
+
+    [Fact]
     public async Task CommitAsync_should_append_outbox_and_release_lock()
     {
         // Arrange

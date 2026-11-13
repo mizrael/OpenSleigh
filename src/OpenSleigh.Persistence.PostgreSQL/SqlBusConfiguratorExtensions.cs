@@ -19,6 +19,7 @@ public static class SqlBusConfiguratorExtensions
         busConfigurator.Services
             .AddSingleton(config.SagaRepositoryOptions)
             .AddSingleton(config.OutboxRepositoryOptions)
+            .AddSingleton<SagaDbSchemaUpgrade, PostgreSqlSchemaUpgrade>()
             .AddSingleton<SagaDbSchemaInitializer>()
             .AddPooledSagaDbContext(builder => builder.UseNpgsql(config.ConnectionString))
             // the relay reads and deletes outbox rows on the context its transaction runs on,

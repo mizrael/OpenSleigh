@@ -3,14 +3,26 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 namespace OpenSleigh.Persistence.SQL;
 
 /// <summary>
-/// creates the saga database and its schema, when missing, the first time a context asks for it.
+/// creates the saga database and its schema, when missing, the first time a context asks for it,
+/// and upgrades the schema of a database created by an earlier version of the library.
 /// Registered as a singleton, it remembers the outcome for the lifetime of its service provider:
 /// contexts are created several times per message, and only the first one pays for the check.
 /// </summary>
 public sealed class SagaDbSchemaInitializer
 {
     private readonly object _gate = new();
+    private readonly SagaDbSchemaUpgrade? _schemaUpgrade;
     private volatile bool _created;
+
+    public SagaDbSchemaInitializer()
+    {
+    }
+
+    /// <param name="schemaUpgrade">what a database that already exists is brought up to date with.</param>
+    public SagaDbSchemaInitializer(SagaDbSchemaUpgrade schemaUpgrade)
+    {
+        _schemaUpgrade = schemaUpgrade ?? throw new ArgumentNullException(nameof(schemaUpgrade));
+    }
 
     public void EnsureCreated(DatabaseFacade database)
     {
@@ -25,7 +37,11 @@ public sealed class SagaDbSchemaInitializer
             if (_created)
                 return;
 
-            database.EnsureCreated();
+            // a database that was just created has the current schema
+            var alreadyExisted = !database.EnsureCreated();
+            if (alreadyExisted)
+                _schemaUpgrade?.Apply(database);
+
             _created = true;
         }
     }

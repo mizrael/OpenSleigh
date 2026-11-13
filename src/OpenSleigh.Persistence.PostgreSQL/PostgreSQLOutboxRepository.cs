@@ -1,15 +1,20 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL;
+using OpenSleigh.Persistence.SQL.Entities;
 using OpenSleigh.Utils;
-using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
 
 internal class PostgreSQLOutboxRepository : SqlOutboxRepository
 {
-    private const string ReadQueryRaw = $"SELECT * FROM {Constants.DbSchema}.\"OutboxMessages\" FOR UPDATE SKIP LOCKED";
-    private readonly static FormattableString ReadQuery = FormattableStringFactory.Create(ReadQueryRaw);
+    // the due time is sent by the application and compared with its own clock, like every other time in the outbox.
+    // Ordered by due time, the rows come from the index on it: a read stops at the first row that is not due,
+    // however many of those there are, whatever the planner knows about the table
+    private const string ReadQuery =
+        $"SELECT * FROM {Constants.DbSchema}.\"{OutboxMessage.TableName}\" " +
+        $"WHERE \"{nameof(OutboxMessage.DeliverAt)}\" <= {{0}} " +
+        $"ORDER BY \"{nameof(OutboxMessage.DeliverAt)}\" LIMIT {{1}} FOR UPDATE SKIP LOCKED";
 
     public PostgreSQLOutboxRepository(
         SqlOutboxRepositoryOptions options, 
@@ -24,9 +29,8 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
     public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var entities = await RelayDbContext.OutboxMessages
-           .FromSql(ReadQuery)
+           .FromSqlRaw(ReadQuery, DateTimeOffset.UtcNow, _options.MaxMessagesToPull)
            .AsNoTracking()
-           .Take(_options.MaxMessagesToPull)
            .ToListAsync(cancellationToken);
 
         var messages = new List<MessageEnvelope>(entities.Count);
