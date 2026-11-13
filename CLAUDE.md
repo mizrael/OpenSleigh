@@ -65,7 +65,7 @@ docker-compose down && docker-compose up -d
 - PostgreSQL: `POSTGRES_PASSWORD=Sup3r_p4ssword123`
 - RabbitMQ vhost: `/opensleigh-tests`
 
-**Note:** Cosmos tests are excluded (not fully implemented). E2E tests are disabled in CI.
+**Note:** Cosmos tests are excluded (not fully implemented). E2E tests run in their own CircleCI job (`e2e`), through `tests/OpenSleigh.E2ETests/run-e2e.sh`.
 
 ## High-Level Architecture
 
@@ -218,7 +218,7 @@ Understanding how messages flow through the system:
 ### Test Projects (tests/)
 
 - **OpenSleigh.Tests/** - Unit tests (no external dependencies)
-- **OpenSleigh.E2ETests/** - End-to-end tests (currently disabled in CI)
+- **OpenSleigh.E2ETests/** - End-to-end tests (own `e2e` job in CI)
 - **OpenSleigh.Persistence.*.Tests/** - Persistence layer integration tests (require Docker)
 - **OpenSleigh.Transport.*.Tests/** - Transport layer integration tests (require Docker)
 - **tests/infra/docker-compose.yml** - Infrastructure services for integration tests
@@ -247,7 +247,7 @@ Samples demonstrate various persistence and transport configurations. Use as ref
 
 Tests use xUnit with NSubstitute for mocking. Categorize with traits:
 - `[Trait("Category", "Integration")]` - Requires Docker infrastructure
-- `[Trait("Category", "E2E")]` - End-to-end scenarios (currently disabled in CI)
+- `[Trait("Category", "E2E")]` - End-to-end scenarios (own `e2e` job in CI; PostgreSQL, RabbitMQ and Kafka needed)
 
 ### Code Coverage
 
@@ -255,7 +255,7 @@ Enforced via codecov.yaml: **70% minimum** for both project and patch coverage, 
 
 ### CI/CD
 
-- **CircleCI** (primary): Runs build + unit tests + integration tests on every push; SonarCloud quality scan
+- **CircleCI** (primary): Runs build + unit tests + integration tests on every push, and the E2E tests in a separate job; SonarCloud quality scan
 - **GitHub Actions**: CodeQL security scanning (develop/releases branches); NuGet publishing (manual/releases)
 
 ## Critical Reminders
