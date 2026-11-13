@@ -18,6 +18,10 @@ public class DelayedDeliveryTests
     private static readonly TimeSpan OutboxInterval = TimeSpan.FromMilliseconds(25);
     private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(20);
 
+    // how long a test waits for something that must not happen. Nothing tells that the transport is idle:
+    // it is several passes of the relay, and far longer than a message stays in the in-memory channel
+    private static readonly TimeSpan SettleTime = 8 * OutboxInterval;
+
     [Fact]
     public async Task A_timeout_should_be_handled_once_and_not_before_it_is_due_when_the_reply_never_arrives()
     {
@@ -28,11 +32,14 @@ public class DelayedDeliveryTests
         var request = new StartRequest(Guid.NewGuid().ToString(), ReplyArrives: false);
         await PublishAsync(provider, request);
 
-        await WaitUntilAsync(() => probe.TimeoutsHandled(request.CorrelationId) > 0);
-        await Task.Delay(4 * OutboxInterval);
+        await WaitUntilAsync(() => probe.TimeoutsHandled(request.CorrelationId) > 0, "the timeout was not handled");
+        await WaitUntilOutboxIsEmptyAsync(provider);
+        await Task.Delay(SettleTime);
 
         Assert.Equal(1, probe.TimeoutsHandled(request.CorrelationId));
-        Assert.True(probe.TimeToTimeout(request.CorrelationId) >= Timeout);
+        Assert.True(
+            probe.TimeoutHandledAt(request.CorrelationId) >= probe.TimeoutNotDueBefore(request.CorrelationId),
+            "the timeout was handled before it was due");
 
         await StopHostedServicesAsync(provider);
     }
@@ -47,14 +54,16 @@ public class DelayedDeliveryTests
         var request = new StartRequest(Guid.NewGuid().ToString(), ReplyArrives: true);
         await PublishAsync(provider, request);
 
-        await WaitUntilAsync(() => probe.IsCompleted(request.CorrelationId));
-        await Task.Delay(Timeout + 8 * OutboxInterval);
+        await WaitUntilAsync(() => probe.IsCompleted(request.CorrelationId), "the saga did not complete");
+        await WaitUntilAsync(
+            () => DateTimeOffset.UtcNow > probe.TimeoutDueBy(request.CorrelationId),
+            "the due time of the timeout did not pass");
+
+        // a read after the due time returns the timeout until the relay has published and removed it
+        await WaitUntilOutboxIsEmptyAsync(provider);
+        await Task.Delay(SettleTime);
 
         Assert.Equal(0, probe.TimeoutsHandled(request.CorrelationId));
-        Assert.Empty(await provider.GetRequiredService<IOutboxRepository>().ReadPendingAsync());
-
-        // nothing is waiting either: a message that is still delayed would show up once it is due
-        await Task.Delay(Timeout);
         Assert.Empty(await provider.GetRequiredService<IOutboxRepository>().ReadPendingAsync());
 
         await StopHostedServicesAsync(provider);
@@ -89,12 +98,21 @@ public class DelayedDeliveryTests
         await scope.ServiceProvider.GetRequiredService<IMessageBus>().PublishAsync(request);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition)
+    private static Task WaitUntilAsync(Func<bool> condition, string failure)
+        => WaitUntilAsync(() => ValueTask.FromResult(condition()), failure);
+
+    private static Task WaitUntilOutboxIsEmptyAsync(IServiceProvider provider)
+    {
+        var outbox = provider.GetRequiredService<IOutboxRepository>();
+        return WaitUntilAsync(async () => !(await outbox.ReadPendingAsync()).Any(), "the outbox was not emptied");
+    }
+
+    private static async Task WaitUntilAsync(Func<ValueTask<bool>> condition, string failure)
     {
         var stopwatch = Stopwatch.StartNew();
-        while (!condition())
+        while (!await condition())
         {
-            Assert.True(stopwatch.Elapsed < WaitLimit, "the expected message was not handled in time");
+            Assert.True(stopwatch.Elapsed < WaitLimit, $"{failure} in time");
             await Task.Delay(10);
         }
     }
@@ -105,25 +123,33 @@ public class DelayedDeliveryTests
 
     public record ReplyTimedOut : IMessage;
 
+    /// <summary>
+    /// the times are read from the clock the due time of a message is computed from, and compared with.
+    /// </summary>
     public sealed class TimeoutProbe
     {
-        private readonly ConcurrentDictionary<string, long> _started = new();
+        private readonly ConcurrentDictionary<string, DateTimeOffset> _notDueBefore = new();
+        private readonly ConcurrentDictionary<string, DateTimeOffset> _dueBy = new();
         private readonly ConcurrentDictionary<string, int> _timeouts = new();
-        private readonly ConcurrentDictionary<string, TimeSpan> _timeToTimeout = new();
+        private readonly ConcurrentDictionary<string, DateTimeOffset> _handledAt = new();
         private readonly ConcurrentDictionary<string, bool> _completed = new();
 
-        public void Started(string correlationId) => _started[correlationId] = Stopwatch.GetTimestamp();
+        // the due time of the timeout is the time it was published at plus its delay: it lies between these two
+        public void PublishingTimeout(string correlationId) => _notDueBefore[correlationId] = DateTimeOffset.UtcNow + Timeout;
+        public void PublishedTimeout(string correlationId) => _dueBy[correlationId] = DateTimeOffset.UtcNow + Timeout;
 
         public void TimedOut(string correlationId)
         {
-            _timeToTimeout.TryAdd(correlationId, Stopwatch.GetElapsedTime(_started[correlationId]));
+            _handledAt.TryAdd(correlationId, DateTimeOffset.UtcNow);
             _timeouts.AddOrUpdate(correlationId, 1, (_, count) => count + 1);
         }
 
         public void Completed(string correlationId) => _completed[correlationId] = true;
 
         public int TimeoutsHandled(string correlationId) => _timeouts.GetValueOrDefault(correlationId);
-        public TimeSpan TimeToTimeout(string correlationId) => _timeToTimeout[correlationId];
+        public DateTimeOffset TimeoutNotDueBefore(string correlationId) => _notDueBefore[correlationId];
+        public DateTimeOffset TimeoutDueBy(string correlationId) => _dueBy[correlationId];
+        public DateTimeOffset TimeoutHandledAt(string correlationId) => _handledAt[correlationId];
         public bool IsCompleted(string correlationId) => _completed.ContainsKey(correlationId);
     }
 
@@ -141,12 +167,12 @@ public class DelayedDeliveryTests
 
         public ValueTask HandleAsync(IMessageContext<StartRequest> messageContext, CancellationToken cancellationToken = default)
         {
-            // the clock starts before the timeout is published: the time measured is never shorter than the delay
-            _probe.Started(messageContext.CorrelationId);
-
             if (messageContext.Message.ReplyArrives)
                 Publish(new Reply());
+
+            _probe.PublishingTimeout(messageContext.CorrelationId);
             Publish(new ReplyTimedOut(), Timeout);
+            _probe.PublishedTimeout(messageContext.CorrelationId);
 
             return ValueTask.CompletedTask;
         }

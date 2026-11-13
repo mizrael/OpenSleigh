@@ -118,7 +118,7 @@ internal static class PipelineScenarios
                 services.TryDecorate<IPublisher>((provider, inner)
                     => new TrackingPublisher(inner, provider.GetRequiredService<WorkTracker>()));
 
-            services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+            services.TryAddSingleton<ITransactionManager, BenchTransactionManager>();
             services.TryDecorate<ITransactionManager>((_, inner) => new CommitTrackingTransactionManager(inner, commits));
             instrument?.Invoke(services);
         });

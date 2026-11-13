@@ -93,8 +93,8 @@ public class SagaExecutionService : ISagaExecutionService
 
         var hasNewMessages = context.Outbox.Count > 0;
 
-        // a relay woken up for messages that are not due yet would read the outbox for nothing
-        var hasMessagesToRelayNow = hasNewMessages && context.Outbox.Any(message => message.DeliverAt is null);
+        // looked up now: the outbox is empty once the messages are stored
+        DateTimeOffset? earliestDueTime = hasNewMessages && _outboxSignal is not null ? EarliestDueTime(context.Outbox) : null;
 
         if (_sagaStateRepository is ISagaStateCommitter committer)
         {
@@ -117,9 +117,32 @@ public class SagaExecutionService : ISagaExecutionService
                                       .ConfigureAwait(false);
         }
 
-        if (hasMessagesToRelayNow)
+        // a relay woken up for messages that are not due yet would read the outbox for nothing.
+        // A short delay may have elapsed while the messages were stored
+        if (earliestDueTime is { } dueTime && IsDue(dueTime))
             _outboxSignal?.NotifyPendingMessages();
     }
+
+    private static readonly DateTimeOffset NoDelay = DateTimeOffset.MinValue;
+
+    private static DateTimeOffset EarliestDueTime(IReadOnlyCollection<MessageEnvelope> messages)
+    {
+        var earliest = DateTimeOffset.MaxValue;
+
+        foreach (var message in messages)
+        {
+            if (message.DeliverAt is not { } dueTime)
+                return NoDelay;
+
+            if (dueTime < earliest)
+                earliest = dueTime;
+        }
+
+        return earliest;
+    }
+
+    private static bool IsDue(DateTimeOffset dueTime)
+        => dueTime == NoDelay || dueTime <= DateTimeOffset.UtcNow;
 
     private async Task<ISagaInstance> ResolveInstanceAsync<TM>(IMessageContext<TM> messageContext, SagaDescriptor descriptor, CancellationToken cancellationToken) where TM : IMessage
     {

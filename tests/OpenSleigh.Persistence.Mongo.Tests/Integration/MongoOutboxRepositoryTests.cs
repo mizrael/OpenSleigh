@@ -105,18 +105,19 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
     [Fact]
     public async Task ReadPendingAsync_should_return_a_delayed_message_once_its_delay_has_elapsed()
     {
-        var delay = TimeSpan.FromSeconds(2);
-        var message = CreateMessage(delay);
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
+        // created once the store is there: setting it up does not use up the delay
+        var message = CreateMessage(TimeSpan.FromSeconds(1));
         await sut.AppendAsync([message]);
 
-        var readBefore = await sut.ReadPendingAsync();
-        await Task.Delay(delay + TimeSpan.FromSeconds(1));
-        var readAfter = await sut.ReadPendingAsync();
+        var (read, readAt) = await ReadUntilAnyAsync(sut);
 
-        Assert.Empty(readBefore);
-        Assert.Equal(message.MessageId, Assert.Single(readAfter).MessageId);
+        Assert.Equal(message.MessageId, Assert.Single(read).MessageId);
+        // every read that ended before the due time returned nothing. A date is stored to the millisecond
+        Assert.True(
+            readAt >= message.DeliverAt!.Value - StoredDatePrecision,
+            $"read at {readAt:O}, before it was due at {message.DeliverAt:O}");
     }
 
     [Fact]
@@ -132,13 +133,34 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         await sut.AppendAsync([notDue, immediate, notDueEither, due]);
 
         var read = await sut.ReadPendingAsync();
-        await Task.Delay(50);
-        var readAgain = await sut.ReadPendingAsync();
+        // the claim of the first read expires as soon as the clock moves
+        var (readAgain, _) = await ReadUntilAnyAsync(sut);
 
         Assert.Equal(expected, read.Select(m => m.MessageId).Order());
         Assert.Equal(expected, readAgain.Select(m => m.MessageId).Order());
         Assert.Null((await FindStoredAsync(db, notDue)).LockId);
         Assert.Null((await FindStoredAsync(db, notDueEither)).LockId);
+    }
+
+    private static readonly TimeSpan StoredDatePrecision = TimeSpan.FromMilliseconds(1);
+    private static readonly TimeSpan ReadLimit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan PauseBetweenReads = TimeSpan.FromMilliseconds(20);
+
+    // reads until messages are returned, and tells when the read that returned them ended
+    private static async Task<(IReadOnlyList<MessageEnvelope> Messages, DateTimeOffset ReadAt)> ReadUntilAnyAsync(MongoOutboxRepository sut)
+    {
+        var giveUpAt = DateTimeOffset.UtcNow + ReadLimit;
+
+        while (true)
+        {
+            var messages = (await sut.ReadPendingAsync()).ToList();
+            var readAt = DateTimeOffset.UtcNow;
+            if (messages.Count > 0)
+                return (messages, readAt);
+
+            Assert.True(readAt < giveUpAt, $"no message was returned in {ReadLimit}");
+            await Task.Delay(PauseBetweenReads);
+        }
     }
 
     [Fact]
