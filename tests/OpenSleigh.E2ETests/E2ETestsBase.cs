@@ -112,27 +112,39 @@ public abstract class E2ETestsBase
         }
     }
 
+    // every host is stopped and disposed, whatever the ones before it did: one left running keeps consuming
+    // from queues and topics that the next tests use
     private static async Task StopAsync(IEnumerable<IHost> hosts, bool throwOnFailure)
     {
         var failures = new List<Exception>();
         foreach (var host in hosts)
         {
-            try
-            {
-                await host.StopAsync();
-            }
-            catch (Exception e)
-            {
-                failures.Add(e);
-            }
-            finally
-            {
-                host.Dispose();
-            }
+            await TryAsync(() => host.StopAsync(), failures);
+            await TryAsync(() => DisposeAsync(host), failures);
         }
 
         if (throwOnFailure && failures.Count > 0)
             throw new AggregateException("the hosts did not stop cleanly.", failures);
+    }
+
+    private static async Task DisposeAsync(IHost host)
+    {
+        if (host is IAsyncDisposable asyncDisposable)
+            await asyncDisposable.DisposeAsync();
+        else
+            host.Dispose();
+    }
+
+    private static async Task TryAsync(Func<Task> action, ICollection<Exception> failures)
+    {
+        try
+        {
+            await action();
+        }
+        catch (Exception e)
+        {
+            failures.Add(e);
+        }
     }
 
     private IHostBuilder CreateHostBuilder() =>
