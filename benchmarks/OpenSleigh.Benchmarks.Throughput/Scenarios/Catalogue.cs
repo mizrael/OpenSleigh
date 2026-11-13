@@ -96,21 +96,6 @@ internal static class Catalogue
             "500 pending outbox documents relayed to a no-op publisher; rate until drained or 10 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10))),
 
-#if DELAYED_DELIVERY
-        // compared with the scenarios above: messages that are not due must not slow down the ones that are
-        new("sqlserver-outbox-relay-delayed-backlog", GateAndFull, MessagesPerSecond, true,
-            "as sqlserver-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
-            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
-
-        new("postgres-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
-            "as postgres-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
-            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
-
-        new("mongo-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
-            "as mongo-outbox-relay, while 20000 documents that are not due yet wait in the same collection; rate of the 500 until drained or 10 s",
-            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
-#endif
-
         new("postgres-state-longsaga", GateAndFull, Milliseconds, false,
             "find/lock/release cycle on a saga with 300 processed messages; mean of 40 cycles",
             ctx => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.Postgres(ctx), 300, 40)),
@@ -241,6 +226,23 @@ internal static class Catalogue
         new("mongo-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
             "2000 two-hop sagas on MongoDB + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+#endif
+
+#if DELAYED_DELIVERY
+        // compared with the *-outbox-relay scenarios: messages that are not due must not slow down the ones that are.
+        // Last, because scenarios run in this order in one process: a scenario that only one side of a comparison has,
+        // run before scenarios that both have, changes what those are measured on (kafka-consume was 25% slower after it)
+        new("sqlserver-outbox-relay-delayed-backlog", GateAndFull, MessagesPerSecond, true,
+            "as sqlserver-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
+
+        new("postgres-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
+            "as postgres-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
+
+        new("mongo-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
+            "as mongo-outbox-relay, while 20000 documents that are not due yet wait in the same collection; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
 #endif
     ];
 
