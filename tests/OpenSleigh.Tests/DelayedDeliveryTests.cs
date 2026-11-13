@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.InMemory;
+using OpenSleigh.InMemory.Messaging;
 using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 using System.Collections.Concurrent;
@@ -40,6 +41,7 @@ public class DelayedDeliveryTests
         Assert.True(
             probe.TimeoutHandledAt(request.CorrelationId) >= probe.TimeoutNotDueBefore(request.CorrelationId),
             "the timeout was handled before it was due");
+        Assert.Empty(provider.GetRequiredService<InMemoryDeadLetters>().Messages);
 
         await StopHostedServicesAsync(provider);
     }
@@ -65,6 +67,9 @@ public class DelayedDeliveryTests
 
         Assert.Equal(0, probe.TimeoutsHandled(request.CorrelationId));
         Assert.Empty(await provider.GetRequiredService<IOutboxRepository>().ReadPendingAsync());
+
+        // not handled is not failed: a timeout that comes too late is not a dead letter
+        Assert.Empty(provider.GetRequiredService<InMemoryDeadLetters>().Messages);
 
         await StopHostedServicesAsync(provider);
     }

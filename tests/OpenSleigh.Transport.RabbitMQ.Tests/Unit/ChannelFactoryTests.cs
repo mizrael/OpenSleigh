@@ -92,7 +92,12 @@ public class ChannelFactoryTests
                 arguments: Arg.Is<Dictionary<string, object?>>(d =>
                     d.ContainsKey(Headers.XMessageTTL) && (int)d[Headers.XMessageTTL]! == (int)rabbitCfg.RetryDelay.TotalMilliseconds &&
                     d.ContainsKey(Headers.XDeadLetterExchange) && (string)d[Headers.XDeadLetterExchange]! == queueReferences.ExchangeName &&
-                    d.ContainsKey(Headers.XDeadLetterRoutingKey) && (string)d[Headers.XDeadLetterRoutingKey]! == queueReferences.RoutingKey),
+                    d.ContainsKey(Headers.XDeadLetterRoutingKey) && (string)d[Headers.XDeadLetterRoutingKey]! == queueReferences.QueueName),
+                cancellationToken: Arg.Any<CancellationToken>());
+        channel.Received(1).QueueBindAsync(queue: queueReferences.RetryQueueName,
+                exchange: queueReferences.RetryExchangeName,
+                routingKey: queueReferences.RetryQueueName,
+                arguments: null,
                 cancellationToken: Arg.Any<CancellationToken>());
 
         channel.Received(1).QueueDeclareAsync(queue: queueReferences.QueueName,

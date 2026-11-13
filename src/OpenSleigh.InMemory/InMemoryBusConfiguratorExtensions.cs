@@ -36,11 +36,19 @@ public static class InMemoryBusConfiguratorExtensions
     {
         options ??= InMemorySagaOptions.Defaults;
 
+        // subscriber options registered by the application are left alone
+        busConfigurator.Services.TryAddSingleton(
+            new InMemorySubscriberOptions(options.SubscriberMaxMessagesBatchSize, InMemorySubscriberOptions.Defaults.PollingInterval)
+            {
+                RetryDelay = options.SubscriberRetryDelay
+            });
+
         // a persistence configured before the transport keeps its own transaction manager
         busConfigurator.Services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
 
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)
+                                .AddSingleton<InMemoryDeadLetters>()
                                 .AddSingleton<Channel<MessageEnvelope>>(ctx => Channel.CreateBounded<MessageEnvelope>(options.SubscriberMaxMessagesBatchSize))
                                 .AddSingleton<ChannelReader<MessageEnvelope>>(ctx =>
                                 {
