@@ -19,27 +19,26 @@ public abstract class SimpleSagaScenario : E2ETestsBase
     public async Task run_single_message_scenario(int hostsCount)
     {
         var message = new StartSimpleSaga();
-
-        var receivedCount = 0;
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(10) * hostsCount);
+        var received = new Expectation(1);
 
         Action<IMessageContext<StartSimpleSaga>> onMessage = ctx =>
         {
-            Assert.False(string.IsNullOrWhiteSpace(ctx.MessageId));
-            Assert.False(string.IsNullOrWhiteSpace(ctx.SenderId));
-
-            Interlocked.Increment(ref receivedCount);
-            tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
+            received.Require(!string.IsNullOrWhiteSpace(ctx.MessageId), "the message has no id");
+            received.Require(!string.IsNullOrWhiteSpace(ctx.SenderId), "the message has no sender id");
+            received.Signal();
         };
 
         await RunScenarioAsync(hostsCount,
             (ctx, services) => services.AddSingleton(onMessage),
-            async bus => await bus.PublishAsync(message, tokenSource.Token),
-            tokenSource);
+            async (services, cancellationToken) =>
+            {
+                var bus = services.GetRequiredService<IMessageBus>();
+                await bus.PublishAsync(message, cancellationToken);
+                await received.Reached.WaitAsync(cancellationToken);
+            });
 
-        await Task.Delay(500);
-
-        Assert.Equal(1, receivedCount);
+        Assert.Empty(received.Problems);
+        Assert.Equal(1, received.Count);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

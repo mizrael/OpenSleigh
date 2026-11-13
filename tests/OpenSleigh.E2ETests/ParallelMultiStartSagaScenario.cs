@@ -3,8 +3,6 @@ using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport;
 using System.Collections.Concurrent;
 using System.ComponentModel;
-using System.Diagnostics;
-using System.Text.Json;
 using Bogus;
 using Xunit.Abstractions;
 
@@ -14,6 +12,8 @@ namespace OpenSleigh.E2ETests;
 [Trait("Category", "E2E")]
 public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
 {
+    private const int StartMessagesCount = 2;
+
     private static readonly Faker Faker = new();
 
     protected ParallelMultiStartSagaScenario(ITestOutputHelper console) : base(console) { }
@@ -25,54 +25,28 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
     public async Task run_multiple_start_messages_scenario(int hostsCount)
     {
         var correlationId = Faker.Random.Guid().ToString();
-        var foo = Faker.Random.Int();
-        var bar = Faker.Lorem.Slug(5);
 
-        var start = new StartMultiStartSaga(foo, correlationId, Guid.NewGuid().ToString("N"));
-        var alsoStart = new AlsoStartMultiStartSaga(bar, correlationId, Guid.NewGuid().ToString("N"));
+        var start = new StartMultiStartSaga(Faker.Random.Int(), correlationId);
+        var alsoStart = new AlsoStartMultiStartSaga(Faker.Lorem.Slug(5), correlationId);
 
         IMessage first = Faker.Random.Bool() ? start : alsoStart;
         IMessage last = ReferenceEquals(first, start) ? alsoStart : start;
 
-        var receivedCount = 0;
-        var timeout = 10 * hostsCount;
-        if (Debugger.IsAttached)
-        {
-            timeout = 1000;
-        }
-        using var tokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(timeout));
-
-        MultiStartSagaState state = null!;
-
+        var handled = new Expectation(StartMessagesCount);
         ConcurrentBag<string> instanceIds = [];
 
-        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (ctx, inst) =>
+        Action<IMessageContext<StartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onStart = (ctx, instance) =>
         {
-            Console.WriteLine($"Handled Start message {JsonSerializer.Serialize(ctx.Message, new JsonSerializerOptions { WriteIndented = true })}");
-            Assert.False(string.IsNullOrWhiteSpace(ctx.MessageId));
-            Assert.False(string.IsNullOrWhiteSpace(ctx.SenderId));
-
-            instanceIds.Add(inst.InstanceId);
-            Interlocked.Increment(ref receivedCount);
-            if (ReferenceEquals(last, start))
-            {
-                state = inst.State;
-                // ReSharper disable once AccessToDisposedClosure
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            }
+            handled.Require(!string.IsNullOrWhiteSpace(ctx.MessageId), "the message has no id");
+            handled.Require(!string.IsNullOrWhiteSpace(ctx.SenderId), "the message has no sender id");
+            instanceIds.Add(instance.InstanceId);
+            handled.Signal();
         };
 
-        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (ctx, inst) =>
+        Action<IMessageContext<AlsoStartMultiStartSaga>, ISagaInstance<MultiStartSagaState>> onAlsoStart = (_, instance) =>
         {
-            Console.WriteLine($"Handled AlsoStart message {JsonSerializer.Serialize(ctx.Message, new JsonSerializerOptions { WriteIndented = true })}");
-            instanceIds.Add(inst.InstanceId);
-            Interlocked.Increment(ref receivedCount);
-            if (ReferenceEquals(last, alsoStart))
-            {
-                state = inst.State;
-                // ReSharper disable once AccessToDisposedClosure
-                tokenSource.CancelAfter(TimeSpan.FromSeconds(5));
-            }
+            instanceIds.Add(instance.InstanceId);
+            handled.Signal();
         };
 
         await RunScenarioAsync(
@@ -82,25 +56,20 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
                 services.AddSingleton(onStart);
                 services.AddSingleton(onAlsoStart);
             },
-            async bus =>
+            async (services, cancellationToken) =>
             {
-                Console.WriteLine($"Start message Id: {start.RequestId}");
-                Console.WriteLine($"AlsoStart message Id: {alsoStart.RequestId}");
+                var bus = services.GetRequiredService<IMessageBus>();
 
-                await bus.PublishAsync(first, tokenSource.Token);
-                await bus.PublishAsync(last, tokenSource.Token);
-            },
-            tokenSource
-        );
+                // the second message is on its way while the first is being handled
+                await bus.PublishAsync(first, cancellationToken);
+                await bus.PublishAsync(last, cancellationToken);
 
-        Assert.Equal(2, receivedCount);
+                await handled.Reached.WaitAsync(cancellationToken);
+            });
+
+        Assert.Empty(handled.Problems);
+        Assert.Equal(StartMessagesCount, handled.Count);
         Assert.Single(instanceIds.Distinct());
-
-        // These work correctly for in-memory scenarios because the object is always the same
-        // Not having access to the host's container, I'm not sure if there's an appropriate way to get at the
-        // saga state in the physical-persistence scenarios
-        // Assert.Equal(foo, state.Foo);
-        // Assert.Equal(bar, state.Bar);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

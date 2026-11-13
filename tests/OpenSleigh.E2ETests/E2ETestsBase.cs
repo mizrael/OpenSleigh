@@ -1,9 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenSleigh.DependencyInjection;
-using OpenSleigh.Transport;
 using OpenSleigh.Outbox;
+using OpenSleigh.Queries;
 using System.ComponentModel;
+using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using Xunit.Abstractions;
 
@@ -13,70 +14,125 @@ namespace OpenSleigh.E2ETests;
 [Trait("Category", "E2E")]
 public abstract class E2ETestsBase
 {
-    protected readonly ITestOutputHelper? Console;
+    // upper bounds, spent only by a scenario that fails: one that works ends as soon as what it expects has happened
+    private static readonly TimeSpan StartupTimeout = TimeSpan.FromSeconds(60);
+    private static readonly TimeSpan ScenarioTimeout = TimeSpan.FromSeconds(60);
+
+    // how long the hosts are left running once the scenario is over, for a message that should not
+    // have been delivered, or delivered again, to show up. It spans several outbox passes and transport retries
+    private static readonly TimeSpan ObservationWindow = TimeSpan.FromSeconds(3);
+
+    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(50);
+
+    protected readonly ITestOutputHelper Console;
 
     protected E2ETestsBase(ITestOutputHelper console)
     {
-        Console = console;
+        Console = console ?? throw new ArgumentNullException(nameof(console));
     }
 
-    protected E2ETestsBase()
-    {
-        Console = null!;
-    }
-
-    protected async ValueTask<IHost> SetupHost(Action<HostBuilderContext, IServiceCollection> servicesBuilder)
-    {
-        var hostBuilder = CreateHostBuilder();
-        
-        hostBuilder.ConfigureServices(servicesBuilder);
-
-        var host = hostBuilder.Build();
-
-        //TODO:
-        //  await host.SetupInfrastructureAsync();
-        return host;
-    }
-    
+    /// <summary>
+    /// starts the hosts, runs the scenario on the services of the first one, keeps the hosts running
+    /// for the observation window and stops them.
+    /// </summary>
+    /// <param name="scenario">publishes the messages and waits for what it expects to happen.
+    /// Its token is cancelled when the scenario takes too long.</param>
+    /// <exception cref="TimeoutException">the scenario did not finish in time.</exception>
     protected async Task RunScenarioAsync(int hostsCount,
         Action<HostBuilderContext, IServiceCollection> configureServices,
-        Func<IMessageBus, Task> runner,
-        CancellationTokenSource runningTokenSource)
+        Func<IServiceProvider, CancellationToken, Task> scenario)
     {
-        var startupTokenSource = new CancellationTokenSource(TimeSpan.FromSeconds(30) * hostsCount);
+        var hosts = Enumerable.Range(0, hostsCount)
+            .Select(_ => CreateHostBuilder().ConfigureServices(configureServices).Build())
+            .ToArray();
 
-        var createHostTasks = Enumerable.Range(1, hostsCount)
-            .Select(async i =>
-            {
-                var host = await SetupHost(configureServices);
+        try
+        {
+            await StartAsync(hosts);
 
-                await host.StartAsync(startupTokenSource.Token);
-                return host;
-            }).ToArray();
+            await using (var scope = hosts[0].Services.CreateAsyncScope())
+                await RunWithTimeoutAsync(token => scenario(scope.ServiceProvider, token));
 
-        await Task.WhenAll(createHostTasks);
+            await Task.Delay(ObservationWindow);
+        }
+        catch
+        {
+            // what failed above is what the test reports, whatever stopping the hosts has to say
+            await StopAsync(hosts, throwOnFailure: false);
+            throw;
+        }
 
-        if (startupTokenSource.IsCancellationRequested)
-            throw new Exception("a timeout occurred during hosts initialization.");
+        await StopAsync(hosts, throwOnFailure: true);
+    }
 
-        var producerHost = createHostTasks.First().Result;
-        using var scope = producerHost.Services.CreateScope();
-        var bus = scope.ServiceProvider.GetRequiredService<IMessageBus>();
+    /// <summary>
+    /// reads a saga over and over until it is stored the way the scenario expects.
+    /// </summary>
+    protected static async Task<SagaInstanceInfo> WaitForSagaAsync<TSaga>(
+        IServiceProvider services,
+        string correlationId,
+        Func<SagaInstanceInfo, bool> isAsExpected,
+        CancellationToken cancellationToken)
+    {
+        var query = services.GetRequiredService<ISagaStateQuery>();
+        while (true)
+        {
+            var saga = await query.GetByCorrelationIdAsync(correlationId, typeof(TSaga).FullName!, cancellationToken);
+            if (saga is not null && isAsExpected(saga))
+                return saga;
 
-        await runner(bus);
+            await Task.Delay(PollingInterval, cancellationToken);
+        }
+    }
 
-        while (!runningTokenSource.IsCancellationRequested)
-            await Task.Delay(10);
+    private static async Task StartAsync(IReadOnlyCollection<IHost> hosts)
+    {
+        using var timeout = new CancellationTokenSource(StartupTimeout);
+        try
+        {
+            await Task.WhenAll(hosts.Select(host => host.StartAsync(timeout.Token)));
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException($"the hosts did not start within {StartupTimeout.TotalSeconds} seconds.");
+        }
+    }
 
-        foreach (var t in createHostTasks)
+    private static async Task RunWithTimeoutAsync(Func<CancellationToken, Task> scenario)
+    {
+        using var timeout = new CancellationTokenSource(Debugger.IsAttached ? Timeout.InfiniteTimeSpan : ScenarioTimeout);
+        try
+        {
+            await scenario(timeout.Token);
+        }
+        catch (OperationCanceledException) when (timeout.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"the scenario did not complete within {ScenarioTimeout.TotalSeconds} seconds: something it expected did not happen.");
+        }
+    }
+
+    private static async Task StopAsync(IEnumerable<IHost> hosts, bool throwOnFailure)
+    {
+        var failures = new List<Exception>();
+        foreach (var host in hosts)
         {
             try
             {
-                await t.Result.StopAsync();
-                t.Result.Dispose();
+                await host.StopAsync();
             }
-            catch { }
+            catch (Exception e)
+            {
+                failures.Add(e);
+            }
+            finally
+            {
+                host.Dispose();
+            }
         }
+
+        if (throwOnFailure && failures.Count > 0)
+            throw new AggregateException("the hosts did not stop cleanly.", failures);
     }
 
     private IHostBuilder CreateHostBuilder() =>
@@ -87,19 +143,13 @@ public abstract class E2ETestsBase
                 {
                     ConfigureTransportAndPersistence(cfg);
 
-                    // setting a very low, but non-zero, outbox processor interval
-                    // otherwise the background processes will keep running and prevent the rest 
-                    // of the test from completing
                     var opts = new OutboxProcessorOptions(TimeSpan.FromMilliseconds(250));
                     cfg.WithOutboxProcessorOptions(opts);
 
                     RegisterSagas(cfg);
                 });
 
-                if (Console != null)
-                {
-                    services.AddLogging(b => b.ClearProviders().AddProvider(new OutputLoggerProvider(Console)));
-                }
+                services.AddLogging(b => b.ClearProviders().AddProvider(new OutputLoggerProvider(Console)));
             });
 
     protected abstract void ConfigureTransportAndPersistence(IBusConfigurator cfg);
@@ -121,11 +171,16 @@ public abstract class E2ETestsBase
         public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
             Func<TState, Exception?, string> formatter)
         {
-            testOutputHelper.WriteLine($"{categoryName}/{logLevel}: {formatter(state, exception)}");
-
-            if (exception != null)
+            try
             {
-                testOutputHelper.WriteLine(exception.ToString());
+                testOutputHelper.WriteLine($"{categoryName}/{logLevel}: {formatter(state, exception)}");
+
+                if (exception != null)
+                    testOutputHelper.WriteLine(exception.ToString());
+            }
+            catch (InvalidOperationException)
+            {
+                // a host that is still shutting down logs after its test is over, when xunit takes no more output
             }
         }
 
