@@ -105,8 +105,8 @@ internal static class Catalogue
         // the messages are in the broker before the subscriber starts: fed by a publisher while it runs,
         // the consumer only ever shows how fast that publisher is
         new("kafka-consume", GateAndFull, MessagesPerSecond, true,
-            "5000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 30 s",
-            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 5000, 32, TimeSpan.FromSeconds(30))),
+            "50000 messages already in Kafka when the subscriber starts, in-memory persistence; rate until consumed or 60 s",
+            ctx => PipelineScenarios.ConsumeBacklogAsync(ctx, TransportTarget.Kafka(ctx, typeof(Ping)), 50000, 32, TimeSpan.FromSeconds(60))),
 
         new("postgres-rabbit-e2e", GateAndFull, SagasPerSecond, true,
             "200 two-hop sagas on PostgreSQL + RabbitMQ; rate until completed or 15 s",
