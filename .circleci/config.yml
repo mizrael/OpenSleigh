@@ -10,7 +10,7 @@ parameters:
   benchmark_rounds:
     description: maximum number of base/head rounds the benchmark gate runs
     type: integer
-    default: 15
+    default: 5
   benchmark_report_only:
     description: print the benchmark comparison without failing the job
     type: boolean

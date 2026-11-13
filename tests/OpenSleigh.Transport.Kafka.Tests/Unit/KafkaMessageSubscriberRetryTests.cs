@@ -34,8 +34,8 @@ public class KafkaMessageSubscriberRetryTests
         {
             harness.Consumer.Pause(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == RetryPartition));
             harness.Consumer.StoreOffset(other);
-            harness.Consumer.StoreOffset(retried);
             harness.Consumer.Resume(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == RetryPartition));
+            harness.Consumer.StoreOffset(retried);
         });
     }
 
@@ -78,8 +78,52 @@ public class KafkaMessageSubscriberRetryTests
 
         await harness.Handler.DidNotReceive().HandleAsync(theirs, Arg.Any<CancellationToken>());
         await harness.Handler.Received(1).HandleAsync(mine, Arg.Any<CancellationToken>());
-        harness.Consumer.Received(1).StoreOffset(theirs);
         harness.Consumer.DidNotReceiveWithAnyArgs().Pause(default!);
+    }
+
+    [Fact]
+    public async Task The_offset_of_a_message_retried_by_another_group_should_be_stored_when_nothing_follows_it()
+    {
+        var harness = new Harness();
+        var theirs = Retried(7, DateTimeOffset.UtcNow + TimeSpan.FromHours(1), group: "theirs");
+        harness.Deliver(theirs);
+
+        await harness.RunUntilStoredAsync(theirs, retryDelay: TimeSpan.FromHours(1));
+
+        await harness.Handler.DidNotReceiveWithAnyArgs().HandleAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task The_offsets_of_handled_messages_should_be_stored_before_their_partition_is_given_up()
+    {
+        var harness = new Harness();
+        var handled = Message(Topic, 3);
+        var revoked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var storedWhenRevoked = false;
+        var deliveries = 0;
+        // a consumer with a message always ready is never idle: the only chance to store is the rebalance
+        harness.Consumer.Consume(Arg.Any<int>()).Returns(_ =>
+        {
+            if (Interlocked.Increment(ref deliveries) == 1)
+                return handled;
+
+            if (!revoked.Task.IsCompleted)
+            {
+                harness.Builder.Revoke(harness.Consumer, handled.TopicPartition);
+                storedWhenRevoked = harness.Events.Any(e => e.Name == "store:3");
+                revoked.TrySetResult();
+            }
+
+            Thread.Sleep(5);
+            return null;
+        });
+
+        var sut = harness.CreateSut(TimeSpan.FromSeconds(30));
+        await sut.StartAsync();
+        await revoked.Task.WaitAsync(Timeout);
+        await sut.StopAsync();
+
+        Assert.True(storedWhenRevoked);
     }
 
     [Fact]
@@ -102,8 +146,8 @@ public class KafkaMessageSubscriberRetryTests
         Received.InOrder(() =>
         {
             harness.Consumer.Pause(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == partition));
-            harness.Consumer.StoreOffset(failing);
             harness.Consumer.Resume(Arg.Is<IEnumerable<TopicPartition>>(partitions => partitions.Single() == partition));
+            harness.Consumer.StoreOffset(failing);
         });
     }
 
@@ -174,7 +218,7 @@ public class KafkaMessageSubscriberRetryTests
     {
         var harness = new Harness();
         var first = Message(Topic, 3);
-        var second = Message(Topic, 4);
+        var second = Message("ipsum", 4);
         harness.Consumer.When(c => c.StoreOffset(first))
                         .Do(_ => throw new KafkaException(new Error(ErrorCode.Local_State, "not assigned")));
         harness.Deliver(first, second);

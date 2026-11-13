@@ -23,7 +23,12 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     private readonly IConsumer<string, byte[]> _consumer;
     private readonly HeldMessages _heldMessages = new();
+    private readonly Dictionary<TopicPartition, ConsumeResult<string, byte[]>> _lastHandledOfOtherPartitions = new();
+    private ConsumeResult<string, byte[]>? _lastHandled;
+    private int _handledSinceOffsetsStored;
     private bool _storesOffsets = true;
+
+    private const int MaxHandledBeforeOffsetsAreStored = 100;
 
     private CancellationTokenSource? _stoppingCts;
     private Task? _consumerTask;
@@ -70,19 +75,39 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     }
 
     // a partition that is taken away from this consumer goes to another one, which receives what was not stored
-    // as handled: the messages held for it here would be processed twice, and behind them the ones that arrive
-    // when the partition comes back
+    // as handled: the offsets of the messages handled so far are stored first, and the messages held for it here
+    // are forgotten, or they would be processed twice, and behind them the ones that arrive when the partition comes back
     private void ForgetHeldMessagesOnRebalance(ConsumerBuilder<string, byte[]> builder)
     {
         try
         {
-            builder.SetPartitionsRevokedHandler((_, partitions) => ForgetHeldMessages(partitions));
-            builder.SetPartitionsLostHandler((_, partitions) => ForgetHeldMessages(partitions));
+            builder.SetPartitionsRevokedHandler((_, partitions) =>
+            {
+                StoreHandledOffsets();
+                ForgetHeldMessages(partitions);
+            });
+            builder.SetPartitionsLostHandler((_, partitions) =>
+            {
+                // already someone else's: there is nothing left to store offsets on
+                ForgetHandledOffsets(partitions);
+                ForgetHeldMessages(partitions);
+            });
         }
         catch (InvalidOperationException ex)
         {
             _logger.LogWarning(ex,
-                "the Kafka consumer builder already has a rebalance handler: messages waiting to be processed again when their partition is taken away can be processed twice");
+                "the Kafka consumer builder already has a rebalance handler: messages handled just before their partition is taken away, or waiting to be processed again, can be processed twice");
+        }
+    }
+
+    private void ForgetHandledOffsets(List<TopicPartitionOffset> partitions)
+    {
+        foreach (var partition in partitions)
+        {
+            _lastHandledOfOtherPartitions.Remove(partition.TopicPartition);
+
+            if (_lastHandled is not null && _lastHandled.TopicPartition == partition.TopicPartition)
+                _lastHandled = null;
         }
     }
 
@@ -141,6 +166,11 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             _logger.LogCritical(ex, "the Kafka consume loop has stopped, no more messages are consumed: {Error}", ex.Message);
             throw;
         }
+        finally
+        {
+            // closing the consumer commits what is stored
+            StoreHandledOffsets();
+        }
     }
 
     /// <summary>
@@ -160,8 +190,15 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
             var result = _consumer.Consume((int)Math.Ceiling(consumeTimeout.TotalMilliseconds));
             var canProcess = (result is not null && !result.IsPartitionEOF);
-            if (canProcess && !TryHoldOrSkip(result!))
+            if (!canProcess)
+            {
+                // nothing to do right now: a good moment for what is cheaper done once in a while
+                StoreHandledOffsets();
+            }
+            else if (!TryHoldOrSkip(result!))
+            {
                 await HandleAsync(result!, stoppingToken);
+            }
         }
         catch (ConsumeException ex) when (ex.Error?.Code == ErrorCode.UnknownTopicOrPart)
         {
@@ -197,7 +234,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
         if (_retryTopics.IsForAnotherGroup(result.Message?.Headers))
         {
-            StoreOffset(result);
+            MarkAsHandled(result);
             return true;
         }
 
@@ -247,7 +284,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
             return;
         }
 
-        StoreOffset(result);
+        MarkAsHandled(result);
 
         if (isLastOfPartition)
             ResumePartition(result.TopicPartition);
@@ -270,7 +307,7 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     {
         if (await _messageHandler.HandleAsync(result, stoppingToken))
         {
-            StoreOffset(result);
+            MarkAsHandled(result);
             return;
         }
 
@@ -293,7 +330,48 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
     }
 
     // the offset of a message is stored, and later committed, only once the message was dealt with:
-    // one that was not, because the process died or stopped or because it is still held, is delivered again
+    // one that was not, because the process died or stopped or because it is still held, is delivered again.
+    // Storing an offset covers every message before it in the partition, and is a call into the native client
+    // that costs a tenth of the consumer's throughput when made for every message: it is made for the last message
+    // handled of each partition, every so many messages, whenever the consumer is idle, and before a partition
+    // is given up. A message that was handled can be delivered again if the process dies before that, never skipped
+    private void MarkAsHandled(ConsumeResult<string, byte[]> result)
+    {
+        if (!_storesOffsets)
+            return;
+
+        // messages mostly come in runs of the same partition: only the last one of a run is set aside
+        var previous = _lastHandled;
+        if (previous is not null && !IsSamePartition(previous, result))
+            _lastHandledOfOtherPartitions[previous.TopicPartition] = previous;
+        _lastHandled = result;
+
+        if (++_handledSinceOffsetsStored >= MaxHandledBeforeOffsetsAreStored)
+            StoreHandledOffsets();
+    }
+
+    private static bool IsSamePartition(ConsumeResult<string, byte[]> first, ConsumeResult<string, byte[]> second)
+        => first.Partition.Value == second.Partition.Value && string.Equals(first.Topic, second.Topic, StringComparison.Ordinal);
+
+    private void StoreHandledOffsets()
+    {
+        _handledSinceOffsetsStored = 0;
+
+        // the most recent message goes last: its partition may also be among the others, with an older message
+        if (_lastHandledOfOtherPartitions.Count > 0)
+        {
+            foreach (var result in _lastHandledOfOtherPartitions.Values)
+                StoreOffset(result);
+            _lastHandledOfOtherPartitions.Clear();
+        }
+
+        if (_lastHandled is null)
+            return;
+
+        StoreOffset(_lastHandled);
+        _lastHandled = null;
+    }
+
     private void StoreOffset(ConsumeResult<string, byte[]> result)
     {
         if (!_storesOffsets)

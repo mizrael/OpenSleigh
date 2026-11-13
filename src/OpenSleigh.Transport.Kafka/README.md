@@ -47,6 +47,8 @@ A message is marked as consumed only after it has been processed, or published t
 - a message that could be published to neither topic is not skipped: it is processed again after `RetryDelay`, and nothing else is read from its partition until it is dealt with;
 - a message that cannot be read at all (an unknown type, a missing header) is logged and skipped.
 
+Offsets are stored for the last message handled of each partition: every 100 messages, whenever the consumer has nothing to read, before a partition is given up in a rebalance, and when the consumer stops. Storing one for every message costs about a tenth of the consumer's throughput. If the process dies in between, the messages handled since are delivered again: sagas ignore the ones they have recorded as processed.
+
 A custom `IConsumerBuilderFactory` has to set `enable.auto.offset.store` to `false` to keep this; when it does not, the subscriber logs a warning and messages in flight at a stop are lost. One that sets its own rebalance handlers gets a warning too: messages waiting for a retry can then be processed twice after a rebalance.
 
 The id of a message, as a saga sees it, is its key as Kafka delivers it: the id it was published with, between double quotes. That is how every version so far has written it, and sagas have stored those ids as processed, so it stays.
