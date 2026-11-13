@@ -43,6 +43,26 @@ public class MessageEnvelopeTests
     }
 
     [Fact]
+    public void TryCreate_ShouldReturnFalse_WithoutDeserializing_WhenTheTypeIsNotAMessage()
+    {
+        var serializer = Substitute.For<ISerializer>();
+
+        var result = MessageEnvelope.TryCreate(
+            new byte[] { 1, 2, 3 },
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            DateTimeOffset.UtcNow,
+            typeof(System.Text.StringBuilder),
+            "test-sender",
+            serializer,
+            out var envelope);
+
+        Assert.False(result);
+        Assert.Null(envelope);
+        Assert.Empty(serializer.ReceivedCalls());
+    }
+
+    [Fact]
     public void TryCreate_ShouldThrowArgumentNullException_WhenSerializerIsNull()
     {
         // Act & Assert
