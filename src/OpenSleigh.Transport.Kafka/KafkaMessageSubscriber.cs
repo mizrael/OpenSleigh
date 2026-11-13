@@ -18,7 +18,8 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
 
     private readonly IConsumer<string, byte[]> _consumer;
     private readonly HeldMessages _heldMessages = new();
-    private readonly Dictionary<(string? Topic, int Partition), ConsumeResult<string, byte[]>> _lastHandled = new();
+    private readonly Dictionary<TopicPartition, ConsumeResult<string, byte[]>> _lastHandledOfOtherPartitions = new();
+    private ConsumeResult<string, byte[]>? _lastHandled;
     private int _handledSinceOffsetsStored;
     private bool _storesOffsets = true;
 
@@ -205,21 +206,31 @@ public sealed class KafkaMessageSubscriber : IMessageSubscriber, IDisposable
         if (!_storesOffsets || stoppingToken.IsCancellationRequested)
             return;
 
-        _lastHandled[(result.Topic, result.Partition.Value)] = result;
+        // messages mostly come in runs of the same partition: only the last one of a run is set aside
+        var previous = _lastHandled;
+        if (previous is not null && !IsSamePartition(previous, result))
+            _lastHandledOfOtherPartitions[previous.TopicPartition] = previous;
+        _lastHandled = result;
 
         if (++_handledSinceOffsetsStored >= MaxHandledBeforeOffsetsAreStored)
             StoreHandledOffsets();
     }
 
+    private static bool IsSamePartition(ConsumeResult<string, byte[]> first, ConsumeResult<string, byte[]> second)
+        => first.Partition.Value == second.Partition.Value && string.Equals(first.Topic, second.Topic, StringComparison.Ordinal);
+
     private void StoreHandledOffsets()
     {
-        if (_handledSinceOffsetsStored == 0)
+        if (_lastHandled is null)
             return;
 
-        foreach (var result in _lastHandled.Values)
+        // the most recent message goes last: its partition may also be among the others, with an older message
+        foreach (var result in _lastHandledOfOtherPartitions.Values)
             StoreOffset(result);
+        StoreOffset(_lastHandled);
 
-        _lastHandled.Clear();
+        _lastHandledOfOtherPartitions.Clear();
+        _lastHandled = null;
         _handledSinceOffsetsStored = 0;
     }
 

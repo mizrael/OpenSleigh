@@ -250,6 +250,41 @@ public class KafkaMessageSubscriberTests
     }
 
     [Fact]
+    public async Task StartAsync_should_end_up_storing_the_offset_of_the_last_message_of_every_partition_when_they_alternate()
+    {
+        ConsumeResult<string, byte[]> Message(string topic, long offset) => new() { Topic = topic, Partition = 0, Offset = offset };
+        var messages = new[] { Message("lorem", 0), Message("ipsum", 0), Message("lorem", 1), Message("ipsum", 1), Message("lorem", 2) };
+        var pending = new ConcurrentQueue<ConsumeResult<string, byte[]>>(messages);
+
+        var consumer = Substitute.For<IConsumer<string, byte[]>>();
+        consumer.Consume(Arg.Any<int>())
+            .Returns(_ => pending.TryDequeue(out var result) ? result : null);
+        var lastStoredByTopic = new ConcurrentDictionary<string, long>();
+        var allStored = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        consumer.When(c => c.StoreOffset(Arg.Any<ConsumeResult<string, byte[]>>()))
+                .Do(call =>
+                {
+                    var stored = call.Arg<ConsumeResult<string, byte[]>>();
+                    lastStoredByTopic[stored.Topic] = stored.Offset.Value;
+                    if (stored == messages[^1])
+                        allStored.TrySetResult();
+                });
+
+        var handler = Substitute.For<IKafkaMessageHandler>();
+        handler.HandleAsync(Arg.Any<ConsumeResult<string, byte[]>>(), Arg.Any<CancellationToken>())
+               .Returns(ValueTask.FromResult(true));
+
+        var sut = CreateSut(consumer, handler);
+
+        await sut.StartAsync();
+        await allStored.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await sut.StopAsync();
+
+        Assert.Equal(2, lastStoredByTopic["lorem"]);
+        Assert.Equal(1, lastStoredByTopic["ipsum"]);
+    }
+
+    [Fact]
     public async Task StartAsync_should_keep_consuming_when_the_consumer_stores_offsets_by_itself()
     {
         const int messagesCount = 250;
