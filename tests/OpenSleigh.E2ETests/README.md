@@ -94,8 +94,10 @@ A scenario restricted to combinations that `E2E_COMBINATIONS` does not ask for i
 ### When a case fails because of a product defect
 
 Report the defect, then add an entry to `KnownDefects.Exclusions` with an id, the reason and the cases it affects:
-those cases are no longer run. Deleting the entry puts them back; `E2E_INCLUDE_KNOWN_DEFECTS=true` runs them without
-deleting it. An entry that excludes nothing fails `HarnessTests`.
+those cases are no longer run, and a scenario left with no case at all is reported as skipped with the defect as
+the reason. Deleting the entry puts them back; `E2E_INCLUDE_KNOWN_DEFECTS=true` runs them without
+deleting it. An entry that excludes nothing fails `HarnessTests`. Entries match on the name of the scenario class,
+which `[MatrixData]` takes from the name of its file: keep one scenario class per file, named like the file.
 
 ### Scenarios that need more than identical hosts
 
@@ -162,5 +164,7 @@ is the example. A scenario about a message for a saga that does not exist assert
 
 - The SQL database and schema are created before the first host starts, and Kafka topics before their consumers:
   several hosts starting on an empty database, and consumers starting before their topics exist, are scenarios of their own.
+- `StartHostsAsync` returns once the hosts are subscribed, not merely started: a host subscribes in the background
+  after it has started, and on RabbitMQ a message published before the queue of a service is bound never reaches it.
 - Every run has its own database, queues, topics and client group, so tests can run at the same time.
   Scenario classes run in parallel (`xunit.runner.json`); the cases of one class run one after the other.

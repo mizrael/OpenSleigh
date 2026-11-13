@@ -18,7 +18,7 @@ parameters:
   e2e_repetitions:
     description: how many times the E2E job runs the whole E2E suite; raise it to measure flakiness
     type: integer
-    default: 5
+    default: 20
 
 jobs:
   build:

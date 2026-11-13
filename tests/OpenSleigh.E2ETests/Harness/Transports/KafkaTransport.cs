@@ -78,6 +78,10 @@ internal sealed class KafkaTransport : ITransport
             new CreateTopicsOptions { RequestTimeout = BrokerTimeout, OperationTimeout = BrokerTimeout });
     }
 
+    // the topics exist before the hosts start and a new consumer group reads them from the beginning:
+    // what is published before a consumer has joined is still there for it
+    public Task WaitUntilSubscribedAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
+
     public bool SupportsDeadLetters => true;
 
     public Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken)

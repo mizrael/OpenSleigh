@@ -17,6 +17,9 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
     {
         var cases = AllCases().ToArray();
 
+        // the names the exclusions are written against are the ones the tests really have
+        Assert.All(cases, matrixCase => Assert.Contains(matrixCase.Scenario, ScenarioClassNames()));
+
         foreach (var defect in KnownDefects.Exclusions)
         {
             var excluded = cases.Where(defect.Affects).ToArray();
@@ -130,13 +133,18 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
         await run.StopHostsAsync();
     }
 
+    private static IEnumerable<string> ScenarioClassNames()
+        => typeof(HarnessTests).Assembly.GetTypes()
+            .Where(type => type.IsAssignableTo(typeof(ScenarioBase)))
+            .Select(type => type.Name);
+
     private static IEnumerable<MatrixCase> AllCases()
         => from type in typeof(HarnessTests).Assembly.GetTypes()
            where !type.IsAbstract
            from method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance)
            let matrix = method.GetCustomAttribute<MatrixDataAttribute>()
            where matrix is not null
-           from matrixCase in matrix.GetCases(method)
+           from matrixCase in matrix.AllCases()
            select matrixCase;
 
     private sealed class CountingPublisher(IPublisher inner, Expectation published) : IPublisher

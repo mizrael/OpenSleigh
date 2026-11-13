@@ -17,6 +17,12 @@ public interface ITransport : IAsyncDisposable
     /// </summary>
     Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// called for every host once it is started, and returns when the host receives what is published from now on.
+    /// A host is started before its subscribers have subscribed: they do that in the background.
+    /// </summary>
+    Task WaitUntilSubscribedAsync(IServiceProvider hostServices, CancellationToken cancellationToken);
+
     /// <summary>false when the transport has nowhere to put a message it gives up on.</summary>
     bool SupportsDeadLetters { get; }
 

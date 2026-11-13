@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Xunit.Sdk;
 
 namespace OpenSleigh.E2ETests.Harness;
@@ -6,7 +7,7 @@ namespace OpenSleigh.E2ETests.Harness;
 /// <summary>
 /// the rows of a scenario: every combination, with one host, a pair and a few; only one host
 /// where hosts share nothing. A scenario method takes <c>(string combination, int hostsCount)</c>.
-/// Cases listed in <see cref="KnownDefects"/> are left out.
+/// Cases listed in <see cref="KnownDefects"/> are left out; a scenario left with no case is reported as skipped.
 /// Set E2E_COMBINATIONS to a comma separated list of combinations to run only those.
 /// </summary>
 [AttributeUsage(AttributeTargets.Method)]
@@ -17,7 +18,22 @@ public sealed class MatrixDataAttribute : DataAttribute
     private static readonly int[] DefaultHostsCounts = [1, 2, 5];
     private static readonly int[] SingleHost = [1];
 
-    private const string NotRequested = "not-requested";
+    private const string NotRun = "not-run";
+    private static readonly char[] PathSeparators = ['/', '\\'];
+
+    private readonly string _scenario;
+    private readonly string _method;
+
+    /// <summary>
+    /// the parameters are filled in by the compiler: a scenario class is in a file of the same name.
+    /// </summary>
+    public MatrixDataAttribute(
+        [CallerFilePath] string scenarioFile = "",
+        [CallerMemberName] string method = "")
+    {
+        _scenario = Path.GetFileNameWithoutExtension(scenarioFile.Split(PathSeparators)[^1]);
+        _method = method;
+    }
 
     /// <summary>the combinations the scenario runs on. All of them when not set.</summary>
     public string[]? Only { get; set; }
@@ -26,53 +42,50 @@ public sealed class MatrixDataAttribute : DataAttribute
     public int[]? HostsCounts { get; set; }
 
     /// <summary>
-    /// set when E2E_COMBINATIONS asks for none of the combinations of the scenario:
-    /// the scenario is reported as skipped, instead of failing for having no rows.
+    /// set when no case of the scenario is run: E2E_COMBINATIONS asks for none of its combinations,
+    /// or all of them are excluded by a known defect. The scenario is then reported as skipped, with the reason,
+    /// instead of failing for having no rows.
     /// </summary>
     public override string? Skip
     {
-        get => IsRequested()
-            ? base.Skip
-            : $"{CombinationsVariable} asks for none of the combinations this scenario runs on.";
+        get
+        {
+            if (CasesToRun().Any())
+                return base.Skip;
+
+            var defect = AllCases().Select(KnownDefects.Find).FirstOrDefault(found => found is not null);
+            return defect is not null && RequestedCases().Any()
+                ? $"known defect '{defect.Id}': {defect.Reason}"
+                : $"{CombinationsVariable} asks for none of the combinations this scenario runs on.";
+        }
         set => base.Skip = value;
     }
 
     public override IEnumerable<object[]> GetData(MethodInfo testMethod)
     {
+        var rows = CasesToRun()
+            .Select(matrixCase => new object[] { matrixCase.Combination, matrixCase.HostsCount })
+            .ToArray();
+
         // a theory needs a row to be reported at all, skipped or not
-        if (!IsRequested())
-            return [[NotRequested, 0]];
-
-        var requested = RequestedCombinations();
-
-        return GetCases(testMethod)
-            .Where(matrixCase => requested is null || requested.Contains(matrixCase.Combination))
-            .Where(matrixCase => KnownDefects.AreIncluded || KnownDefects.Find(matrixCase) is null)
-            .Select(matrixCase => new object[] { matrixCase.Combination, matrixCase.HostsCount });
-    }
-
-    private bool IsRequested()
-    {
-        var requested = RequestedCombinations();
-        return requested is null
-               || Combinations.All.Any(combination => requested.Contains(combination.Name)
-                                                      && (Only is null || Only.Contains(combination.Name)));
+        return rows.Length > 0 ? rows : [[NotRun, 0]];
     }
 
     /// <summary>every case of the scenario, whatever the environment asks for and known defects included.</summary>
-    public IEnumerable<MatrixCase> GetCases(MethodInfo testMethod)
+    public IEnumerable<MatrixCase> AllCases()
+        => from combination in Combinations.All
+           where Only is null || Only.Contains(combination.Name)
+           from hostsCount in combination.HostsShareInfrastructure ? HostsCounts ?? DefaultHostsCounts : SingleHost
+           select new MatrixCase(_scenario, _method, combination.Name, hostsCount);
+
+    private IEnumerable<MatrixCase> RequestedCases()
     {
-        ArgumentNullException.ThrowIfNull(testMethod);
-
-        // a scenario can be declared on a base class: the class under test is the one the method was found through
-        var scenario = (testMethod.ReflectedType ?? testMethod.DeclaringType)?.Name
-            ?? throw new InvalidOperationException($"unable to tell which class '{testMethod.Name}' is run for.");
-
-        return from combination in Combinations.All
-               where Only is null || Only.Contains(combination.Name)
-               from hostsCount in combination.HostsShareInfrastructure ? HostsCounts ?? DefaultHostsCounts : SingleHost
-               select new MatrixCase(scenario, testMethod.Name, combination.Name, hostsCount);
+        var requested = RequestedCombinations();
+        return AllCases().Where(matrixCase => requested is null || requested.Contains(matrixCase.Combination));
     }
+
+    private IEnumerable<MatrixCase> CasesToRun()
+        => RequestedCases().Where(matrixCase => KnownDefects.AreIncluded || KnownDefects.Find(matrixCase) is null);
 
     private static HashSet<string>? RequestedCombinations()
     {

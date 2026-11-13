@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Transport.RabbitMQ;
 using RabbitMQ.Client;
@@ -15,6 +16,7 @@ internal sealed class RabbitMqTransport : ITransport
 {
     private const string SettingsSection = "Rabbit";
     private const int DefaultRetryDelayInMilliseconds = 500;
+    private static readonly TimeSpan SubscriptionPollingInterval = TimeSpan.FromMilliseconds(20);
 
     private readonly string _runId;
     private readonly RabbitConfiguration _configuration;
@@ -61,6 +63,39 @@ internal sealed class RabbitMqTransport : ITransport
             _queues.TryAdd(CreateQueueReferences(messageType, service), messageType);
 
         return Task.CompletedTask;
+    }
+
+    // a message published to an exchange before the queue of a service is bound to it never reaches that service
+    public async Task WaitUntilSubscribedAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
+    {
+        if (hostServices.GetRequiredService<ISystemInfo>().PublishOnly)
+            return;
+
+        var service = hostServices.GetServiceName();
+        var queueNames = hostServices.GetHandledMessageTypes()
+            .Select(messageType => CreateQueueReferences(messageType, service).QueueName)
+            .ToArray();
+
+        await using var connection = await CreateConnectionAsync(cancellationToken);
+        foreach (var queueName in queueNames)
+        {
+            while (await CountConsumersAsync(connection, queueName, cancellationToken) == 0)
+                await Task.Delay(SubscriptionPollingInterval, cancellationToken);
+        }
+    }
+
+    private static async Task<uint> CountConsumersAsync(IConnection connection, string queueName, CancellationToken cancellationToken)
+    {
+        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        try
+        {
+            var queue = await channel.QueueDeclarePassiveAsync(queueName, cancellationToken);
+            return queue.ConsumerCount;
+        }
+        catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == Constants.NotFound)
+        {
+            return 0;
+        }
     }
 
     public bool SupportsDeadLetters => true;
