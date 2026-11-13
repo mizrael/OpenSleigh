@@ -13,8 +13,7 @@ internal static partial class ResultsPage
         IReadOnlyList<BenchmarkRun> runs,
         string repository,
         string branch,
-        IReadOnlyDictionary<string, double> tolerances,
-        double defaultTolerance)
+        GateSettings gate)
     {
         var latest = runs[0];
         var page = new StringBuilder();
@@ -31,16 +30,14 @@ internal static partial class ResultsPage
         page.AppendLine("| Scenario | Unit | This commit | Previous commit | Change |");
         page.AppendLine("|---|---|---:|---:|---|");
         foreach (var scenario in latest.Scenarios)
-        {
-            var tolerance = tolerances.GetValueOrDefault(scenario.Name, defaultTolerance);
-            page.AppendLine($"| {scenario.Name} | {scenario.Unit} | {Spread(scenario.Head)} | {Spread(scenario.Base)} | {DescribeChange(scenario.Change, tolerance)} |");
-        }
+            page.AppendLine($"| {scenario.Name} | {scenario.Unit} | {Spread(scenario.Head)} | {Spread(scenario.Base)} | {DescribeChange(scenario, gate)} |");
 
         page.AppendLine();
         page.AppendLine(
             "Values are the median over the rounds, with the lowest and highest round in parentheses. " +
             "Change is how much better (+) or worse (-) this commit did than the previous one, taken round by round. " +
-            $"A change inside the tolerance of the benchmark gate ({Percent(defaultTolerance)} unless a scenario sets its own) is within noise.");
+            $"A change inside the tolerance of the benchmark gate ({Percent(gate.DefaultTolerance)} unless a scenario sets its own) is within noise, " +
+            "and so is a larger one on a scenario that measures microseconds, when the difference is below the absolute floor the gate has for it.");
 
         page.AppendLine();
         page.AppendLine("## What each scenario does");
@@ -88,18 +85,17 @@ internal static partial class ResultsPage
         return values.Count == 1 ? median : $"{median} ({Numbers.Format(values.Min())} to {Numbers.Format(values.Max())})";
     }
 
-    private static string DescribeChange(double? change, double tolerance)
+    private static string DescribeChange(ScenarioSummary scenario, GateSettings gate)
     {
-        if (change is null)
+        if (scenario.Change is not { } change)
             return "n/a";
 
-        var percent = Math.Round(change.Value * 100, MidpointRounding.AwayFromZero);
+        var percent = Math.Round(change * 100, MidpointRounding.AwayFromZero);
         var text = percent == 0 ? "0%" : percent.ToString("+0;-0", CultureInfo.InvariantCulture) + "%";
-        if (change > tolerance)
-            return $"{text} (faster)";
-        if (change < -tolerance)
-            return $"{text} (slower)";
-        return $"{text} (within noise)";
+        if (gate.IsNoise(scenario.Name, change, scenario.Difference))
+            return $"{text} (within noise)";
+
+        return change > 0 ? $"{text} (faster)" : $"{text} (slower)";
     }
 
     private static string Percent(double fraction) => fraction.ToString("0%", CultureInfo.InvariantCulture);

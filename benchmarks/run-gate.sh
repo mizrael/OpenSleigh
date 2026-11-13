@@ -74,7 +74,7 @@ if [ "$SUITE" = "full" ] && [ -z "$SCENARIOS" ]; then
   done
 fi
 
-compare_args=(--results "$RESULTS_DIR" --config "$REPO_ROOT/benchmarks/gate.json" --markdown "$OUT_DIR/summary.md")
+compare_args=(--results "$RESULTS_DIR" --config "$REPO_ROOT/benchmarks/gate.json" --base-config "$BASE_DIR/benchmarks/gate.json" --markdown "$OUT_DIR/summary.md")
 if [ "${BENCH_REPORT_ONLY:-false}" = "true" ]; then compare_args+=(--no-fail); fi
 
 dotnet "$OUT_DIR/bin/head/$ASSEMBLY" compare "${compare_args[@]}"

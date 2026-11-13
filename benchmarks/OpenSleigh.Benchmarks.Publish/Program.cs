@@ -48,28 +48,10 @@ if (runs.Count == 0)
     return 0;
 }
 
-var (tolerances, defaultTolerance) = ReadTolerances(gateConfigPath);
-File.WriteAllText(outputPath, ResultsPage.Render(runs, repository, branch, tolerances, defaultTolerance));
+var gate = GateSettings.Read(gateConfigPath);
+File.WriteAllText(outputPath, ResultsPage.Render(runs, repository, branch, gate));
 Console.WriteLine($"wrote {outputPath} from {runs.Count} run(s), latest {runs[0].Sha[..7]}");
 return 0;
-
-static (Dictionary<string, double> Tolerances, double DefaultTolerance) ReadTolerances(string gateConfigPath)
-{
-    const double fallbackTolerance = 0.30;
-    var tolerances = new Dictionary<string, double>();
-    if (!File.Exists(gateConfigPath))
-        return (tolerances, fallbackTolerance);
-
-    using var gate = JsonDocument.Parse(File.ReadAllText(gateConfigPath));
-    var defaultTolerance = gate.RootElement.TryGetProperty("defaultTolerance", out var value) ? value.GetDouble() : fallbackTolerance;
-
-    if (gate.RootElement.TryGetProperty("scenarios", out var scenarios) && scenarios.ValueKind == JsonValueKind.Object)
-        foreach (var scenario in scenarios.EnumerateObject())
-            if (scenario.Value.TryGetProperty("tolerance", out var tolerance))
-                tolerances[scenario.Name] = tolerance.GetDouble();
-
-    return (tolerances, defaultTolerance);
-}
 
 static Dictionary<string, string?> ParseOptions(string[] arguments)
 {

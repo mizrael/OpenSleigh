@@ -1,18 +1,18 @@
 namespace OpenSleigh.Benchmarks.Throughput.Infrastructure;
 
+/// <param name="MinimumDifference">the absolute floor of this scenario, in its unit. None when not set.</param>
 internal sealed record ScenarioGate(bool Gate = true, double? Tolerance = null, double? MinimumDifference = null);
 
 /// <summary>
-/// What "worse" means: a scenario regresses when the head is slower than the base by more than its tolerance,
-/// and by at least the minimum difference of its unit. The tolerance is relative, and a relative change means
-/// nothing between two values that are both next to zero: the minimum difference is the absolute floor under it.
+/// What "worse" means: a scenario regresses when the head is slower than the base by more than its tolerance
+/// and, for a scenario that has one, by at least its minimum difference. The tolerance is relative, and a relative
+/// change means little between two values that are both next to zero: the minimum difference is the absolute floor
+/// under it. It is set per scenario, never for a whole unit: it has to be small against what that scenario measures.
 /// </summary>
-/// <param name="MinimumDifference">the floor per unit, in that unit. A unit that is not listed has no floor.</param>
 internal sealed record GateConfiguration(
     double DefaultTolerance,
     int MinimumRounds,
-    Dictionary<string, ScenarioGate>? Scenarios,
-    Dictionary<string, double>? MinimumDifference = null)
+    Dictionary<string, ScenarioGate>? Scenarios)
 {
     public const double NoMinimumDifference = 0;
 
@@ -23,9 +23,7 @@ internal sealed record GateConfiguration(
 
     public double ToleranceFor(string scenarioName) => For(scenarioName).Tolerance ?? DefaultTolerance;
 
-    public double MinimumDifferenceFor(string scenarioName, string unit)
-        => For(scenarioName).MinimumDifference
-           ?? (MinimumDifference is not null && MinimumDifference.TryGetValue(unit, out var floor) ? floor : NoMinimumDifference);
+    public double MinimumDifferenceFor(string scenarioName) => For(scenarioName).MinimumDifference ?? NoMinimumDifference;
 }
 
 internal enum Verdict
@@ -97,7 +95,7 @@ internal static class Comparison
                 ? headByRound[round] - baseByRound[round]
                 : baseByRound[round] - headByRound[round])
             .ToArray());
-        var minimumDifference = configuration.MinimumDifferenceFor(name, definition.Unit);
+        var minimumDifference = configuration.MinimumDifferenceFor(name);
 
         Verdict verdict;
         if (headByRound.Count == 0)
@@ -147,7 +145,7 @@ internal static class Comparison
 
         lines.Add(string.Empty);
         lines.Add("Change is the median, over paired rounds, of how much better (+) or worse (-) the head did than the base in the same round.");
-        lines.Add("Difference is the same median in the unit of the scenario. A change beyond the tolerance whose difference is smaller than the floor of its unit is not a verdict on the code: the verdict says so.");
+        lines.Add("Difference is the same median in the unit of the scenario. A change beyond the tolerance whose difference is smaller than the floor of its scenario is not a verdict on the code: the verdict says so.");
         return string.Join(Environment.NewLine, lines) + Environment.NewLine;
     }
 

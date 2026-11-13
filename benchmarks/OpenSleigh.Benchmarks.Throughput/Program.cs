@@ -5,7 +5,7 @@ using System.Text.Json;
 
 // Usage:
 //   run     [--suite local|gate|full] [--scenario a,b] [--runs N] [--variant NAME] [--round N] [--out FILE.json]
-//   compare --results DIR [--config gate.json] [--markdown FILE.md] [--no-fail]
+//   compare --results DIR [--config gate.json] [--base-config gate.json] [--markdown FILE.md] [--no-fail]
 //   wait    [--timeout SECONDS]
 //   profile [--suite local|full] [--variant NAME] [--out FILE.md]
 //   list
@@ -75,7 +75,7 @@ int Compare()
         .ToArray();
 
     var comparisons = Comparison.Compare(reports, configuration);
-    var markdown = Comparison.ToMarkdown(comparisons);
+    var markdown = Comparison.ToMarkdown(comparisons) + DescribeChangedSettings(configurationPath);
     Console.WriteLine(markdown);
 
     if (options.TryGetValue("markdown", out var markdownPath) && !string.IsNullOrWhiteSpace(markdownPath))
@@ -90,6 +90,20 @@ int Compare()
 
     Console.WriteLine($"Benchmark gate: {failures.Length} scenario(s) got worse than the base beyond tolerance: {string.Join(", ", failures)}");
     return options.ContainsKey("no-fail") ? 0 : 1;
+}
+
+// the gate judges a branch by the settings of that branch, so that a branch can add a scenario with its tolerance.
+// A branch can loosen them too: that is not prevented, it is said, where whoever reviews the result will read it
+string DescribeChangedSettings(string configurationPath)
+{
+    if (!options.TryGetValue("base-config", out var baseConfigurationPath) || string.IsNullOrWhiteSpace(baseConfigurationPath))
+        return string.Empty;
+
+    static string Read(string path) => File.Exists(path) ? File.ReadAllText(path).ReplaceLineEndings("\n").Trim() : string.Empty;
+
+    return Read(configurationPath) == Read(baseConfigurationPath)
+        ? string.Empty
+        : Environment.NewLine + "**The settings of the gate (`benchmarks/gate.json`) are not those of the base branch: this comparison was judged by the changed ones.**" + Environment.NewLine;
 }
 
 async Task<int> ProfileAsync()
