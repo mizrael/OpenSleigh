@@ -2,6 +2,7 @@ using Microsoft.Data.SqlClient;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Persistence.SQLServer;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Integration.SQLServer;
 
@@ -33,5 +34,21 @@ public class SqlServerSchemaInitializationTests :
         await admin.Database.ExecuteSqlRawAsync("ALTER ROLE db_datawriter ADD MEMBER [" + user + "]");
 
         return new SqlConnectionStringBuilder(connectionString) { UserID = user, Password = password }.ConnectionString;
+    }
+
+    protected override async Task UpgradeWhileOthersWaitAsync(SagaDbContext admin, Func<Task> whileOthersWait)
+    {
+        // the lock belongs to the transaction
+        await using var transaction = await admin.Database.BeginTransactionAsync();
+
+        await admin.Database.ExecuteSqlRawAsync(
+            "EXEC sp_getapplock @Resource = N'" + SqlServerSchemaUpgrade.ConcurrentUpgradesLockName + "', " +
+            "@LockMode = N'Exclusive', @LockOwner = N'Transaction'");
+        await whileOthersWait();
+
+        foreach (var statement in new SqlServerSchemaUpgrade().Changes.SelectMany(change => change.Statements))
+            await admin.Database.ExecuteSqlRawAsync(statement);
+
+        await transaction.CommitAsync();
     }
 }

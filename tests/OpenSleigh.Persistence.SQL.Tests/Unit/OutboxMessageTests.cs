@@ -9,13 +9,13 @@ public class OutboxMessageTests
     private static readonly JsonSerializer Serializer = new();
 
     [Fact]
-    public void A_message_without_a_delay_should_be_stored_as_due_immediately_and_read_without_a_due_time()
+    public void A_message_without_a_delay_should_be_stored_and_read_without_a_due_time()
     {
         var envelope = MessageEnvelope.Create(new FakeMessage(), SystemInfo());
 
         var entity = OutboxMessage.Map(envelope, Serializer);
 
-        Assert.Equal(OutboxMessage.DueImmediately, entity.DeliverAt);
+        Assert.Null(entity.DeliverAt);
         Assert.True(entity.TryMap(TypeResolver(), Serializer, out var read));
         Assert.Null(read.DeliverAt);
     }

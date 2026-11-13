@@ -26,4 +26,20 @@ public static class SagaDbContextServiceCollectionExtensions
 
         return services;
     }
+
+    /// <summary>
+    /// registers what creates the saga database when it is missing, and brings one created by an earlier version
+    /// of the library up to date with <typeparamref name="TUpgrade"/>. It happens when the host starts,
+    /// or with the first <see cref="SagaDbContext"/> when there is no host.
+    /// </summary>
+    public static IServiceCollection AddSagaDbSchemaInitialization<TUpgrade>(this IServiceCollection services)
+        where TUpgrade : SagaDbSchemaUpgrade
+    {
+        ArgumentNullException.ThrowIfNull(services);
+
+        return services
+            .AddSingleton<SagaDbSchemaUpgrade, TUpgrade>()
+            .AddSingleton<SagaDbSchemaInitializer>()
+            .AddHostedService<SagaDbSchemaStartup>();
+    }
 }

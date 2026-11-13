@@ -26,23 +26,34 @@ Of course it can be used in conjunction with any other Transport library as well
 
 ## Upgrading a database created by version 3.3.0 or earlier
 
-Delayed messages need a column on the outbox table and an index on it. A new database is created with both. For a database that already exists, the library adds them by itself the first time the application uses the database after the upgrade:
+Delayed messages need a column on the outbox table and an index on it. A new database is created with both. A database that already exists gets them from the library when the application starts (or, without a host, the first time it uses the database):
 
 ```sql
 IF COL_LENGTH(N'[opensleigh].[OutboxMessages]', N'DeliverAt') IS NULL
-    ALTER TABLE [opensleigh].[OutboxMessages] ADD [DeliverAt] datetimeoffset NOT NULL DEFAULT '1970-01-01T00:00:00.0000000+00:00';
+    ALTER TABLE [opensleigh].[OutboxMessages] ADD [DeliverAt] datetimeoffset NULL;
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[opensleigh].[OutboxMessages]') AND name = N'IX_OutboxMessages_DeliverAt')
-    CREATE INDEX [IX_OutboxMessages_DeliverAt] ON [opensleigh].[OutboxMessages] ([DeliverAt]);
+    CREATE INDEX [IX_OutboxMessages_DeliverAt] ON [opensleigh].[OutboxMessages] ([DeliverAt]); -- WITH (ONLINE = ON) where the edition can
 ```
 
-- It first checks, with one query, whether the column and the index are there. When they are, nothing else runs: this is all that happens at every later start.
-- The statements run in one transaction, and instances that start at the same time wait for each other (an application lock), so it is safe to start several at once. The statements do nothing when the column or the index already exists.
-- Both statements need a schema modification lock on the outbox table, and wait for running transactions on it to end. Depending on the edition of SQL Server, adding the column may rewrite the rows of the table: the outbox is normally almost empty.
-- **Permissions:** both statements require the `ALTER` permission on the outbox table (members of `db_owner` and `db_ddladmin` have it), which is the case when the application created the database. If the user cannot change the table, the application fails as soon as it uses the database, with an `InvalidOperationException` that lists the statements, and tries again the next time. Run the statements above with a user that can, before or after deploying the new version: once they are applied, the application needs no such permission.
-- **Rolling upgrade:** instances of the earlier version keep working on the upgraded table, and the messages they store are published as before. They do not know about delays, though, and publish a delayed message as soon as they read it: do not publish messages with a delay until every instance runs the new version.
-- **Going back:** the earlier version works on the upgraded table. To remove the change, drop the index, the default constraint of the column, and the column.
+- It first checks, with one query each, whether the column and the index are there. When they are, nothing else runs: this is all that happens at every later start.
+- Instances that start at the same time wait for each other (an application lock), and each checks again once it has the lock: only the first one changes anything, so it is safe to start several at once.
+- The column is nullable and has no default, so adding it does not rewrite the table, on any edition and whatever its size. It needs the table for a moment only, and gives up after 5 seconds if it cannot have it: a long transaction on the outbox table makes the upgrade fail instead of making everything else wait behind it.
+- The index is built in a second step, with 10 minutes to do it. On the Enterprise and Developer editions, Azure SQL Database and Azure SQL Managed Instance it is built online: the outbox is read and written as usual meanwhile. **On the other editions (Standard, Web, Express) nothing can be stored in the outbox, or relayed from it, while the index is built**: that is every instance, including the ones still on the earlier version.
+- **If it fails**, the application does not start: the error says why, and lists the statements. Nothing is half done: either step can be applied again. The cause is logged, as are the start and the end of each step.
+- **Permissions:** both statements require the `ALTER` permission on the outbox table (members of `db_owner` and `db_ddladmin` have it), which is the case when the application created the database. Otherwise, run the statements above with a user that has it, before or after deploying the new version: once they are applied, the application needs no such permission.
+- **A large outbox** (millions of rows) on an edition that cannot build the index online: apply the statements by hand before deploying, at a time when the outbox can wait. The earlier version works on the upgraded table.
+- **Rolling upgrade:** instances of the earlier version keep working on the upgraded table, and the messages they store are published as before. They do not know about delays, though: **an instance of the earlier version publishes a delayed message as soon as it reads it.** Do not publish messages with a delay until every instance runs the new version.
+- **Going back** to the earlier version: for the same reason, every delayed message still in the outbox is published at once by the earlier version. Before going back, wait until none is left, or remove them (they are lost):
+
+  ```sql
+  SELECT COUNT(*) FROM [opensleigh].[OutboxMessages] WHERE [DeliverAt] > SYSDATETIMEOFFSET();
+  DELETE FROM [opensleigh].[OutboxMessages] WHERE [DeliverAt] > SYSDATETIMEOFFSET();
+  ```
+
+  The column and the index can stay: the earlier version ignores them. Dropping the column erases the due times of the messages that are waiting.
 - The outbox is read through the `IX_OutboxMessages_DeliverAt` index, by name: do not rename or drop it.
+- `QueryHintInterceptor`, `WithHint` and `TableHints` are no longer used and are marked obsolete: the interceptor is not registered any more. An application that used `WithHint` on its own queries of the saga context has to register the interceptor itself.
 
 ---
 

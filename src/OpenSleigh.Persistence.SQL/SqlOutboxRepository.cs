@@ -97,7 +97,39 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
             DbContext.Entry(entity).State = EntityState.Detached;
     }
 
-    public abstract ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default);
+    /// <summary>
+    /// the statement that reads, and locks for the relay's transaction, the messages to publish, skipping the rows
+    /// another relay holds. Its parameters: {0} the current time, {1} how many messages to return at most,
+    /// {2} how many of them, at most, can be delayed messages that are due.
+    /// </summary>
+    /// <remarks>
+    /// Delayed messages that are due come first, up to their share: messages without a delay cannot keep them waiting,
+    /// however many there are, and the other way round. Rows whose due time has not come must not be read at all.
+    /// </remarks>
+    protected abstract string ReadPendingQuery { get; }
+
+    public virtual async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
+    {
+        var batchSize = _options.MaxMessagesToPull;
+
+        var entities = await RelayDbContext.OutboxMessages
+            .FromSqlRaw(ReadPendingQuery, DateTimeOffset.UtcNow, batchSize, DelayedMessagesShare(batchSize))
+            .AsNoTracking()
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var messages = new List<MessageEnvelope>(entities.Count);
+        foreach (var entity in entities)
+        {
+            if (entity.TryMap(_typeResolver, _serializer, out var message))
+                messages.Add(message);
+        }
+        return messages;
+    }
+
+    // half of a pass, rounded up
+    private static int DelayedMessagesShare(int batchSize)
+        => batchSize - batchSize / 2;
 
     public ValueTask DeleteAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {

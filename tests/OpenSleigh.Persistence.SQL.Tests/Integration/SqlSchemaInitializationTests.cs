@@ -170,8 +170,8 @@ public abstract class SqlSchemaInitializationTests
             var failure = await Assert.ThrowsAnyAsync<Exception>(() => HasSagasAsync(provider));
             var explanation = FindInvalidOperation(failure);
             Assert.NotNull(explanation);
+            Assert.Contains("not allowed to change the schema", explanation.Message);
             Assert.Contains(nameof(Entities.OutboxMessage.DeliverAt), explanation.Message);
-            Assert.Contains(Entities.OutboxMessage.DeliverAtIndexName, explanation.Message);
 
             // nothing was changed, and the same provider tries again when asked again
             await Assert.ThrowsAnyAsync<Exception>(() => HasSagasAsync(provider));
@@ -184,6 +184,35 @@ public abstract class SqlSchemaInitializationTests
         await using var restrictedProvider = BuildProvider(restrictedConnectionString);
         Assert.False(await HasSagasAsync(restrictedProvider));
         Assert.Equal(released.PendingMessageId, Assert.Single(await ReadPendingAsync(restrictedProvider)).MessageId);
+    }
+
+    /// <summary>
+    /// takes the lock that makes upgrades wait for each other, runs <paramref name="whileOthersWait"/>,
+    /// applies the statements of the provider's upgrade, and lets go of the lock.
+    /// </summary>
+    protected abstract Task UpgradeWhileOthersWaitAsync(SagaDbContext admin, Func<Task> whileOthersWait);
+
+    [Fact]
+    public async Task An_instance_that_waited_for_another_one_to_upgrade_should_not_change_the_schema_again()
+    {
+        var released = await CreateDatabaseWithReleasedSchemaAsync();
+
+        // an instance that cannot change the schema: if it tried to, it would fail
+        var restrictedConnectionString = await CreateUserWithoutSchemaPermissionsAsync(released.Admin, released.ConnectionString);
+        await using var waitingInstance = BuildProvider(restrictedConnectionString);
+        Task<bool>? starting = null;
+
+        await UpgradeWhileOthersWaitAsync(released.Admin, async () =>
+        {
+            starting = Task.Run(() => HasSagasAsync(waitingInstance));
+
+            // long enough for it to find the upgrade missing and to queue behind the lock
+            await Task.Delay(TimeSpan.FromSeconds(3));
+            Assert.False(starting.IsCompleted);
+        });
+
+        Assert.False(await starting!);
+        Assert.Equal(released.PendingMessageId, Assert.Single(await ReadPendingAsync(waitingInstance)).MessageId);
     }
 
     private sealed record ReleasedDatabase(SagaDbContext Admin, string ConnectionString, string PendingMessageId);

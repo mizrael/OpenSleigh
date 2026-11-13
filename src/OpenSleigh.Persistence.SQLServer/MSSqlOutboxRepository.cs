@@ -8,15 +8,22 @@ namespace OpenSleigh.Persistence.SQLServer;
 
 internal class MSSqlOutboxRepository : SqlOutboxRepository
 {
-    // the due time is sent by the application and compared with its own clock, like every other time in the outbox.
-    // The rows are taken from the index on the due time, in its order: a read stops at the first row that is not due,
-    // however many of those there are, and only locks the rows it returns. Left to choose, SQL Server may scan the table,
-    // or sort it and lock every due row, depending on what it knew about the table when it compiled the query
+    private const string Table = $"[{Constants.DbSchema}].[{OutboxMessage.TableName}]";
+    private const string DeliverAt = $"[{nameof(OutboxMessage.DeliverAt)}]";
+    private const string Hints = $"WITH (UPDLOCK, READPAST, INDEX([{OutboxMessage.DeliverAtIndexName}]))";
+
+    // two ranges of the index on the due time: the delayed messages that are due, and the messages without a delay.
+    // A row that is waiting for its time is never read, however many there are. The index is named: left to choose,
+    // SQL Server may scan the table, or sort it and lock every due row, depending on what it knew about the table
+    // when it compiled the query. The due time is sent by the application and compared with its own clock,
+    // like every other time in the outbox
     private const string ReadQuery =
-        $"SELECT TOP ({{1}}) * FROM [{Constants.DbSchema}].[{OutboxMessage.TableName}] " +
-        $"WITH (UPDLOCK, READPAST, INDEX([{OutboxMessage.DeliverAtIndexName}])) " +
-        $"WHERE [{nameof(OutboxMessage.DeliverAt)}] <= {{0}} " +
-        $"ORDER BY [{nameof(OutboxMessage.DeliverAt)}]";
+        "SELECT TOP ({1}) * FROM (" +
+        $"SELECT * FROM (SELECT TOP ({{2}}) * FROM {Table} {Hints} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt}) AS due " +
+        "UNION ALL " +
+        $"SELECT * FROM (SELECT TOP ({{1}}) * FROM {Table} {Hints} WHERE {DeliverAt} IS NULL) AS immediate" +
+        ") AS pending " +
+        $"ORDER BY CASE WHEN {DeliverAt} IS NULL THEN 1 ELSE 0 END, {DeliverAt}";
 
     public MSSqlOutboxRepository(
         SagaDbContext dbContext, 
@@ -28,21 +35,7 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
     {
     }
 
-    public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
-    {
-        var entities = await RelayDbContext.OutboxMessages
-           .FromSqlRaw(ReadQuery, DateTimeOffset.UtcNow, _options.MaxMessagesToPull)
-           .AsNoTracking()
-           .ToListAsync(cancellationToken);
-
-        var messages = new List<MessageEnvelope>(entities.Count);
-        foreach (var entity in entities)
-        {
-            if (entity.TryMap(_typeResolver, _serializer, out var m))
-                messages.Add(m);
-        }
-        return messages;
-    }
+    protected override string ReadPendingQuery => ReadQuery;
 
     // SQL Server is not given one statement listing the keys: depending on the version it reads the list as JSON,
     // which needs compatibility level 130, and it may scan the table for it, waiting on rows another relay holds.

@@ -14,14 +14,12 @@ public sealed class SagaDbSchemaInitializer
     private readonly SagaDbSchemaUpgrade? _schemaUpgrade;
     private volatile bool _created;
 
-    public SagaDbSchemaInitializer()
+    /// <param name="schemaUpgrade">
+    /// what a database that already exists is brought up to date with. Without one, it is left as it is.
+    /// </param>
+    public SagaDbSchemaInitializer(SagaDbSchemaUpgrade? schemaUpgrade = null)
     {
-    }
-
-    /// <param name="schemaUpgrade">what a database that already exists is brought up to date with.</param>
-    public SagaDbSchemaInitializer(SagaDbSchemaUpgrade schemaUpgrade)
-    {
-        _schemaUpgrade = schemaUpgrade ?? throw new ArgumentNullException(nameof(schemaUpgrade));
+        _schemaUpgrade = schemaUpgrade;
     }
 
     public void EnsureCreated(DatabaseFacade database)

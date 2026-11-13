@@ -1,6 +1,7 @@
 using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
 using OpenSleigh.Utils;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
 
@@ -84,18 +85,98 @@ public abstract class SqlOutboxRepositoryTests
     [Fact]
     public async Task ReadPendingAsync_should_return_a_message_when_its_delay_has_passed()
     {
-        var delay = TimeSpan.FromSeconds(1);
-        var delayed = CreateMessage(delay);
-
         var (db, _) = _fixture.CreateDbContext();
         var sut = CreateSut(db);
+
+        // created once the database is there: creating it must not use up the delay
+        var delayed = CreateMessage(TimeSpan.FromSeconds(3));
         await sut.AppendAsync([delayed]);
 
         Assert.Empty(await sut.ReadPendingAsync());
 
-        await Task.Delay(delay + delay);
+        var read = await ReadUntilNotEmptyAsync(sut, TimeSpan.FromSeconds(30));
 
-        Assert.Equal(delayed.MessageId, Assert.Single(await sut.ReadPendingAsync()).MessageId);
+        Assert.Equal(delayed.MessageId, Assert.Single(read).MessageId);
+        Assert.True(DateTimeOffset.UtcNow >= delayed.DeliverAt);
+    }
+
+    private static async Task<IReadOnlyCollection<MessageEnvelope>> ReadUntilNotEmptyAsync(SqlOutboxRepository sut, TimeSpan limit)
+    {
+        var deadline = DateTimeOffset.UtcNow + limit;
+        while (true)
+        {
+            var messages = (await sut.ReadPendingAsync()).ToArray();
+            if (messages.Length > 0 || DateTimeOffset.UtcNow > deadline)
+                return messages;
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100));
+        }
+    }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_return_due_delayed_messages_however_many_messages_without_a_delay_keep_coming()
+    {
+        var batchSize = SqlOutboxRepositoryOptions.Default.MaxMessagesToPull;
+        var delayedShare = batchSize - batchSize / 2;
+        var overdue = Enumerable.Range(1, delayedShare + 1)
+            .Select(minutes => CreateMessageDueAt(DateTimeOffset.UtcNow.AddMinutes(-minutes)))
+            .ToArray();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync(overdue);
+        await sut.AppendAsync(Enumerable.Range(0, 3 * batchSize).Select(_ => CreateMessage()).ToArray());
+
+        var firstPass = (await sut.ReadPendingAsync()).ToArray();
+        await sut.DeleteAsync(firstPass);
+
+        // more arrive than a pass takes, as long as the relay runs
+        await sut.AppendAsync(Enumerable.Range(0, batchSize).Select(_ => CreateMessage()).ToArray());
+        var secondPass = (await sut.ReadPendingAsync()).ToArray();
+
+        Assert.Equal(batchSize, firstPass.Length);
+        Assert.Equal(delayedShare, firstPass.Count(message => message.DeliverAt is not null));
+        Assert.Equal(batchSize, secondPass.Length);
+        Assert.Equal(
+            overdue.Select(message => message.MessageId).OrderBy(id => id),
+            firstPass.Concat(secondPass).Where(message => message.DeliverAt is not null).Select(message => message.MessageId).OrderBy(id => id));
+    }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_return_messages_without_a_delay_however_many_delayed_ones_are_due()
+    {
+        var batchSize = SqlOutboxRepositoryOptions.Default.MaxMessagesToPull;
+        var immediate = CreateMessage();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync(Enumerable.Range(1, 3 * batchSize)
+            .Select(minutes => CreateMessageDueAt(DateTimeOffset.UtcNow.AddMinutes(-minutes)))
+            .ToArray());
+        await sut.AppendAsync([immediate]);
+
+        var messages = (await sut.ReadPendingAsync()).ToArray();
+
+        Assert.Equal(batchSize - batchSize / 2 + 1, messages.Length);
+        Assert.Contains(messages, message => message.MessageId == immediate.MessageId);
+    }
+
+    [Fact]
+    public async Task ReadPendingAsync_should_return_the_delayed_messages_that_have_been_due_the_longest_first()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var dueTimes = new[] { now.AddMinutes(-1), now.AddMinutes(-3), now.AddMinutes(-2) };
+        var overdue = dueTimes.Select(CreateMessageDueAt).ToArray();
+
+        var (db, _) = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync(overdue);
+
+        var messages = (await sut.ReadPendingAsync()).ToArray();
+
+        Assert.Equal(
+            new[] { overdue[1].MessageId, overdue[2].MessageId, overdue[0].MessageId },
+            messages.Select(message => message.MessageId));
     }
 
     [Fact]
@@ -116,7 +197,7 @@ public abstract class SqlOutboxRepositoryTests
     }
 
     [Fact]
-    public async Task AppendAsync_should_store_a_message_without_a_delay_as_due_immediately()
+    public async Task AppendAsync_should_store_a_message_without_a_delay_without_a_due_time()
     {
         var message = CreateMessage();
 
@@ -125,7 +206,7 @@ public abstract class SqlOutboxRepositoryTests
         await sut.AppendAsync([message]);
 
         var stored = await db.OutboxMessages.AsNoTracking().SingleAsync();
-        Assert.Equal(Entities.OutboxMessage.DueImmediately, stored.DeliverAt);
+        Assert.Null(stored.DeliverAt);
     }
 
     [Fact]

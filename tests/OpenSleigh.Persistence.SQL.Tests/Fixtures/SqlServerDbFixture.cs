@@ -10,6 +10,5 @@ public class SqlServerDbFixture : DbFixture
 
     protected override DbContextOptionsBuilder<SagaDbContext> CreateOptionsBuilder(string connectionString)
     => new DbContextOptionsBuilder<SagaDbContext>()
-            .UseSqlServer(connectionString)
-            .AddInterceptors(new QueryHintInterceptor()); // this is necessary to have the outbox working
+            .UseSqlServer(connectionString);
 }

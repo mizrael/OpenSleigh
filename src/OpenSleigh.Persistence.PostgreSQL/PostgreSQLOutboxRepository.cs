@@ -8,13 +8,20 @@ namespace OpenSleigh.Persistence.PostgreSQL;
 
 internal class PostgreSQLOutboxRepository : SqlOutboxRepository
 {
-    // the due time is sent by the application and compared with its own clock, like every other time in the outbox.
-    // Ordered by due time, the rows come from the index on it: a read stops at the first row that is not due,
-    // however many of those there are, whatever the planner knows about the table
+    private const string Table = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
+    private const string DeliverAt = $"\"{nameof(OutboxMessage.DeliverAt)}\"";
+
+    // two ranges of the index on the due time, each ordered by it so that the planner takes the rows from the index
+    // whatever it knows about the table: the delayed messages that are due, and the messages without a delay.
+    // A row that is waiting for its time is never read, however many there are.
+    // The due time is sent by the application and compared with its own clock, like every other time in the outbox
     private const string ReadQuery =
-        $"SELECT * FROM {Constants.DbSchema}.\"{OutboxMessage.TableName}\" " +
-        $"WHERE \"{nameof(OutboxMessage.DeliverAt)}\" <= {{0}} " +
-        $"ORDER BY \"{nameof(OutboxMessage.DeliverAt)}\" LIMIT {{1}} FOR UPDATE SKIP LOCKED";
+        "SELECT * FROM (" +
+        $"(SELECT * FROM {Table} WHERE {DeliverAt} <= {{0}} ORDER BY {DeliverAt} LIMIT {{2}} FOR UPDATE SKIP LOCKED) " +
+        "UNION ALL " +
+        $"(SELECT * FROM {Table} WHERE {DeliverAt} IS NULL ORDER BY {DeliverAt} LIMIT {{1}} FOR UPDATE SKIP LOCKED)" +
+        ") AS pending " +
+        $"ORDER BY CASE WHEN {DeliverAt} IS NULL THEN 1 ELSE 0 END, {DeliverAt} LIMIT {{1}}";
 
     public PostgreSQLOutboxRepository(
         SqlOutboxRepositoryOptions options, 
@@ -26,19 +33,5 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
     {
     }
 
-    public override async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
-    {
-        var entities = await RelayDbContext.OutboxMessages
-           .FromSqlRaw(ReadQuery, DateTimeOffset.UtcNow, _options.MaxMessagesToPull)
-           .AsNoTracking()
-           .ToListAsync(cancellationToken);
-
-        var messages = new List<MessageEnvelope>(entities.Count);
-        foreach (var entity in entities)
-        {
-            if (entity.TryMap(_typeResolver, _serializer, out var m))
-                messages.Add(m);
-        }
-        return messages;
-    }
+    protected override string ReadPendingQuery => ReadQuery;
 }

@@ -93,7 +93,7 @@ public class SqlSagaStateCommitTests
 
         await using var db = CreateDbContext(dbName);
         var dueTimes = await db.OutboxMessages.ToDictionaryAsync(e => e.MessageId, e => e.DeliverAt);
-        Assert.Equal(Entities.OutboxMessage.DueImmediately, dueTimes[immediate.MessageId]);
+        Assert.Null(dueTimes[immediate.MessageId]);
         Assert.Equal(delayed.DeliverAt, dueTimes[delayed.MessageId]);
     }
 

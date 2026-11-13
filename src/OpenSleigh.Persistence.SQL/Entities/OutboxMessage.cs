@@ -10,12 +10,6 @@ public record OutboxMessage
     public const string TableName = "OutboxMessages";
     public const string DeliverAtIndexName = "IX_OutboxMessages_DeliverAt";
 
-    /// <summary>
-    /// the due time of a message that has no delay: a time that has always passed.
-    /// Every message has a due time, so that the relay finds the ones to publish with one range on one index.
-    /// </summary>
-    public static readonly DateTimeOffset DueImmediately = DateTimeOffset.UnixEpoch;
-
     public required string CorrelationId { get; set; }
     public required byte[] Body { get; set; }
     public required string MessageId { get; set; }
@@ -25,9 +19,10 @@ public record OutboxMessage
     public required string SenderId { get; set; }
 
     /// <summary>
-    /// the earliest time, in UTC, at which the relay publishes the message.
+    /// the earliest time, in UTC, at which the relay publishes the message. Null when there is no delay,
+    /// which is also what a row written by a version of the library that does not know the column has.
     /// </summary>
-    public DateTimeOffset DeliverAt { get; set; } = DueImmediately;
+    public DateTimeOffset? DeliverAt { get; set; }
 
     public bool TryMap(
         ITypeResolver typeResolver, 
@@ -50,7 +45,7 @@ public record OutboxMessage
             CreatedAt,
             type,
             senderId: SenderId,
-            deliverAt: DeliverAt > DueImmediately ? DeliverAt : null,
+            deliverAt: DeliverAt,
             serializer,
             out envelope);
     }
@@ -70,7 +65,7 @@ public record OutboxMessage
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName,
             SenderId = message.SenderId,
-            DeliverAt = message.DeliverAt ?? DueImmediately,
+            DeliverAt = message.DeliverAt,
         };
     }
 }
@@ -83,12 +78,8 @@ internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfigurat
 
         builder.HasKey(e => e.MessageId);
 
-        // the default is for rows written by a version of the library that does not know the column.
-        // The value is always sent: left to the database, it would have to be read back after every insert
-        builder.Property(e => e.DeliverAt)
-            .HasDefaultValue(OutboxMessage.DueImmediately)
-            .ValueGeneratedNever();
-
+        // the relay looks up the delayed messages that are due, and the ones without a delay, through this index:
+        // the ones that are waiting for their time are never read
         builder.HasIndex(e => e.DeliverAt)
             .HasDatabaseName(OutboxMessage.DeliverAtIndexName);
     }

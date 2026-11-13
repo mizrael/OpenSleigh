@@ -2,6 +2,7 @@ using Npgsql;
 using OpenSleigh.DependencyInjection;
 using OpenSleigh.Persistence.PostgreSQL;
 using OpenSleigh.Persistence.SQL.Tests.Fixtures;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Integration.PostgreSQL;
 
@@ -33,5 +34,25 @@ public class PostgreSQLSchemaInitializationTests :
             "GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA " + Constants.DbSchema + " TO " + user);
 
         return new NpgsqlConnectionStringBuilder(connectionString) { Username = user, Password = password }.ConnectionString;
+    }
+
+    protected override async Task UpgradeWhileOthersWaitAsync(SagaDbContext admin, Func<Task> whileOthersWait)
+    {
+        // the lock belongs to the connection: it is kept open until the lock is let go
+        await admin.Database.OpenConnectionAsync();
+        try
+        {
+            await admin.Database.ExecuteSqlRawAsync(PostgreSqlSchemaUpgrade.LockForConnection);
+            await whileOthersWait();
+
+            foreach (var statement in new PostgreSqlSchemaUpgrade().Changes.SelectMany(change => change.Statements))
+                await admin.Database.ExecuteSqlRawAsync(statement);
+
+            await admin.Database.ExecuteSqlRawAsync(PostgreSqlSchemaUpgrade.ReleaseLockForConnection);
+        }
+        finally
+        {
+            await admin.Database.CloseConnectionAsync();
+        }
     }
 }
