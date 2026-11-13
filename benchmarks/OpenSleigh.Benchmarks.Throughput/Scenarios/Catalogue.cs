@@ -231,7 +231,7 @@ internal static class Catalogue
 #if DELAYED_DELIVERY
         // compared with the *-outbox-relay scenarios: messages that are not due must not slow down the ones that are.
         // Last, because scenarios run in this order in one process: a scenario that only one side of a comparison has,
-        // run before scenarios that both have, changes what those are measured on (kafka-consume was 25% slower after it)
+        // run before scenarios that both have, changes the process those are measured in
         new("sqlserver-outbox-relay-delayed-backlog", GateAndFull, MessagesPerSecond, true,
             "as sqlserver-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
