@@ -26,6 +26,10 @@ internal static class Runner
                 var context = new ScenarioContext(settings, problems);
                 var runStopwatch = Stopwatch.StartNew();
 
+                // a scenario measured over a tenth of a second is slowed down a lot by one collection:
+                // whether one falls inside it must not depend on how much the scenarios before it allocated
+                CollectGarbage();
+
                 try
                 {
                     var value = await scenario.RunAsync(context).WaitAsync(ScenarioTimeout);
@@ -95,6 +99,13 @@ internal static class Runner
 
         foreach (var (stage, calls, total) in profile.Stages)
             yield return $"| {stage} | {calls} | {total.ToString("N0", culture)} | {(total / Math.Max(calls, 1)).ToString("N3", culture)} | {(total / Math.Max(profile.Sagas, 1)).ToString("N3", culture)} |";
+    }
+
+    private static void CollectGarbage()
+    {
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
     }
 
     private static string DescribeMachine()
