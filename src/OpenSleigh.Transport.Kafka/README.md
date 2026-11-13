@@ -39,7 +39,7 @@ var kafkaConfig = new KafkaConfiguration(connectionString) { ProducerLinger = Ti
 var kafkaConfig = new KafkaConfiguration(connectionString) { RetryDelay = TimeSpan.FromSeconds(5) };
 ```
 
-The retry topic is named after the topic, followed by `.retry`; set `RetryTopicName` on `QueueReferences` to change it. The consumer asks the broker to create the topics it subscribes to, which works when the broker allows it (`auto.create.topics.enable`). If yours does not, create the retry topics along with the others.
+The retry topic is named after the topic, followed by `.retry`; set `RetryTopicName` on `QueueReferences` to change it. The consumer asks the broker to create the topics it subscribes to, which works when the broker allows it (`auto.create.topics.enable`). If yours does not, create the retry topics along with the others. Creating them up front is the better choice anyway: a topic that appears after the consumer has started is assigned to it in a second rebalance, a moment later.
 
 A message is marked as consumed only after it has been processed, or published to its retry or dead letter topic: one that was being processed when the application stopped is delivered again. A custom `IConsumerBuilderFactory` has to set `enable.auto.offset.store` to `false` to keep this.
 
