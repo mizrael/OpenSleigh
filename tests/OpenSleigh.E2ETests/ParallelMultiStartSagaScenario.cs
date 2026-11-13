@@ -26,8 +26,11 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
     {
         var correlationId = Faker.Random.Guid().ToString();
 
-        var start = new StartMultiStartSaga(Faker.Random.Int(), correlationId);
-        var alsoStart = new AlsoStartMultiStartSaga(Faker.Lorem.Slug(5), correlationId);
+        var foo = Faker.Random.Int();
+        var bar = Faker.Lorem.Slug(5);
+
+        var start = new StartMultiStartSaga(foo, correlationId);
+        var alsoStart = new AlsoStartMultiStartSaga(bar, correlationId);
 
         IMessage first = Faker.Random.Bool() ? start : alsoStart;
         IMessage last = ReferenceEquals(first, start) ? alsoStart : start;
@@ -49,6 +52,8 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
             handled.Signal();
         };
 
+        object? storedState = null;
+
         await RunScenarioAsync(
             hostsCount,
             (_, services) =>
@@ -65,11 +70,17 @@ public abstract class ParallelMultiStartSagaScenario : E2ETestsBase
                 await bus.PublishAsync(last, cancellationToken);
 
                 await handled.Reached.WaitAsync(cancellationToken);
+
+                // what each message wrote is in the stored state, whichever was handled first
+                storedState = (await WaitForSagaAsync<MultiStartSaga>(services, correlationId,
+                    stored => stored.ProcessedMessages.Count == StartMessagesCount && !stored.IsLocked,
+                    cancellationToken)).StateData;
             });
 
         Assert.Empty(handled.Problems);
         Assert.Equal(StartMessagesCount, handled.Count);
         Assert.Single(instanceIds.Distinct());
+        Assert.Equal(new MultiStartSagaState { Foo = foo, Bar = bar }, storedState);
     }
 
     protected override void RegisterSagas(IBusConfigurator cfg)

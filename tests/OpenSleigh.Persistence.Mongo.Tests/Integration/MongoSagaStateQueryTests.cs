@@ -125,6 +125,43 @@ public class MongoSagaStateQueryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
+    public async Task GetByInstanceIdAsync_should_deserialize_state_data_stored_with_the_full_name_of_its_type()
+    {
+        var db = _fixture.CreateDbContext();
+        var typeResolver = new TypeResolver();
+        typeResolver.Register(typeof(DummyState));
+        var sut = new MongoSagaStateQuery(db, _serializer, typeResolver);
+
+        var state = DummyState.New();
+        var entity = await InsertSagaState(db,
+            sagaStateType: typeof(DummyState).FullName,
+            stateData: _serializer.Serialize(state));
+
+        var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
+
+        var deserialized = Assert.IsType<DummyState>(result!.StateData);
+        Assert.Equal(state.Id, deserialized.Id);
+    }
+
+    [Fact]
+    public async Task GetByInstanceIdAsync_should_return_null_state_when_type_unknown_to_the_resolver()
+    {
+        var db = _fixture.CreateDbContext();
+        var typeResolver = new TypeResolver();
+        typeResolver.Register(typeof(DummyState));
+        var sut = new MongoSagaStateQuery(db, _serializer, typeResolver);
+
+        var entity = await InsertSagaState(db,
+            sagaStateType: "Some.NonExistent.Type, FakeAssembly",
+            stateData: new byte[] { 0x01 });
+
+        var result = await sut.GetByInstanceIdAsync(entity.InstanceId);
+
+        Assert.NotNull(result);
+        Assert.Null(result.StateData);
+    }
+
+    [Fact]
     public async Task GetByInstanceIdAsync_should_return_null_state_when_data_corrupted()
     {
         var db = _fixture.CreateDbContext();

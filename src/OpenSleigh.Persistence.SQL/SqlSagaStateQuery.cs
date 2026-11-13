@@ -8,11 +8,24 @@ public class SqlSagaStateQuery : ISagaStateQuery
 {
     private readonly SagaDbContext _dbContext;
     private readonly ISerializer _serializer;
+    private readonly ITypeResolver? _typeResolver;
 
+    /// <summary>
+    /// creates a query that can only read the state of sagas stored with the assembly qualified name of their state type.
+    /// Sagas are stored with its full name: use the constructor that takes an <see cref="ITypeResolver"/>.
+    /// </summary>
     public SqlSagaStateQuery(SagaDbContext dbContext, ISerializer serializer)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+    }
+
+    /// <param name="typeResolver">resolves the state type of a saga from the name it was stored with.
+    /// The state types of the registered sagas are known to the one <c>AddOpenSleigh</c> registers.</param>
+    public SqlSagaStateQuery(SagaDbContext dbContext, ISerializer serializer, ITypeResolver typeResolver)
+        : this(dbContext, serializer)
+    {
+        _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
     }
 
     public async ValueTask<SagaInstanceInfo?> GetByInstanceIdAsync(
@@ -74,12 +87,25 @@ public class SqlSagaStateQuery : ISagaStateQuery
             PageSize: filter.PageSize);
     }
 
+    // a full name is only enough for Type.GetType to find a type of this assembly or of the core library
+    private Type? ResolveStateType(string typeName)
+    {
+        try
+        {
+            return Type.GetType(typeName) ?? _typeResolver?.Resolve(typeName, throwOnError: false);
+        }
+        catch (Exception e) when (e is ArgumentException or TypeLoadException or IOException or BadImageFormatException)
+        {
+            return null;
+        }
+    }
+
     private SagaInstanceInfo MapToSagaInstanceInfo(Entities.SagaState entity)
     {
         object? stateData = null;
         if (entity.StateData is not null && entity.StateData.Length > 0 && entity.SagaStateType is not null)
         {
-            var stateType = Type.GetType(entity.SagaStateType);
+            var stateType = ResolveStateType(entity.SagaStateType);
             if (stateType is not null)
             {
                 try { stateData = _serializer.Deserialize(entity.StateData, stateType); }

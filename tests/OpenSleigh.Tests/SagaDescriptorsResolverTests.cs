@@ -38,6 +38,17 @@ public class SagaDescriptorsResolverTests
     }
 
     [Fact]
+    public void Register_stateful_should_make_the_state_type_resolvable_by_its_full_name()
+    {
+        var typeResolver = new TypeResolver();
+        var sut = new SagaDescriptorsResolver(typeResolver);
+
+        sut.Register<FakeSagaWithState, int>();
+
+        Assert.Equal(typeof(int), typeResolver.Resolve(typeof(int).FullName!, throwOnError: false));
+    }
+
+    [Fact]
     public void Resolve_should_return_descriptors_for_registered_message()
     {
         var typeResolver = Substitute.For<ITypeResolver>();

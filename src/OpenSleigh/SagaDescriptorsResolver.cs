@@ -56,6 +56,11 @@ internal class SagaDescriptorsResolver : ISagaDescriptorsResolver
         {
             Register(messageType, descriptor);
         }
+
+        // sagas are stored with the full name of their state type: this is what turns it back into the type.
+        // After the messages, which keep their names should a state type share one
+        if (descriptor.SagaStateType is not null)
+            _typeResolver.Register(descriptor.SagaStateType);
     }
 
     private void Register(Type messageType, SagaDescriptor descriptor)
