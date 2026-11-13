@@ -23,7 +23,7 @@ internal sealed class KafkaTransport : ITransport
     private readonly string _bootstrapServers;
     private readonly SemaphoreSlim _topicsGate = new(1, 1);
     private readonly ConcurrentDictionary<string, byte> _topics = new();
-    private readonly ConcurrentDictionary<string, byte> _deadLetterTopics = new();
+    private readonly ConcurrentDictionary<string, Type> _deadLetterTopics = new();
 
     public KafkaTransport(RunContext context)
     {
@@ -52,7 +52,7 @@ internal sealed class KafkaTransport : ITransport
                 var references = CreateQueueReferences(messageType);
                 if (_topics.TryAdd(references.TopicName, 0))
                     missing.Add(references.TopicName);
-                if (_deadLetterTopics.TryAdd(references.DeadLetterTopicName, 0))
+                if (_deadLetterTopics.TryAdd(references.DeadLetterTopicName, messageType))
                     missing.Add(references.DeadLetterTopicName);
             }
 
@@ -80,26 +80,30 @@ internal sealed class KafkaTransport : ITransport
 
     public bool SupportsDeadLetters => true;
 
-    public Task<long> CountDeadLettersAsync(CancellationToken cancellationToken)
-        => Task.Run(CountDeadLetters, cancellationToken);
+    public Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken)
+        => Task.Run(ReadDeadLetters, cancellationToken);
 
-    private long CountDeadLetters()
+    private IReadOnlyDictionary<Type, long> ReadDeadLetters()
     {
         // offsets are asked through a consumer, which is never subscribed to anything
         var config = new ConsumerConfig { BootstrapServers = _bootstrapServers, GroupId = $"{_runId}.probe" };
         using var consumer = new ConsumerBuilder<Ignore, Ignore>(config).Build();
 
-        long count = 0;
-        foreach (var topicName in _deadLetterTopics.Keys)
+        var deadLetters = new Dictionary<Type, long>();
+        foreach (var (topicName, messageType) in _deadLetterTopics)
         {
+            long count = 0;
             for (var partition = 0; partition < Partitions; partition++)
             {
                 var offsets = consumer.QueryWatermarkOffsets(new TopicPartition(topicName, partition), BrokerTimeout);
                 count += offsets.High.Value - offsets.Low.Value;
             }
+
+            if (count > 0)
+                deadLetters[messageType] = count;
         }
 
-        return count;
+        return deadLetters;
     }
 
     public async ValueTask DisposeAsync()

@@ -38,16 +38,20 @@ public abstract class ScenarioBase
 
     /// <summary>
     /// starts identical hosts on a combination, runs the scenario, keeps the hosts running for the observation
-    /// window, checks that nothing is left in the outbox or was dead-lettered, and stops the hosts.
+    /// window, checks that nothing is left in the outbox or was dead-lettered (or what <paramref name="verify"/> says),
+    /// and stops the hosts.
     /// </summary>
     /// <param name="scenario">publishes the messages and waits for what it expects to happen.
     /// Its token is cancelled when the scenario takes too long.</param>
+    /// <param name="verify">what must hold once the observation window is over, while the hosts still run.
+    /// <see cref="AssertNothingIsLeftBehindAsync"/> when not given: a scenario that expects dead letters says which.</param>
     /// <exception cref="TimeoutException">the scenario did not finish in time.</exception>
     protected async Task RunScenarioAsync(
         string combination,
         int hostsCount,
         HostSetup setup,
-        Func<ScenarioRun, CancellationToken, Task> scenario)
+        Func<ScenarioRun, CancellationToken, Task> scenario,
+        Func<ScenarioRun, Task>? verify = null)
     {
         ArgumentNullException.ThrowIfNull(scenario);
 
@@ -60,7 +64,7 @@ public abstract class ScenarioBase
         await RunWithTimeoutAsync(token => scenario(run, token));
 
         await Task.Delay(ObservationWindow);
-        await AssertNothingIsLeftBehindAsync(run);
+        await (verify ?? AssertNothingIsLeftBehindAsync)(run);
 
         await run.StopHostsAsync();
     }
@@ -70,13 +74,52 @@ public abstract class ScenarioBase
     /// </summary>
     protected static async Task AssertNothingIsLeftBehindAsync(ScenarioRun run)
     {
+        await AssertOutboxIsEmptyAsync(run);
+
+        if (!run.SupportsDeadLetters)
+            return;
+
         using var timeout = new CancellationTokenSource(ChecksTimeout);
-
-        Assert.Equal(0, await run.CountOutboxMessagesAsync(timeout.Token));
-
-        if (run.SupportsDeadLetters)
-            Assert.Equal(0, await run.CountDeadLettersAsync(timeout.Token));
+        Assert.Empty(await run.ReadDeadLettersAsync(timeout.Token));
     }
+
+    /// <summary>
+    /// every message was relayed.
+    /// </summary>
+    protected static async Task AssertOutboxIsEmptyAsync(ScenarioRun run)
+    {
+        using var timeout = new CancellationTokenSource(ChecksTimeout);
+        Assert.Equal(0, await run.CountOutboxMessagesAsync(timeout.Token));
+    }
+
+    /// <summary>
+    /// the only dead letters are messages that reached a host before their saga was stored, which is by design
+    /// (see <see cref="ProcessingFailure.IsSagaNotFound"/>): one dead letter for each such failure,
+    /// of the message types the scenario says can arrive early, and nothing else.
+    /// </summary>
+    protected static async Task AssertOnlySagaNotFoundDeadLettersAsync(ScenarioRun run, params Type[] canArriveEarly)
+    {
+        var notFound = run.ProcessingFailures.Where(failure => failure.IsSagaNotFound).ToArray();
+        Assert.All(notFound, failure => Assert.Contains(failure.MessageType, canArriveEarly));
+
+        if (!run.SupportsDeadLetters)
+            return;
+
+        var expected = notFound.GroupBy(failure => failure.MessageType)
+            .ToDictionary(failures => failures.Key, failures => failures.LongCount());
+
+        using var timeout = new CancellationTokenSource(ChecksTimeout);
+        var deadLetters = await run.ReadDeadLettersAsync(timeout.Token);
+
+        Assert.Equal(
+            expected.OrderBy(entry => entry.Key.FullName),
+            deadLetters.OrderBy(entry => entry.Key.FullName));
+    }
+
+    /// <summary>
+    /// leaves the hosts running for a message that should not be delivered, or delivered again, to show up.
+    /// </summary>
+    protected static Task ObserveAsync() => Task.Delay(ObservationWindow);
 
     /// <exception cref="TimeoutException">the scenario did not finish in time.</exception>
     protected static async Task RunWithTimeoutAsync(Func<CancellationToken, Task> scenario)

@@ -14,7 +14,7 @@ internal sealed class InMemoryTransport : ITransport
 
     public bool SupportsDeadLetters => false;
 
-    public Task<long> CountDeadLettersAsync(CancellationToken cancellationToken)
+    public Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken)
         => throw new NotSupportedException("the in-memory transport has no dead letters.");
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

@@ -1,10 +1,13 @@
+using System.Collections.Concurrent;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.DependencyInjection;
+using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.Outbox;
 using OpenSleigh.Queries;
+using OpenSleigh.Transport;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Harness;
@@ -27,6 +30,7 @@ public sealed class ScenarioRun : IAsyncDisposable
     private readonly ITransport _transport;
     private readonly List<ScenarioHost> _hosts = [];
     private readonly object _hostsGate = new();
+    private readonly ConcurrentQueue<ProcessingFailure> _processingFailures = new();
 
     private ScenarioRun(Combination combination, RunContext context, ITestOutputHelper console)
     {
@@ -141,10 +145,19 @@ public sealed class ScenarioRun : IAsyncDisposable
     public Task<long> CountOutboxMessagesAsync(CancellationToken cancellationToken)
         => _store.CountOutboxMessagesAsync(AnyHost.Services, cancellationToken);
 
-    /// <summary>how many messages were dead-lettered, over the message types the hosts of this run handle.</summary>
+    /// <summary>
+    /// how many messages of each type were dead-lettered, over the message types the hosts of this run handle.
+    /// Types with no dead letter are left out.
+    /// </summary>
     /// <exception cref="NotSupportedException">the transport has no dead letters: see <see cref="SupportsDeadLetters"/>.</exception>
-    public Task<long> CountDeadLettersAsync(CancellationToken cancellationToken)
-        => _transport.CountDeadLettersAsync(cancellationToken);
+    public Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken)
+        => _transport.ReadDeadLettersAsync(cancellationToken);
+
+    /// <summary>
+    /// every message a host of this run gave back to its transport with an exception, so far:
+    /// the reason behind a retry or a dead letter.
+    /// </summary>
+    public IReadOnlyCollection<ProcessingFailure> ProcessingFailures => _processingFailures;
 
     /// <summary>
     /// stops every host that is still running.
@@ -213,6 +226,10 @@ public sealed class ScenarioRun : IAsyncDisposable
                 }, configuration);
 
                 setup.ConfigureServices?.Invoke(services);
+
+                // last, to see what the decorators of the scenario throw as well
+                services.Decorate<IMessageProcessor>((_, inner)
+                    => new RecordingMessageProcessor(inner, setup.Service, _processingFailures));
             })
             .Build();
     }

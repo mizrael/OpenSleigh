@@ -18,7 +18,7 @@ internal sealed class RabbitMqTransport : ITransport
 
     private readonly string _runId;
     private readonly RabbitConfiguration _configuration;
-    private readonly ConcurrentDictionary<QueueReferences, byte> _queues = new();
+    private readonly ConcurrentDictionary<QueueReferences, Type> _queues = new();
 
     public RabbitMqTransport(RunContext context)
     {
@@ -58,22 +58,27 @@ internal sealed class RabbitMqTransport : ITransport
     {
         var service = hostServices.GetServiceName();
         foreach (var messageType in hostServices.GetHandledMessageTypes())
-            _queues.TryAdd(CreateQueueReferences(messageType, service), 0);
+            _queues.TryAdd(CreateQueueReferences(messageType, service), messageType);
 
         return Task.CompletedTask;
     }
 
     public bool SupportsDeadLetters => true;
 
-    public async Task<long> CountDeadLettersAsync(CancellationToken cancellationToken)
+    public async Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken)
     {
         await using var connection = await CreateConnectionAsync(cancellationToken);
 
-        long count = 0;
-        foreach (var queue in _queues.Keys)
-            count += await CountMessagesAsync(connection, queue.DeadLetterQueue, cancellationToken);
+        // every service has a dead letter queue of its own for a message type
+        var deadLetters = new Dictionary<Type, long>();
+        foreach (var (queue, messageType) in _queues)
+        {
+            var count = await CountMessagesAsync(connection, queue.DeadLetterQueue, cancellationToken);
+            if (count > 0)
+                deadLetters[messageType] = deadLetters.GetValueOrDefault(messageType) + count;
+        }
 
-        return count;
+        return deadLetters;
     }
 
     // a channel is closed by the broker when it asks for a queue that does not exist: one channel per question

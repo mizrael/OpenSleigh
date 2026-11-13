@@ -21,8 +21,9 @@ public interface ITransport : IAsyncDisposable
     bool SupportsDeadLetters { get; }
 
     /// <summary>
-    /// how many messages were dead-lettered, over the message types the hosts of this run handle.
+    /// how many messages of each type were dead-lettered, over the message types the hosts of this run handle.
+    /// Types with no dead letter are left out.
     /// </summary>
     /// <exception cref="NotSupportedException">the transport has no dead letters.</exception>
-    Task<long> CountDeadLettersAsync(CancellationToken cancellationToken);
+    Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken);
 }

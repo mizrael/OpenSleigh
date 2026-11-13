@@ -100,15 +100,10 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
 
     [Theory]
     [MatrixData(Only = [PostgreSqlWithRabbitMq, PostgreSqlWithKafka], HostsCounts = [1])]
-    public async Task a_message_whose_handler_fails_is_counted_as_dead_lettered(string combination, int hostsCount)
+    public async Task a_message_for_a_saga_that_does_not_exist_is_read_as_a_dead_letter(string combination, int hostsCount)
     {
-        var attempted = new Expectation(1);
-        Action<IMessageContext<StartFailingSaga>> onMessage = _ => attempted.Signal();
-
-        var setup = new HostSetup(bus => bus.AddSaga<FailingSaga>())
-        {
-            ConfigureServices = services => services.AddSingleton(onMessage)
-        };
+        // the child saga handles this message and is not started by it
+        var setup = new HostSetup(bus => bus.AddSaga<ChildSaga>());
 
         await using var run = CreateRun(combination);
         await run.StartHostsAsync(hostsCount, setup);
@@ -117,14 +112,20 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
 
         await RunWithTimeoutAsync(async cancellationToken =>
         {
-            Assert.Equal(0, await run.CountDeadLettersAsync(cancellationToken));
+            Assert.Empty(await run.ReadDeadLettersAsync(cancellationToken));
 
-            await run.AnyHost.PublishAsync(new StartFailingSaga(), cancellationToken);
-            await attempted.Reached.WaitAsync(cancellationToken);
+            await run.AnyHost.PublishAsync(new ProcessChildSaga(), cancellationToken);
 
-            while (await run.CountDeadLettersAsync(cancellationToken) != 1)
+            while ((await run.ReadDeadLettersAsync(cancellationToken)).Count == 0)
                 await Task.Delay(DeadLettersPollingInterval, cancellationToken);
         });
+
+        await AssertOutboxIsEmptyAsync(run);
+        await AssertOnlySagaNotFoundDeadLettersAsync(run, typeof(ProcessChildSaga));
+
+        var failure = Assert.Single(run.ProcessingFailures);
+        Assert.True(failure.IsSagaNotFound);
+        Assert.False(failure.IsLockConflict);
 
         await run.StopHostsAsync();
     }

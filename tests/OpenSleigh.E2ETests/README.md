@@ -89,6 +89,13 @@ Rules that keep the suite stable:
 - No retries around a scenario, no skipped tests. A case that cannot pass because of a product defect gets an entry in `KnownDefects.cs`.
 
 `[MatrixData]` options: `Only = [...]` restricts the combinations, `HostsCounts = [...]` replaces 1, 2 and 5.
+A scenario restricted to combinations that `E2E_COMBINATIONS` does not ask for is reported as skipped.
+
+### When a case fails because of a product defect
+
+Report the defect, then add an entry to `KnownDefects.Exclusions` with an id, the reason and the cases it affects:
+those cases are no longer run. Deleting the entry puts them back; `E2E_INCLUDE_KNOWN_DEFECTS=true` runs them without
+deleting it. An entry that excludes nothing fails `HarnessTests`.
 
 ### Scenarios that need more than identical hosts
 
@@ -122,7 +129,9 @@ await run.StopHostsAsync();
 | publish from a given host | `host.PublishAsync(message, token)` |
 | final state, processed messages | `run.WaitForSagaAsync`, `run.FindSagaAsync` |
 | outbox drained | `run.CountOutboxMessagesAsync` |
-| dead letters | `run.CountDeadLettersAsync`, where `run.SupportsDeadLetters` (not in memory) |
+| dead letters | `run.ReadDeadLettersAsync` (count per message type), where `run.SupportsDeadLetters` (not in memory) |
+| why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound` and `IsLockConflict` |
+| dead letters that are expected | pass `verify` to `RunScenarioAsync`, with `AssertOutboxIsEmptyAsync` and `AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` |
 | a service that fails on purpose | `services.Decorate<IPublisher>((provider, inner) => new FailingPublisher(inner))` in `ConfigureServices`, which runs after the library registered its services |
 | anything else in a host | `host.Services` |
 
@@ -135,6 +144,19 @@ it creates after `RunContext.RunId`, and removes it when disposed. `SqlStore` is
 
 Then give the `e2e` job its container (`.circleci/config.yml`), add it to `tests/infra/docker-compose.yml`, its
 connection string to `appsettings.json` and its port to `run-e2e.sh`.
+
+## Behaviour that is by design, and how scenarios assert it
+
+**A message for a saga that is not stored is dead-lettered at once, and never retried.** This holds for a saga
+that does not exist and for one that is only late. The late case: a message that starts several sagas is handled by
+one saga after the other, each stored on its own. What the first saga publishes can reach another host before the
+next saga is stored; that host handles it for the first saga, fails for the next one with
+`unable to locate state for Saga '...'`, and the message goes to the dead letter queue. It needs two hosts or more.
+
+A scenario where this can happen does not ignore the dead letter queue: it names the message types that can arrive
+early and calls `AssertOnlySagaNotFoundDeadLettersAsync(run, types...)`, which requires one dead letter for each
+such failure and nothing else, so any other dead letter still fails the test. `MultipleSagasSameMessagesScenario`
+is the example. A scenario about a message for a saga that does not exist asserts the same thing.
 
 ## What the harness does on purpose
 
