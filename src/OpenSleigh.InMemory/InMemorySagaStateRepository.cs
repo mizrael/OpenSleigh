@@ -6,8 +6,10 @@ namespace OpenSleigh.InMemory;
 
 internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQuery
 {
-    private readonly ConcurrentDictionary<string, (ISagaInstance state, string? lockId)> _statesByDescriptor = new();
-    private readonly ConcurrentDictionary<string, (ISagaInstance state, string? lockId)> _statesById = new();
+    // processedMessages is what the saga had handled when it was last released. The instance itself keeps changing
+    // while its owner handles a message, and its list cannot be read from another thread in the meantime
+    private readonly ConcurrentDictionary<string, (ISagaInstance state, string? lockId, IReadOnlyList<ProcessedMessageInfo> processedMessages)> _statesByDescriptor = new();
+    private readonly ConcurrentDictionary<string, (ISagaInstance state, string? lockId, IReadOnlyList<ProcessedMessageInfo> processedMessages)> _statesById = new();
     private readonly object _lockSync = new();
 
     public ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
@@ -36,8 +38,13 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             if (_statesByDescriptor.TryGetValue(key, out var byDesc) && byDesc.lockId is not null)
                 throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
 
-            _statesById[state.InstanceId] = (state, lockId);
-            _statesByDescriptor[key] = (state, lockId);
+            // a saga that is locked for the first time has handled nothing yet, as far as anyone else can tell
+            IReadOnlyList<ProcessedMessageInfo> released = _statesById.TryGetValue(state.InstanceId, out var known)
+                ? known.processedMessages
+                : [];
+
+            _statesById[state.InstanceId] = (state, lockId, released);
+            _statesByDescriptor[key] = (state, lockId, released);
         }
 
         return ValueTask.FromResult(lockId);
@@ -55,8 +62,12 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
                 && entry.lockId != state.LockId)
                 throw new LockException($"unable to release saga '{state.InstanceId}' with lock id '{state.LockId}'");
 
-            _statesByDescriptor[key] = (state, null);
-            _statesById[state.InstanceId] = (state, null);
+            IReadOnlyList<ProcessedMessageInfo> processedMessages = state.ProcessedMessages
+                .Select(pm => new ProcessedMessageInfo(pm.MessageId, pm.When))
+                .ToArray();
+
+            _statesByDescriptor[key] = (state, null, processedMessages);
+            _statesById[state.InstanceId] = (state, null, processedMessages);
         }
 
         return ValueTask.CompletedTask;
@@ -100,7 +111,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         return ValueTask.FromResult(new PagedResult<SagaInstanceInfo>(items, totalCount, page, pageSize));
     }
 
-    private static SagaInstanceInfo MapToInfo((ISagaInstance state, string? lockId) entry)
+    private static SagaInstanceInfo MapToInfo((ISagaInstance state, string? lockId, IReadOnlyList<ProcessedMessageInfo> processedMessages) entry)
         => new()
         {
             InstanceId = entry.state.InstanceId,
@@ -110,9 +121,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             SagaStateType = entry.state.Descriptor.SagaStateType?.FullName,
             IsCompleted = entry.state.IsCompleted,
             IsLocked = entry.lockId is not null,
-            ProcessedMessages = entry.state.ProcessedMessages
-                .Select(pm => new ProcessedMessageInfo(pm.MessageId, pm.When))
-                .ToList(),
+            ProcessedMessages = entry.processedMessages,
             StateData = ExtractStateData(entry.state)
         };
 
