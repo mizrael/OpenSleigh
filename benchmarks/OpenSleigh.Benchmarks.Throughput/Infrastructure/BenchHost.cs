@@ -37,7 +37,7 @@ internal static class BenchHost
         overrideServices?.Invoke(builder.Services);
 
         // not every persistence/transport combination registers a transaction manager
-        builder.Services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+        builder.Services.TryAddSingleton<ITransactionManager, BenchTransactionManager>();
 
         return builder.Build();
     }
@@ -94,7 +94,7 @@ internal static class BenchHost
     }
 }
 
-internal sealed class NoOpTransactionManager : ITransactionManager
+internal sealed class BenchTransactionManager : ITransactionManager
 {
     public ValueTask<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
         => ValueTask.FromResult<ITransaction>(NoOpTransaction.Instance);

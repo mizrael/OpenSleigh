@@ -221,6 +221,98 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task CommitAsync_should_not_signal_pending_messages_when_none_of_them_is_due_yet()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxRepository = Substitute.For<IOutboxRepository>();
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance, TimeSpan.FromMinutes(1)));
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(),
+            sagaStateRepository,
+            outboxRepository,
+            outboxSignal);
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        await outboxRepository.Received(1).AppendAsync(Arg.Any<IEnumerable<MessageEnvelope>>(), Arg.Any<CancellationToken>());
+        outboxSignal.DidNotReceive().NotifyPendingMessages();
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_signal_pending_messages_when_a_delayed_message_is_already_due()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        var dueSoon = MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance, TimeSpan.FromMilliseconds(1));
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance, TimeSpan.FromMinutes(1)));
+        sagaInstance.Publish(dueSoon);
+        SpinWait.SpinUntil(() => DateTimeOffset.UtcNow >= dueSoon.DeliverAt);
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(),
+            sagaStateRepository,
+            Substitute.For<IOutboxRepository>(),
+            outboxSignal);
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        Received.InOrder(() =>
+        {
+            sagaStateRepository.ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+            outboxSignal.NotifyPendingMessages();
+        });
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_signal_pending_messages_when_a_delayed_message_becomes_due_while_it_is_stored()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository, ISagaStateCommitter>();
+        var outboxSignal = Substitute.For<IOutboxSignal>();
+
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        var dueSoon = MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance, TimeSpan.FromMilliseconds(200));
+        sagaInstance.Publish(dueSoon);
+
+        var wasDueBeforeTheCommit = true;
+        ((ISagaStateCommitter)sagaStateRepository)
+            .When(committer => committer.CommitAsync(sagaInstance, Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                wasDueBeforeTheCommit = DateTimeOffset.UtcNow >= dueSoon.DeliverAt;
+                SpinWait.SpinUntil(() => DateTimeOffset.UtcNow >= dueSoon.DeliverAt);
+            });
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(),
+            sagaStateRepository,
+            Substitute.For<IOutboxRepository>(),
+            outboxSignal);
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        outboxSignal.Received(1).NotifyPendingMessages();
+        Assert.False(wasDueBeforeTheCommit, "the commit started too late for this test to tell when the due time is evaluated");
+    }
+
+    [Fact]
     public async Task CommitAsync_should_append_outbox_and_release_lock()
     {
         // Arrange

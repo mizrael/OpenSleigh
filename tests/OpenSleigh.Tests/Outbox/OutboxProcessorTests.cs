@@ -248,6 +248,85 @@ public class OutboxProcessorTests
         await tx.Received(1).RollbackAsync();
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RelayPendingMessagesAsync_should_leave_in_the_outbox_a_message_that_is_not_due(bool deletesInBatches)
+    {
+        var outboxRepo = deletesInBatches
+            ? Substitute.For<IOutboxRepository, IOutboxBatchRepository>()
+            : Substitute.For<IOutboxRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var txManager = Substitute.For<ITransactionManager>();
+        var tx = Substitute.For<ITransaction>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(tx);
+
+        var notDue = DummyMessage.CreateEnvelope(delay: TimeSpan.FromHours(1));
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { notDue });
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(CancellationToken.None);
+
+        Assert.Equal(OutboxRelayResult.Nothing, result);
+        await publisher.DidNotReceiveWithAnyArgs().PublishAsync(default!, default);
+        await outboxRepo.DidNotReceiveWithAnyArgs().DeleteAsync(default(MessageEnvelope)!, default);
+        if (deletesInBatches)
+            await ((IOutboxBatchRepository)outboxRepo).DidNotReceiveWithAnyArgs().DeleteAsync(default(IReadOnlyCollection<MessageEnvelope>)!, default);
+        await tx.Received(1).CommitAsync();
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_count_a_message_that_is_not_due_neither_as_relayed_nor_as_failed()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        var immediate = DummyMessage.CreateEnvelope();
+        var notDue = DummyMessage.CreateEnvelope(delay: TimeSpan.FromHours(1));
+        var failing = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { notDue, immediate, failing });
+        publisher.PublishAsync(failing, Arg.Any<CancellationToken>())
+            .Returns(x => throw new InvalidOperationException("publish failed"));
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(CancellationToken.None);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 1, Failed: 1), result);
+        await publisher.DidNotReceive().PublishAsync(notDue, Arg.Any<CancellationToken>());
+        await ((IOutboxBatchRepository)outboxRepo).Received(1).DeleteAsync(
+            Arg.Is<IReadOnlyCollection<MessageEnvelope>>(deleted => deleted.SequenceEqual(new[] { immediate })),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_publish_and_delete_a_delayed_message_that_is_due()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        var due = DummyMessage.CreateEnvelope(delay: TimeSpan.FromTicks(1));
+        // the clock may not have moved since the message was created
+        SpinWait.SpinUntil(() => DateTimeOffset.UtcNow >= due.DeliverAt);
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { due });
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, Substitute.For<ILogger<OutboxProcessor>>(), txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(CancellationToken.None);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 1, Failed: 0), result);
+        await publisher.Received(1).PublishAsync(due, Arg.Any<CancellationToken>());
+        await outboxRepo.Received(1).DeleteAsync(due, Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public void Ctor_should_throw_when_outboxRepository_is_null()
     {

@@ -26,6 +26,7 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
 
         var holdId = Guid.NewGuid().ToString();
         await StoreHeldMessagesAsync(state.Outbox, holdId, cancellationToken).ConfigureAwait(false);
+        var heldMessages = HeldBy(holdId, state.Outbox);
 
         try
         {
@@ -33,11 +34,11 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         }
         catch
         {
-            await TryRemoveHeldMessagesAsync(holdId).ConfigureAwait(false);
+            await TryRemoveHeldMessagesAsync(heldMessages).ConfigureAwait(false);
             throw;
         }
 
-        await TryLetGoOfHeldMessagesAsync(holdId).ConfigureAwait(false);
+        await TryLetGoOfHeldMessagesAsync(heldMessages).ConfigureAwait(false);
     }
 
     private async ValueTask StoreHeldMessagesAsync(IEnumerable<MessageEnvelope> outbox, string holdId, CancellationToken cancellationToken)
@@ -63,11 +64,11 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         }
     }
 
-    private async ValueTask TryRemoveHeldMessagesAsync(string holdId)
+    private async ValueTask TryRemoveHeldMessagesAsync(FilterDefinition<Entities.OutboxMessage> heldMessages)
     {
         try
         {
-            await _dbContext.OutboxMessages.DeleteManyAsync(HeldBy(holdId)).ConfigureAwait(false);
+            await _dbContext.OutboxMessages.DeleteManyAsync(heldMessages).ConfigureAwait(false);
         }
         catch
         {
@@ -75,7 +76,7 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         }
     }
 
-    private async ValueTask TryLetGoOfHeldMessagesAsync(string holdId)
+    private async ValueTask TryLetGoOfHeldMessagesAsync(FilterDefinition<Entities.OutboxMessage> heldMessages)
     {
         var letGo = Builders<Entities.OutboxMessage>.Update
             .Set(e => e.LockId, null)
@@ -84,7 +85,7 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         try
         {
             // not cancellable: the saga is released, and stopping here would only delay its messages
-            await _dbContext.OutboxMessages.UpdateManyAsync(HeldBy(holdId), letGo).ConfigureAwait(false);
+            await _dbContext.OutboxMessages.UpdateManyAsync(heldMessages, letGo).ConfigureAwait(false);
         }
         catch
         {
@@ -93,6 +94,15 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         }
     }
 
-    private static FilterDefinition<Entities.OutboxMessage> HeldBy(string holdId)
-        => Builders<Entities.OutboxMessage>.Filter.Eq(e => e.LockId, holdId);
+    // looked up by message id, which is indexed: by hold alone, the server would go through the whole outbox.
+    // The hold still tells the messages this commit stored from one that was already there under the same id
+    internal static FilterDefinition<Entities.OutboxMessage> HeldBy(string holdId, IEnumerable<MessageEnvelope> outbox)
+    {
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+        var messageIds = outbox.Select(message => message.MessageId).Distinct().ToArray();
+
+        return filterBuilder.And(
+            filterBuilder.In(e => e.MessageId, messageIds),
+            filterBuilder.Eq(e => e.LockId, holdId));
+    }
 }

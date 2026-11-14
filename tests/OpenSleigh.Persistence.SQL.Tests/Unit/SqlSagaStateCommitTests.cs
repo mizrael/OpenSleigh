@@ -79,6 +79,25 @@ public class SqlSagaStateCommitTests
     }
 
     [Fact]
+    public async Task CommitAsync_should_store_when_a_message_is_due()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var sut = CreateSut(dbName);
+        var saga = CreateSaga(CreateMessageContext());
+        await saga.LockAsync(sut, CancellationToken.None);
+        var immediate = Publish(saga);
+        var delayed = MessageEnvelope.Create(new FakeMessage(), saga, TimeSpan.FromMinutes(5));
+        saga.Publish(delayed);
+
+        await sut.CommitAsync(saga);
+
+        await using var db = CreateDbContext(dbName);
+        var dueTimes = await db.OutboxMessages.ToDictionaryAsync(e => e.MessageId, e => e.DeliverAt);
+        Assert.Null(dueTimes[immediate.MessageId]);
+        Assert.Equal(delayed.DeliverAt, dueTimes[delayed.MessageId]);
+    }
+
+    [Fact]
     public async Task ReleaseAsync_should_not_store_the_outbox()
     {
         var dbName = Guid.NewGuid().ToString();

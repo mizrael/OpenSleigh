@@ -20,6 +20,12 @@ internal static class PipelineScenarios
     private static readonly TimeSpan RelaySettleTime = TimeSpan.FromSeconds(2);
     private const int RelayWarmUpMessages = 30;
     private const int PublishParallelism = 8;
+    private const int SeedChunkSize = 50;
+
+#if DELAYED_DELIVERY
+    private const int DelayedBacklogChunkSize = 500;
+    private static readonly TimeSpan DelayedBacklogDelay = TimeSpan.FromDays(1);
+#endif
 
     /// <summary>
     /// IMessageBus.PublishAsync from concurrent callers, one DI scope per call, relay not running.
@@ -53,13 +59,17 @@ internal static class PipelineScenarios
     /// Pre-filled outbox drained by the real OutboxBackgroundService into a publisher that does nothing,
     /// or into the publisher of <paramref name="transport"/> when one is given. Nothing consumes what it publishes.
     /// </summary>
+    /// <param name="delayedBacklog">
+    /// messages that are not due during the run, waiting in the same outbox. They are neither relayed nor counted.
+    /// </param>
     public static Task<double> OutboxRelayAsync(
         ScenarioContext context,
         PersistenceTarget persistence,
         int messages,
         TimeSpan cap,
-        TransportTarget? transport = null)
-        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+        TransportTarget? transport = null,
+        int delayedBacklog = 0)
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport, delayedBacklog,
             instrument: null,
             completed: (_, relayed, elapsed) => elapsed > TimeSpan.Zero ? relayed / elapsed.TotalSeconds : 0);
 
@@ -72,7 +82,7 @@ internal static class PipelineScenarios
         int messages,
         TimeSpan cap,
         TransportTarget? transport = null)
-        => RunOutboxRelayAsync(context, persistence, messages, cap, transport,
+        => RunOutboxRelayAsync(context, persistence, messages, cap, transport, delayedBacklog: 0,
             instrument: StageTimings.Instrument,
             completed: (services, relayed, elapsed) => new EndToEndProfile(
                 relayed,
@@ -85,6 +95,7 @@ internal static class PipelineScenarios
         int messages,
         TimeSpan cap,
         TransportTarget? transport,
+        int delayedBacklog,
         Action<IServiceCollection>? instrument,
         Func<IServiceProvider, int, TimeSpan, T> completed)
     {
@@ -107,7 +118,7 @@ internal static class PipelineScenarios
                 services.TryDecorate<IPublisher>((provider, inner)
                     => new TrackingPublisher(inner, provider.GetRequiredService<WorkTracker>()));
 
-            services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+            services.TryAddSingleton<ITransactionManager, BenchTransactionManager>();
             services.TryDecorate<ITransactionManager>((_, inner) => new CommitTrackingTransactionManager(inner, commits));
             instrument?.Invoke(services);
         });
@@ -120,6 +131,9 @@ internal static class PipelineScenarios
             var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
             await host.Services.GetRequiredService<IPublisher>().PublishAsync(NewStart(systemInfo));
             tracker.Reset();
+
+            // the waiting messages are there from the start, so the warm-up reads the same outbox as the measurement
+            await SeedDelayedBacklogAsync(host.Services, delayedBacklog);
 
             // the first passes compile queries and code that every later pass reuses: they are not what is measured.
             // They run here, before the relay is started, so that it cannot take measured messages early
@@ -428,9 +442,32 @@ internal static class PipelineScenarios
     private static MessageEnvelope NewStart(ISystemInfo systemInfo)
         => MessageEnvelope.Create(new StartBench { CorrelationId = Guid.NewGuid().ToString() }, systemInfo);
 
-    private static async Task SeedOutboxAsync(IServiceProvider services, int messages)
+#if DELAYED_DELIVERY
+    private static MessageEnvelope NewDelayedStart(ISystemInfo systemInfo)
+        => MessageEnvelope.Create(new StartBench { CorrelationId = Guid.NewGuid().ToString() }, systemInfo, DelayedBacklogDelay);
+#endif
+
+    private static Task SeedDelayedBacklogAsync(IServiceProvider services, int messages)
     {
-        const int chunkSize = 50;
+        if (messages == 0)
+            return Task.CompletedTask;
+
+#if DELAYED_DELIVERY
+        return SeedOutboxAsync(services, messages, DelayedBacklogChunkSize, NewDelayedStart);
+#else
+        throw new NotSupportedException("the checkout the harness is built against has no delayed delivery");
+#endif
+    }
+
+    private static Task SeedOutboxAsync(IServiceProvider services, int messages)
+        => SeedOutboxAsync(services, messages, SeedChunkSize, NewStart);
+
+    private static async Task SeedOutboxAsync(
+        IServiceProvider services,
+        int messages,
+        int chunkSize,
+        Func<ISystemInfo, MessageEnvelope> newEnvelope)
+    {
         var systemInfo = services.GetRequiredService<ISystemInfo>();
 
         for (var seeded = 0; seeded < messages; seeded += chunkSize)
@@ -438,7 +475,7 @@ internal static class PipelineScenarios
             using var scope = services.CreateScope();
             var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
             var chunk = Enumerable.Range(0, Math.Min(chunkSize, messages - seeded))
-                .Select(_ => NewStart(systemInfo))
+                .Select(_ => newEnvelope(systemInfo))
                 .ToArray();
             await repository.AppendAsync(chunk);
         }

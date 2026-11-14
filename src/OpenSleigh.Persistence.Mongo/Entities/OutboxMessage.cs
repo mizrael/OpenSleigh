@@ -1,9 +1,12 @@
 ﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 using OpenSleigh.Utils;
 using System.Diagnostics.CodeAnalysis;
 
 namespace OpenSleigh.Persistence.Mongo.Entities;
 
+// an element added by a later version must not stop this one from reading the outbox
+[BsonIgnoreExtraElements]
 public record OutboxMessage
 {
     public ObjectId Id { get; init; }
@@ -18,6 +21,16 @@ public record OutboxMessage
     public required DateTimeOffset CreatedAt { get; set; }
     public string? ParentId { get; set; }
     public required string SenderId { get; set; }
+
+    /// <summary>
+    /// the earliest time, in UTC, at which the relay publishes the message. Null when there is no delay.
+    /// </summary>
+    /// <remarks>
+    /// A date, so that the relay can look the due messages up by range through an index.
+    /// Not written when null: a message without a delay is stored as it was before there were delays.
+    /// </remarks>
+    [BsonIgnoreIfNull]
+    public DateTime? DeliverAt { get; set; }
 
     public bool TryMap(
         ITypeResolver typeResolver,
@@ -40,9 +53,15 @@ public record OutboxMessage
             CreatedAt,
             type,
             senderId: SenderId,
+            deliverAt: DueTime(),
             serializer,
             out envelope);
     }
+
+    private DateTimeOffset? DueTime()
+        => DeliverAt is null
+            ? null
+            : new DateTimeOffset(DateTime.SpecifyKind(DeliverAt.Value, DateTimeKind.Utc));
 
     public static OutboxMessage Create(
         Outbox.MessageEnvelope message,
@@ -60,6 +79,7 @@ public record OutboxMessage
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName!,
             SenderId = message.SenderId,
+            DeliverAt = message.DeliverAt?.UtcDateTime,
         };
     }
 }

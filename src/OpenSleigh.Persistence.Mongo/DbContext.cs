@@ -37,7 +37,26 @@ public class DbContext : IDbContext
             Name = "ix_message_id"
         });
         OutboxMessages.Indexes.CreateOne(index);
+
+        // the relay looks up the messages that are due. Not sparse: a message without a due time is due
+        var deliverAtIndex = new CreateIndexModel<Entities.OutboxMessage>(
+            indexBuilder.Ascending(e => e.DeliverAt),
+            new CreateIndexOptions()
+            {
+                Name = OutboxDeliverAtIndexName
+            });
+        try
+        {
+            OutboxMessages.Indexes.CreateOne(deliverAtIndex);
+        }
+        catch (MongoCommandException ex) when (ex.Code is IndexOptionsConflictCode or IndexKeySpecsConflictCode)
+        {
+            // the collection already has an index on this key, created by someone else under another name
+            // or with other options: failing here would stop the application from starting
+        }
     }
+
+    internal const string OutboxDeliverAtIndexName = "ix_deliver_at";
 
     private void BuildSagaStatesIndexes()
     {

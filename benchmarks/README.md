@@ -45,6 +45,10 @@ What the scenarios leave out on purpose:
 - SQL Server end to end moves by more than the gate's tolerance between rounds on a CI runner, and Kafka needs
   seconds to start: their scenarios are in the `full` suite only.
 
+The `*-outbox-relay-delayed-backlog` scenarios relay the same messages as the `*-outbox-relay` scenario of the same
+name, while 20,000 messages that are not due yet wait in the same outbox. The two numbers should be the same: a
+message that is waiting must not slow down the ones that are due.
+
 The `gate` and `full` suites need the services of `tests/infra/docker-compose.yml`. Connection settings default to
 those containers and can be overridden with `BENCH_SQLSERVER`, `BENCH_POSTGRES`, `BENCH_MONGO`, `BENCH_KAFKA`,
 `BENCH_RABBIT_HOST`, `BENCH_RABBIT_VHOST`, `BENCH_RABBIT_USER` and `BENCH_RABBIT_PASSWORD`.
@@ -62,7 +66,8 @@ its tolerance, or when a scenario that works on the base fails on the branch.
 - `benchmarks/gate.json` holds the tolerance (30% by default, per-scenario overrides), the minimum number of
   rounds, and lets a scenario be reported without gating (`"gate": false`).
 - The harness may only use public API that exists on both sides. A scenario for something that only exists on the
-  branch is compiled conditionally (see `RABBIT_CONSUMER_TUNING` in the project file) and reported as inconclusive.
+  branch is compiled conditionally (see `RABBIT_CONSUMER_TUNING` and `DELAYED_DELIVERY` in the project file) and
+  reported as inconclusive.
 - Put `[bench-full]` in the message of the last commit to run the `full` suite instead, or
   `[bench-scenarios name1,name2]` to run only those scenarios.
 - Pipeline parameters: `benchmark_base_branch`, `benchmark_rounds`, `benchmark_report_only`.

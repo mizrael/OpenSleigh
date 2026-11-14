@@ -43,7 +43,7 @@ public class OutboxBackgroundService : BackgroundService
                 // what was signalled so far is about to be read; a message appended during the pass signals again
                 _signal.ClearPendingMessages();
 
-                var result = await RelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
+                var result = await TryRelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
 
                 // a pass that left messages behind (broker down, rows locked) is not followed by another right away,
                 // even when it relayed others: the ones that failed would be retried, and logged, at the pace of the drain
@@ -59,6 +59,29 @@ public class OutboxBackgroundService : BackgroundService
         {
         }
     }
+
+    private async ValueTask<OutboxRelayResult> TryRelayPendingMessagesAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            return await RelayPendingMessagesAsync(stoppingToken).ConfigureAwait(false);
+        }
+        // only the cancellation that stops the service ends the relay: any other failure of a pass,
+        // a timeout reported as a cancellation included, is retried after the interval
+        catch (Exception e) when (e is not OperationCanceledException || !stoppingToken.IsCancellationRequested)
+        {
+            _logger.LogError(
+                e,
+                "Outbox Background Service could not relay the pending messages on client '{ClientId}', it will try again in {Interval}: {Error}",
+                _systemInfo.ClientId,
+                _options.Interval,
+                e.Message);
+
+            return FailedPass;
+        }
+    }
+
+    private static readonly OutboxRelayResult FailedPass = new(Relayed: 0, Failed: 1);
 
     private async ValueTask<OutboxRelayResult> RelayPendingMessagesAsync(CancellationToken stoppingToken)
     {

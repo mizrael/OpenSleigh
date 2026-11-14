@@ -126,6 +126,94 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
+    public async Task CommitAsync_should_store_a_delayed_message_let_go_of_but_not_due()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var saga = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        await saga.LockAsync(sut, CancellationToken.None);
+        var immediate = Publish(saga);
+        var delayed = Publish(saga, TimeSpan.FromHours(1));
+
+        await sut.CommitAsync(saga);
+
+        var storedImmediate = await db.OutboxMessages.Find(e => e.MessageId == immediate.MessageId).SingleAsync();
+        Assert.Null(storedImmediate.LockId);
+        Assert.Null(storedImmediate.DeliverAt);
+        var storedDelayed = await db.OutboxMessages.Find(e => e.MessageId == delayed.MessageId).SingleAsync();
+        Assert.Null(storedDelayed.LockId);
+        Assert.Null(storedDelayed.LockTime);
+        Assert.NotNull(storedDelayed.DeliverAt);
+        var relayed = await CreateOutboxRepository(db).ReadPendingAsync();
+        Assert.Equal(immediate.MessageId, Assert.Single(relayed).MessageId);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_not_let_go_of_the_messages_someone_else_holds()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var heldBySomeoneElse = await StoreHeldMessageAsync(db);
+        var saga = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        await saga.LockAsync(sut, CancellationToken.None);
+        var published = Publish(saga);
+
+        await sut.CommitAsync(saga);
+
+        var storedMessage = await db.OutboxMessages.Find(e => e.MessageId == published.MessageId).SingleAsync();
+        Assert.Null(storedMessage.LockId);
+        var stillHeld = await db.OutboxMessages.Find(e => e.MessageId == heldBySomeoneElse.MessageId).SingleAsync();
+        Assert.Equal(heldBySomeoneElse.LockId, stillHeld.LockId);
+        Assert.NotNull(stillHeld.LockTime);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_not_remove_the_messages_someone_else_holds_when_the_lock_is_not_held()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db, new MongoSagaStateRepositoryOptions(TimeSpan.Zero));
+        var heldBySomeoneElse = await StoreHeldMessageAsync(db);
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var firstOwner = CreateSagaContext(messageContext);
+        await firstOwner.LockAsync(sut, CancellationToken.None);
+        var secondOwner = new SagaInstance(firstOwner.InstanceId, firstOwner.TriggerMessageId, firstOwner.CorrelationId, firstOwner.Descriptor);
+        await secondOwner.LockAsync(sut, CancellationToken.None);
+
+        var published = Publish(firstOwner);
+        await Assert.ThrowsAsync<LockException>(async () => await sut.CommitAsync(firstOwner));
+
+        Assert.False(await db.OutboxMessages.Find(e => e.MessageId == published.MessageId).AnyAsync());
+        var stillHeld = await db.OutboxMessages.Find(e => e.MessageId == heldBySomeoneElse.MessageId).SingleAsync();
+        Assert.Equal(heldBySomeoneElse.LockId, stillHeld.LockId);
+    }
+
+    private static OpenSleigh.Outbox.MessageEnvelope Publish(ISagaInstance saga, TimeSpan delay)
+    {
+        var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga, delay);
+        saga.Publish(envelope);
+        return envelope;
+    }
+
+    // what a commit that is still releasing its saga has in the outbox
+    private async Task<Entities.OutboxMessage> StoreHeldMessageAsync(IDbContext db)
+    {
+        var someoneElse = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        var envelope = OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), someoneElse);
+        var held = Entities.OutboxMessage.Create(envelope, new JsonSerializer());
+        held.LockId = Guid.NewGuid().ToString();
+        held.LockTime = DateTimeOffset.UtcNow;
+        await db.OutboxMessages.InsertOneAsync(held);
+        return held;
+    }
+
+    private static MongoOutboxRepository CreateOutboxRepository(IDbContext db)
+    {
+        var typeResolver = new TypeResolver();
+        typeResolver.Register(typeof(FakeMessage));
+        return new MongoOutboxRepository(db, MongoOutboxRepositoryOptions.Default, typeResolver, new JsonSerializer());
+    }
+
+    [Fact]
     public async Task FindAsync_should_return_null_if_not_existing()
     {
         var db = _fixture.CreateDbContext();
