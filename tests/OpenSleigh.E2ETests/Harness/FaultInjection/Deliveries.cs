@@ -6,9 +6,8 @@ using OpenSleigh.Transport;
 namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 
 /// <summary>
-/// counts the deliveries the hosts of a scenario were done with, per message type: the ones that were processed
-/// without an exception, whether a handler ran or the message was recognised as one to ignore.
-/// A scenario about messages that must not be handled waits for them here, instead of waiting for a time.
+/// counts, per message type, the deliveries the hosts processed without an exception, whether a handler ran
+/// or the message was ignored. A scenario about messages that must not be handled waits here, not for a time.
 /// </summary>
 public sealed class Deliveries
 {

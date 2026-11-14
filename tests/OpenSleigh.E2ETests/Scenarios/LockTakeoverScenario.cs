@@ -57,7 +57,7 @@ public class LockTakeoverScenario(ITestOutputHelper console) : ScenarioBase(cons
             {
                 await run.AnyHost.PublishAsync(new StartTransfer(correlationId), cancellationToken);
 
-                // the handler ran, and nothing it did is stored: the saga is there, locked, with no message handled
+                // the handler ran, and nothing it did is stored
                 var dead = await crash.Happened.WaitAsync(cancellationToken);
                 var locked = await run.FindSagaAsync<TransferSaga>(correlationId, cancellationToken);
                 Assert.NotNull(locked);
@@ -90,7 +90,7 @@ public class LockTakeoverScenario(ITestOutputHelper console) : ScenarioBase(cons
             {
                 await AssertNoDeadLettersAsync(run);
 
-                // until the lock expires, whoever is given the message finds the saga locked, and nothing else goes wrong
+                // until the lock expires, whoever is given the message finds the saga locked
                 Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.ToString()));
             });
 

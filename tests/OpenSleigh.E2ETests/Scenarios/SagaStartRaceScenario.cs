@@ -73,11 +73,9 @@ public class SagaStartRaceScenario(ITestOutputHelper console) : ScenarioBase(con
         Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
         Assert.Equal(Carts * MessagesPerCart, runs.Runs.Count);
 
-        // one instance per cart, whoever started it
         Assert.All(runs.Runs.GroupBy(run => run.CorrelationId),
             runsOfCart => Assert.Single(runsOfCart.Select(run => run.InstanceId).Distinct()));
 
-        // and what each message wrote is in its state, whichever was handled first
         Assert.All(stored, cart =>
         {
             var state = Assert.IsType<CartState>(cart.StateData);

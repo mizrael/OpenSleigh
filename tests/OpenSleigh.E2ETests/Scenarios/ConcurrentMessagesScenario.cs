@@ -73,7 +73,6 @@ public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBas
         Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
         Assert.Equal(Accounts * MessagesPerAccount, runs.Runs.Count);
 
-        // one instance per account, and every movement in its balance, once
         Assert.Equal(Accounts, runs.Runs.Select(run => run.InstanceId).Distinct().Count());
         Assert.All(stored, account =>
         {

@@ -40,7 +40,6 @@ public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBas
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                // a cancellation for a reservation nobody made
                 await run.AnyHost.PublishAsync(new CancelReservation(neverReserved), cancellationToken);
                 while (run.ProcessingFailures.Count == 0)
                     await Task.Delay(PollingInterval, cancellationToken);
@@ -67,7 +66,6 @@ public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBas
                 Assert.False(stored.IsLocked);
                 Assert.Equal(MessagesOfTheReservation, stored.ProcessedMessages.Count);
 
-                // and a saga that was never started was not started by a message that cannot start it
                 Assert.Null(await run.FindSagaAsync<ReservationSaga>(neverReserved, cancellationToken));
             },
             async run =>
