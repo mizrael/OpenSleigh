@@ -161,6 +161,11 @@ internal static class SagaStateScenarios
 
     private static async Task<string> CreateSagaAsync(IServiceProvider services, int processedMessages)
     {
+#if LEDGER_SPIKE
+        // SPIKE: the ledger store keeps nothing of a saga that handled nothing: a saga starts with its first message
+        processedMessages = Math.Max(processedMessages, 1);
+#endif
+
         var descriptor = SagaDescriptor.Create<BenchSaga, BenchState>();
         var correlationId = Guid.NewGuid().ToString();
         var alreadyProcessed = Enumerable.Range(0, processedMessages)

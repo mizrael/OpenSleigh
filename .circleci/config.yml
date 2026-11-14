@@ -83,8 +83,14 @@ jobs:
   # the E2E tests run whole sagas on real hosts, against real services. They have a job of their own:
   # they take minutes rather than seconds, and a failure here should not hide the result of the build job
   e2e:
+    parameters:
+      spike_mode:
+        description: SPIKE, how the ledger store guards a saga, NoLock or Lease
+        type: string
+        default: NoLock
     resource_class: large
     environment:
+      OPENSLEIGH_SPIKE_MODE: "<< parameters.spike_mode >>"
       TARGET_FRAMEWORK: net10.0
       E2E_REPETITIONS: "<< pipeline.parameters.e2e_repetitions >>"
       E2E_RESULTS_DIR: /tmp/e2e-results
@@ -285,13 +291,16 @@ jobs:
 workflows:
   e2e:
     jobs:
-      - e2e
+      # the suite without a lock ran on commit 44abd41 (job 1943); this commit runs it with the lease
+      - e2e:
+          name: e2e_lease
+          spike_mode: Lease
   ledger_spike:
     jobs:
-      # spike_postgres (suite spike-postgres) and spike_sqlserver (suite spike-sqlserver) ran on commit 73f3367:
-      # jobs 1921 and 1922. They are left out of this commit, which only adds MongoDB
+      # the three suites ran on earlier commits: spike-postgres and spike-sqlserver on 73f3367 (jobs 1921 and 1922),
+      # spike-mongo on 44abd41 (job 1944). This commit only runs the scenarios named in its message
       - benchmark:
-          name: spike_mongo
+          name: spike_state_short
           base: << pipeline.parameters.benchmark_base_branch >>
           suite: spike-mongo
           report_only: true
