@@ -12,10 +12,7 @@ public sealed class RabbitMqConnectionLog
 {
     private readonly ConcurrentQueue<IConnection> _opened = new();
 
-    /// <summary>how many connections the hosts asked for, so far.</summary>
-    public int Opened => _opened.Count;
-
-    /// <summary>how many of them are open now.</summary>
+    /// <summary>how many of the connections the hosts asked for are open now.</summary>
     public int Open => _opened.Count(connection => connection.IsOpen);
 
     internal void Add(IConnection connection) => _opened.Enqueue(connection);

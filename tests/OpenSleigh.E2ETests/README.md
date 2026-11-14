@@ -225,8 +225,10 @@ asserts the same thing.
 ## Timeouts and infrastructure failures
 
 **Timeouts.** A saga publishes its own timeout with `Publish(message, delay)` and handles it like any other message.
-A scenario asserts a lower bound only (never handled before the delay), reads the time before the saga publishes the
-timeout, and waits for the timeout through a callback. A timeout that must *not* be handled, because its saga
+A scenario asserts that the timeout is never handled before the delay, and that it is not handled more than half a
+minute late; it reads the time before the saga publishes the timeout, and waits for the timeout through a callback.
+What a timeout races with is not left to the clock: `FailPublishingOf<TMessage>(fault)` keeps it in the outbox until
+the scenario is ready for it. A timeout that must *not* be handled, because its saga
 completed, reaches no handler: `services.ObserveDeliveriesOf<TMessage>(expectation)` tells when a host is done with it.
 The in-memory outbox count leaves out a message that is not due, so "the outbox is empty" proves nothing there.
 
@@ -235,7 +237,7 @@ for it to have been hit (`WaitForHitsAsync`) rather than for a time:
 
 | In `ConfigureServices` | While the fault is on |
 |---|---|
-| `FailPublishingWhile(fault)` | the relay cannot publish |
+| `FailPublishingWhile(fault)`, `FailPublishingOf<TMessage>(fault)` | the relay cannot publish, anything or messages of one type |
 | `FailOutboxReadsWhile(fault)`, `FailOutboxDeletesWhile(fault)` | the relay cannot read its outbox, or remove what it published |
 | `FailCommitsThatPublish<TMessage>(fault)` | a saga that published a `TMessage` cannot be committed |
 | `ExpireOutboxClaimsAfter(duration)` | not a fault: on MongoDB a message the relay could not publish or remove is read again only when its claim expires, a minute by default |

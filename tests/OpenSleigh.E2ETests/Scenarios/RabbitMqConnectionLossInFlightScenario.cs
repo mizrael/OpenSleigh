@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
@@ -56,14 +55,11 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
 
                 var open = await connections.WaitForAsync(hostsCount, cancellationToken);
                 await connections.CloseAsync(open, cancellationToken);
-                var closed = Stopwatch.StartNew();
 
                 connectionsAreClosed.SetResult();
 
                 await run.WaitForSagaAsync<InvoiceSaga>(correlationId, stored => stored.IsCompleted, cancellationToken);
                 await deliveredAgain.Reached.WaitAsync(cancellationToken);
-
-                Console.WriteLine($"MEASURED rabbitmq-connection-loss-in-flight delivered-again-ms={closed.ElapsedMilliseconds}");
             },
             async run =>
             {

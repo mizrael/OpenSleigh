@@ -50,7 +50,6 @@ public class OutboxReadFailureScenario(ITestOutputHelper console) : ScenarioBase
         Assert.Equal(1, handled.Count);
 
         var shortestPause = outboxCannotBeRead.ShortestTimeBetweenHitsOfOneSource();
-        Console.WriteLine($"MEASURED outbox-read-failure passes={outboxCannotBeRead.Hits.Count} shortest-pause-ms={shortestPause?.TotalMilliseconds:F0}");
         Assert.True(shortestPause >= ShortestPauseOfARelayThatBacksOff,
             $"the relay read its outbox again {shortestPause?.TotalMilliseconds} ms after it failed: it does not back off.");
     }

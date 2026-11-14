@@ -65,7 +65,6 @@ public class PublishFailureScenario(ITestOutputHelper console) : ScenarioBase(co
         Assert.Equal(1, published.Count);
 
         var shortestPause = brokerIsDown.ShortestTimeBetweenHitsOfOneSource();
-        Console.WriteLine($"MEASURED publish-failure attempts={brokerIsDown.Hits.Count} shortest-pause-ms={shortestPause?.TotalMilliseconds:F0}");
         Assert.True(shortestPause >= ShortestPauseOfARelayThatBacksOff,
             $"a relay tried to publish again {shortestPause?.TotalMilliseconds} ms after it failed: it does not back off.");
     }

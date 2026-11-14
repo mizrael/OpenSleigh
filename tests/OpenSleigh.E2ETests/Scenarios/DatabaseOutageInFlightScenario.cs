@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
@@ -31,9 +30,6 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
         var handlerIsRunning = new Expectation(1);
         var databaseIsAway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var holdNextHandler = 1;
-        IReadOnlyCollection<ProcessingFailure> failures = [];
-        var lockConflicts = 0;
-        TimeSpan completedAfter = default;
 
         // the first handler to run waits, with its saga locked, until the database is gone
         WhileSendingInvoice whileSending = async (_, cancellationToken) =>
@@ -65,7 +61,6 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
                     await Task.Delay(PollingInterval, cancellationToken);
 
                 await outage.EndAsync(cancellationToken);
-                var databaseIsBack = Stopwatch.StartNew();
 
                 // the invoice is asked to be sent again, as whoever looks after the dead letters would,
                 // until a host gets as far as handling it: one that still has a broken connection gives it back
@@ -77,24 +72,13 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
                         completed = await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore, cancellationToken);
                 }
 
-                completedAfter = databaseIsBack.Elapsed;
-
                 int TimesGivenBack() => invoices.TimesGivenBack.GetValueOrDefault(correlationId);
             },
-            async run =>
-            {
-                failures = FailuresThatDeadLetter(run);
-                lockConflicts = run.ProcessingFailures.Count(failure => failure.IsLockConflict);
-                await AssertOnlyDatabaseFailuresWereDeadLetteredAsync(run);
-            });
+            AssertOnlyDatabaseFailuresWereDeadLetteredAsync);
 
-        Console.WriteLine(
-            $"MEASURED database-outage-in-flight combination={combination} completed-after-ms={completedAfter.TotalMilliseconds:F0} " +
-            $"lock-conflicts={lockConflicts} dead-lettered={failures.Count} times-sent={invoices.TimesSent.GetValueOrDefault(correlationId)}");
-
-        // the handler that was running, and the one that completed the saga
+        // the handler that was running, whose message was given back, and the one that completed the saga
         Assert.Equal([correlationId], invoices.Completed);
         Assert.Equal(2, invoices.TimesSent.GetValueOrDefault(correlationId));
-        Assert.Contains(failures, failure => failure.MessageType == typeof(SendInvoice));
+        Assert.True(invoices.TimesGivenBack.GetValueOrDefault(correlationId) >= 1);
     }
 }

@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
 using Xunit.Abstractions;
@@ -23,9 +22,6 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
         var failedPassesOfEachRelay = new ConcurrentDictionary<object, int>();
         var relaysThatWorkAgain = new ConcurrentDictionary<object, bool>();
         var databaseIsBack = false;
-        Recovery? recovery = null;
-        IReadOnlyCollection<ProcessingFailure> failures = [];
-        TimeSpan outageLasted = default;
 
         var setup = CreateHostSetup(invoices,
             configureServices: services => services.ObserveRelayPasses((host, failed) =>
@@ -44,7 +40,6 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
                 Assert.True(await IssueAnInvoiceAndFollowItAsync(run, invoices, cancellationToken));
 
                 failedPassesOfEachRelay.Clear();
-                var down = Stopwatch.StartNew();
                 await outage.BeginAsync(cancellationToken);
 
                 // nothing gets in while the database is away, and the relays keep finding it gone:
@@ -59,9 +54,8 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
 
                 await outage.EndAsync(cancellationToken);
                 Volatile.Write(ref databaseIsBack, true);
-                outageLasted = down.Elapsed;
 
-                recovery = await IssueInvoicesUntilTheyKeepCompletingAsync(run, invoices, cancellationToken);
+                await IssueInvoicesUntilTheyKeepCompletingAsync(run, invoices, cancellationToken);
 
                 // the invoices can all have been relayed by one host: the relay of every host has to be reading again
                 while (relaysThatWorkAgain.Count < hostsCount)
@@ -71,16 +65,7 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
                     => failedPassesOfEachRelay.Count == hostsCount
                        && failedPassesOfEachRelay.Values.All(passes => passes >= FailedRelayPassesOfEachHostToWaitFor);
             },
-            async run =>
-            {
-                failures = FailuresThatDeadLetter(run);
-                await AssertOnlyDatabaseFailuresWereDeadLetteredAsync(run);
-            });
-
-        Console.WriteLine(
-            $"MEASURED database-outage combination={combination} outage-ms={outageLasted.TotalMilliseconds:F0} " +
-            $"first-completed-ms={recovery!.TimeToFirstCompletedInvoice.TotalMilliseconds:F0} steady-ms={recovery.TimeToSteadyState.TotalMilliseconds:F0} " +
-            $"invoices-tried={recovery.InvoicesTried} refused={invoices.Refused} failed-relay-passes={failedPassesOfEachRelay.Values.Sum()} dead-lettered={failures.Count}");
+            AssertOnlyDatabaseFailuresWereDeadLetteredAsync);
 
         AssertEveryInvoiceIsAccountedFor(invoices);
     }

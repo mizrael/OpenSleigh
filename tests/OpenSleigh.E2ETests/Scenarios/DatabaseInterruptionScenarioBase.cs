@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
@@ -62,9 +61,6 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
         public void WasSent(string correlationId) => _timesSent.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
         public void WasGivenBack(string correlationId) => _timesGivenBack.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
     }
-
-    /// <param name="TimeToFirstCompletedInvoice">from the moment the scenario started issuing invoices again.</param>
-    protected sealed record Recovery(TimeSpan TimeToFirstCompletedInvoice, TimeSpan TimeToSteadyState, int InvoicesTried);
 
     protected static HostSetup CreateHostSetup(
         Invoices invoices,
@@ -170,28 +166,17 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     /// <summary>
     /// issues invoices, one at a time, until <see cref="InvoicesInARowThatProveRecovery"/> of them complete in a row.
     /// </summary>
-    protected async Task<Recovery> IssueInvoicesUntilTheyKeepCompletingAsync(ScenarioRun run, Invoices invoices, CancellationToken cancellationToken)
+    protected async Task IssueInvoicesUntilTheyKeepCompletingAsync(ScenarioRun run, Invoices invoices, CancellationToken cancellationToken)
     {
-        var elapsed = Stopwatch.StartNew();
-        TimeSpan? firstCompleted = null;
-        var tried = 0;
         var completedInARow = 0;
 
         while (completedInARow < InvoicesInARowThatProveRecovery)
         {
-            tried++;
             if (await IssueAnInvoiceAndFollowItAsync(run, invoices, cancellationToken))
-            {
-                firstCompleted ??= elapsed.Elapsed;
                 completedInARow++;
-            }
             else
-            {
                 completedInARow = 0;
-            }
         }
-
-        return new Recovery(firstCompleted!.Value, elapsed.Elapsed, tried);
     }
 
     /// <summary>

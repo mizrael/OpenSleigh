@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using Xunit.Abstractions;
 
@@ -19,8 +18,6 @@ public class DatabaseConnectionLossScenario(ITestOutputHelper console) : Databas
     public async Task hosts_work_again_without_a_restart_when_their_database_connections_are_dropped(string combination, int hostsCount)
     {
         var invoices = new Invoices();
-        Recovery? recovery = null;
-        IReadOnlyCollection<ProcessingFailure> failures = [];
 
         await RunScenarioAsync(combination, hostsCount, CreateHostSetup(invoices),
             async (run, cancellationToken) =>
@@ -31,22 +28,11 @@ public class DatabaseConnectionLossScenario(ITestOutputHelper console) : Databas
                 for (var invoice = 0; invoice < InvoicesBeforeTheConnectionsAreDropped; invoice++)
                     Assert.True(await IssueAnInvoiceAndFollowItAsync(run, invoices, cancellationToken));
 
-                var dropping = Stopwatch.StartNew();
                 await outage.DropConnectionsAsync(cancellationToken);
-                Console.WriteLine($"MEASURED database-connection-loss combination={combination} drop-ms={dropping.ElapsedMilliseconds}");
 
-                recovery = await IssueInvoicesUntilTheyKeepCompletingAsync(run, invoices, cancellationToken);
+                await IssueInvoicesUntilTheyKeepCompletingAsync(run, invoices, cancellationToken);
             },
-            async run =>
-            {
-                failures = FailuresThatDeadLetter(run);
-                await AssertOnlyDatabaseFailuresWereDeadLetteredAsync(run);
-            });
-
-        Console.WriteLine(
-            $"MEASURED database-connection-loss combination={combination} first-completed-ms={recovery!.TimeToFirstCompletedInvoice.TotalMilliseconds:F0} " +
-            $"steady-ms={recovery.TimeToSteadyState.TotalMilliseconds:F0} invoices-tried={recovery.InvoicesTried} " +
-            $"refused={invoices.Refused} dead-lettered={failures.Count}");
+            AssertOnlyDatabaseFailuresWereDeadLetteredAsync);
 
         AssertEveryInvoiceIsAccountedFor(invoices);
     }

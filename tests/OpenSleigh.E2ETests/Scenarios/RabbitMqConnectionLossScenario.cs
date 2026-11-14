@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
@@ -86,7 +85,6 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
                     // every connection the hosts have open, once the broker lists them all
                     var open = await connections.WaitForAsync(connectionLog.Open, cancellationToken);
                     await connections.CloseAsync(open, cancellationToken);
-                    var closed = Stopwatch.StartNew();
 
                     // the queues are still there, without their consumers: what is published meanwhile waits in them
                     foreach (var queueName in queueNames)
@@ -97,18 +95,11 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
                     foreach (var invoice in invoices)
                         await run.AnyHost.PublishAsync(new IssueInvoice(invoice), cancellationToken);
 
-                    await connections.WaitForConsumersAsync(queueNames, (uint)hostsCount, cancellationToken);
-                    var consumersBack = closed.Elapsed;
-
                     // the hosts consume again, and they publish again: the invoices are sent by a message of their own
+                    await connections.WaitForConsumersAsync(queueNames, (uint)hostsCount, cancellationToken);
                     await Task.WhenAll(invoices.Select(WaitUntilSentAsync));
-                    var allSent = closed.Elapsed;
 
                     openAfterEachTime.Add(connectionLog.Open);
-
-                    Console.WriteLine(
-                        $"MEASURED rabbitmq-connection-loss time={time} closed={open.Count} open-before={openBefore} open-after={connectionLog.Open} " +
-                        $"opened-in-all={connectionLog.Opened} consumers-back-ms={consumersBack.TotalMilliseconds:F0} all-sent-ms={allSent.TotalMilliseconds:F0}");
                 }
             },
             async run =>
