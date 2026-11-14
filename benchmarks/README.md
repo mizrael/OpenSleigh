@@ -73,8 +73,10 @@ its tolerance, or when a scenario that works on the base fails on the branch.
   - A floor is set per scenario, never for a whole unit, and must be well below what the scenario measures:
     a floor above the baseline would let a scenario get several times slower.
   - Only the two `dbcontext` scenarios have one, of 0.0005 ms. They measure about 0.001 ms per context, so a
-    context that gets half again as slow still fails. With 200 contexts per sample the whole measurement took half
+    context that gets 1.6 times slower still fails. With 200 contexts per sample the whole measurement took half
     a millisecond, and identical code once differed by 34% and failed the job; they now resolve 20,000 per sample.
+    Over 5 gate jobs that compared identical code that way (50 paired rounds), the median of a job differed by
+    up to 0.00024 ms, 23%: inside the tolerance, and half the floor.
   - Before adding a floor to another scenario, make it measure more per sample: that removes the noise instead
     of hiding it.
 - The gate judges a branch by the `gate.json` of that branch, so that a branch can add a scenario together with
