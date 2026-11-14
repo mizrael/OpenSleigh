@@ -1,5 +1,6 @@
 ﻿namespace OpenSleigh.Persistence.SQL;
 
+[Obsolete("No longer used by OpenSleigh, which states its table hints in the statement that reads the outbox. It will be removed in a future version.")]
 public enum TableHints
 {
     Index,

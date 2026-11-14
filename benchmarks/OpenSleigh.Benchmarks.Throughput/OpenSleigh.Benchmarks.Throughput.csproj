@@ -21,11 +21,16 @@
   <PropertyGroup>
     <OpenSleighSrcRoot Condition="'$(OpenSleighSrcRoot)' == ''">$(MSBuildThisFileDirectory)..\..\src</OpenSleighSrcRoot>
     <RabbitConfigurationFile>$(OpenSleighSrcRoot)/OpenSleigh.Transport.RabbitMQ/RabbitConfiguration.cs</RabbitConfigurationFile>
+    <MessageEnvelopeFile>$(OpenSleighSrcRoot)/OpenSleigh/Outbox/MessageEnvelope.cs</MessageEnvelopeFile>
   </PropertyGroup>
 
   <!-- scenarios for settings that only exist on one side of a comparison are compiled in only where the setting exists -->
   <PropertyGroup Condition="Exists('$(RabbitConfigurationFile)') And $([System.IO.File]::ReadAllText('$(RabbitConfigurationFile)').Contains('ConsumerDispatchConcurrency'))">
     <DefineConstants>$(DefineConstants);RABBIT_CONSUMER_TUNING</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="Exists('$(MessageEnvelopeFile)') And $([System.IO.File]::ReadAllText('$(MessageEnvelopeFile)').Contains('DeliverAt'))">
+    <DefineConstants>$(DefineConstants);DELAYED_DELIVERY</DefineConstants>
   </PropertyGroup>
 
   <PropertyGroup Condition="Exists('$(OpenSleighSrcRoot)/OpenSleigh/Outbox/IOutboxBatchRepository.cs')">

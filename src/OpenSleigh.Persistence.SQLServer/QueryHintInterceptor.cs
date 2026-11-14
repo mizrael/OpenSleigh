@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 namespace OpenSleigh.Persistence.SQLServer;
 
 [ExcludeFromCodeCoverage]
+[Obsolete("No longer used by OpenSleigh, which states its table hints in the statement that reads the outbox. It will be removed in a future version.")]
 public class QueryHintInterceptor : DbCommandInterceptor
 {
     private static readonly TimeSpan _timeout = TimeSpan.FromSeconds(5);

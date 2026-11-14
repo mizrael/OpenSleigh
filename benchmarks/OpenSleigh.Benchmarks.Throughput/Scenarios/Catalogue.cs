@@ -17,6 +17,10 @@ internal static class Catalogue
     private const int DbContextResolutions = 20_000;
     private const int LargeSqlBatchSize = 100;
 
+#if DELAYED_DELIVERY
+    private const int DelayedBacklog = 20000;
+#endif
+
     public static IReadOnlyList<Scenario> All { get; } = Build();
 
     private static List<Scenario> Build() =>
@@ -25,6 +29,16 @@ internal static class Catalogue
         new("local-outbox-relay", LocalOnly, MessagesPerSecond, true,
             "2000 pending messages, fake outbox returning 10 per read, no-op publisher; rate until drained or 30 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, LocalScenarios.FakeBatchedOutbox(SqlDefaultBatchSize), 2000, TimeSpan.FromSeconds(30))),
+
+        new("local-inmemory-outbox-relay", LocalOnly, MessagesPerSecond, true,
+            "500 pending messages in the in-memory outbox relayed to a no-op publisher; rate until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.InMemory(ctx), 500, TimeSpan.FromSeconds(10))),
+
+#if DELAYED_DELIVERY
+        new("local-inmemory-outbox-relay-delayed-backlog", LocalOnly, MessagesPerSecond, true,
+            "as local-inmemory-outbox-relay, while 20000 messages that are not due yet wait in the same outbox; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.InMemory(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
+#endif
 
         new("local-kafka-consumer", LocalOnly, MessagesPerSecond, true,
             "1000 messages always ready in a fake consumer, real subscriber/handler/saga pipeline, in-memory persistence; rate until consumed or 15 s",
@@ -215,6 +229,23 @@ internal static class Catalogue
         new("mongo-rabbit-e2e-concurrent-long", FullOnly, SagasPerSecond, true,
             "2000 two-hop sagas on MongoDB + RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
             ctx => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.Mongo(ctx), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))),
+#endif
+
+#if DELAYED_DELIVERY
+        // compared with the *-outbox-relay scenarios: messages that are not due must not slow down the ones that are.
+        // Last, because scenarios run in this order in one process: a scenario that only one side of a comparison has,
+        // run before scenarios that both have, changes the process those are measured in
+        new("sqlserver-outbox-relay-delayed-backlog", GateAndFull, MessagesPerSecond, true,
+            "as sqlserver-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.SqlServer(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
+
+        new("postgres-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
+            "as postgres-outbox-relay, while 20000 rows that are not due yet wait in the same table; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Postgres(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
+
+        new("mongo-outbox-relay-delayed-backlog", FullOnly, MessagesPerSecond, true,
+            "as mongo-outbox-relay, while 20000 documents that are not due yet wait in the same collection; rate of the 500 until drained or 10 s",
+            ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
 #endif
     ];
 

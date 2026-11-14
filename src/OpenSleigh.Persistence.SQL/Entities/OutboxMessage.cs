@@ -7,6 +7,9 @@ namespace OpenSleigh.Persistence.SQL.Entities;
 
 public record OutboxMessage
 {
+    public const string TableName = "OutboxMessages";
+    public const string DeliverAtIndexName = "IX_OutboxMessages_DeliverAt";
+
     public required string CorrelationId { get; set; }
     public required byte[] Body { get; set; }
     public required string MessageId { get; set; }
@@ -14,6 +17,12 @@ public record OutboxMessage
     public required DateTimeOffset CreatedAt { get; set; }
     public string? ParentId { get; set; }
     public required string SenderId { get; set; }
+
+    /// <summary>
+    /// the earliest time, in UTC, at which the relay publishes the message. Null when there is no delay,
+    /// which is also what a row written by a version of the library that does not know the column has.
+    /// </summary>
+    public DateTimeOffset? DeliverAt { get; set; }
 
     public bool TryMap(
         ITypeResolver typeResolver, 
@@ -36,6 +45,7 @@ public record OutboxMessage
             CreatedAt,
             type,
             senderId: SenderId,
+            deliverAt: DeliverAt,
             serializer,
             out envelope);
     }
@@ -55,6 +65,7 @@ public record OutboxMessage
             CreatedAt = message.CreatedAt,
             MessageType = message.MessageType.FullName,
             SenderId = message.SenderId,
+            DeliverAt = message.DeliverAt,
         };
     }
 }
@@ -63,8 +74,13 @@ internal class OutboxMessageStateEntityTypeConfiguration : IEntityTypeConfigurat
 {
     public void Configure(EntityTypeBuilder<OutboxMessage> builder)
     {
-        builder.ToTable("OutboxMessages", Constants.DbSchema);
+        builder.ToTable(OutboxMessage.TableName, Constants.DbSchema);
 
         builder.HasKey(e => e.MessageId);
+
+        // the relay looks up the delayed messages that are due, and the ones without a delay, through this index:
+        // the ones that are waiting for their time are never read
+        builder.HasIndex(e => e.DeliverAt)
+            .HasDatabaseName(OutboxMessage.DeliverAtIndexName);
     }
 }

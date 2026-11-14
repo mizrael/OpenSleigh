@@ -5,7 +5,7 @@ namespace OpenSleigh.Tests;
 
 public record DummyMessage : IMessage
 {
-    public static MessageEnvelope CreateEnvelope(string? parentId = null)
+    public static MessageEnvelope CreateEnvelope(string? parentId = null, TimeSpan delay = default)
     {
         var message = new DummyMessage();
 
@@ -14,6 +14,6 @@ public record DummyMessage : IMessage
         context.TriggerMessageId.Returns(parentId);
         context.InstanceId.Returns(Guid.NewGuid().ToString());
 
-        return MessageEnvelope.Create(message, context);
+        return MessageEnvelope.Create(message, context, delay);
     }
 }

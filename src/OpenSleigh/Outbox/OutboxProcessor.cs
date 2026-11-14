@@ -41,6 +41,9 @@ public class OutboxProcessor : IOutboxProcessor
             var batchRepository = _outboxRepository as IOutboxBatchRepository;
             var published = new List<MessageEnvelope>();
 
+            // read once, by the first message that has a due time
+            DateTimeOffset? now = null;
+
             var messages = await _outboxRepository.ReadPendingAsync(cancellationToken);
             foreach (var message in messages)
             {
@@ -50,6 +53,16 @@ public class OutboxProcessor : IOutboxProcessor
                 // what was published so far is still removed below: stopping must not send it again
                 if (cancellationToken.IsCancellationRequested)
                     break;
+
+                // a repository that knows nothing about due times returns every message: it stays in the outbox
+                if (message.DeliverAt is { } dueTime && dueTime > (now ??= DateTimeOffset.UtcNow))
+                {
+                    _logger.LogDebug(
+                        "Outbox message {MessageId} is not due until {DeliverAt}, it is left in the outbox.",
+                        message.MessageId,
+                        dueTime);
+                    continue;
+                }
 
                 try
                 {

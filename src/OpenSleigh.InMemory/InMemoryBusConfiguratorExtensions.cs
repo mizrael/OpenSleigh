@@ -24,6 +24,9 @@ public static class InMemoryBusConfiguratorExtensions
             .AddSingleton<ISagaStateQuery>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
             .AddSingleton<IOutboxRepository, InMemoryOutboxRepository>();
 
+        // the outbox relay needs one, whatever the transport is
+        busConfigurator.Services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+
         return busConfigurator;
     }
 
@@ -40,10 +43,12 @@ public static class InMemoryBusConfiguratorExtensions
                 RetryDelay = options.SubscriberRetryDelay
             });
 
+        // a persistence configured before the transport keeps its own transaction manager
+        busConfigurator.Services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
+
         busConfigurator.Services.AddSingleton<IPublisher, InMemoryPublisher>()
                                 .AddSingleton(options)
                                 .AddSingleton<InMemoryDeadLetters>()
-                                .AddSingleton<ITransactionManager, InMemoryTransactionManager>()
                                 .AddSingleton<Channel<MessageEnvelope>>(ctx => Channel.CreateBounded<MessageEnvelope>(options.SubscriberMaxMessagesBatchSize))
                                 .AddSingleton<ChannelReader<MessageEnvelope>>(ctx =>
                                 {

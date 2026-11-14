@@ -1,18 +1,16 @@
-using OpenSleigh.InMemory;
 using OpenSleigh.Persistence;
 
 namespace OpenSleigh.Tests;
 
-public class InMemoryTransactionManagerTests
+public class NoOpTransactionManagerTests
 {
     [Fact]
     public async Task StartTransactionAsync_should_return_NoOpTransaction()
     {
-        var sut = new InMemoryTransactionManager();
+        var sut = new NoOpTransactionManager();
 
         var result = await sut.StartTransactionAsync(CancellationToken.None);
 
-        Assert.IsType<NoOpTransaction>(result);
         Assert.Same(NoOpTransaction.Instance, result);
     }
 }

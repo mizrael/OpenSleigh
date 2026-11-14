@@ -38,6 +38,10 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<InternalsVisibleTo Include="OpenSleigh.Persistence.Mongo.Tests" />
+	</ItemGroup>
+
+	<ItemGroup>
 		<None Include="README.md" Pack="true" PackagePath="\">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</None>

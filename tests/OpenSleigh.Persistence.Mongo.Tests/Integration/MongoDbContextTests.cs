@@ -14,6 +14,7 @@ namespace OpenSleigh.Persistence.Mongo.Tests.Integration;
 public class MongoDbContextTests : IClassFixture<DbFixture>
 {
     private const string OutboxMessageIdIndex = "ix_message_id";
+    private const string OutboxDeliverAtIndex = "ix_deliver_at";
     private const string SagaCorrelationIndex = "ix_correlation_type";
     private const string SagaInstanceIdIndex = "ix_instance_id";
 
@@ -35,6 +36,37 @@ public class MongoDbContextTests : IClassFixture<DbFixture>
         Assert.True(IsUnique(outboxIndexes[OutboxMessageIdIndex]));
         Assert.True(IsUnique(sagaIndexes[SagaCorrelationIndex]));
         Assert.False(IsUnique(sagaIndexes[SagaInstanceIdIndex]));
+    }
+
+    [Fact]
+    public async Task Ctor_should_create_an_index_on_the_due_time_that_also_covers_the_messages_without_one()
+    {
+        var sut = _fixture.CreateDbContext();
+
+        var outboxIndexes = await ReadIndexesAsync(sut.OutboxMessages);
+
+        var index = outboxIndexes[OutboxDeliverAtIndex];
+        Assert.Equal(new BsonDocument(nameof(Entities.OutboxMessage.DeliverAt), 1), index["key"]);
+        Assert.False(IsUnique(index));
+        Assert.False(index.Contains("sparse"));
+        Assert.False(index.Contains("partialFilterExpression"));
+    }
+
+    [Fact]
+    public async Task Ctor_should_accept_an_existing_index_on_the_due_time_under_another_name()
+    {
+        var database = new MongoClient(_fixture.ConnectionString).GetDatabase(_fixture.CreateDatabaseName());
+        var outbox = database.GetCollection<Entities.OutboxMessage>("outbox");
+        await outbox.Indexes.CreateOneAsync(new CreateIndexModel<Entities.OutboxMessage>(
+            Builders<Entities.OutboxMessage>.IndexKeys.Ascending(e => e.DeliverAt),
+            new CreateIndexOptions { Name = "created_by_someone_else" }));
+
+        var sut = new DbContext(database);
+
+        var outboxIndexes = await ReadIndexesAsync(sut.OutboxMessages);
+        Assert.True(outboxIndexes.ContainsKey("created_by_someone_else"));
+        Assert.False(outboxIndexes.ContainsKey(OutboxDeliverAtIndex));
+        Assert.True(IsUnique(outboxIndexes[OutboxMessageIdIndex]));
     }
 
     [Fact]
