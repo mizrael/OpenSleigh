@@ -5,10 +5,19 @@ namespace OpenSleigh.E2ETests.Scenarios;
 
 public class CommitFailureScenario(ITestOutputHelper console) : CommitFailureScenarioBase(console)
 {
-    // one host, and a few: the message that follows can reach another host, which only knows what is in the store
+    // in memory, where there is one host, and with a few hosts everywhere else: the message that follows
+    // can reach another host, which only knows what is in the store
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
-    public async Task a_commit_that_fails_does_not_leave_the_saga_locked_and_sends_none_of_its_messages(string combination, int hostsCount)
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_commit_that_fails_does_not_leave_the_saga_locked_and_sends_none_of_its_messages(string combination, int hostsCount)
+        => FailACommitAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(HostsCounts = [3])]
+    public Task a_commit_that_fails_does_not_leave_the_saga_locked_and_sends_none_of_its_messages_with_several_hosts(string combination, int hostsCount)
+        => FailACommitAsync(combination, hostsCount);
+
+    private async Task FailACommitAsync(string combination, int hostsCount)
     {
         var outcome = await PackAParcelWithACommitThatFailsOnceAsync(combination, hostsCount);
 

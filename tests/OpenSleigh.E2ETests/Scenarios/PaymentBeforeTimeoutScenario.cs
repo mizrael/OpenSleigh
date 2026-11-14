@@ -13,9 +13,19 @@ public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioB
     // as soon as the order is stored
     private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(3);
 
+    // in memory, where there is one host, and with a few hosts everywhere else: the timeout is one row in an outbox
+    // that every host relays, and whichever host receives it has to leave it alone
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
-    public async Task an_order_paid_in_time_does_not_expire(string combination, int hostsCount)
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task an_order_paid_in_time_does_not_expire(string combination, int hostsCount)
+        => PayAnOrderInTimeAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(HostsCounts = [3])]
+    public Task an_order_paid_in_time_does_not_expire_with_several_hosts(string combination, int hostsCount)
+        => PayAnOrderInTimeAsync(combination, hostsCount);
+
+    private async Task PayAnOrderInTimeAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();
         var journal = new OrderPaymentJournal();

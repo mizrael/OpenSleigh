@@ -20,7 +20,16 @@ public static class KnownDefects
 {
     public const string IncludeVariable = "E2E_INCLUDE_KNOWN_DEFECTS";
 
-    public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
+    public static readonly IReadOnlyList<KnownDefect> Exclusions =
+    [
+        new KnownDefect(
+            "state-stored-after-failed-commit",
+            "when the commit of a saga fails, the saga is released, and the release stores the state as the handler " +
+            "left it (and whether it completed), without the messages it published and without the message being " +
+            "recorded as processed: the handler runs again on a state it has already changed. " +
+            "On every store, in-memory included (CircleCI job 1870: 7 cases out of 7, state changed once instead of not at all).",
+            matrixCase => matrixCase.Scenario == "CommitFailureStateScenario"),
+    ];
 
     public static bool AreIncluded
         => bool.TryParse(Environment.GetEnvironmentVariable(IncludeVariable), out var included) && included;

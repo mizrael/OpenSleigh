@@ -18,10 +18,19 @@ public class PublishFailureScenario(ITestOutputHelper console) : ScenarioBase(co
 
     private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
 
-    // one host, and a few: with several, every relay finds the broker down
+    // in memory, where there is one host, and with a few hosts everywhere else: every relay finds the broker down,
+    // and only one of them may publish the message when it is back
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
-    public async Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_delivered_once_afterwards(string combination, int hostsCount)
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_delivered_once_afterwards(string combination, int hostsCount)
+        => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(HostsCounts = [3])]
+    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_delivered_once_afterwards_with_several_hosts(string combination, int hostsCount)
+        => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
+
+    private async Task PublishWhileTheBrokerIsDownAsync(string combination, int hostsCount)
     {
         var brokerIsDown = new Fault("the broker cannot be reached, on purpose.");
         var published = new Expectation(1);

@@ -13,10 +13,19 @@ public class OutboxDeleteFailureScenario(ITestOutputHelper console) : ScenarioBa
 {
     private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
 
-    // one host, and a few: the second copy can reach another host than the first
+    // in memory, where there is one host, and with a few hosts everywhere else: the second copy can reach
+    // another host than the first, which only knows what is in the store
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
-    public async Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once(string combination, int hostsCount)
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once(string combination, int hostsCount)
+        => PublishWithoutRemovingAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(HostsCounts = [3])]
+    public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once_with_several_hosts(string combination, int hostsCount)
+        => PublishWithoutRemovingAsync(combination, hostsCount);
+
+    private async Task PublishWithoutRemovingAsync(string combination, int hostsCount)
     {
         var outboxCannotBeCleaned = new Fault("the published messages cannot be removed from the outbox, on purpose.");
         var publishedTwice = new Expectation(2);

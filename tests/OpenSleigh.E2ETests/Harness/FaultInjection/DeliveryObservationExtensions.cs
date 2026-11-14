@@ -27,6 +27,39 @@ public static class DeliveryObservationExtensions
         return services.Decorate<IPublisher>((_, inner) => new ObservingPublisher(inner, onPublished));
     }
 
+    /// <summary>
+    /// tells a scenario about every pass of the relay of a host that left something in the outbox, or could not
+    /// read it at all.
+    /// </summary>
+    public static IServiceCollection ObserveFailedRelayPasses(this IServiceCollection services, Action onFailedPass)
+    {
+        ArgumentNullException.ThrowIfNull(onFailedPass);
+        return services.Decorate<IOutboxProcessor>((_, inner) => new ObservingOutboxProcessor(inner, onFailedPass));
+    }
+
+    private sealed class ObservingOutboxProcessor(IOutboxProcessor inner, Action onFailedPass) : IOutboxProcessor
+    {
+        public ValueTask ProcessPendingMessagesAsync(CancellationToken cancellationToken = default)
+            => inner.ProcessPendingMessagesAsync(cancellationToken);
+
+        public async ValueTask<OutboxRelayResult> RelayPendingMessagesAsync(CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                var result = await inner.RelayPendingMessagesAsync(cancellationToken);
+                if (result.Failed > 0)
+                    onFailedPass();
+
+                return result;
+            }
+            catch (Exception e) when (e is not OperationCanceledException)
+            {
+                onFailedPass();
+                throw;
+            }
+        }
+    }
+
     private sealed class ObservingPublisher(IPublisher inner, Action<MessageEnvelope> onPublished) : IPublisher
     {
         public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
