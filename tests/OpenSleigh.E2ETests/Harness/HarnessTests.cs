@@ -162,16 +162,22 @@ public class HarnessTests(ITestOutputHelper console) : ScenarioBase(console)
             });
     }
 
+    // every combination needs one for its outbox relay. MongoDB once had none, and no host on it could relay anything
     [Fact]
-    public void the_workaround_for_mongodb_is_still_needed()
+    public void every_combination_registers_a_transaction_manager()
     {
-        var services = new ServiceCollection();
-        services.AddOpenSleigh(bus => MongoStore.UseMongoPersistence(bus, "mongodb://not-used", "not-used"));
+        Assert.All(Combinations.All, combination =>
+        {
+            var context = RunContext.Create();
+            var services = new ServiceCollection();
+            services.AddOpenSleigh(bus =>
+            {
+                combination.CreateStore(context).Configure(bus);
+                combination.CreateTransport(context).Configure(bus, HostIdentity.DefaultService);
+            });
 
-        Assert.False(
-            services.Any(descriptor => descriptor.ServiceType == typeof(ITransactionManager)),
-            $"UseMongoPersistence registers a transaction manager now: delete the workaround in {nameof(MongoStore)}, " +
-            $"{nameof(KnownDefects)}.{nameof(KnownDefects.MongoRegistersNoTransactionManager)} and this test.");
+            Assert.Contains(services, descriptor => descriptor.ServiceType == typeof(ITransactionManager));
+        });
     }
 
     private static IEnumerable<string> ScenarioClassNames()

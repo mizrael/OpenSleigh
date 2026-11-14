@@ -14,19 +14,11 @@ public sealed record KnownDefect(string Id, string Reason, Func<MatrixCase, bool
 /// <summary>
 /// the cases of the matrix that are not run because of a defect in the product, each with its reason.
 /// This list is the only place where a case is taken out: an exclusion is removed by deleting its entry.
-/// Set E2E_INCLUDE_KNOWN_DEFECTS=true to run the excluded cases anyway, and without the workarounds
-/// of the harness, for example to check a fix.
+/// Set E2E_INCLUDE_KNOWN_DEFECTS=true to run the excluded cases anyway, for example to check a fix.
 /// </summary>
 public static class KnownDefects
 {
     public const string IncludeVariable = "E2E_INCLUDE_KNOWN_DEFECTS";
-
-    /// <summary>
-    /// not an exclusion, a workaround in MongoStore: UseMongoPersistence registers no ITransactionManager,
-    /// which the outbox relay needs, so a host on MongoDB relays nothing. HarnessTests fails once the product
-    /// registers one, to say that the workaround can go.
-    /// </summary>
-    public const string MongoRegistersNoTransactionManager = "mongo-registers-no-transaction-manager";
 
     public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
 

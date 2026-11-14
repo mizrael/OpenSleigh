@@ -14,7 +14,8 @@ internal sealed class InMemoryStore : IStore
 
     public Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken) => Task.CompletedTask;
 
-    // reading the pending messages of the in-memory outbox claims nothing: it can be used to count them
+    // reading the in-memory outbox claims nothing, so it can be used to count: the messages that are due,
+    // which leaves out one that was published with a delay and still waits
     public async Task<long> CountOutboxMessagesAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
     {
         var outbox = hostServices.GetRequiredService<IOutboxRepository>();

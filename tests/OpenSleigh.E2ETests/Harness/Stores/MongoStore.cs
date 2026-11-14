@@ -1,8 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using MongoDB.Driver;
 using OpenSleigh.DependencyInjection;
-using OpenSleigh.Persistence;
 using OpenSleigh.Persistence.Mongo;
 using OpenSleigh.Persistence.Mongo.Entities;
 
@@ -29,22 +27,10 @@ internal sealed class MongoStore : IStore
     }
 
     public void Configure(IBusConfigurator bus)
-    {
-        UseMongoPersistence(bus, _connectionString, _databaseName);
-
-        if (!KnownDefects.AreIncluded)
-            WorkAroundMissingTransactionManager(bus.Services);
-    }
+        => UseMongoPersistence(bus, _connectionString, _databaseName);
 
     internal static void UseMongoPersistence(IBusConfigurator bus, string connectionString, string databaseName)
         => bus.UseMongoPersistence(new MongoConfiguration(connectionString, databaseName));
-
-    /// <summary>
-    /// the workaround for <see cref="KnownDefects.MongoRegistersNoTransactionManager"/>: without it no host
-    /// on MongoDB can relay its outbox. It adds nothing once the product registers a transaction manager of its own.
-    /// </summary>
-    private static void WorkAroundMissingTransactionManager(IServiceCollection services)
-        => services.TryAddSingleton<ITransactionManager, NoTransactionManager>();
 
     // the first host creates the collections and their indexes, before any host starts: a context does that when it is created
     public async Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken)
@@ -73,11 +59,5 @@ internal sealed class MongoStore : IStore
     {
         using var client = new MongoClient(_connectionString);
         await client.DropDatabaseAsync(_databaseName);
-    }
-
-    private sealed class NoTransactionManager : ITransactionManager
-    {
-        public ValueTask<ITransaction> StartTransactionAsync(CancellationToken cancellationToken = default)
-            => ValueTask.FromResult<ITransaction>(NoOpTransaction.Instance);
     }
 }

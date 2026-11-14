@@ -38,7 +38,7 @@ bash tests/OpenSleigh.E2ETests/run-e2e.sh
 | `E2E_COMBINATIONS` | comma separated combinations to run, for example `inmemory` (needs no container) or `postgresql-rabbitmq,mongodb-kafka` |
 | `E2E_FILTER` | a `dotnet test` filter, `Category=E2E` by default. One scenario: `Category=E2E&FullyQualifiedName~ParentChildScenario` |
 | `E2E_REPETITIONS` | how many times the suite runs; raise it to measure flakiness (the `e2e_repetitions` pipeline parameter in CI) |
-| `E2E_INCLUDE_KNOWN_DEFECTS` | `true` runs the cases excluded in `KnownDefects.cs` as well, and without the workarounds of the harness, to check a fix |
+| `E2E_INCLUDE_KNOWN_DEFECTS` | `true` runs the cases excluded in `KnownDefects.cs` as well, to check a fix |
 | `E2E_RESULTS_DIR` | where the `run-N.trx` files and `summary.txt` go |
 
 `dotnet test` works too: `E2E_COMBINATIONS=inmemory dotnet test tests/OpenSleigh.E2ETests --framework net10.0`.
