@@ -247,7 +247,84 @@ internal static class Catalogue
             "as mongo-outbox-relay, while 20000 documents that are not due yet wait in the same collection; rate of the 500 until drained or 10 s",
             ctx => PipelineScenarios.OutboxRelayAsync(ctx, PersistenceTarget.Mongo(ctx), 500, TimeSpan.FromSeconds(10), delayedBacklog: DelayedBacklog)),
 #endif
+        .. Spike("postgres", PersistenceTarget.Postgres),
+        .. Spike("sqlserver", PersistenceTarget.SqlServer),
+        .. SpikeLocal(),
     ];
+
+    // SPIKE: the scenarios of the ledger experiment. Each one exists twice: as it is, and with "-lease".
+    // On the branch the first runs without a lock and the second with a lease taken before the handler;
+    // on the base branch both run the same code, which shows how much two runs of the same thing differ.
+    private static IEnumerable<Scenario> Spike(string store, Func<ScenarioContext, int?, PersistenceTarget> persistence)
+    {
+        string[] suite = [$"spike-{store}"];
+
+        foreach (var lease in new[] { false, true })
+        {
+            var suffix = lease ? "-lease" : string.Empty;
+            Func<Func<Task<double>>, Task<double>> mode = lease ? SpikeMode.LeaseAsync : SpikeMode.NoLockAsync;
+
+            yield return new($"spike-{store}-state-short{suffix}", suite, Milliseconds, false,
+                "find/lock/release cycle on a saga with no processed messages to start with; mean of 200 cycles",
+                ctx => mode(() => SagaStateScenarios.LongSagaCycleAsync(ctx, persistence(ctx, null), 0, 200)));
+
+            yield return new($"spike-{store}-state-long{suffix}", suite, Milliseconds, false,
+                "find/lock/release cycle on a saga with 300 processed messages; mean of 200 cycles",
+                ctx => mode(() => SagaStateScenarios.LongSagaCycleAsync(ctx, persistence(ctx, null), 300, 200)));
+
+            yield return new($"spike-{store}-e2e{suffix}", suite, SagasPerSecond, true,
+                "300 two-hop sagas on RabbitMQ, one consumer; rate until completed or 20 s",
+                ctx => mode(() => PipelineScenarios.EndToEndAsync(ctx, persistence(ctx, null), TransportTarget.Rabbit(ctx), 300, TimeSpan.FromSeconds(20))));
+
+#if RABBIT_CONSUMER_TUNING
+            yield return new($"spike-{store}-e2e-concurrent{suffix}", suite, SagasPerSecond, true,
+                "2000 two-hop sagas on RabbitMQ, ConsumerDispatchConcurrency = 16 and PrefetchCount = 64; rate until completed or 30 s",
+                ctx => mode(() => PipelineScenarios.EndToEndAsync(ctx, persistence(ctx, null), TransportTarget.RabbitConcurrent(ctx, 16, 64), 2000, TimeSpan.FromSeconds(30))));
+
+            var orders = $"spike-{store}-orders{suffix}";
+            yield return new(orders, suite, "orders/s", true,
+                "300 orders (orchestrator, 4 workers, 4 replies arriving together) on 3 hosts with 8 consumers each; rate until completed or 90 s",
+                ctx => mode(() => ContentionScenarios.OrderWorkflowAsync(ctx, orders, persistence(ctx, null), 3, 8, 300, TimeSpan.Zero, TimeSpan.FromSeconds(90))));
+
+            var slowOrders = $"spike-{store}-orders-5ms{suffix}";
+            yield return new(slowOrders, suite, "orders/s", true,
+                "as orders, with handlers that take 5 ms",
+                ctx => mode(() => ContentionScenarios.OrderWorkflowAsync(ctx, slowOrders, persistence(ctx, null), 3, 8, 300, TimeSpan.FromMilliseconds(5), TimeSpan.FromSeconds(90))));
+
+            var burst = $"spike-{store}-burst{suffix}";
+            yield return new(burst, suite, MessagesPerSecond, true,
+                "10 sagas that each receive 40 different messages at once, on 3 hosts with 8 consumers each; rate until completed or 120 s",
+                ctx => mode(() => ContentionScenarios.BurstAsync(ctx, burst, persistence(ctx, null), 3, 8, 10, 40, TimeSpan.Zero, TimeSpan.FromSeconds(120))));
+
+            var slowBurst = $"spike-{store}-burst-5ms{suffix}";
+            yield return new(slowBurst, suite, MessagesPerSecond, true,
+                "as burst, with handlers that take 5 ms",
+                ctx => mode(() => ContentionScenarios.BurstAsync(ctx, slowBurst, persistence(ctx, null), 3, 8, 10, 40, TimeSpan.FromMilliseconds(5), TimeSpan.FromSeconds(120))));
+
+            var oneHostBurst = $"spike-{store}-burst-1host{suffix}";
+            yield return new(oneHostBurst, suite, MessagesPerSecond, true,
+                "as burst, on one host with 16 consumers",
+                ctx => mode(() => ContentionScenarios.BurstAsync(ctx, oneHostBurst, persistence(ctx, null), 1, 16, 10, 40, TimeSpan.Zero, TimeSpan.FromSeconds(120))));
+#endif
+        }
+    }
+
+    private static IEnumerable<Scenario> SpikeLocal()
+    {
+        string[] suite = ["spike-local"];
+
+        yield return new("spike-sqlite-state-long", suite, Milliseconds, false,
+            "find/lock/release cycle on a saga with 300 processed messages, on a SQLite file; mean of 40 cycles",
+            ctx => SpikeMode.NoLockAsync(() => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqliteSagaState(ctx), 300, 40)));
+
+        yield return new("spike-sqlite-state-long-lease", suite, Milliseconds, false,
+            "find/lock/release cycle on a saga with 300 processed messages, on a SQLite file; mean of 40 cycles",
+            ctx => SpikeMode.LeaseAsync(() => SagaStateScenarios.LongSagaCycleAsync(ctx, PersistenceTarget.SqliteSagaState(ctx), 300, 40)));
+
+        yield return new("spike-inmemory-e2e", suite, SagasPerSecond, true,
+            "2000 two-hop sagas, in-memory transport and persistence; rate until completed or 30 s",
+            ctx => SpikeMode.NoLockAsync(() => PipelineScenarios.EndToEndAsync(ctx, PersistenceTarget.InMemory(ctx), TransportTarget.InMemory(), 2000, TimeSpan.FromSeconds(30))));
+    }
 
     /// <summary>
     /// The end-to-end runs that are profiled: where the time of a saga goes, call by call.

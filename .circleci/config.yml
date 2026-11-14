@@ -216,6 +216,8 @@ jobs:
       BENCH_ROUNDS: "<< pipeline.parameters.benchmark_rounds >>"
       BENCH_REPORT_ONLY: "<< parameters.report_only >>"
       BENCH_SUITE: "<< parameters.suite >>"
+      # SPIKE: the contention scenarios take longer than the gate's; five rounds are wanted
+      BENCH_TIME_BUDGET_SECONDS: "2100"
       # a named service container is reached by its name, not on localhost
       BENCH_KAFKA: broker:29092
     docker:
@@ -277,18 +279,26 @@ jobs:
           path: /tmp/bench-artifacts/summary.md
           destination: benchmark-summary.md
 
+# SPIKE, this branch only: the build and codecov workflows are left out (the unit and integration tests are written
+# for the stores this branch replaces), and the benchmark job runs the scenarios of the ledger experiment,
+# one job per store, never failing on a difference
 workflows:
-  build_and_test:
-    jobs:
-      - build
   e2e:
     jobs:
       - e2e
-  codecov:
+  ledger_spike:
     jobs:
-      - codecov:
-          context: codecov
-  benchmark_gate:
+      - benchmark:
+          name: spike_postgres
+          base: << pipeline.parameters.benchmark_base_branch >>
+          suite: spike-postgres
+          report_only: true
+      - benchmark:
+          name: spike_sqlserver
+          base: << pipeline.parameters.benchmark_base_branch >>
+          suite: spike-sqlserver
+          report_only: true
+  unused_on_this_branch:
     jobs:
       - benchmark:
           name: benchmark_gate
@@ -296,7 +306,7 @@ workflows:
           report_only: << pipeline.parameters.benchmark_report_only >>
           filters:
             branches:
-              ignore:
+              only:
                 - << pipeline.parameters.benchmark_base_branch >>
   # every commit that lands on the base branch is measured too; the docs site publishes these runs
   benchmark_develop:

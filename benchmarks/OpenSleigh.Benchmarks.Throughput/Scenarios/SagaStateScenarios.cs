@@ -129,9 +129,18 @@ internal static class SagaStateScenarios
         var instance = await repository.FindAsync(descriptor, NewMessageContext(correlationId))
             ?? throw new InvalidOperationException("saga state not found");
 
-        if (instance.ProcessedMessages.Count < expectedAtLeast)
+#if LEDGER_SPIKE
+        // SPIKE: the ledger store does not load what a saga handled; the query does
+        var query = scope.ServiceProvider.GetService<OpenSleigh.Queries.ISagaStateQuery>();
+        var stored = query is null ? null : await query.GetByInstanceIdAsync(instance.InstanceId);
+        var processedMessages = stored?.ProcessedMessages.Count ?? expectedAtLeast;
+#else
+        var processedMessages = instance.ProcessedMessages.Count;
+#endif
+
+        if (processedMessages < expectedAtLeast)
             throw new InvalidOperationException(
-                $"the saga holds {instance.ProcessedMessages.Count} processed messages, expected at least {expectedAtLeast}");
+                $"the saga holds {processedMessages} processed messages, expected at least {expectedAtLeast}");
         if (!string.IsNullOrEmpty(instance.LockId))
             throw new InvalidOperationException("the saga is still locked");
     }

@@ -51,6 +51,7 @@ async Task<int> RunAsync()
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputPath))!);
         File.WriteAllText(outputPath, JsonSerializer.Serialize(report, jsonOptions));
         File.WriteAllText(Path.ChangeExtension(outputPath, ".md"), markdown);
+        SpikeMetrics.WriteTo(Path.ChangeExtension(outputPath, ".metrics.txt"), variant, round);
     }
 
     // a scenario that fails is reported, not thrown: deciding what that means is the job of 'compare'

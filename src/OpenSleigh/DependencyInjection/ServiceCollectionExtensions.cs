@@ -28,6 +28,7 @@ public static class ServiceCollectionExtensions
             .AddSingleton<ISagaDescriptorsResolver>(sagaDescriptorResolver)
             .AddSingleton<ISagaStateTypeResolver>(sagaDescriptorResolver)
 
+            .AddSingleton<SagaInstanceGate>()
             .AddTransient<IMessageBus, DefaultMessageBus>()
             .AddTransient<ISagaRunner, SagaRunner>()
             .AddTransient<ISagaInstanceFactory, SagaInstanceFactory>()       

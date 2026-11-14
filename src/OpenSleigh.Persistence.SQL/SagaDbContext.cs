@@ -37,6 +37,8 @@ public class SagaDbContext : DbContext
         modelBuilder.ApplyConfiguration(new SagaStateEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new OutboxMessageStateEntityTypeConfiguration());
         modelBuilder.ApplyConfiguration(new SagaProcessedMessageTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new SagaHeadTypeConfiguration());
+        modelBuilder.ApplyConfiguration(new SagaLedgerEntryTypeConfiguration());
     }
 
     public async ValueTask<ITransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
@@ -47,4 +49,6 @@ public class SagaDbContext : DbContext
 
     public DbSet<SagaState> SagaStates { get; set; }
     public DbSet<OutboxMessage> OutboxMessages { get; set; }
+    public DbSet<SagaHead> Sagas { get; set; }
+    public DbSet<SagaLedgerEntry> SagaLedger { get; set; }
 }

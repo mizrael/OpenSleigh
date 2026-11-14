@@ -4,15 +4,13 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Persistence.SQL;
 
+// SPIKE, not for merging: reads the head and the ledger entries of the experiment.
 public class SqlSagaStateQuery : ISagaStateQuery
 {
     private readonly SagaDbContext _dbContext;
     private readonly ISerializer _serializer;
     private readonly ISagaStateTypeResolver? _stateTypes;
 
-    /// <param name="stateTypes">turns the name a saga's state type is stored with back into the type.
-    /// <c>AddOpenSleigh</c> registers one that knows the state types of the registered sagas.
-    /// Without it the query returns sagas without their state.</param>
     public SqlSagaStateQuery(SagaDbContext dbContext, ISerializer serializer, ISagaStateTypeResolver? stateTypes = null)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
@@ -24,13 +22,12 @@ public class SqlSagaStateQuery : ISagaStateQuery
         string instanceId,
         CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.SagaStates
-            .Include(s => s.ProcessedMessages)
+        var entity = await _dbContext.Sagas
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.InstanceId == instanceId, cancellationToken)
             .ConfigureAwait(false);
 
-        return entity is null ? null : MapToSagaInstanceInfo(entity);
+        return entity is null ? null : await MapAsync(entity, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<SagaInstanceInfo?> GetByCorrelationIdAsync(
@@ -38,13 +35,12 @@ public class SqlSagaStateQuery : ISagaStateQuery
         string sagaType,
         CancellationToken cancellationToken = default)
     {
-        var entity = await _dbContext.SagaStates
-            .Include(s => s.ProcessedMessages)
+        var entity = await _dbContext.Sagas
             .AsNoTracking()
             .FirstOrDefaultAsync(s => s.CorrelationId == correlationId && s.SagaType == sagaType, cancellationToken)
             .ConfigureAwait(false);
 
-        return entity is null ? null : MapToSagaInstanceInfo(entity);
+        return entity is null ? null : await MapAsync(entity, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<PagedResult<SagaInstanceInfo>> GetAllAsync(
@@ -53,9 +49,7 @@ public class SqlSagaStateQuery : ISagaStateQuery
     {
         filter ??= new SagaQueryFilter();
 
-        IQueryable<Entities.SagaState> query = _dbContext.SagaStates
-            .Include(s => s.ProcessedMessages)
-            .AsNoTracking();
+        IQueryable<Entities.SagaHead> query = _dbContext.Sagas.AsNoTracking();
 
         if (filter.SagaType is not null)
             query = query.Where(s => s.SagaType == filter.SagaType);
@@ -65,22 +59,34 @@ public class SqlSagaStateQuery : ISagaStateQuery
 
         var totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
-        var items = await query
+        var heads = await query
             .OrderBy(s => s.InstanceId)
             .Skip((filter.Page - 1) * filter.PageSize)
             .Take(filter.PageSize)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var items = new List<SagaInstanceInfo>(heads.Count);
+        foreach (var head in heads)
+            items.Add(await MapAsync(head, cancellationToken).ConfigureAwait(false));
+
         return new PagedResult<SagaInstanceInfo>(
-            Items: items.Select(MapToSagaInstanceInfo).ToList(),
+            Items: items,
             TotalCount: totalCount,
             Page: filter.Page,
             PageSize: filter.PageSize);
     }
 
-    private SagaInstanceInfo MapToSagaInstanceInfo(Entities.SagaState entity)
+    private async ValueTask<SagaInstanceInfo> MapAsync(Entities.SagaHead entity, CancellationToken cancellationToken)
     {
+        var entries = await _dbContext.SagaLedger
+            .AsNoTracking()
+            .Where(e => e.InstanceId == entity.InstanceId)
+            .OrderBy(e => e.Version)
+            .Select(e => new { e.MessageId, e.OccurredAt })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
         object? stateData = null;
         if (entity.StateData is not null && entity.StateData.Length > 0 && entity.SagaStateType is not null)
         {
@@ -100,9 +106,9 @@ public class SqlSagaStateQuery : ISagaStateQuery
             SagaType = entity.SagaType,
             SagaStateType = entity.SagaStateType,
             IsCompleted = entity.IsCompleted,
-            IsLocked = entity.LockId is not null && entity.LockTime is not null,
-            ProcessedMessages = entity.ProcessedMessages
-                .Select(m => new ProcessedMessageInfo(m.MessageId, m.When))
+            IsLocked = entity.LeaseId is not null && entity.LeaseTime is not null,
+            ProcessedMessages = entries
+                .Select(m => new ProcessedMessageInfo(m.MessageId, m.OccurredAt))
                 .ToList(),
             StateData = stateData
         };
