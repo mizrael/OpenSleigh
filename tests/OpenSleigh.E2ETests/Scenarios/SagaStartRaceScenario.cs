@@ -21,11 +21,20 @@ public class SagaStartRaceScenario(ITestOutputHelper console) : ScenarioBase(con
     private const string SecondSku = "sku-2";
     private const string CouponCode = "WELCOME";
 
-    // one host, for the messages a single host handles at the same time, and a few, for the hosts that race.
-    // A pair adds nothing that five hosts do not show
+    // the hosts that race to start the saga. One host of these transports handles its messages one at a time,
+    // and shows nothing that five hosts do not
     [Theory]
-    [MatrixData(HostsCounts = [1, 5])]
-    public async Task messages_that_start_the_same_saga_together_start_it_once(string combination, int hostsCount)
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [5])]
+    public Task messages_that_start_the_same_saga_together_start_it_once_on_hosts_that_race(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    // in memory a host handles several messages at the same time: it races with itself
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task messages_that_start_the_same_saga_together_start_it_once_on_a_host_that_handles_several_at_once(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    private async Task RunAsync(string combination, int hostsCount)
     {
         var carts = Enumerable.Range(0, Carts).Select(_ => Guid.NewGuid().ToString()).ToArray();
         var runs = new HandlerRuns(Carts * MessagesPerCart);

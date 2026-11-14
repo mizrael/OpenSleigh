@@ -6,57 +6,30 @@ using Xunit.Abstractions;
 namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
-/// a message that has no saga to go to: its saga was never started, or is already over.
-/// Neither runs a handler; the first is dead-lettered, the second is ignored.
+/// messages that have no saga to go to: one whose saga was never started, and two whose saga is already over.
+/// None of them runs a handler. The first is dead-lettered, once; the others are ignored.
 /// </summary>
 public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
+    private const int MessagesOfTheReservation = 2;
     private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(20);
 
-    // a pair of hosts shows what five would: whether a message one host gave up on is given to another
+    // a pair of hosts shows what one would, and whether a message one host gave up on is given to the other
     [Theory]
-    [MatrixData(HostsCounts = [1, 2])]
-    public async Task a_message_for_a_saga_that_was_never_started_is_dead_lettered_once(string combination, int hostsCount)
-    {
-        var correlationId = Guid.NewGuid().ToString();
-        var runs = new HandlerRuns(1);
-
-        var setup = new HostSetup(bus => bus.AddSaga<ReservationSaga>())
-        {
-            ConfigureServices = services => services.AddSingleton(runs)
-        };
-
-        await RunScenarioAsync(combination, hostsCount, setup,
-            async (run, cancellationToken) =>
-            {
-                await run.AnyHost.PublishAsync(new CancelReservation(correlationId), cancellationToken);
-
-                while (run.ProcessingFailures.Count == 0)
-                    await Task.Delay(PollingInterval, cancellationToken);
-            },
-            async run =>
-            {
-                await AssertOnlySagaNotFoundDeadLettersAsync(run, typeof(CancelReservation));
-
-                // given up on at once: no host is given the message a second time
-                var failure = Assert.Single(run.ProcessingFailures);
-                Assert.True(failure.IsSagaNotFound, failure.ToString());
-
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                Assert.Null(await run.FindSagaAsync<ReservationSaga>(correlationId, timeout.Token));
-            });
-
-        Assert.Empty(runs.Runs);
-    }
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    public Task a_message_with_no_saga_to_go_to_runs_no_handler_on_any_host(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
 
     [Theory]
-    [MatrixData(HostsCounts = [1, 2])]
-    public async Task a_message_for_a_saga_that_is_over_is_ignored(string combination, int hostsCount)
-    {
-        const int messagesOfTheReservation = 2;
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_message_with_no_saga_to_go_to_runs_no_handler_on_a_host_on_its_own(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
 
-        var correlationId = Guid.NewGuid().ToString();
-        var runs = new HandlerRuns(messagesOfTheReservation);
+    private async Task RunAsync(string combination, int hostsCount)
+    {
+        var neverReserved = Guid.NewGuid().ToString();
+        var reservation = Guid.NewGuid().ToString();
+        var runs = new HandlerRuns(MessagesOfTheReservation);
         var deliveries = new Deliveries();
 
         var setup = new HostSetup(bus => bus.AddSaga<ReservationSaga>())
@@ -67,38 +40,50 @@ public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBas
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                await run.AnyHost.PublishAsync(new ReserveSeat(correlationId), cancellationToken);
-                await run.WaitForSagaAsync<ReservationSaga>(correlationId,
+                // a cancellation for a reservation nobody made
+                await run.AnyHost.PublishAsync(new CancelReservation(neverReserved), cancellationToken);
+                while (run.ProcessingFailures.Count == 0)
+                    await Task.Delay(PollingInterval, cancellationToken);
+
+                await run.AnyHost.PublishAsync(new ReserveSeat(reservation), cancellationToken);
+                await run.WaitForSagaAsync<ReservationSaga>(reservation,
                     saga => saga.ProcessedMessages.Count == 1 && !saga.IsLocked, cancellationToken);
 
-                await run.AnyHost.PublishAsync(new ConfirmReservation(correlationId), cancellationToken);
-                await run.WaitForSagaAsync<ReservationSaga>(correlationId,
+                await run.AnyHost.PublishAsync(new ConfirmReservation(reservation), cancellationToken);
+                await run.WaitForSagaAsync<ReservationSaga>(reservation,
                     saga => saga.IsCompleted && !saga.IsLocked, cancellationToken);
 
-                // a late cancellation, and the message that started the reservation, sent again
-                await run.AnyHost.PublishAsync(new CancelReservation(correlationId), cancellationToken);
-                await run.AnyHost.PublishAsync(new ReserveSeat(correlationId), cancellationToken);
+                // a late cancellation for the reservation that is over, and the message that started it, sent again
+                await run.AnyHost.PublishAsync(new CancelReservation(reservation), cancellationToken);
+                await run.AnyHost.PublishAsync(new ReserveSeat(reservation), cancellationToken);
 
                 await deliveries.WaitUntilProcessedAsync<CancelReservation>(1, cancellationToken);
                 await deliveries.WaitUntilProcessedAsync<ReserveSeat>(2, cancellationToken);
 
                 // the saga is as it was when it was over, and it was not started again
-                var stored = await run.FindSagaAsync<ReservationSaga>(correlationId, cancellationToken);
+                var stored = await run.FindSagaAsync<ReservationSaga>(reservation, cancellationToken);
                 Assert.NotNull(stored);
                 Assert.True(stored.IsCompleted);
                 Assert.False(stored.IsLocked);
-                Assert.Equal(messagesOfTheReservation, stored.ProcessedMessages.Count);
+                Assert.Equal(MessagesOfTheReservation, stored.ProcessedMessages.Count);
+
+                // and a saga that was never started was not started by a message that cannot start it
+                Assert.Null(await run.FindSagaAsync<ReservationSaga>(neverReserved, cancellationToken));
             },
             async run =>
             {
-                // ignored is not failed: no host gave a message back, and none was dead-lettered
-                await AssertNoDeadLettersAsync(run);
-                Assert.Empty(run.ProcessingFailures);
+                // ignored is not failed: the only message a host gave back is the one whose saga does not exist.
+                // It was given up on at once: no host was given it a second time
+                await AssertOnlySagaNotFoundDeadLettersAsync(run, typeof(CancelReservation));
+
+                var failure = Assert.Single(run.ProcessingFailures);
+                Assert.True(failure.IsSagaNotFound, failure.ToString());
             });
 
         Assert.Empty(runs.RunsOf<CancelReservation>());
         Assert.Single(runs.RunsOf<ReserveSeat>());
         Assert.Single(runs.RunsOf<ConfirmReservation>());
+        Assert.All(runs.Runs, run => Assert.Equal(reservation, run.CorrelationId));
         Assert.Single(runs.Runs.Select(run => run.InstanceId).Distinct());
     }
 }

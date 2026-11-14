@@ -17,11 +17,20 @@ public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBas
     private const int MovementsPerAccount = 12;
     private const int MessagesPerAccount = 1 + MovementsPerAccount;
 
-    // one host, for the messages a single host handles at the same time, and a few, for the hosts that compete.
-    // A pair adds nothing that five hosts do not show
+    // the hosts that compete for the messages of one saga. One host of these transports handles its messages
+    // one at a time, and shows nothing that five hosts do not
     [Theory]
-    [MatrixData(HostsCounts = [1, 5])]
-    public async Task every_message_for_one_saga_is_handled_exactly_once(string combination, int hostsCount)
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [5])]
+    public Task every_message_for_one_saga_is_handled_exactly_once_by_hosts_that_compete(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    // in memory a host handles several messages at the same time: it competes with itself
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task every_message_for_one_saga_is_handled_exactly_once_by_a_host_that_handles_several_at_once(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    private async Task RunAsync(string combination, int hostsCount)
     {
         var accounts = Enumerable.Range(0, Accounts).Select(_ => Guid.NewGuid().ToString()).ToArray();
         var runs = new HandlerRuns(Accounts * MessagesPerAccount);

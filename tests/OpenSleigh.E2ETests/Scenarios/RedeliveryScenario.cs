@@ -20,11 +20,20 @@ public class RedeliveryScenario(ITestOutputHelper console) : ScenarioBase(consol
     private const int DeliveriesOfEachMessage = 2 * CopiesAtOnce;
     private const int Messages = 2;
 
-    // one host, for the copies a single host is given, and a few, for the copies that reach different hosts
-    // at the same time. A pair adds nothing that five hosts do not show
+    // the copies reach different hosts at the same time, or one host after the other, as the transport has it.
+    // One host of these transports shows nothing that five hosts do not
     [Theory]
-    [MatrixData(HostsCounts = [1, 5])]
-    public async Task a_message_delivered_again_is_not_handled_again(string combination, int hostsCount)
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [5])]
+    public Task a_message_delivered_again_is_not_handled_again_by_any_host(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    // in memory a host handles the copies at the same time
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_message_delivered_again_is_not_handled_again_by_a_host_that_handles_several_at_once(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    private async Task RunAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();
         var runs = new HandlerRuns(Messages);

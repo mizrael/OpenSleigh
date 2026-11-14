@@ -15,7 +15,7 @@ public class ColdStartScenario(ITestOutputHelper console) : ScenarioBase(console
 
     // what is created at startup belongs to the store: the tables of a SQL database, the indexes of a MongoDB one.
     // The transport takes no part in it, so each store runs with one transport only, the one whose hosts start faster.
-    // In memory there is nothing to create
+    // In memory there is nothing to create. The SQL cases are excluded by the known defect 'cold-start-schema-race'
     [Theory]
     [MatrixData(
         Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq],
