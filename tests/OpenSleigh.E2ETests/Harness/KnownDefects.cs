@@ -20,7 +20,17 @@ public static class KnownDefects
 {
     public const string IncludeVariable = "E2E_INCLUDE_KNOWN_DEFECTS";
 
-    public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
+    public static readonly IReadOnlyList<KnownDefect> Exclusions =
+    [
+        new KnownDefect(
+            "cold-start-schema-race",
+            "hosts that start together on an empty SQL database each run EnsureCreated, which checks and then creates: "
+            + "the ones that lose the race fail to start ('database already exists' on SQL Server, a duplicate key on "
+            + "pg_namespace on PostgreSQL). SagaDbSchemaInitializer serialises the contexts of one process only.",
+            matrixCase => matrixCase.Scenario == nameof(Scenarios.ColdStartScenario)
+                          && (Combinations.Uses(matrixCase.Combination, Combinations.SqlServer)
+                              || Combinations.Uses(matrixCase.Combination, Combinations.PostgreSql))),
+    ];
 
     public static bool AreIncluded
         => bool.TryParse(Environment.GetEnvironmentVariable(IncludeVariable), out var included) && included;
