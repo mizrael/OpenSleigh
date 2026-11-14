@@ -57,6 +57,37 @@ public abstract class SagaDbSchemaUpgrade
     protected abstract void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply);
 
     /// <summary>
+    /// runs <paramref name="createTables"/> while no other instance is creating or upgrading the schema of the same
+    /// database, which exists by then: instances that start together wait here, and all but the first find the tables created.
+    /// </summary>
+    /// <remarks>
+    /// No transaction is open: the tables are created in one of their own. Unless overridden, nothing makes instances wait.
+    /// </remarks>
+    protected virtual void RunExclusively(DatabaseFacade database, Action createTables)
+        => createTables();
+
+    /// <summary>
+    /// creates the tables of a database that has none, one instance at a time.
+    /// </summary>
+    public void CreateTablesExclusively(DatabaseFacade database, Action createTables)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        ArgumentNullException.ThrowIfNull(createTables);
+
+        // also how long this instance waits for the one that is creating the tables
+        var previousTimeout = database.GetCommandTimeout();
+        database.SetCommandTimeout(CommandTimeout);
+        try
+        {
+            RunExclusively(database, createTables);
+        }
+        finally
+        {
+            database.SetCommandTimeout(previousTimeout);
+        }
+    }
+
+    /// <summary>
     /// whether the database refused a statement because the user is not allowed to run it.
     /// </summary>
     protected abstract bool IsPermissionDenied(Exception exception);

@@ -53,6 +53,41 @@ public abstract class SqlSchemaInitializationTests
         Assert.False(await HasSagasAsync(newProvider));
     }
 
+    [Fact]
+    public async Task Instances_that_start_together_without_a_database_should_all_start_and_use_the_one_they_created()
+    {
+        var connectionString = await CreateMissingDatabaseAsync();
+
+        var instances = Enumerable.Range(0, InstancesStartingTogether)
+            .Select(_ => BuildProvider(connectionString))
+            .ToArray();
+        try
+        {
+            // released together: each one finds no database, or no tables, and creates what is missing
+            using var start = new ManualResetEventSlim();
+            var starting = instances
+                .Select(instance => Task.Run(() =>
+                {
+                    start.Wait();
+                    return HasSagasAsync(instance);
+                }))
+                .ToArray();
+            start.Set();
+
+            Assert.All(await Task.WhenAll(starting), hasSagas => Assert.False(hasSagas));
+
+            await using var laterInstance = BuildProvider(connectionString);
+            Assert.False(await HasSagasAsync(laterInstance));
+            Assert.Empty(await ReadPendingAsync(laterInstance));
+            Assert.Contains(Entities.OutboxMessage.DeliverAtIndexName, await ReadOutboxIndexNamesAsync(laterInstance));
+        }
+        finally
+        {
+            foreach (var instance in instances)
+                await instance.DisposeAsync();
+        }
+    }
+
     private async Task<string> CreateMissingDatabaseAsync()
     {
         // the fixture creates the database and will remove it at the end: it is dropped here to start without one

@@ -87,7 +87,10 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
         var queueRefFactory = Substitute.For<IQueueReferenceFactory>();
         queueRefFactory.Create(envelope).Returns(queueRef);
 
-        var sut = new RabbitPublisher(queueRefFactory, _fixture.RabbitConfiguration, channelFactory, logger, new JsonSerializer());
+        // the host of this publisher handles nothing: the queue the consumer reads was declared above, by the consumer
+        var sut = new RabbitPublisher(
+            queueRefFactory, _fixture.RabbitConfiguration, channelFactory, logger, new JsonSerializer(),
+            Substitute.For<ISagaDescriptorsResolver>(), Substitute.For<ISystemInfo>());
         await sut.PublishAsync(envelope);
 
         while (!tokenSource.IsCancellationRequested)

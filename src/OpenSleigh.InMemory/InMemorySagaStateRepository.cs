@@ -12,6 +12,9 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
     private readonly ConcurrentDictionary<string, (ISagaInstance state, string? lockId, ProcessedMessage[] processedMessages)> _statesById = new();
     private readonly object _lockSync = new();
 
+    // compared by reference: tells a saga that was locked and never released from one released having handled nothing
+    private static readonly ProcessedMessage[] NeverReleased = new ProcessedMessage[0];
+
     public ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
         where TM : IMessage
     {
@@ -38,8 +41,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             if (_statesByDescriptor.TryGetValue(key, out var byDesc) && byDesc.lockId is not null)
                 throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
 
-            // a saga that is locked for the first time has handled nothing yet, as far as anyone else can tell
-            var released = byId.processedMessages ?? [];
+            var released = byId.processedMessages ?? NeverReleased;
 
             _statesById[state.InstanceId] = (state, lockId, released);
             _statesByDescriptor[key] = (state, lockId, released);
@@ -64,6 +66,41 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
             _statesByDescriptor[key] = (state, null, processedMessages);
             _statesById[state.InstanceId] = (state, null, processedMessages);
+        }
+
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// releases the saga and keeps what it had handled when it was last released. A saga that was never released
+    /// is forgotten: the message that starts it again gets a new instance, with a new state.
+    /// </summary>
+    /// <remarks>
+    /// The instance that is stored is the one the handler worked on: what the handler did to the state of a saga
+    /// that was released before, and whether it completed it, cannot be undone here.
+    /// </remarks>
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+    {
+        string key = BuildKey(state.Descriptor, state.CorrelationId);
+
+        lock (_lockSync)
+        {
+            if (!_statesById.TryGetValue(state.InstanceId, out var entry))
+                return ValueTask.CompletedTask;
+
+            if (!string.IsNullOrEmpty(state.LockId) && entry.lockId is not null && entry.lockId != state.LockId)
+                throw new LockException($"unable to release saga '{state.InstanceId}' with lock id '{state.LockId}'");
+
+            if (ReferenceEquals(entry.processedMessages, NeverReleased))
+            {
+                _statesById.TryRemove(state.InstanceId, out _);
+                _statesByDescriptor.TryRemove(key, out _);
+            }
+            else
+            {
+                _statesByDescriptor[key] = (entry.state, null, entry.processedMessages);
+                _statesById[state.InstanceId] = (entry.state, null, entry.processedMessages);
+            }
         }
 
         return ValueTask.CompletedTask;

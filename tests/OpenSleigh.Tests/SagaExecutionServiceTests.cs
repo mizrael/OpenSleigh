@@ -136,7 +136,8 @@ public class SagaExecutionServiceTests
         var result = await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
 
         Assert.IsType<NoOpSagaInstance>(result);
-        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.Received(1).AbandonAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -158,6 +159,24 @@ public class SagaExecutionServiceTests
         await sut.ReleaseAsync(sagaInstance, CancellationToken.None);
 
         await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_delegate_to_repository()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+
+        var sut = new SagaExecutionService(Substitute.For<ISagaInstanceFactory>(), sagaStateRepository, Substitute.For<IOutboxRepository>());
+
+        await sut.AbandonAsync(sagaInstance, CancellationToken.None);
+
+        await sagaStateRepository.Received(1).AbandonAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

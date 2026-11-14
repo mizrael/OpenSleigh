@@ -13,19 +13,30 @@ public class RabbitPublisher : IPublisher
     private readonly ILogger<RabbitPublisher> _logger;
     private readonly IChannelFactory _channelFactory;
     private readonly ISerializer _serializer;
+    private readonly HashSet<Type> _consumedMessageTypes;
 
+    /// <param name="sagaDescriptorsResolver">tells which message types the sagas of this host handle.</param>
+    /// <param name="systemInfo">tells whether this host only publishes.</param>
     public RabbitPublisher(
         IQueueReferenceFactory queueReferenceFactory,
         RabbitConfiguration rabbitConfig,
         IChannelFactory channelFactory,
         ILogger<RabbitPublisher> logger,
-        ISerializer serializer)
+        ISerializer serializer,
+        ISagaDescriptorsResolver sagaDescriptorsResolver,
+        ISystemInfo systemInfo)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         _rabbitConfig = rabbitConfig ?? throw new ArgumentNullException(nameof(rabbitConfig));
         _channelFactory = channelFactory ?? throw new ArgumentNullException(nameof(channelFactory));
         _serializer = serializer ?? throw new ArgumentNullException(nameof(serializer));
+        ArgumentNullException.ThrowIfNull(sagaDescriptorsResolver);
+        ArgumentNullException.ThrowIfNull(systemInfo);
+
+        _consumedMessageTypes = systemInfo.PublishOnly
+            ? []
+            : sagaDescriptorsResolver.GetRegisteredMessageTypes().ToHashSet();
     }
 
     public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
@@ -36,7 +47,7 @@ public class RabbitPublisher : IPublisher
 
         var channel = await _channelFactory.GetPublishChannelAsync(cancellationToken);
 
-        await channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken);
+        await EnsureCanPublishAsync(channel, envelope.MessageType, queueRef, cancellationToken);
 
         var properties = new BasicProperties();
         properties.Persistent = true;
@@ -76,4 +87,11 @@ public class RabbitPublisher : IPublisher
                 queueRef.ExchangeName);
         });
     }
+
+    // the queue of a message this host consumes is declared here as well: the relay can publish before the subscriber
+    // has declared it, and the message would be lost. Any other queue would keep a copy of every message, for nobody
+    private ValueTask EnsureCanPublishAsync(IChannel channel, Type messageType, QueueReferences queueRef, CancellationToken cancellationToken)
+        => _consumedMessageTypes.Contains(messageType)
+            ? channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken)
+            : channel.EnsureExchangeAsync(queueRef, _rabbitConfig, cancellationToken);
 }

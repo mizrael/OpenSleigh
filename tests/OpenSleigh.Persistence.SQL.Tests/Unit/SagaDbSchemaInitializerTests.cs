@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Unit;
@@ -44,6 +45,29 @@ public class SagaDbSchemaInitializerTests
         sut.EnsureCreated(context.Database);
 
         Assert.Equal(2, upgrade.Applied);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_create_the_tables_of_a_relational_database_one_instance_at_a_time()
+    {
+        var databasePath = Path.Combine(Path.GetTempPath(), $"osl_create_{Guid.NewGuid():N}.db");
+        var upgrade = new RecordingSchemaUpgrade();
+        var sut = new SagaDbSchemaInitializer(upgrade);
+        try
+        {
+            using var context = new NotInitializedSagaDbContext(
+                new DbContextOptionsBuilder<NotInitializedSagaDbContext>().UseSqlite($"Data Source={databasePath};Pooling=False").Options);
+
+            sut.EnsureCreated(context.Database);
+
+            Assert.Equal(1, upgrade.ExclusiveCreations);
+            Assert.Equal(0, upgrade.Applied);
+            Assert.False(context.Set<Entities.SagaState>().Any());
+        }
+        finally
+        {
+            File.Delete(databasePath);
+        }
     }
 
     [Fact]
@@ -105,6 +129,7 @@ public class SagaDbSchemaInitializerTests
     private sealed class RecordingSchemaUpgrade : SagaDbSchemaUpgrade
     {
         public int Applied { get; private set; }
+        public int ExclusiveCreations { get; private set; }
         public int FailuresLeft { get; set; }
 
         public override IReadOnlyList<SagaDbSchemaChange> Changes => [];
@@ -113,6 +138,12 @@ public class SagaDbSchemaInitializerTests
 
         protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
             => apply();
+
+        protected override void RunExclusively(DatabaseFacade database, Action createTables)
+        {
+            ExclusiveCreations++;
+            createTables();
+        }
 
         public override void Apply(DatabaseFacade database)
         {

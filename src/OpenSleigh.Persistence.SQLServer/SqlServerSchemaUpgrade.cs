@@ -57,22 +57,30 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
     ];
 
     private readonly string _lockStatement;
+    private readonly string _sessionLockStatement;
     private readonly string _waitForTableLocks;
+
+    // released when asked to, or when the connection is closed or goes back to its pool
+    private const string ReleaseSessionLock =
+        $"EXEC sp_releaseapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockOwner = N'Session'";
 
     public SqlServerSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)
     {
-        // sp_getapplock reports a lock it did not get (timeout, cancellation, deadlock) with a negative return value,
-        // not with an error: the statements that follow would run without the lock
-        _lockStatement =
-            "DECLARE @result int; " +
-            $"EXEC @result = sp_getapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockMode = N'Exclusive', " +
-            $"@LockOwner = N'Transaction', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
-            "IF @result < 0 BEGIN; " +
-            "THROW 51000, N'the lock that makes schema upgrades wait for each other was not granted.', 1; " +
-            "END";
+        _lockStatement = LockStatement(owner: "Transaction");
+        _sessionLockStatement = LockStatement(owner: "Session");
 
         _waitForTableLocks = $"SET LOCK_TIMEOUT {(int)TableLockTimeout.TotalMilliseconds}";
     }
+
+    // sp_getapplock reports a lock it did not get (timeout, cancellation, deadlock) with a negative return value,
+    // not with an error: the statements that follow would run without the lock
+    private string LockStatement(string owner)
+        => "DECLARE @result int; " +
+           $"EXEC @result = sp_getapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockMode = N'Exclusive', " +
+           $"@LockOwner = N'{owner}', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
+           "IF @result < 0 BEGIN; " +
+           "THROW 51000, N'the lock that makes schema upgrades wait for each other was not granted.', 1; " +
+           "END";
 
     public override IReadOnlyList<SagaDbSchemaChange> Changes => SchemaChanges;
 
@@ -98,16 +106,42 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
         }
     }
 
+    // the lock belongs to the connection, not to a transaction, because the tables are created in a transaction
+    // of their own: the connection is kept for all the statements
+    protected override void RunExclusively(DatabaseFacade database, Action createTables)
+    {
+        database.OpenConnection();
+        try
+        {
+            database.ExecuteSqlRaw(_sessionLockStatement);
+            try
+            {
+                createTables();
+            }
+            finally
+            {
+                TryExecute(database, ReleaseSessionLock);
+            }
+        }
+        finally
+        {
+            database.CloseConnection();
+        }
+    }
+
     // the setting belongs to the connection, which goes back to its pool
     private static void TryStopWaitingForTableLocks(DatabaseFacade database)
+        => TryExecute(database, StopWaitingForTableLocks);
+
+    private static void TryExecute(DatabaseFacade database, string statement)
     {
         try
         {
-            database.ExecuteSqlRaw(StopWaitingForTableLocks);
+            database.ExecuteSqlRaw(statement);
         }
         catch
         {
-            // the connection is gone, and its settings with it: the failure that broke it is the one to report
+            // the connection is gone, and its settings and locks with it: the failure that broke it is the one to report
         }
     }
 

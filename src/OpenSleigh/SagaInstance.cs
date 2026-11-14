@@ -93,12 +93,27 @@ public record SagaInstance : ISagaInstance
         {
             await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                        .ConfigureAwait(false);
+        }
+        catch (SagaException)
+        {
+            // the handler failed and was rolled back: the state is stored as the rollback left it
+            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
+            throw;
+        }
+        catch
+        {
+            // the handler was interrupted by a stop, or could not be rolled back: the message is not done with
+            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
+            throw;
+        }
 
+        try
+        {
             await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
+            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
             throw;
         }
     }
@@ -136,6 +151,27 @@ public record SagaInstance : ISagaInstance
         try
         {
             await sagaExecutionService.ReleaseAsync(this, CancellationToken.None)
+                                      .ConfigureAwait(false);
+        }
+        catch
+        {
+            // best effort: lock will expire via LockMaxDuration for SQL/Mongo
+        }
+
+        this.LockId = string.Empty;
+    }
+
+    // nothing of what the handler did is stored: the saga stays as it was before the message
+    private async ValueTask TryAbandonAsync(ISagaExecutionService sagaExecutionService)
+    {
+        if (string.IsNullOrEmpty(this.LockId))
+            return;
+
+        ClearOutbox();
+
+        try
+        {
+            await sagaExecutionService.AbandonAsync(this, CancellationToken.None)
                                       .ConfigureAwait(false);
         }
         catch

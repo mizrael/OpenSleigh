@@ -10,7 +10,17 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        return ReleaseAsyncCore(state, Array.Empty<MessageEnvelope>(), canRetry: true, cancellationToken);
+        return ReleaseAsyncCore(state, Array.Empty<MessageEnvelope>(), storeInstance: true, canRetry: true, cancellationToken);
+    }
+
+    /// <summary>
+    /// releases the saga. The saga itself stays as it was stored.
+    /// </summary>
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return ReleaseAsyncCore(state, Array.Empty<MessageEnvelope>(), storeInstance: false, canRetry: true, cancellationToken);
     }
 
     /// <summary>
@@ -20,12 +30,13 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        return ReleaseAsyncCore(state, state.Outbox, canRetry: true, cancellationToken);
+        return ReleaseAsyncCore(state, state.Outbox, storeInstance: true, canRetry: true, cancellationToken);
     }
 
     private async ValueTask ReleaseAsyncCore(
         ISagaInstance state,
         IReadOnlyCollection<MessageEnvelope> outbox,
+        bool storeInstance,
         bool canRetry,
         CancellationToken cancellationToken)
     {
@@ -47,13 +58,8 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
         IReadOnlyCollection<string> newMessageIds = [];
         try
         {
-            newMessageIds = await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
-
-            entity.IsCompleted = state.IsCompleted;
-
-            var stateData = ExtractStateData(state);
-            if (stateData is not null)
-                entity.StateData = stateData;
+            if (storeInstance)
+                newMessageIds = await StoreInstanceAsync(entity, state, cancellationToken).ConfigureAwait(false);
 
             // the saga is unlocked by its lock time. Its lock id is replaced, not removed:
             // whoever found the saga before this release cannot lock it as it was then
@@ -88,7 +94,7 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             if (notStoredYet.Count == outbox.Count)
                 throw;
 
-            await ReleaseAsyncCore(state, notStoredYet, canRetry: false, cancellationToken).ConfigureAwait(false);
+            await ReleaseAsyncCore(state, notStoredYet, storeInstance, canRetry: false, cancellationToken).ConfigureAwait(false);
             return;
         }
         catch
@@ -153,6 +159,19 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
         return storedIds.Count == 0
             ? outbox
             : outbox.Where(message => !storedIds.Contains(message.MessageId)).ToArray();
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> StoreInstanceAsync(SagaState entity, ISagaInstance state, CancellationToken cancellationToken)
+    {
+        var newMessageIds = await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
+
+        entity.IsCompleted = state.IsCompleted;
+
+        var stateData = ExtractStateData(state);
+        if (stateData is not null)
+            entity.StateData = stateData;
+
+        return newMessageIds;
     }
 
     // processed messages are only ever added: the ones already stored are left alone

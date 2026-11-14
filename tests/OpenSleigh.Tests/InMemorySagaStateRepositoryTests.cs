@@ -121,4 +121,69 @@ public class InMemorySagaStateRepositoryTests
         // Assert - Should be able to lock again after release
         await repository.LockAsync(instance, CancellationToken.None);
     }
+
+    [Fact]
+    public async Task AbandonAsync_should_unlock_the_saga_and_keep_what_it_had_handled_when_it_was_last_released()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var firstMessage = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var secondMessage = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter(), correlationId: firstMessage.CorrelationId);
+        var instance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            firstMessage.MessageId,
+            firstMessage.CorrelationId,
+            SagaDescriptor.Create<FakeSaga>());
+        await instance.LockAsync(repository, CancellationToken.None);
+        instance.SetAsProcessed(firstMessage);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        await instance.LockAsync(repository, CancellationToken.None);
+        instance.SetAsProcessed(secondMessage);
+        await repository.AbandonAsync(instance, CancellationToken.None);
+
+        var stored = await repository.GetByInstanceIdAsync(instance.InstanceId);
+        Assert.NotNull(stored);
+        Assert.False(stored.IsLocked);
+        Assert.Equal(firstMessage.MessageId, Assert.Single(stored.ProcessedMessages).MessageId);
+        await repository.LockAsync(instance, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_forget_a_saga_that_was_never_released()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var instance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            messageContext.MessageId,
+            messageContext.CorrelationId,
+            descriptor);
+        await instance.LockAsync(repository, CancellationToken.None);
+
+        await repository.AbandonAsync(instance, CancellationToken.None);
+
+        // the message that starts the saga is delivered again, and starts it anew
+        Assert.Null(await repository.FindAsync(descriptor, messageContext, CancellationToken.None));
+        Assert.Null(await repository.GetByInstanceIdAsync(instance.InstanceId));
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_throw_when_lock_id_does_not_match()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var instance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        await repository.LockAsync(instance, CancellationToken.None);
+
+        var someoneElse = Substitute.For<ISagaStateRepository>();
+        someoneElse.LockAsync(instance, Arg.Any<CancellationToken>()).Returns("wrong-lock-id");
+        await instance.LockAsync(someoneElse, CancellationToken.None);
+
+        await Assert.ThrowsAsync<LockException>(
+            () => repository.AbandonAsync(instance, CancellationToken.None).AsTask());
+    }
 }

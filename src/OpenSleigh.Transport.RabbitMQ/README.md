@@ -71,6 +71,22 @@ With the default naming, the retry queue of those versions (`<queue>.retry`) sen
 
 When the routing key of a message type is the name of its queue (a custom naming policy), the retry queue already returned its messages to that queue only, and it is kept as it is.
 
+### What a host declares on the broker
+
+- A host declares the queue of its service, with its retry and dead letter queues, for every message type its sagas handle: when it starts consuming, and when it publishes one of them.
+- For a message type it only publishes, a host declares the exchange and nothing else. This is the case of a host set to publish only (`SetPublishOnly()`), and of a service that publishes a message handled by the sagas of another service.
+- A message published to an exchange that no queue is bound to yet is dropped by the broker: the services that consume a message type have to be started once before the first message of that type is published.
+
+#### Queues left behind by 3.3.0 or earlier
+
+In those versions a publisher also declared the queue of its own service for every message type it published, and bound it to the exchange of the type. On a host that does not handle the type nobody consumes from that queue, which receives a copy of every message and keeps it.
+
+This version no longer declares those queues, and does not delete them either: a queue that exists stays bound and keeps receiving copies until it is removed. The library cannot tell such a queue from one that a service with the same name will consume from, so removing them is left to the operator:
+
+- they are the queues named after a service and a message type that service publishes but does not handle (`<message type>.<client group>.workers` with the default naming), with no consumers and a number of messages that only grows; each has a retry queue (`<queue>.retry` or `<queue>.retry.direct`) and a dead letter queue (`<message type>.dead.<client group>.workers`) that stay empty;
+- once every instance of the service runs this version, delete the three of them, for example with `rabbitmqctl delete_queue <name>` or from the management UI. The messages they hold are copies: the services that handle the message type received their own;
+- an instance of an earlier version that is still running declares them again, so delete them after the upgrade, not during it.
+
 
 If your application has to handle messages and events, not just dispatch them, you also have to configure each Saga :
 
