@@ -22,11 +22,21 @@ public class LockTakeoverScenario(ITestOutputHelper console) : ScenarioBase(cons
     private const int Messages = 2;
 
     // not in memory: a host that dies takes its sagas with it, and there the locks never expire.
-    // With one host its replacement takes the saga over, with a pair the host that is left does;
-    // more hosts would only be more hosts that are left
+    // The host that is left takes the saga over. More hosts would only be more hosts that are left
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [1, 2])]
-    public async Task a_saga_left_locked_by_a_host_that_died_is_taken_over_when_its_lock_expires(string combination, int hostsCount)
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    public Task a_saga_left_locked_by_a_host_that_died_is_taken_over_by_another_when_its_lock_expires(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    // the only host dies, and the one that replaces it takes the saga over. What differs from the case above is how
+    // the message reaches a host that was not there when it was published, which is up to the transport:
+    // the expiry of the lock is the store's, and every store has shown it above. So one store, with each transport
+    [Theory]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
+    public Task a_saga_left_locked_by_the_only_host_is_taken_over_by_its_replacement_when_its_lock_expires(string combination, int hostsCount)
+        => RunAsync(combination, hostsCount);
+
+    private async Task RunAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();
         var runs = new HandlerRuns(Messages);
