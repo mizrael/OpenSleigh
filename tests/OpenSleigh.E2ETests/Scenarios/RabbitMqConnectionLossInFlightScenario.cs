@@ -25,8 +25,8 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
         var connectionsAreClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var sent = new Expectation(1);
 
-        // the handler and, once the broker has delivered the message again, the host that finds it already handled
-        var deliveredTwice = new Expectation(2);
+        // the handler and, once the broker has delivered the message again, a host that finds it already handled
+        var deliveredAgain = new Expectation(2);
 
         Action<IMessageContext<SendInvoice>> onSent = _ => sent.Signal();
         WhileSendingInvoice whileSending = async (_, cancellationToken) =>
@@ -41,7 +41,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 .AddSingleton(onSent)
                 .AddSingleton(whileSending)
                 .NameRabbitMqConnections(connectionName)
-                .ObserveDeliveriesOf<SendInvoice>(deliveredTwice)
+                .ObserveDeliveriesOf<SendInvoice>(deliveredAgain)
         };
 
         await RunScenarioAsync(combination, hostsCount, setup,
@@ -59,7 +59,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 connectionsAreClosed.SetResult();
 
                 await run.WaitForSagaAsync<InvoiceSaga>(correlationId, stored => stored.IsCompleted, cancellationToken);
-                await deliveredTwice.Reached.WaitAsync(cancellationToken);
+                await deliveredAgain.Reached.WaitAsync(cancellationToken);
 
                 Console.WriteLine($"MEASURED rabbitmq-connection-loss-in-flight delivered-again-ms={closed.ElapsedMilliseconds}");
             },
@@ -71,7 +71,9 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.Exception.ToString()));
             });
 
+        // the handler ran once, whoever the message was delivered to afterwards, and however many times:
+        // a host whose connection is closed while it acknowledges the second delivery is given a third
         Assert.Equal(1, sent.Count);
-        Assert.Equal(2, deliveredTwice.Count);
+        Assert.True(deliveredAgain.Count >= 2);
     }
 }

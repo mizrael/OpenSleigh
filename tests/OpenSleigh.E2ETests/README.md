@@ -221,3 +221,40 @@ asserts the same thing.
   would take its messages with it. The transport deletes them at the end of the run.
 - Every run has its own database, queues, topics and client group, so tests can run at the same time.
   Scenario classes run in parallel (`xunit.runner.json`); the cases of one class run one after the other.
+
+## Timeouts and infrastructure failures
+
+**Timeouts.** A saga publishes its own timeout with `Publish(message, delay)` and handles it like any other message.
+A scenario asserts a lower bound only (never handled before the delay), reads the time before the saga publishes the
+timeout, and waits for the timeout through a callback. A timeout that must *not* be handled, because its saga
+completed, reaches no handler: `services.ObserveDeliveriesOf<TMessage>(expectation)` tells when a host is done with it.
+The in-memory outbox count leaves out a message that is not due, so "the outbox is empty" proves nothing there.
+
+**Failures injected in a host**, on every combination. A `Fault` is turned on and off by the scenario, which waits
+for it to have been hit (`WaitForHitsAsync`) rather than for a time:
+
+| In `ConfigureServices` | While the fault is on |
+|---|---|
+| `FailPublishingWhile(fault)` | the relay cannot publish |
+| `FailOutboxReadsWhile(fault)`, `FailOutboxDeletesWhile(fault)` | the relay cannot read its outbox, or remove what it published |
+| `FailCommitsThatPublish<TMessage>(fault)` | a saga that published a `TMessage` cannot be committed |
+| `ExpireOutboxClaimsAfter(duration)` | not a fault: on MongoDB a message the relay could not publish or remove is read again only when its claim expires, a minute by default |
+
+**Connections taken away for real**, with what the services offer and for one run only:
+
+| Helper | What it does | Combinations |
+|---|---|---|
+| `DatabaseOutage.Of(run)` | `DropConnectionsAsync`, `BeginAsync`, `EndAsync`: PostgreSQL terminates the sessions of the database of the run and refuses new ones; SQL Server sets it offline and online | `postgresql-*`, `sqlserver-*` |
+| `RabbitMqConnections.Named(name)` | lists and closes the connections of the hosts through the management API; the hosts are given the name with `NameRabbitMqConnections(name)` | `*-rabbitmq` |
+
+What these scenarios assert, because it is how the library behaves today:
+
+- a message that fails for another reason than a lock is dead-lettered at once, also when the reason is the database:
+  an interruption can cost messages. The scenarios require every message to be accounted for (completed, or in the
+  dead letters with the failure a host reported), and the hosts to work again without a restart;
+- a scenario cannot know which pooled connection a host will use next, so it does not expect a given message to
+  succeed after an interruption: it issues work one item at a time until several in a row complete
+  (`DatabaseInterruptionScenarioBase`);
+- a saga that could not be released, because the database was away, stays locked until `LockMaxDuration`.
+
+Kafka has no such switch: its interruptions need a proxy between the hosts and the broker, which the suite does not have.

@@ -29,6 +29,15 @@ public static class KnownDefects
             "recorded as processed: the handler runs again on a state it has already changed. " +
             "On every store, in-memory included (CircleCI job 1870: 7 cases out of 7, state changed once instead of not at all).",
             matrixCase => matrixCase.Scenario == "CommitFailureStateScenario"),
+
+        new KnownDefect(
+            "rabbitmq-connection-kept-after-reconnect",
+            "a host that loses its connection to RabbitMQ ends up with one connection more every time: the connection " +
+            "it had recovers by itself (automatic recovery is on) and keeps the consumers, while RabbitPersistentConnection " +
+            "opens another one when it is told of the shutdown, and never closes the first. " +
+            "CircleCI job 1894: 10 runs out of 10, two hosts with 2 connections had 4 after losing them once and 6 after twice.",
+            matrixCase => matrixCase.Scenario == "RabbitMqConnectionLossScenario"
+                          && matrixCase.Method == "hosts_have_as_many_connections_as_before_once_they_are_connected_again"),
     ];
 
     public static bool AreIncluded
