@@ -149,6 +149,8 @@ A host must still be running when the scenario returns: the checks read the stor
 | why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound`, `IsLockConflict` and `IsHandlerFailure` |
 | dead letters that are expected | pass `assertDeadLetters` to `RunScenarioAsync`, for example `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` |
 | hosts that start on a database nobody prepared | `prepareStore: false` on `RunScenarioAsync`: the first hosts create the database themselves, together |
+| which handler ran, how many times and for which saga instance | `HandlerRuns`, registered as a singleton and injected in the saga: `RunsByMessage()` tells a message handled once from one handled twice |
+| messages that must not run a handler | `Deliveries` with `services.CountDeliveries(deliveries)`: wait until the hosts are done with them, then assert that nothing ran |
 | anything else in a host | `host.Services` |
 
 ### Making a service fail on purpose
@@ -202,6 +204,15 @@ early and passes `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` 
 requires one dead letter for each such failure and nothing else, so any other dead letter still fails the test.
 `MultipleSagasSameMessagesScenario` is the example. A scenario about a message for a saga that does not exist
 asserts the same thing.
+
+**A message for a saga that is over, or that has handled it already, is ignored**: no handler runs, nothing is
+given back to the transport, nothing is dead-lettered. This holds for a start message too: a completed saga is not
+started again. `MessageWithoutSagaScenario` and `RedeliveryScenario` assert it.
+
+**A lock outlives the host that took it, for `LockMaxDuration`.** A host that dies between its handler and its commit
+leaves the saga locked; whoever is given the message is retried until the lock expires, then takes the saga over and
+runs the handler again. The first owner can no longer release or change the saga. `LockTakeoverScenario` asserts it,
+on every store whose locks expire: in memory they do not.
 
 ## What the harness does on purpose
 
