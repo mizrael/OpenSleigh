@@ -24,7 +24,56 @@ public class DbContext : IDbContext
 
         SagaStates = db.GetCollection<Entities.SagaState>("sagaStates");
         BuildSagaStatesIndexes();
+
+        SagaLedger = db.GetCollection<Entities.SagaLedgerEntry>("sagaLedger");
+        BuildSagaLedgerIndexes();
     }
+
+    // SPIKE: the indexes of the ledger experiment
+    private void BuildSagaLedgerIndexes()
+    {
+        var keys = Builders<Entities.SagaLedgerEntry>.IndexKeys;
+        var filter = Builders<Entities.SagaLedgerEntry>.Filter;
+
+        SagaLedger.Indexes.CreateMany(
+        [
+            // the append: a second document for the same version is refused
+            new CreateIndexModel<Entities.SagaLedgerEntry>(
+                keys.Ascending(e => e.InstanceId).Ascending(e => e.Version),
+                new CreateIndexOptions { Unique = true, Name = "ix_instance_version" }),
+
+            // the latest document of a saga
+            new CreateIndexModel<Entities.SagaLedgerEntry>(
+                keys.Ascending(e => e.CorrelationId).Ascending(e => e.SagaType).Ascending(e => e.SagaStateType).Descending(e => e.Version),
+                new CreateIndexOptions { Name = "ix_saga_latest" }),
+
+            // one saga per correlation id
+            new CreateIndexModel<Entities.SagaLedgerEntry>(
+                keys.Ascending(e => e.CorrelationId).Ascending(e => e.SagaType).Ascending(e => e.SagaStateType),
+                new CreateIndexOptions<Entities.SagaLedgerEntry>
+                {
+                    Unique = true,
+                    Name = "ix_saga_start",
+                    PartialFilterExpression = filter.Eq(e => e.IsStart, true)
+                }),
+
+            // idempotency: a message is handled once by a saga
+            new CreateIndexModel<Entities.SagaLedgerEntry>(
+                keys.Ascending(e => e.CorrelationId).Ascending(e => e.SagaType).Ascending(e => e.SagaStateType).Ascending(e => e.MessageIds),
+                new CreateIndexOptions { Unique = true, Name = "ix_saga_message" }),
+
+            // the relay looks up the documents that have messages to send
+            new CreateIndexModel<Entities.SagaLedgerEntry>(
+                keys.Ascending(e => e.Pending).Ascending(e => e.ClaimTime),
+                new CreateIndexOptions<Entities.SagaLedgerEntry>
+                {
+                    Name = "ix_pending",
+                    PartialFilterExpression = filter.Eq(e => e.Pending, true)
+                }),
+        ]);
+    }
+
+    public IMongoCollection<Entities.SagaLedgerEntry> SagaLedger { get; }
 
     private void BuildOutboxIndexes()
     {

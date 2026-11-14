@@ -1,18 +1,18 @@
 using MongoDB.Driver;
+using OpenSleigh.Persistence.Mongo.Entities;
 using OpenSleigh.Queries;
 using OpenSleigh.Utils;
 
 namespace OpenSleigh.Persistence.Mongo;
 
+// SPIKE, not for merging: reads the documents of the ledger experiment. A list of sagas reads every document:
+// the design has a summary collection for it, which this experiment does not build.
 public class MongoSagaStateQuery : ISagaStateQuery
 {
     private readonly IDbContext _dbContext;
     private readonly ISerializer _serializer;
     private readonly ISagaStateTypeResolver? _stateTypes;
 
-    /// <param name="stateTypes">turns the name a saga's state type is stored with back into the type.
-    /// <c>AddOpenSleigh</c> registers one that knows the state types of the registered sagas.
-    /// Without it the query returns sagas without their state.</param>
     public MongoSagaStateQuery(IDbContext dbContext, ISerializer serializer, ISagaStateTypeResolver? stateTypes = null)
     {
         ArgumentNullException.ThrowIfNull(dbContext);
@@ -26,14 +26,10 @@ public class MongoSagaStateQuery : ISagaStateQuery
         string instanceId,
         CancellationToken cancellationToken = default)
     {
-        var filter = Builders<Entities.SagaState>.Filter
-            .Eq(e => e.InstanceId, instanceId);
-
-        var entity = await _dbContext.SagaStates
-            .FindOneAsync(filter, cancellationToken)
+        var entries = await ReadAsync(Builders<SagaLedgerEntry>.Filter.Eq(e => e.InstanceId, instanceId), cancellationToken)
             .ConfigureAwait(false);
 
-        return entity is null ? null : MapToSagaInstanceInfo(entity);
+        return entries.Count == 0 ? null : Map(entries);
     }
 
     public async ValueTask<SagaInstanceInfo?> GetByCorrelationIdAsync(
@@ -41,16 +37,12 @@ public class MongoSagaStateQuery : ISagaStateQuery
         string sagaType,
         CancellationToken cancellationToken = default)
     {
-        var filterBuilder = Builders<Entities.SagaState>.Filter;
-        var filter = filterBuilder.And(
-            filterBuilder.Eq(e => e.CorrelationId, correlationId),
-            filterBuilder.Eq(e => e.SagaType, sagaType));
+        var filter = Builders<SagaLedgerEntry>.Filter;
+        var entries = await ReadAsync(
+            filter.And(filter.Eq(e => e.CorrelationId, correlationId), filter.Eq(e => e.SagaType, sagaType)),
+            cancellationToken).ConfigureAwait(false);
 
-        var entity = await _dbContext.SagaStates
-            .FindOneAsync(filter, cancellationToken)
-            .ConfigureAwait(false);
-
-        return entity is null ? null : MapToSagaInstanceInfo(entity);
+        return entries.Count == 0 ? null : Map(entries);
     }
 
     public async ValueTask<PagedResult<SagaInstanceInfo>> GetAllAsync(
@@ -59,67 +51,62 @@ public class MongoSagaStateQuery : ISagaStateQuery
     {
         filter ??= new SagaQueryFilter();
 
-        var filterBuilder = Builders<Entities.SagaState>.Filter;
-        var mongoFilter = filterBuilder.Empty;
+        var mongoFilter = filter.SagaType is null
+            ? Builders<SagaLedgerEntry>.Filter.Empty
+            : Builders<SagaLedgerEntry>.Filter.Eq(e => e.SagaType, filter.SagaType);
 
-        if (filter.SagaType is not null)
-            mongoFilter &= filterBuilder.Eq(e => e.SagaType, filter.SagaType);
+        var sagas = (await ReadAsync(mongoFilter, cancellationToken).ConfigureAwait(false))
+            .GroupBy(e => e.InstanceId)
+            .Select(entries => Map(entries.ToList()))
+            .Where(saga => filter.IsCompleted is null || saga.IsCompleted == filter.IsCompleted)
+            .OrderBy(saga => saga.InstanceId)
+            .ToList();
 
-        if (filter.IsCompleted.HasValue)
-            mongoFilter &= filterBuilder.Eq(e => e.IsCompleted, filter.IsCompleted.Value);
-
-        var totalCount = await _dbContext.SagaStates
-            .CountDocumentsAsync(mongoFilter, cancellationToken: cancellationToken)
-            .ConfigureAwait(false);
-
-        var skip = (filter.Page - 1) * filter.PageSize;
-
-        var findOptions = new FindOptions<Entities.SagaState>
-        {
-            Skip = skip,
-            Limit = filter.PageSize
-        };
-
-        var cursor = await _dbContext.SagaStates
-            .FindAsync(mongoFilter, findOptions, cancellationToken)
-            .ConfigureAwait(false);
-
-        var entities = await cursor
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var items = entities
-            .Select(MapToSagaInstanceInfo)
+        var items = sagas
+            .Skip((filter.Page - 1) * filter.PageSize)
+            .Take(filter.PageSize)
             .ToList()
             .AsReadOnly();
 
-        return new PagedResult<SagaInstanceInfo>(items, (int)totalCount, filter.Page, filter.PageSize);
+        return new PagedResult<SagaInstanceInfo>(items, sagas.Count, filter.Page, filter.PageSize);
     }
 
-    private SagaInstanceInfo MapToSagaInstanceInfo(Entities.SagaState entity)
+    private async ValueTask<List<SagaLedgerEntry>> ReadAsync(FilterDefinition<SagaLedgerEntry> filter, CancellationToken cancellationToken)
+        => await _dbContext.SagaLedger
+            .Find(filter)
+            .SortBy(e => e.Version)
+            .Project<SagaLedgerEntry>(Builders<SagaLedgerEntry>.Projection.Exclude(e => e.Outbox))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+    // the entries of one saga, oldest first
+    private SagaInstanceInfo Map(List<SagaLedgerEntry> entries)
     {
+        var latest = entries[^1];
+
         object? stateData = null;
-        if (entity.StateData is not null && entity.StateData.Length > 0 && entity.SagaStateType is not null)
+        if (latest.StateData is not null && latest.StateData.Length > 0 && latest.SagaStateType is not null)
         {
-            var stateType = _stateTypes?.Resolve(entity.SagaStateType);
+            var stateType = _stateTypes?.Resolve(latest.SagaStateType);
             if (stateType is not null)
             {
-                try { stateData = _serializer.Deserialize(entity.StateData, stateType); }
+                try { stateData = _serializer.Deserialize(latest.StateData, stateType); }
                 catch { /* corrupted or incompatible state data; surface as null */ }
             }
         }
 
         return new SagaInstanceInfo
         {
-            InstanceId = entity.InstanceId,
-            CorrelationId = entity.CorrelationId,
-            TriggerMessageId = entity.TriggerMessageId,
-            SagaType = entity.SagaType,
-            SagaStateType = entity.SagaStateType,
-            IsCompleted = entity.IsCompleted,
-            IsLocked = entity.LockId is not null && entity.LockTime is not null,
-            ProcessedMessages = entity.ProcessedMessages
-                .Select(m => new ProcessedMessageInfo(m.MessageId, m.When))
+            InstanceId = latest.InstanceId,
+            CorrelationId = latest.CorrelationId,
+            TriggerMessageId = latest.TriggerMessageId,
+            SagaType = latest.SagaType,
+            SagaStateType = latest.SagaStateType,
+            IsCompleted = latest.IsCompleted,
+            IsLocked = latest.LeaseId is not null && latest.LeaseTime is not null,
+            ProcessedMessages = entries
+                .SelectMany(entry => entry.MessageIds.Select(id =>
+                    new ProcessedMessageInfo(id, new DateTimeOffset(DateTime.SpecifyKind(entry.OccurredAt, DateTimeKind.Utc)))))
                 .ToList()
                 .AsReadOnly(),
             StateData = stateData

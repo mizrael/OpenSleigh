@@ -7,4 +7,5 @@ public interface IDbContext
 {
     IMongoCollection<OutboxMessage> OutboxMessages { get; }
     IMongoCollection<SagaState> SagaStates { get; }
+    IMongoCollection<SagaLedgerEntry> SagaLedger { get; }
 }

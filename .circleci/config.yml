@@ -288,15 +288,12 @@ workflows:
       - e2e
   ledger_spike:
     jobs:
+      # spike_postgres (suite spike-postgres) and spike_sqlserver (suite spike-sqlserver) ran on commit 73f3367:
+      # jobs 1921 and 1922. They are left out of this commit, which only adds MongoDB
       - benchmark:
-          name: spike_postgres
+          name: spike_mongo
           base: << pipeline.parameters.benchmark_base_branch >>
-          suite: spike-postgres
-          report_only: true
-      - benchmark:
-          name: spike_sqlserver
-          base: << pipeline.parameters.benchmark_base_branch >>
-          suite: spike-sqlserver
+          suite: spike-mongo
           report_only: true
   unused_on_this_branch:
     jobs:

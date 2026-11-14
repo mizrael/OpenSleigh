@@ -61,6 +61,12 @@ public class MongoOutboxRepository : IOutboxRepository
 
     private async ValueTask DeleteAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
+        if (_embeddedMessages.Remove(message.MessageId, out var owner))
+        {
+            await DeleteEmbeddedAsync(owner, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
 
         var result = await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
@@ -69,9 +75,88 @@ public class MongoOutboxRepository : IOutboxRepository
             throw new ArgumentException($"message '{message.MessageId}' not found");
     }
 
+    #region SPIKE: the messages a saga published, stored in the document of its append
+
+    private sealed class EmbeddedOwner
+    {
+        public required MongoDB.Bson.ObjectId DocumentId { get; init; }
+        public required string ClaimId { get; init; }
+        public int Remaining;
+    }
+
+    // filled by a read and emptied by the deletes of the same relay pass
+    private readonly Dictionary<string, EmbeddedOwner> _embeddedMessages = new();
+
+    // the document stops being pending, and lets go of the bodies, once all its messages were published
+    private async ValueTask DeleteEmbeddedAsync(EmbeddedOwner owner, CancellationToken cancellationToken)
+    {
+        if (--owner.Remaining > 0)
+            return;
+
+        var filter = Builders<Entities.SagaLedgerEntry>.Filter;
+        var claimed = filter.And(
+            filter.Eq(e => e.Id, owner.DocumentId),
+            filter.Eq(e => e.ClaimId, owner.ClaimId));
+        var sent = Builders<Entities.SagaLedgerEntry>.Update
+            .Unset(e => e.Pending)
+            .Unset(e => e.Outbox)
+            .Unset(e => e.ClaimId)
+            .Unset(e => e.ClaimTime);
+
+        await _dbContext.SagaLedger.UpdateOneAsync(claimed, sent, cancellationToken: cancellationToken).ConfigureAwait(false);
+    }
+
+    private async ValueTask ReadEmbeddedAsync(DateTimeOffset now, List<MessageEnvelope> results, CancellationToken cancellationToken)
+    {
+        var filter = Builders<Entities.SagaLedgerEntry>.Filter;
+        var available = filter.And(
+            filter.Eq(e => e.Pending, true),
+            filter.Or(
+                filter.Eq(e => e.ClaimTime, null),
+                filter.Lt(e => e.ClaimTime, (now - _options.LockMaxDuration).UtcDateTime)));
+
+        var claimId = Guid.NewGuid().ToString();
+        var claim = Builders<Entities.SagaLedgerEntry>.Update
+            .Set(e => e.ClaimId, claimId)
+            .Set(e => e.ClaimTime, now.UtcDateTime);
+
+        var claimed = await _dbContext.SagaLedger.UpdateManyAsync(available, claim, cancellationToken: cancellationToken)
+                                                 .ConfigureAwait(false);
+        if (claimed.IsAcknowledged && claimed.ModifiedCount == 0)
+            return;
+
+        var mine = filter.And(filter.Eq(e => e.Pending, true), filter.Eq(e => e.ClaimId, claimId));
+        var documents = await _dbContext.SagaLedger
+            .Find(mine)
+            .Project(e => new { e.Id, e.Outbox })
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        foreach (var document in documents)
+        {
+            var owner = new EmbeddedOwner { DocumentId = document.Id, ClaimId = claimId };
+
+            foreach (var entity in document.Outbox ?? [])
+            {
+                if (!entity.TryMap(_typeResolver, _serializer, out var message))
+                    continue;
+
+                owner.Remaining++;
+                _embeddedMessages[message.MessageId] = owner;
+                results.Add(message);
+            }
+        }
+    }
+
+    #endregion
+
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
+        var results = new List<MessageEnvelope>();
+
+        await ReadEmbeddedAsync(now, results, cancellationToken).ConfigureAwait(false);
+
         var available = Available(now, _options.LockMaxDuration);
 
         // the messages are claimed before they are read, so that another relay reading at the same time
@@ -83,7 +168,7 @@ public class MongoOutboxRepository : IOutboxRepository
         var claimed = await _dbContext.OutboxMessages.UpdateManyAsync(available, claim, cancellationToken: cancellationToken)
                                                      .ConfigureAwait(false);
         if (claimed.IsAcknowledged && claimed.ModifiedCount == 0)
-            return Enumerable.Empty<MessageEnvelope>();
+            return results;
 
         var filter = ClaimedBy(claimId, now);
         var cursor = await _dbContext.OutboxMessages.FindAsync(filter, cancellationToken: cancellationToken)
@@ -91,9 +176,8 @@ public class MongoOutboxRepository : IOutboxRepository
         var entities = await cursor.ToListAsync(cancellationToken)
                                    .ConfigureAwait(false);
         if (entities is null)
-            return Enumerable.Empty<MessageEnvelope>();
+            return results;
 
-        var results = new List<MessageEnvelope>(entities.Count);
         foreach(var entity in entities)
         {
             if (entity.TryMap(_typeResolver, _serializer, out var message))

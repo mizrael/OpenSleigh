@@ -249,6 +249,7 @@ internal static class Catalogue
 #endif
         .. Spike("postgres", PersistenceTarget.Postgres),
         .. Spike("sqlserver", PersistenceTarget.SqlServer),
+        .. Spike("mongo", (ctx, _) => PersistenceTarget.Mongo(ctx)),
         .. SpikeLocal(),
     ];
 

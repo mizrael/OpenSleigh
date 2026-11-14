@@ -79,9 +79,10 @@ public class SqlSagaStateQuery : ISagaStateQuery
 
     private async ValueTask<SagaInstanceInfo> MapAsync(Entities.SagaHead entity, CancellationToken cancellationToken)
     {
+        // read after the head: an entry stored in between belongs to a later version than the state that was read
         var entries = await _dbContext.SagaLedger
             .AsNoTracking()
-            .Where(e => e.InstanceId == entity.InstanceId)
+            .Where(e => e.InstanceId == entity.InstanceId && e.Version <= entity.Version)
             .OrderBy(e => e.Version)
             .Select(e => new { e.MessageId, e.OccurredAt })
             .ToListAsync(cancellationToken)
