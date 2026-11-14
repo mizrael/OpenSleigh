@@ -258,12 +258,19 @@ internal static class Catalogue
     // on the base branch both run the same code, which shows how much two runs of the same thing differ.
     private static IEnumerable<Scenario> Spike(string store, Func<ScenarioContext, int?, PersistenceTarget> persistence)
     {
-        string[] suite = [$"spike-{store}"];
+        string[] storeSuite = [$"spike-{store}"];
 
-        foreach (var lease in new[] { false, true })
+        (string Suffix, Func<Func<Task<double>>, Task<double>> Mode)[] modes =
+        [
+            (string.Empty, SpikeMode.NoLockAsync),
+            ("-lease", SpikeMode.LeaseAsync),
+            ("-leasewait", SpikeMode.LeaseWaitAsync),
+        ];
+
+        foreach (var (suffix, mode) in modes)
         {
-            var suffix = lease ? "-lease" : string.Empty;
-            Func<Func<Task<double>>, Task<double>> mode = lease ? SpikeMode.LeaseAsync : SpikeMode.NoLockAsync;
+            // the lease that waits is only run where it is asked for by name
+            var suite = suffix == "-leasewait" ? Array.Empty<string>() : storeSuite;
 
             yield return new($"spike-{store}-state-short{suffix}", suite, Milliseconds, false,
                 "find/lock/release cycle on a saga with no processed messages to start with; mean of 200 cycles",

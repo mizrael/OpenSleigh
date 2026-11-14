@@ -291,16 +291,17 @@ jobs:
 workflows:
   e2e:
     jobs:
-      # the suite without a lock ran on commit 44abd41 (job 1943); this commit runs it with the lease
+      # the suite without a lock ran on commit 44abd41 (job 1943) and with the lease on e000578;
+      # this commit runs it with the lease that waits
       - e2e:
-          name: e2e_lease
-          spike_mode: Lease
+          name: e2e_leasewait
+          spike_mode: LeaseWait
   ledger_spike:
     jobs:
       # the three suites ran on earlier commits: spike-postgres and spike-sqlserver on 73f3367 (jobs 1921 and 1922),
       # spike-mongo on 44abd41 (job 1944). This commit only runs the scenarios named in its message
       - benchmark:
-          name: spike_state_short
+          name: spike_lease_wait
           base: << pipeline.parameters.benchmark_base_branch >>
           suite: spike-mongo
           report_only: true

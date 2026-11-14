@@ -57,6 +57,13 @@ public class SagaRunner : ISagaRunner
 
                 LedgerSpike.CountInProcessRetry();
             }
+            // the saga is leased by another host: nothing was handled yet, and waiting here is shorter than the transport's delay
+            catch (Exception conflict) when (
+                LedgerSpike.Mode == LedgerConcurrencyMode.LeaseWait && conflict.IsLockConflict() && retry < LedgerSpike.LeaseWaits)
+            {
+                LedgerSpike.CountLeaseWait();
+                await Task.Delay(LedgerSpike.LeaseWaitStep * (retry + 1), cancellationToken).ConfigureAwait(false);
+            }
         }
     }
 

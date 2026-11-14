@@ -37,30 +37,39 @@ internal static class SpikeMode
 {
     public static async Task<double> NoLockAsync(Func<Task<double>> scenario)
     {
-        Set(lease: false);
+        Set(NoLock);
         return await scenario();
     }
 
-    public static async Task<double> LeaseAsync(Func<Task<double>> scenario)
+    public static Task<double> LeaseAsync(Func<Task<double>> scenario) => WithAsync(Lease, scenario);
+
+    public static Task<double> LeaseWaitAsync(Func<Task<double>> scenario) => WithAsync(LeaseWait, scenario);
+
+    private const int NoLock = 0;
+    private const int Lease = 1;
+    private const int LeaseWait = 2;
+
+    private static async Task<double> WithAsync(int mode, Func<Task<double>> scenario)
     {
-        Set(lease: true);
+        Set(mode);
         try
         {
             return await scenario();
         }
         finally
         {
-            Set(lease: false);
+            Set(NoLock);
         }
     }
 
     public static IEnumerable<(string Name, double Value)> Counters()
     {
 #if LEDGER_SPIKE
-        yield return ("leaseMode", OpenSleigh.LedgerSpike.Mode == OpenSleigh.LedgerConcurrencyMode.Lease ? 1 : 0);
+        yield return ("mode", (int)OpenSleigh.LedgerSpike.Mode);
         yield return ("appendConflicts", OpenSleigh.LedgerSpike.AppendConflicts);
         yield return ("inProcessRetries", OpenSleigh.LedgerSpike.InProcessRetries);
         yield return ("conflictsLeftToTransport", OpenSleigh.LedgerSpike.ConflictsLeftToTransport);
+        yield return ("leaseWaits", OpenSleigh.LedgerSpike.LeaseWaitsCount);
 #else
         yield break;
 #endif
@@ -73,10 +82,10 @@ internal static class SpikeMode
 #endif
     }
 
-    private static void Set(bool lease)
+    private static void Set(int mode)
     {
 #if LEDGER_SPIKE
-        OpenSleigh.LedgerSpike.Mode = lease ? OpenSleigh.LedgerConcurrencyMode.Lease : OpenSleigh.LedgerConcurrencyMode.NoLock;
+        OpenSleigh.LedgerSpike.Mode = (OpenSleigh.LedgerConcurrencyMode)mode;
 #endif
     }
 }

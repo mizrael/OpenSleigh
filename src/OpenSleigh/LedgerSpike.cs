@@ -10,7 +10,11 @@ public enum LedgerConcurrencyMode
     NoLock,
 
     /// <summary>a lease is written on the saga before the handler, as the lock is today.</summary>
-    Lease
+    Lease,
+
+    /// <summary>as <see cref="Lease"/>, and a message that finds the saga leased waits in the process and tries again
+    /// a few times before it is given back to the transport.</summary>
+    LeaseWait
 }
 
 public static class LedgerSpike
@@ -25,6 +29,19 @@ public static class LedgerSpike
 
     /// <summary>how many times a message is handled again in the process after its append was refused.</summary>
     public static int ConflictRetries { get; set; } = 3;
+
+    /// <summary>how many times a message that found its saga leased waits and tries again in the process.</summary>
+    public static int LeaseWaits { get; set; } = 5;
+
+    /// <summary>the first wait for a lease; each later one is this much longer.</summary>
+    public static TimeSpan LeaseWaitStep { get; set; } = TimeSpan.FromMilliseconds(10);
+
+    private static long _leaseWaits;
+
+    /// <summary>times a message waited in the process for a lease.</summary>
+    public static long LeaseWaitsCount => Interlocked.Read(ref _leaseWaits);
+
+    public static void CountLeaseWait() => Interlocked.Increment(ref _leaseWaits);
 
     /// <summary>appends refused because the saga had changed since it was loaded.</summary>
     public static long AppendConflicts => Interlocked.Read(ref _appendConflicts);
@@ -44,6 +61,7 @@ public static class LedgerSpike
         Interlocked.Exchange(ref _appendConflicts, 0);
         Interlocked.Exchange(ref _inProcessRetries, 0);
         Interlocked.Exchange(ref _conflictsLeftToTransport, 0);
+        Interlocked.Exchange(ref _leaseWaits, 0);
     }
 
     private static LedgerConcurrencyMode ModeFromEnvironment()
