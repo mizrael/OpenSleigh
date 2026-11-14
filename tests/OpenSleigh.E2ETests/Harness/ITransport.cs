@@ -1,0 +1,36 @@
+using OpenSleigh.DependencyInjection;
+
+namespace OpenSleigh.E2ETests.Harness;
+
+/// <summary>
+/// the transport of one scenario run: its queues or topics are named after the run.
+/// Disposing it removes what it created; what a disposal throws is handled by the run, not here.
+/// </summary>
+public interface ITransport : IAsyncDisposable
+{
+    /// <param name="service">the service the host belongs to: hosts of one service compete for its messages,
+    /// each service gets its own copy of a message.</param>
+    void Configure(IBusConfigurator bus, string service);
+
+    /// <summary>
+    /// called for every host, once it is built and before it starts.
+    /// </summary>
+    Task PrepareAsync(IServiceProvider hostServices, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// called whenever hosts were started, with every host that is running, and returns when each of them
+    /// receives its share of what is published from now on. A host is started before its subscribers
+    /// have subscribed: they do that in the background.
+    /// </summary>
+    Task WaitUntilSubscribedAsync(IReadOnlyCollection<IServiceProvider> runningHosts, CancellationToken cancellationToken);
+
+    /// <summary>false when the transport has nowhere to put a message it gives up on.</summary>
+    bool SupportsDeadLetters { get; }
+
+    /// <summary>
+    /// how many messages of each type were dead-lettered, over the message types the hosts of this run
+    /// handle or publish. Types with no dead letter are left out.
+    /// </summary>
+    /// <exception cref="NotSupportedException">the transport has no dead letters.</exception>
+    Task<IReadOnlyDictionary<Type, long>> ReadDeadLettersAsync(CancellationToken cancellationToken);
+}

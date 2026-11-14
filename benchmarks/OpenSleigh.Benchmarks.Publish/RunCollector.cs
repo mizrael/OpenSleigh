@@ -10,7 +10,8 @@ internal sealed record ScenarioSummary(
     string Workload,
     IReadOnlyList<double> Head,
     IReadOnlyList<double> Base,
-    double? Change);
+    double? Change,
+    double? Difference);
 
 internal sealed record BenchmarkRun(
     string Sha,
@@ -165,8 +166,14 @@ internal sealed partial class RunCollector
             var higherIsBetter = definition.GetProperty("HigherIsBetter").GetBoolean();
 
             // base and head ran back to back in every round: the change is taken within a round, then the median over rounds
-            var changes = head.Keys.Intersect(baseline.Keys)
+            var rounds = head.Keys.Intersect(baseline.Keys).ToArray();
+            var changes = rounds
                 .Select(round => higherIsBetter ? head[round] / baseline[round] - 1 : baseline[round] / head[round] - 1)
+                .ToArray();
+
+            // the same comparison in the unit of the scenario, with the same sign: what the gate holds against its floor
+            var differences = rounds
+                .Select(round => higherIsBetter ? head[round] - baseline[round] : baseline[round] - head[round])
                 .ToArray();
 
             summaries.Add(new ScenarioSummary(
@@ -175,7 +182,8 @@ internal sealed partial class RunCollector
                 definition.GetProperty("Workload").GetString()!,
                 head.OrderBy(v => v.Key).Select(v => v.Value).ToArray(),
                 baseline.OrderBy(v => v.Key).Select(v => v.Value).ToArray(),
-                changes.Length > 0 ? Numbers.Median(changes) : null));
+                changes.Length > 0 ? Numbers.Median(changes) : null,
+                differences.Length > 0 ? Numbers.Median(differences) : null));
         }
 
         return summaries;
