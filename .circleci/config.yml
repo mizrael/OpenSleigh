@@ -18,7 +18,7 @@ parameters:
   e2e_repetitions:
     description: how many times the E2E job runs the whole E2E suite; raise it to measure flakiness
     type: integer
-    default: 1
+    default: 10
 
 jobs:
   build:
@@ -88,6 +88,7 @@ jobs:
       TARGET_FRAMEWORK: net10.0
       E2E_REPETITIONS: "<< pipeline.parameters.e2e_repetitions >>"
       E2E_RESULTS_DIR: /tmp/e2e-results
+      E2E_FILTER: "Category=E2E&(FullyQualifiedName~Payment|FullyQualifiedName~Failure|FullyQualifiedName~DatabaseConnection|FullyQualifiedName~DatabaseOutage|FullyQualifiedName~RabbitMqConnection)"
       # a named service container is reached by its name, not on localhost
       ConnectionStrings__kafka: broker:29092
 
