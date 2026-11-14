@@ -203,6 +203,12 @@ requires one dead letter for each such failure and nothing else, so any other de
 `MultipleSagasSameMessagesScenario` is the example. A scenario about a message for a saga that does not exist
 asserts the same thing.
 
+**A handler that throws leaves its saga as it was.** The message is compensated when the saga has a compensation
+handler for it (`ICompensateMessage<TM>`), and dead-lettered otherwise, or when the compensation fails too. Either
+way a failure record is stored, which a scenario reads through `ISagaFailureQuery` of a host.
+`HandlerFailureScenario` is the example: it passes its own `assertDeadLetters`, which requires exactly one dead
+letter, of the message whose handler failed.
+
 ## What the harness does on purpose
 
 - The SQL database and schema, and the MongoDB collections and indexes, are created by the first host before any

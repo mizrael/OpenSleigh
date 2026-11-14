@@ -23,6 +23,10 @@ public class SagaStateRepositoryInterceptor
     public virtual ValueTask ReleaseAsync(ISagaStateRepository repository, ISagaInstance state, CancellationToken cancellationToken)
         => repository.ReleaseAsync(state, cancellationToken);
 
+    /// <summary>called when the saga is released without being stored: its handler failed, or was interrupted.</summary>
+    public virtual ValueTask AbandonAsync(ISagaStateRepository repository, ISagaInstance state, CancellationToken cancellationToken)
+        => repository.AbandonAsync(state, cancellationToken);
+
     /// <summary>called only on a repository that stores a saga and its messages together.</summary>
     public virtual ValueTask CommitAsync(ISagaStateCommitter repository, ISagaInstance state, CancellationToken cancellationToken)
         => repository.CommitAsync(state, cancellationToken);
@@ -51,6 +55,9 @@ internal class InterceptedSagaStateRepository(ISagaStateRepository inner, SagaSt
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
         => Interceptor.ReleaseAsync(inner, state, cancellationToken);
+
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+        => Interceptor.AbandonAsync(inner, state, cancellationToken);
 
     private sealed class Committing(ISagaStateRepository inner, ISagaStateCommitter committer, SagaStateRepositoryInterceptor interceptor)
         : InterceptedSagaStateRepository(inner, interceptor), ISagaStateCommitter
