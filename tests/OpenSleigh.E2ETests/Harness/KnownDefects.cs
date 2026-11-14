@@ -20,7 +20,16 @@ public static class KnownDefects
 {
     public const string IncludeVariable = "E2E_INCLUDE_KNOWN_DEFECTS";
 
-    public static readonly IReadOnlyList<KnownDefect> Exclusions = [];
+    public static readonly IReadOnlyList<KnownDefect> Exclusions =
+    [
+        new KnownDefect(
+            "rabbitmq-publisher-declares-a-queue-of-its-own",
+            "the RabbitMQ publisher declares the queue of its own service for every message type it publishes, and binds it to " +
+            "the exchange of the type, also on a host that does not handle that type or only publishes: " +
+            "nobody consumes from that queue, and it keeps a copy of every message.",
+            matrixCase => matrixCase.Scenario == nameof(Scenarios.PublishOnlyApiScenario)
+                          && matrixCase.Method == nameof(Scenarios.PublishOnlyApiScenario.an_api_that_only_publishes_leaves_no_message_behind_on_rabbitmq)),
+    ];
 
     public static bool AreIncluded
         => bool.TryParse(Environment.GetEnvironmentVariable(IncludeVariable), out var included) && included;

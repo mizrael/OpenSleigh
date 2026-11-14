@@ -22,10 +22,13 @@ public class HostRestartScenario(ITestOutputHelper console) : ScenarioBase(conso
 
     /// <summary>
     /// the first host stores the first step and stops before it relays the message that starts the second:
-    /// the saga state and the outbox are all there is.
+    /// the saga state and the outbox are all there is. What reads them is code of the store:
+    /// every store runs it, and one combination has Kafka.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [1])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [1])]
     public Task a_new_host_goes_on_from_a_message_left_in_the_outbox(string combination, int hostsCount)
     {
         // paused by the first step, while it is handled: the message it publishes is stored after that
@@ -42,9 +45,12 @@ public class HostRestartScenario(ITestOutputHelper console) : ScenarioBase(conso
     /// <summary>
     /// the first host relays the message that starts the second step and stops when it gets it back,
     /// before handling it: the message is at the broker, which gives it to the next host.
+    /// That is up to the transport: each one runs it twice, over the three stores.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [1])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka, Combinations.MongoDbKafka],
+        HostsCounts = [1])]
     public Task a_new_host_goes_on_from_a_message_left_at_the_broker(string combination, int hostsCount)
     {
         var secondStepArrived = new Expectation(1);

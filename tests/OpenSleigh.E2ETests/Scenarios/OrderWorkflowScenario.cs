@@ -15,6 +15,7 @@ namespace OpenSleigh.E2ETests.Scenarios;
 public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const int OrdersCount = 10;
+    private const int Replicas = 3;
 
     // PlaceOrder, CreditChecked, StockReserved and OrderShipped
     private const int MessagesHandledByAnOrder = 4;
@@ -26,10 +27,22 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
 
     /// <summary>
     /// replicas of one application that has the four sagas: the two answers reach different hosts at the same time.
+    /// A single replica is left out: it takes the answers one at a time, on RabbitMQ and on Kafka alike.
     /// </summary>
     [Theory]
-    [MatrixData]
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [Replicas])]
     public Task orders_are_fulfilled_by_replicas_of_one_application(string combination, int hostsCount)
+        => RunOnOneApplicationAsync(combination, hostsCount);
+
+    /// <summary>
+    /// one host, which handles several messages at a time in memory: the two answers meet there as well.
+    /// </summary>
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task orders_are_fulfilled_by_one_application_in_memory(string combination, int hostsCount)
+        => RunOnOneApplicationAsync(combination, hostsCount);
+
+    private Task RunOnOneApplicationAsync(string combination, int hostsCount)
     {
         var workflow = new Workflow();
         var setup = workflow.SetupOf(HostIdentity.DefaultService, bus =>

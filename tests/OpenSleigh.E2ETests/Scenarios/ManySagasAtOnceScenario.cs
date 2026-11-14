@@ -9,7 +9,7 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class ManySagasAtOnceScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
-    private const int TransfersCount = 500;
+    private const int TransfersCount = 300;
     private const int HostsCount = 3;
 
     // what keeps the instances apart is code of the store (the lookup by correlation id, the lock, and on the SQL

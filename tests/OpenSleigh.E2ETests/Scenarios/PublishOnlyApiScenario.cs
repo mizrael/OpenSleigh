@@ -46,9 +46,12 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
     /// <summary>
     /// the API appends to the outbox and never relays: the workers find its messages when they poll the outbox,
     /// with nothing in their own process to tell them there is something to read.
+    /// Reading the outbox is code of the store: every store runs it, and one combination has Kafka.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [2])]
     public async Task messages_appended_by_an_api_are_relayed_by_workers_that_poll_the_outbox(string combination, int hostsCount)
     {
         var workload = new TransferWorkload(TransfersCount);

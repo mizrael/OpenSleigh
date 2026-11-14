@@ -14,17 +14,37 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
     private const int Cycles = 100;
     private const decimal Fee = 9.99m;
 
-    // one host, and a pair: with two, a step is rarely handled by the host that handled the previous one.
-    // More hosts add nothing to a saga that has one message in flight at a time
-    private const int OneHost = 1;
+    // a pair of hosts: a step is rarely handled by the host that handled the previous one.
+    // More hosts add nothing to a saga that has one message in flight at a time, and one host is what in-memory has
     private const int TwoHosts = 2;
 
     /// <summary>
     /// the order of the PizzaTracker sample: one event at a time from outside, each sent once the previous one is stored.
     /// </summary>
     [Theory]
-    [MatrixData(HostsCounts = [OneHost, TwoHosts])]
-    public async Task a_saga_is_moved_on_by_one_event_after_the_other(string combination, int hostsCount)
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [TwoHosts])]
+    public Task a_saga_is_moved_on_by_one_event_after_the_other(string combination, int hostsCount)
+        => TrackPizzaOrderAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_saga_is_moved_on_by_one_event_after_the_other_in_memory(string combination, int hostsCount)
+        => TrackPizzaOrderAsync(combination, hostsCount);
+
+    /// <summary>
+    /// a subscription billed a hundred times, each cycle published by the previous one.
+    /// </summary>
+    [Theory]
+    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [TwoHosts])]
+    public Task a_saga_goes_through_a_hundred_steps_without_losing_count(string combination, int hostsCount)
+        => BillSubscriptionAsync(combination, hostsCount);
+
+    [Theory]
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task a_saga_goes_through_a_hundred_steps_without_losing_count_in_memory(string combination, int hostsCount)
+        => BillSubscriptionAsync(combination, hostsCount);
+
+    private async Task TrackPizzaOrderAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString("N");
         (IMessage Event, string Status)[] stages =
@@ -66,12 +86,7 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
         });
     }
 
-    /// <summary>
-    /// a subscription billed a hundred times, each cycle published by the previous one.
-    /// </summary>
-    [Theory]
-    [MatrixData(HostsCounts = [OneHost, TwoHosts])]
-    public async Task a_saga_goes_through_a_hundred_steps_without_losing_count(string combination, int hostsCount)
+    private async Task BillSubscriptionAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString("N");
         var lastCycleBilled = new Expectation(1);

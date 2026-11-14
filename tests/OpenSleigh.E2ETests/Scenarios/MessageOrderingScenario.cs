@@ -70,14 +70,26 @@ public class MessageOrderingScenario(ITestOutputHelper console) : ScenarioBase(c
         => ScanParcelAsync(combination, hostsCount, StraightToTheBroker, PublishToTheBrokerAsync);
 
     /// <summary>
-    /// the way an application publishes: through the outbox, which is read in no particular order,
-    /// by one relay per host, and consumed by every host.
+    /// the way an application publishes: through the outbox, which is read in no particular order.
     /// </summary>
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
+    [MatrixData(HostsCounts = [1])]
     public Task messages_published_through_the_outbox_are_each_handled_once(string combination, int hostsCount)
-        => ScanParcelAsync(combination, hostsCount, ThroughTheOutbox,
-            (host, scan, cancellationToken) => host.PublishAsync(scan, cancellationToken));
+        => ScanParcelAsync(combination, hostsCount, ThroughTheOutbox, PublishThroughTheOutboxAsync);
+
+    /// <summary>
+    /// the same with several hosts: a relay per host reads the outbox, and every host consumes.
+    /// One combination per store, and both transports: the order is not kept on any of them.
+    /// </summary>
+    [Theory]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlKafka, Combinations.MongoDbRabbitMq],
+        HostsCounts = [3])]
+    public Task messages_published_through_the_outbox_are_each_handled_once_by_several_hosts(string combination, int hostsCount)
+        => ScanParcelAsync(combination, hostsCount, ThroughTheOutbox, PublishThroughTheOutboxAsync);
+
+    private static Task PublishThroughTheOutboxAsync(ScenarioHost host, ParcelScanned scan, CancellationToken cancellationToken)
+        => host.PublishAsync(scan, cancellationToken);
 
     /// <returns>the sequence numbers of the scans, in the order the saga handled them.</returns>
     private async Task<IReadOnlyList<int>> ScanParcelAsync(
