@@ -14,6 +14,7 @@ internal static class Catalogue
     private static readonly string[] FullOnly = [Suites.Full];
 
     private const int SqlDefaultBatchSize = 10;
+    private const int DbContextResolutions = 20_000;
     private const int LargeSqlBatchSize = 100;
 
 #if DELAYED_DELIVERY
@@ -64,13 +65,15 @@ internal static class Catalogue
             ctx => SagaStateScenarios.FindAsync(ctx, PersistenceTarget.SqliteSagaState(ctx, pooled: true), 10, 2000)),
 
         // ---- real infrastructure ----
+        // one resolution takes a few microseconds: it takes this many for the clock to measure the loop
+        // and not what else the machine was doing during it
         new("sqlserver-dbcontext", GateAndFull, Milliseconds, false,
-            "resolve 200 SagaDbContext from new DI scopes; mean per context",
-            ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.SqlServer(ctx), 200)),
+            $"resolve {DbContextResolutions} SagaDbContext from new DI scopes; mean per context",
+            ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.SqlServer(ctx), DbContextResolutions)),
 
         new("postgres-dbcontext", GateAndFull, Milliseconds, false,
-            "resolve 200 SagaDbContext from new DI scopes; mean per context",
-            ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.Postgres(ctx), 200)),
+            $"resolve {DbContextResolutions} SagaDbContext from new DI scopes; mean per context",
+            ctx => DbContextScenarios.ResolveFromScopeAsync(ctx, PersistenceTarget.Postgres(ctx), DbContextResolutions)),
 
         new("sqlserver-outbox-append", GateAndFull, MessagesPerSecond, true,
             "2000 IMessageBus.PublishAsync calls from 16 concurrent callers, one scope each, after 64 to warm up",

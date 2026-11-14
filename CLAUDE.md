@@ -247,7 +247,7 @@ Samples demonstrate various persistence and transport configurations. Use as ref
 
 Tests use xUnit with NSubstitute for mocking. Categorize with traits:
 - `[Trait("Category", "Integration")]` - Requires Docker infrastructure
-- `[Trait("Category", "E2E")]` - End-to-end scenarios (own `e2e` job in CI; PostgreSQL, RabbitMQ and Kafka needed)
+- `[Trait("Category", "E2E")]` - End-to-end scenarios (own `e2e` job in CI; every scenario runs on a matrix of stores and transports, see `tests/OpenSleigh.E2ETests/README.md`)
 
 ### Code Coverage
 

@@ -29,13 +29,18 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OpenSleigh.InMemory\OpenSleigh.InMemory.csproj" />
     <ProjectReference Include="..\..\src\OpenSleigh\OpenSleigh.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Persistence.SQL.Tests\OpenSleigh.Persistence.SQL.Tests.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Transport.Kafka.Tests\OpenSleigh.Transport.Kafka.Tests.csproj" />
-    <ProjectReference Include="..\OpenSleigh.Transport.RabbitMQ.Tests\OpenSleigh.Transport.RabbitMQ.Tests.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.Mongo\OpenSleigh.Persistence.Mongo.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.PostgreSQL\OpenSleigh.Persistence.PostgreSQL.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Persistence.SQLServer\OpenSleigh.Persistence.SQLServer.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Transport.Kafka\OpenSleigh.Transport.Kafka.csproj" />
+    <ProjectReference Include="..\..\src\OpenSleigh.Transport.RabbitMQ\OpenSleigh.Transport.RabbitMQ.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="xunit.runner.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

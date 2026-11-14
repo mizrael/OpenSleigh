@@ -65,6 +65,23 @@ its tolerance, or when a scenario that works on the base fails on the branch.
   within each round. Absolute numbers move a lot between runners; the difference within a round moves much less.
 - `benchmarks/gate.json` holds the tolerance (30% by default, per-scenario overrides), the minimum number of
   rounds, and lets a scenario be reported without gating (`"gate": false`).
+- The tolerance is relative, and a relative change means little between two values that are both next to zero.
+  A scenario that measures microseconds can have an absolute floor under its tolerance: `"minimumDifference"` next
+  to its `tolerance` in `gate.json`, in the unit of the scenario. A change beyond the tolerance, for better or for
+  worse, whose median difference is smaller than the floor is reported as `ok: ... by less than the floor` and
+  does not fail the job. The summary shows the difference and the floor of every scenario.
+  - A floor is set per scenario, never for a whole unit, and must be well below what the scenario measures:
+    a floor above the baseline would let a scenario get several times slower.
+  - Only the two `dbcontext` scenarios have one, of 0.0005 ms. They measure about 0.001 ms per context, so a
+    context that gets 1.6 times slower still fails. With 200 contexts per sample the whole measurement took half
+    a millisecond, and identical code once differed by 34% and failed the job; they now resolve 20,000 per sample.
+    Over 5 gate jobs that compared identical code that way (50 paired rounds), the median of a job differed by
+    up to 0.00024 ms, 23%: inside the tolerance, and half the floor.
+  - Before adding a floor to another scenario, make it measure more per sample: that removes the noise instead
+    of hiding it.
+- The gate judges a branch by the `gate.json` of that branch, so that a branch can add a scenario together with
+  its settings. A branch can also loosen them: the summary says in bold when `gate.json` differs from the base
+  branch, for whoever reviews the result.
 - The harness may only use public API that exists on both sides. A scenario for something that only exists on the
   branch is compiled conditionally (see `RABBIT_CONSUMER_TUNING` and `DELAYED_DELIVERY` in the project file) and
   reported as inconclusive.

@@ -2,6 +2,8 @@
   "defaultTolerance": 0.30,
   "minimumRounds": 3,
   "scenarios": {
+    "sqlserver-dbcontext": { "minimumDifference": 0.0005 },
+    "postgres-dbcontext": { "minimumDifference": 0.0005 },
     "sqlserver-outbox-append": { "tolerance": 0.45 },
     "postgres-outbox-append": { "tolerance": 0.45 }
   }
