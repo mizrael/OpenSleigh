@@ -1,6 +1,7 @@
 using OpenSleigh.InMemory;
 using OpenSleigh.Queries;
 using OpenSleigh.Transport;
+using System.Collections.Generic;
 
 namespace OpenSleigh.Tests;
 
@@ -265,6 +266,68 @@ public class InMemorySagaStateRepositoryTests
 
         await Assert.ThrowsAsync<OptimisticLockException>(
             () => repository.LockAsync(another, CancellationToken.None).AsTask());
+    }
+
+    public class CyclicState
+    {
+        public CyclicState? Self { get; set; }
+    }
+
+    private class CyclicSaga : Saga<CyclicState>, IStartedBy<FakeSagaStarter>
+    {
+        public CyclicSaga(ISagaInstance<CyclicState> context) : base(context) { }
+
+        public ValueTask HandleAsync(IMessageContext<FakeSagaStarter> messageContext, CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_append_no_message_when_the_state_cannot_be_serialized()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var outbox = Substitute.For<OpenSleigh.Outbox.IOutboxRepository>();
+        var sut = new InMemorySagaStateCommitter(repository, outbox);
+        var message = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var state = new CyclicState();
+        state.Self = state;
+        var saga = new SagaInstance<CyclicState>(
+            "instance-1", message.MessageId, message.CorrelationId, SagaDescriptor.Create<CyclicSaga, CyclicState>(), state);
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.Publish(DummyMessage.CreateEnvelope());
+
+        await Assert.ThrowsAnyAsync<Exception>(() => sut.CommitAsync(saga).AsTask());
+
+        await outbox.DidNotReceiveWithAnyArgs().AppendAsync(default!, default);
+        Assert.True((await repository.GetByInstanceIdAsync("instance-1"))!.IsLocked);
+
+        await sut.AbandonAsync(saga);
+        Assert.False((await repository.GetByInstanceIdAsync("instance-1"))!.IsLocked);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_append_the_messages_before_the_saga_is_released()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var outbox = Substitute.For<OpenSleigh.Outbox.IOutboxRepository>();
+        var sut = new InMemorySagaStateCommitter(repository, outbox);
+        var message = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var saga = new SagaInstance<CounterState>("instance-1", message.MessageId, message.CorrelationId, CounterDescriptor, new CounterState { Value = 3 });
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.Publish(DummyMessage.CreateEnvelope());
+        bool? lockedWhenAppended = null;
+        outbox.AppendAsync(Arg.Any<IEnumerable<OpenSleigh.Outbox.MessageEnvelope>>(), Arg.Any<CancellationToken>())
+              .Returns(_ =>
+              {
+                  lockedWhenAppended = repository.GetByInstanceIdAsync("instance-1").GetAwaiter().GetResult()!.IsLocked;
+                  return OpenSleigh.Outbox.OutboxAppendResult.Success;
+              });
+
+        await sut.CommitAsync(saga);
+
+        Assert.True(lockedWhenAppended);
+        var stored = await repository.GetByInstanceIdAsync("instance-1");
+        Assert.False(stored!.IsLocked);
+        Assert.Equal(3, Assert.IsType<CounterState>(stored.StateData).Value);
     }
 
     private static SagaMessageFailure CreateFailure(

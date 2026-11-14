@@ -135,8 +135,20 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
     {
-        // outside the gate: it is the expensive part, and it only reads the instance, which belongs to the caller
-        var stateData = ExtractStateData(state);
+        Release(state, SerializeState(state));
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// the state of the instance as it is stored, or null when the saga has none.
+    /// It throws when the state cannot be serialized: nothing has been stored by then.
+    /// </summary>
+    internal byte[]? SerializeState(ISagaInstance state)
+        => ExtractStateData(state);
+
+    /// <param name="stateData">what <see cref="SerializeState"/> returned for the instance.</param>
+    internal void Release(ISagaInstance state, byte[]? stateData)
+    {
         var processedMessages = CopyProcessedMessages(state);
 
         lock (_gate)
@@ -154,8 +166,6 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         }
 
         AddFailure(state.Failure);
-
-        return ValueTask.CompletedTask;
     }
 
     public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)

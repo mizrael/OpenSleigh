@@ -20,7 +20,10 @@ public static class InMemoryBusConfiguratorExtensions
     {
         busConfigurator.Services
             .AddSingleton<InMemorySagaStateRepository>()
-            .AddSingleton<ISagaStateRepository>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
+            // built for every message, with the outbox the message is processed with: it is not always the in-memory one
+            .AddTransient<ISagaStateRepository>(sp => new InMemorySagaStateCommitter(
+                sp.GetRequiredService<InMemorySagaStateRepository>(),
+                sp.GetRequiredService<IOutboxRepository>()))
             .AddSingleton<ISagaStateQuery>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
             .AddSingleton<ISagaFailureQuery>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
             .AddSingleton<ISagaFailurePurger>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())

@@ -62,10 +62,32 @@ public class DbContext : IDbContext
         catch (MongoCommandException ex) when (ex.Code is IndexOptionsConflictCode or IndexKeySpecsConflictCode)
         {
             // the index exists with another expiry, or none: an index cannot be created again with other options
-            SagaMessageFailures.Indexes.DropOne(FailuresOccurredAtIndexName);
-            SagaMessageFailures.Indexes.CreateOne(occurredAtIndex);
+            ReplaceIndex(SagaMessageFailures, occurredAtIndex, FailuresOccurredAtIndexName);
         }
     }
+
+    // instances that start together with a new setting all get here: whoever comes second finds the index
+    // already dropped, or already created again, by the first
+    private static void ReplaceIndex<T>(IMongoCollection<T> collection, CreateIndexModel<T> index, string indexName)
+    {
+        try
+        {
+            collection.Indexes.DropOne(indexName);
+        }
+        catch (MongoCommandException ex) when (ex.Code == IndexNotFoundCode)
+        {
+        }
+
+        try
+        {
+            collection.Indexes.CreateOne(index);
+        }
+        catch (MongoCommandException ex) when (ex.Code is IndexOptionsConflictCode or IndexKeySpecsConflictCode)
+        {
+        }
+    }
+
+    private const int IndexNotFoundCode = 27;
 
     private void BuildOutboxIndexes()
     {

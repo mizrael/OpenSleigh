@@ -418,4 +418,19 @@ public class MongoSagaFailureTests : IClassFixture<DbFixture>
         var withoutExpiryAgain = await ReadOccurredAtIndexAsync(new DbContext(database));
         Assert.False(withoutExpiryAgain.Contains("expireAfterSeconds"));
     }
+
+    [Fact]
+    public async Task Instances_that_start_together_with_a_new_expiry_should_all_start()
+    {
+        var database = new MongoClient(_fixture.ConnectionString).GetDatabase(_fixture.CreateDatabaseName());
+        _ = new DbContext(database);
+
+        var starting = Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => new DbContext(database, TimeSpan.FromDays(30))))
+            .ToArray();
+        var contexts = await Task.WhenAll(starting);
+
+        var index = await ReadOccurredAtIndexAsync(contexts[0]);
+        Assert.Equal(TimeSpan.FromDays(30).TotalSeconds, index["expireAfterSeconds"].ToDouble());
+    }
 }
