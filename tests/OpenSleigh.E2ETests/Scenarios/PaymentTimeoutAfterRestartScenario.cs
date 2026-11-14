@@ -1,3 +1,4 @@
+using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
 using Xunit.Abstractions;
 
@@ -9,9 +10,12 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class PaymentTimeoutAfterRestartScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
-    // the first host has to be stopped before the timeout is due, or it would handle it itself:
-    // stopping a host takes a second or two, mostly for a Kafka consumer to leave its group
-    private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(6);
+    private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(2);
+
+    // a message the relay could not publish is read again when this has passed, on MongoDB
+    private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
+
+    private static readonly TimeSpan OutboxPollingInterval = TimeSpan.FromMilliseconds(50);
 
     // not in memory: the outbox of a host goes away with it
     [Theory]
@@ -22,20 +26,39 @@ public class PaymentTimeoutAfterRestartScenario(ITestOutputHelper console) : Sce
         var firstHost = new OrderPaymentJournal();
         var replacement = new OrderPaymentJournal();
 
+        // stopping a host takes a second or two, mostly for a Kafka consumer to leave its group, and the timeout
+        // can become due meanwhile: the first host cannot publish it, so that it is always the replacement that does,
+        // however long the first one takes to stop
+        var firstHostCannotPublishTheTimeout = new Fault("the timeout is left for the replacement to publish, on purpose.");
+        firstHostCannotPublishTheTimeout.Start();
+
+        var firstSetup = new HostSetup(OrderPaymentJournal.AddSagas)
+        {
+            ConfigureServices = services => firstHost.AddTo(services)
+                .ExpireOutboxClaimsAfter(MongoOutboxClaim)
+                .FailPublishingOf<PaymentTimedOut>(firstHostCannotPublishTheTimeout)
+        };
+        var replacementSetup = new HostSetup(OrderPaymentJournal.AddSagas)
+        {
+            ConfigureServices = services => replacement.AddTo(services).ExpireOutboxClaimsAfter(MongoOutboxClaim)
+        };
+
         await RunScenarioAsync(combination, async (run, cancellationToken) =>
         {
-            var first = (await run.StartHostsAsync(hostsCount, firstHost.CreateHostSetup()))[0];
+            var first = (await run.StartHostsAsync(hostsCount, firstSetup))[0];
             await first.PublishAsync(new PlaceOrder(correlationId, PaymentDueWithin), cancellationToken);
 
-            // the timeout is stored with the order
+            // the timeout is stored with the order. The message that placed the order may still be in the outbox:
+            // the relay removes a message after it has published it
             await run.WaitForSagaAsync<OrderPaymentSaga>(correlationId,
                 stored => stored.ProcessedMessages.Count == 1 && !stored.IsLocked, cancellationToken);
-            Assert.Equal(1, await run.CountOutboxMessagesAsync(cancellationToken));
+            while (await run.CountOutboxMessagesAsync(cancellationToken) != 1)
+                await Task.Delay(OutboxPollingInterval, cancellationToken);
 
             await first.StopAsync();
             Assert.Equal(0, firstHost.TimedOut.Count);
 
-            await run.StartHostAsync(replacement.CreateHostSetup());
+            await run.StartHostAsync(replacementSetup);
 
             await replacement.TimedOut.Reached.WaitAsync(cancellationToken);
             await replacement.ExpiredOrderHandled.Reached.WaitAsync(cancellationToken);

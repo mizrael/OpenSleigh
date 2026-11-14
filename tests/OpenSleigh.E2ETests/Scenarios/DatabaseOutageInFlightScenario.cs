@@ -54,14 +54,14 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
                 await using var outage = DatabaseOutage.Of(run);
 
                 await run.AnyHost.PublishAsync(new IssueInvoice(correlationId), cancellationToken);
-                invoices.WasIssued();
+                invoices.WasIssued(correlationId);
                 await handlerIsRunning.Reached.WaitAsync(cancellationToken);
 
                 await outage.BeginAsync(cancellationToken);
                 databaseIsAway.SetResult();
 
                 // the handler is done and its saga cannot be committed: the host gives the message back
-                while (FailuresThatDeadLetter(run).Count == 0)
+                while (TimesGivenBack() == 0)
                     await Task.Delay(PollingInterval, cancellationToken);
 
                 await outage.EndAsync(cancellationToken);
@@ -72,12 +72,14 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
                 var completed = false;
                 while (!completed)
                 {
-                    var failuresBefore = FailuresThatDeadLetter(run).Count;
+                    var timesGivenBackBefore = TimesGivenBack();
                     if (await TryPublishAsync(run, new SendInvoice(correlationId), cancellationToken))
-                        completed = await FollowInvoiceAsync(run, invoices, correlationId, failuresBefore, cancellationToken);
+                        completed = await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore, cancellationToken);
                 }
 
                 completedAfter = databaseIsBack.Elapsed;
+
+                int TimesGivenBack() => invoices.TimesGivenBack.GetValueOrDefault(correlationId);
             },
             async run =>
             {

@@ -68,7 +68,7 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                using var connections = RabbitMqConnections.Named(connectionName);
+                await using var connections = RabbitMqConnections.Named(connectionName);
 
                 Task WaitUntilSentAsync(string correlationId)
                     => run.WaitForSagaAsync<InvoiceSaga>(correlationId, stored => stored.IsCompleted, cancellationToken);
@@ -118,6 +118,8 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
                 // a message that is delivered again while its first delivery is still being handled finds the saga locked
                 Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.Exception.ToString()));
             });
+
+        await connectionLog.CloseAllAsync();
 
         return new Outcome(timesSent, openBefore, openAfterEachTime);
     }

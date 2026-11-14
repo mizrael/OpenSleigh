@@ -18,7 +18,19 @@ public static class InfrastructureFaultExtensions
     public static IServiceCollection FailPublishingWhile(this IServiceCollection services, Fault fault)
     {
         ArgumentNullException.ThrowIfNull(fault);
-        return services.Decorate<IPublisher>((provider, inner) => new FaultyPublisher(inner, fault, HostOf(provider)));
+        return services.Decorate<IPublisher>((provider, inner) => new FaultyPublisher(inner, fault, HostOf(provider), messageType: null));
+    }
+
+    /// <summary>
+    /// the relay of the host cannot publish a <typeparamref name="TMessage"/> while the fault is on: such a message
+    /// stays in the outbox, whatever happens to the others. It keeps a message from being delivered
+    /// until the scenario is ready for it.
+    /// </summary>
+    public static IServiceCollection FailPublishingOf<TMessage>(this IServiceCollection services, Fault fault)
+        where TMessage : IMessage
+    {
+        ArgumentNullException.ThrowIfNull(fault);
+        return services.Decorate<IPublisher>((provider, inner) => new FaultyPublisher(inner, fault, HostOf(provider), typeof(TMessage)));
     }
 
     /// <summary>the relay of the host cannot read its outbox while the fault is on.</summary>
@@ -62,11 +74,13 @@ public static class InfrastructureFaultExtensions
     public static IServiceCollection ExpireOutboxClaimsAfter(this IServiceCollection services, TimeSpan claimDuration)
         => services.AddSingleton(new MongoOutboxRepositoryOptions(claimDuration));
 
-    private sealed class FaultyPublisher(IPublisher inner, Fault fault, object host) : IPublisher
+    private sealed class FaultyPublisher(IPublisher inner, Fault fault, object host, Type? messageType) : IPublisher
     {
         public ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
         {
-            fault.ThrowIfOn(host);
+            if (messageType is null || envelope.MessageType == messageType)
+                fault.ThrowIfOn(host);
+
             return inner.PublishAsync(envelope, cancellationToken);
         }
     }

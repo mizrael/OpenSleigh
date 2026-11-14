@@ -68,6 +68,7 @@ public abstract class DatabaseOutage : IAsyncDisposable
     {
         public const string ConnectionStringName = "postgre";
         private const string MaintenanceDatabase = "postgres";
+        private static readonly TimeSpan SessionsPollingInterval = TimeSpan.FromMilliseconds(20);
 
         private readonly string _serverConnectionString;
         private readonly string _database;
@@ -86,8 +87,30 @@ public abstract class DatabaseOutage : IAsyncDisposable
         public override Task DropConnectionsAsync(CancellationToken cancellationToken)
             => ExecuteAsync(TerminateSessions, cancellationToken);
 
-        protected override Task BeginCoreAsync(CancellationToken cancellationToken)
-            => ExecuteAsync($"{AllowConnections(false)}; {TerminateSessions}", cancellationToken);
+        // the refusal is committed before the sessions are closed: sent together they would be one transaction,
+        // and a host that connected while it ran would keep its session. A session that was being opened
+        // when the others were closed shows up afterwards: they are closed until none is left
+        protected override async Task BeginCoreAsync(CancellationToken cancellationToken)
+        {
+            await ExecuteAsync(AllowConnections(false), cancellationToken);
+
+            do
+            {
+                await ExecuteAsync(TerminateSessions, cancellationToken);
+                await Task.Delay(SessionsPollingInterval, cancellationToken);
+            } while (await CountSessionsAsync(cancellationToken) > 0);
+        }
+
+        private async Task<long> CountSessionsAsync(CancellationToken cancellationToken)
+        {
+            await using var connection = new NpgsqlConnection(_serverConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new NpgsqlCommand(CountSessions, connection) { CommandTimeout = (int)CommandTimeout.TotalSeconds };
+            return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
+        }
+
+        private string CountSessions => $"SELECT count(*) FROM pg_stat_activity WHERE datname = '{_database}'";
 
         protected override Task EndCoreAsync(CancellationToken cancellationToken)
             => ExecuteAsync(AllowConnections(true), cancellationToken);
@@ -127,9 +150,13 @@ public abstract class DatabaseOutage : IAsyncDisposable
             _serverConnectionString = builder.ConnectionString;
         }
 
-        // a database that goes offline rolls back what is running and closes its connections
-        public override Task DropConnectionsAsync(CancellationToken cancellationToken)
-            => ExecuteAsync($"{SetOffline}; {SetOnline}", cancellationToken);
+        // a database that goes offline rolls back what is running and closes its connections.
+        // As an outage that ends at once: one that could not be ended is ended when this is disposed
+        public override async Task DropConnectionsAsync(CancellationToken cancellationToken)
+        {
+            await BeginAsync(cancellationToken);
+            await EndAsync(cancellationToken);
+        }
 
         protected override Task BeginCoreAsync(CancellationToken cancellationToken)
             => ExecuteAsync(SetOffline, cancellationToken);

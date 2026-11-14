@@ -32,12 +32,15 @@ public class OutboxReadFailureScenario(ITestOutputHelper console) : ScenarioBase
                 .FailOutboxReadsWhile(outboxCannotBeRead)
         };
 
+        // on before the hosts start: a pass of the relay that had begun to read would not see the fault
+        outboxCannotBeRead.Start();
+
         await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
         {
-            outboxCannotBeRead.Start();
             await run.AnyHost.PublishAsync(new StartSimpleSaga(), cancellationToken);
 
-            await outboxCannotBeRead.WaitForHitsAsync(FailedPassesToWaitFor, cancellationToken);
+            var failedPassesSoFar = outboxCannotBeRead.Hits.Count;
+            await outboxCannotBeRead.WaitForHitsAsync(failedPassesSoFar + FailedPassesToWaitFor, cancellationToken);
             Assert.Equal(0, handled.Count);
 
             outboxCannotBeRead.Stop();

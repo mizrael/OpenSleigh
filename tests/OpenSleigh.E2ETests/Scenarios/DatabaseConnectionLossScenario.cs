@@ -48,6 +48,6 @@ public class DatabaseConnectionLossScenario(ITestOutputHelper console) : Databas
             $"steady-ms={recovery.TimeToSteadyState.TotalMilliseconds:F0} invoices-tried={recovery.InvoicesTried} " +
             $"refused={invoices.Refused} dead-lettered={failures.Count}");
 
-        AssertEveryInvoiceIsAccountedFor(invoices, failures);
+        AssertEveryInvoiceIsAccountedFor(invoices);
     }
 }

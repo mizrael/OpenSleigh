@@ -13,7 +13,7 @@ namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 /// and closed through the management API of the broker, as a network that drops them would.
 /// The connections of the other runs, on the same broker, are left alone.
 /// </summary>
-public sealed class RabbitMqConnections : IDisposable
+public sealed class RabbitMqConnections : IAsyncDisposable
 {
     private const string SettingsSection = "Rabbit";
     private const int DefaultManagementPort = 15672;
@@ -25,6 +25,7 @@ public sealed class RabbitMqConnections : IDisposable
     private readonly HttpClient _management;
     private readonly ConnectionFactory _connectionFactory;
     private readonly string _virtualHost;
+    private IConnection? _connection;
 
     private RabbitMqConnections(string connectionName, IConfiguration settings)
     {
@@ -109,8 +110,10 @@ public sealed class RabbitMqConnections : IDisposable
     /// <summary>how many consumers a queue has. Null when the queue does not exist.</summary>
     public async Task<uint?> CountConsumersAsync(string queueName, CancellationToken cancellationToken)
     {
-        await using var connection = await _connectionFactory.CreateConnectionAsync(cancellationToken);
-        await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+        // a connection of its own, which has no name and is not among the ones that are closed.
+        // One channel per question: the broker closes a channel that asks for a queue that does not exist
+        _connection ??= await _connectionFactory.CreateConnectionAsync(cancellationToken);
+        await using var channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
         try
         {
             return (await channel.QueueDeclarePassiveAsync(queueName, cancellationToken)).ConsumerCount;
@@ -131,7 +134,13 @@ public sealed class RabbitMqConnections : IDisposable
         }
     }
 
-    public void Dispose() => _management.Dispose();
+    public async ValueTask DisposeAsync()
+    {
+        _management.Dispose();
+
+        if (_connection is not null)
+            await _connection.DisposeAsync();
+    }
 }
 
 public static class RabbitMqConnectionExtensions

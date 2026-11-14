@@ -20,6 +20,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
     public async Task a_message_that_was_being_handled_when_the_connections_were_closed_is_delivered_again_and_handled_once(string combination, int hostsCount)
     {
         var connectionName = $"e2e-{Guid.NewGuid():N}";
+        var connectionLog = new RabbitMqConnectionLog();
         var correlationId = Guid.NewGuid().ToString();
         var handlerIsRunning = new Expectation(1);
         var connectionsAreClosed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -41,13 +42,14 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 .AddSingleton(onSent)
                 .AddSingleton(whileSending)
                 .NameRabbitMqConnections(connectionName)
+                .LogRabbitMqConnections(connectionLog)
                 .ObserveDeliveriesOf<SendInvoice>(deliveredAgain)
         };
 
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                using var connections = RabbitMqConnections.Named(connectionName);
+                await using var connections = RabbitMqConnections.Named(connectionName);
 
                 await run.AnyHost.PublishAsync(new IssueInvoice(correlationId), cancellationToken);
                 await handlerIsRunning.Reached.WaitAsync(cancellationToken);
@@ -70,6 +72,8 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 // the second delivery can arrive while the first is still being handled, and find the saga locked
                 Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.Exception.ToString()));
             });
+
+        await connectionLog.CloseAllAsync();
 
         // the handler ran once, whoever the message was delivered to afterwards, and however many times:
         // a host whose connection is closed while it acknowledges the second delivery is given a third

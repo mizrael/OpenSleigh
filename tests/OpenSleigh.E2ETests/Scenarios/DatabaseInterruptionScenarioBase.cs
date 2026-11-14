@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
 using OpenSleigh.Transport;
 using Xunit.Abstractions;
@@ -32,12 +33,13 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     protected sealed class Invoices
     {
         private readonly ConcurrentDictionary<string, int> _timesSent = new();
+        private readonly ConcurrentDictionary<string, int> _timesGivenBack = new();
+        private readonly ConcurrentQueue<string> _issued = new();
         private readonly ConcurrentQueue<string> _completed = new();
-        private int _issued;
         private int _refused;
 
         /// <summary>invoices that got into the outbox.</summary>
-        public int Issued => Volatile.Read(ref _issued);
+        public IReadOnlyCollection<string> Issued => _issued;
 
         /// <summary>invoices the database did not take: nothing of them was stored.</summary>
         public int Refused => Volatile.Read(ref _refused);
@@ -48,10 +50,17 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
         /// <summary>how many times the handler that sends an invoice ran, for each invoice.</summary>
         public IReadOnlyDictionary<string, int> TimesSent => _timesSent;
 
-        public void WasIssued() => Interlocked.Increment(ref _issued);
+        /// <summary>
+        /// how many times a host gave a message of an invoice back for another reason than a lock, for each invoice:
+        /// such a message is dead-lettered.
+        /// </summary>
+        public IReadOnlyDictionary<string, int> TimesGivenBack => _timesGivenBack;
+
+        public void WasIssued(string correlationId) => _issued.Enqueue(correlationId);
         public void WasRefused() => Interlocked.Increment(ref _refused);
         public void WasCompleted(string correlationId) => _completed.Enqueue(correlationId);
         public void WasSent(string correlationId) => _timesSent.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
+        public void WasGivenBack(string correlationId) => _timesGivenBack.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
     }
 
     /// <param name="TimeToFirstCompletedInvoice">from the moment the scenario started issuing invoices again.</param>
@@ -70,7 +79,12 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
             {
                 services
                     .AddSingleton(whileSending ?? ((_, _) => Task.CompletedTask))
-                    .AddSingleton(onSent);
+                    .AddSingleton(onSent)
+                    .ObserveFailedDeliveries((message, failure) =>
+                    {
+                        if (!failure.IsLockConflict())
+                            invoices.WasGivenBack(message.CorrelationId);
+                    });
                 configureServices?.Invoke(services);
             }
         };
@@ -87,7 +101,6 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     protected async Task<bool> IssueAnInvoiceAndFollowItAsync(ScenarioRun run, Invoices invoices, CancellationToken cancellationToken)
     {
         var correlationId = Guid.NewGuid().ToString();
-        var failuresBefore = FailuresThatDeadLetter(run).Count;
 
         if (!await TryPublishAsync(run, new IssueInvoice(correlationId), cancellationToken))
         {
@@ -95,16 +108,16 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
             return false;
         }
 
-        invoices.WasIssued();
-        return await FollowInvoiceAsync(run, invoices, correlationId, failuresBefore, cancellationToken);
+        invoices.WasIssued(correlationId);
+        return await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore: 0, cancellationToken);
     }
 
     /// <summary>
-    /// waits until the invoice is stored as completed, or a host gave a message back since <paramref name="failuresBefore"/>
-    /// were counted: with one invoice on its way at a time, that message is one of its own.
+    /// waits until the invoice is stored as completed, or a host gave one of its messages back
+    /// more times than <paramref name="timesGivenBackBefore"/>.
     /// </summary>
     protected async Task<bool> FollowInvoiceAsync(
-        ScenarioRun run, Invoices invoices, string correlationId, int failuresBefore, CancellationToken cancellationToken)
+        ScenarioRun run, Invoices invoices, string correlationId, int timesGivenBackBefore, CancellationToken cancellationToken)
     {
         while (true)
         {
@@ -114,7 +127,7 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
                 return true;
             }
 
-            if (FailuresThatDeadLetter(run).Count > failuresBefore)
+            if (invoices.TimesGivenBack.GetValueOrDefault(correlationId) > timesGivenBackBefore)
                 return false;
 
             await Task.Delay(PollingInterval, cancellationToken);
@@ -205,13 +218,17 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     }
 
     /// <summary>
-    /// no invoice went missing, and none was sent twice: the ones that did not complete are the ones a host gave back.
+    /// no invoice went missing, and none was sent twice: each one that got into the outbox completed,
+    /// or a host gave one of its messages back.
     /// </summary>
-    protected static void AssertEveryInvoiceIsAccountedFor(Invoices invoices, IReadOnlyCollection<ProcessingFailure> failures)
+    protected static void AssertEveryInvoiceIsAccountedFor(Invoices invoices)
     {
         Assert.Equal(invoices.Completed.Count, invoices.Completed.Distinct().Count());
-        Assert.True(invoices.Issued - invoices.Completed.Count <= failures.Count,
-            $"{invoices.Issued} invoices were issued, {invoices.Completed.Count} completed and only {failures.Count} messages were given back.");
+
+        var unaccountedFor = invoices.Issued
+            .Except(invoices.Completed)
+            .Where(correlationId => !invoices.TimesGivenBack.ContainsKey(correlationId));
+        Assert.Empty(unaccountedFor);
 
         Assert.All(invoices.Completed, correlationId => Assert.Equal(1, invoices.TimesSent.GetValueOrDefault(correlationId)));
     }

@@ -19,6 +19,16 @@ public sealed class RabbitMqConnectionLog
     public int Open => _opened.Count(connection => connection.IsOpen);
 
     internal void Add(IConnection connection) => _opened.Enqueue(connection);
+
+    /// <summary>
+    /// closes every connection the hosts opened, once they are stopped: a host closes the connection it uses,
+    /// not one it has replaced, which would otherwise stay open until the tests end.
+    /// </summary>
+    public async Task CloseAllAsync()
+    {
+        foreach (var connection in _opened)
+            await connection.DisposeAsync();
+    }
 }
 
 public static class RabbitMqConnectionLogExtensions

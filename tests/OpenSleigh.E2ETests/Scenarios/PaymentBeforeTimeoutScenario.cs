@@ -9,9 +9,10 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
-    // long enough for the payment to be handled first on a busy machine: the scenario publishes it
-    // as soon as the order is stored
-    private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(3);
+    private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(2);
+
+    // a message the relay could not publish is read again when this has passed, on MongoDB
+    private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
 
     // in memory, where there is one host, and with a few hosts everywhere else: the timeout is one row in an outbox
     // that every host relays, and whichever host receives it has to leave it alone
@@ -33,9 +34,18 @@ public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioB
         // the timeout of a completed saga reaches no handler: the hosts tell when they are done with it
         var timeoutDropped = new Expectation(1);
 
+        // the payment is published as soon as the order is stored, long before the timeout is due. Should the machine
+        // be slow enough for the timeout to become due first, it does not leave the outbox until the order is paid:
+        // which of the two arrives first is not left to the clock
+        var timeoutIsHeld = new Fault("the timeout stays in the outbox until the order is paid, on purpose.");
+        timeoutIsHeld.Start();
+
         var setup = new HostSetup(OrderPaymentJournal.AddSagas)
         {
-            ConfigureServices = services => journal.AddTo(services).ObserveDeliveriesOf<PaymentTimedOut>(timeoutDropped)
+            ConfigureServices = services => journal.AddTo(services)
+                .ObserveDeliveriesOf<PaymentTimedOut>(timeoutDropped)
+                .ExpireOutboxClaimsAfter(MongoOutboxClaim)
+                .FailPublishingOf<PaymentTimedOut>(timeoutIsHeld)
         };
 
         await RunScenarioAsync(combination, hostsCount, setup,
@@ -49,6 +59,8 @@ public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioB
 
                 await run.AnyHost.PublishAsync(new PaymentReceived(correlationId), cancellationToken);
                 await journal.Paid.Reached.WaitAsync(cancellationToken);
+                await run.WaitForSagaAsync<OrderPaymentSaga>(correlationId, stored => stored.IsCompleted && !stored.IsLocked, cancellationToken);
+                timeoutIsHeld.Stop();
 
                 // the timeout is still in the outbox, and becomes due: a host receives it and leaves it at that.
                 // The in-memory outbox does not count a message that is not due, so its being empty would prove nothing
