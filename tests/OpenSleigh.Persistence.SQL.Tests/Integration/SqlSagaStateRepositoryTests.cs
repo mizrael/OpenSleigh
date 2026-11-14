@@ -268,6 +268,47 @@ public abstract class SqlSagaStateRepositoryTests
     }
 
     [Fact]
+    public async Task AbandonAsync_should_release_the_saga_as_it_was_stored()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var descriptor = SagaDescriptor.Create<FakeSagaWithState, DummyState>();
+        var firstMessage = CreateMessageContext<FakeMessage>();
+        var correlationId = firstMessage.CorrelationId;
+        var state = DummyState.New();
+        var setupRepository = CreateSut(_fixture.CreateDbContext(dbName).db);
+        var saga = new SagaInstance<DummyState>(Guid.NewGuid().ToString(), firstMessage.MessageId, correlationId, descriptor, state);
+        await saga.LockAsync(setupRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await setupRepository.ReleaseAsync(saga);
+
+        var sut = CreateSut(_fixture.CreateDbContext(dbName).db);
+        var secondMessage = CreateMessageContext<FakeMessage>();
+        secondMessage.CorrelationId.Returns(correlationId);
+        var found = await sut.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        Assert.NotNull(found);
+        await found.LockAsync(sut, CancellationToken.None);
+
+        // the handler changed the state and completed the saga, and its commit failed
+        var changed = new SagaInstance<DummyState>(found.InstanceId, found.TriggerMessageId, found.CorrelationId, descriptor, DummyState.New(), found.ProcessedMessages);
+        var lockHolder = Substitute.For<ISagaStateRepository>();
+        lockHolder.LockAsync(changed, Arg.Any<CancellationToken>()).Returns(found.LockId);
+        await changed.LockAsync(lockHolder, CancellationToken.None);
+        changed.SetAsProcessed(secondMessage);
+        changed.MarkAsCompleted();
+
+        await sut.AbandonAsync(changed);
+
+        // the message is delivered again, and finds the saga as it was before it
+        var redeliveryRepository = CreateSut(_fixture.CreateDbContext(dbName).db);
+        var stored = await redeliveryRepository.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        var storedWithState = Assert.IsAssignableFrom<ISagaInstance<DummyState>>(stored);
+        Assert.Equal(state, storedWithState.State);
+        Assert.False(stored.IsCompleted);
+        Assert.Equal(firstMessage.MessageId, Assert.Single(stored.ProcessedMessages).MessageId);
+        await stored.LockAsync(redeliveryRepository, CancellationToken.None);
+    }
+
+    [Fact]
     public async Task ReleaseAsync_should_keep_stored_processed_messages_and_add_only_the_new_one()
     {
         var dbName = Guid.NewGuid().ToString();

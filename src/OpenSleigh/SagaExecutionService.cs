@@ -69,7 +69,7 @@ public class SagaExecutionService : ISagaExecutionService
         // processed the same message between the initial check and lock acquisition
         if (!sagaInstance.CanProcess(messageContext))
         {
-            await _sagaStateRepository.ReleaseAsync(sagaInstance, cancellationToken)
+            await _sagaStateRepository.AbandonAsync(sagaInstance, cancellationToken)
                                       .ConfigureAwait(false);
             return NoOpSagaInstance.Create(messageContext, descriptor);
         }
@@ -83,6 +83,14 @@ public class SagaExecutionService : ISagaExecutionService
     {
         ArgumentNullException.ThrowIfNull(context);
         return _sagaStateRepository.ReleaseAsync(context, cancellationToken);
+    }
+
+    public ValueTask AbandonAsync(
+        ISagaInstance context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        return _sagaStateRepository.AbandonAsync(context, cancellationToken);
     }
 
     public async ValueTask CommitAsync(

@@ -56,7 +56,7 @@ public class SqlSagaStateCommitTests
     }
 
     [Fact]
-    public async Task ReleaseAsync_should_release_the_saga_after_a_commit_that_did_not_complete()
+    public async Task AbandonAsync_should_release_the_saga_after_a_commit_that_did_not_complete()
     {
         var dbName = Guid.NewGuid().ToString();
         var sut = CreateSut(dbName);
@@ -71,11 +71,51 @@ public class SqlSagaStateCommitTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await sut.CommitAsync(saga, cancelled.Token));
 
         // what SagaInstance does when its commit fails
-        await sut.ReleaseAsync(saga);
+        await sut.AbandonAsync(saga);
 
         await using var db = CreateDbContext(dbName);
-        Assert.Null((await db.SagaStates.SingleAsync()).LockTime);
+        var stored = await db.SagaStates.Include(e => e.ProcessedMessages).SingleAsync();
+        Assert.Null(stored.LockTime);
+        Assert.Empty(stored.ProcessedMessages);
         Assert.Empty(await db.OutboxMessages.ToListAsync());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_release_the_saga_as_it_was_stored()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var descriptor = SagaDescriptor.Create<FakeSagaWithState, DummyState>();
+        var firstMessage = CreateMessageContext();
+        var state = DummyState.New();
+        var setupRepository = CreateSut(dbName);
+        var saga = new SagaInstance<DummyState>(Guid.NewGuid().ToString(), firstMessage.MessageId, firstMessage.CorrelationId, descriptor, state);
+        await saga.LockAsync(setupRepository, CancellationToken.None);
+        saga.SetAsProcessed(firstMessage);
+        await setupRepository.ReleaseAsync(saga);
+
+        var sut = CreateSut(dbName);
+        var secondMessage = CreateMessageContext(firstMessage.CorrelationId);
+        var found = await sut.FindAsync(descriptor, secondMessage);
+        Assert.NotNull(found);
+        await found.LockAsync(sut, CancellationToken.None);
+
+        // the handler changed the state and completed the saga, and its commit failed
+        var changed = new SagaInstance<DummyState>(found.InstanceId, found.TriggerMessageId, found.CorrelationId, descriptor, DummyState.New(), found.ProcessedMessages);
+        var lockHolder = Substitute.For<ISagaStateRepository>();
+        lockHolder.LockAsync(changed, Arg.Any<CancellationToken>()).Returns(found.LockId);
+        await changed.LockAsync(lockHolder, CancellationToken.None);
+        changed.SetAsProcessed(secondMessage);
+        changed.MarkAsCompleted();
+
+        await sut.AbandonAsync(changed);
+
+        var stored = await CreateSut(dbName).FindAsync(descriptor, secondMessage);
+        var storedWithState = Assert.IsAssignableFrom<ISagaInstance<DummyState>>(stored);
+        Assert.Equal(state, storedWithState.State);
+        Assert.False(stored.IsCompleted);
+        Assert.Equal(firstMessage.MessageId, Assert.Single(stored.ProcessedMessages).MessageId);
+        await using var db = CreateDbContext(dbName);
+        Assert.Null((await db.SagaStates.SingleAsync()).LockTime);
     }
 
     [Fact]

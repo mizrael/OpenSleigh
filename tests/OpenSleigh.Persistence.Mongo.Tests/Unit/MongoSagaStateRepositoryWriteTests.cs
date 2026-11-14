@@ -56,6 +56,28 @@ public class MongoSagaStateRepositoryWriteTests
     }
 
     [Fact]
+    public async Task AbandonAsync_should_release_the_lock_and_write_nothing_of_the_saga()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.MarkAsCompleted();
+        collection.ClearReceivedCalls();
+
+        await sut.AbandonAsync(saga);
+
+        var release = Assert.Single(collection.ReceivedCalls());
+        var update = release.GetArguments().OfType<UpdateDefinition<Entities.SagaState>>().Single();
+        var registry = MongoDB.Bson.Serialization.BsonSerializer.SerializerRegistry;
+        var written = update.Render(new RenderArgs<Entities.SagaState>(registry.GetSerializer<Entities.SagaState>(), registry))
+            .AsBsonDocument["$set"].AsBsonDocument;
+        Assert.Equal(
+            new[] { nameof(Entities.SagaState.LockId), nameof(Entities.SagaState.LockTime) },
+            written.Names.Order());
+    }
+
+    [Fact]
     public async Task ReleaseAsync_should_throw_when_the_state_is_null()
     {
         var sut = CreateSut(CreateCollection(UpdateResult.Unacknowledged.Instance));
