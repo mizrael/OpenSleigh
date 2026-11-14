@@ -80,6 +80,10 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     // the lock belongs to the connection, not to a transaction, because the index is built outside one:
     // the connection is kept for all the statements
     protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        => RunExclusively(database, change.RunsInTransaction ? () => RunInTransaction(database, apply) : apply);
+
+    // the same lock for creating the tables: they are created in a transaction of their own
+    protected override void RunExclusively(DatabaseFacade database, Action action)
     {
         database.OpenConnection();
         try
@@ -87,10 +91,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
             WaitForLock(database);
             try
             {
-                if (change.RunsInTransaction)
-                    RunInTransaction(database, apply);
-                else
-                    apply();
+                action();
             }
             finally
             {

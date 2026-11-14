@@ -1,4 +1,6 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace OpenSleigh.Persistence.SQL;
 
@@ -36,11 +38,23 @@ public sealed class SagaDbSchemaInitializer
                 return;
 
             // a database that was just created has the current schema
-            var alreadyExisted = !database.EnsureCreated();
+            var alreadyExisted = !EnsureDatabaseCreated(database);
             if (alreadyExisted)
                 _schemaUpgrade?.Apply(database);
 
             _created = true;
         }
+    }
+
+    // instances that start together on a database that is missing, or empty, wait for each other
+    // through the schema upgrade, which knows how to on its database
+    private bool EnsureDatabaseCreated(DatabaseFacade database)
+    {
+        var schemaUpgrade = _schemaUpgrade;
+        if (schemaUpgrade is null || database.GetService<IDatabaseCreator>() is not IRelationalDatabaseCreator creator)
+            return database.EnsureCreated();
+
+        return new SagaDbCreation(creator)
+            .EnsureCreated(createTables => schemaUpgrade.CreateTablesExclusively(database, createTables));
     }
 }
