@@ -43,6 +43,8 @@ app.MapOpenSleighReporting(prefix: "/api/sagas");
 | `GET` | `/opensleigh/sagas/{instanceId}` | Get a saga instance by its ID |
 | `GET` | `/opensleigh/sagas/correlation/{correlationId}?sagaType=` | Get a saga instance by correlation ID (requires `sagaType` query parameter) |
 | `GET` | `/opensleigh/sagas/types` | List registered message types with saga handlers |
+| `GET` | `/opensleigh/sagas/{instanceId}/failures` | List the messages whose handler failed on a saga instance |
+| `GET` | `/opensleigh/failures` | List the messages whose handler failed, with what was decided for each |
 
 ### Query Parameters
 

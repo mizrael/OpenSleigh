@@ -19,9 +19,9 @@ public class SqlServerSchemaInitializationTests :
 
     protected override string ReleasedSchemaScriptFileName => "v3.3.0.sqlserver.sql";
 
-    protected override string OutboxIndexNamesQuery =>
+    protected override string IndexNamesQuery(string tableName) =>
         "SELECT CAST(name AS nvarchar(128)) AS [Value] FROM sys.indexes " +
-        $"WHERE object_id = OBJECT_ID(N'{Constants.DbSchema}.{Entities.OutboxMessage.TableName}') AND name IS NOT NULL";
+        $"WHERE object_id = OBJECT_ID(N'{Constants.DbSchema}.{tableName}') AND name IS NOT NULL";
 
     protected override async Task<string> CreateUserWithoutSchemaPermissionsAsync(SagaDbContext admin, string connectionString)
     {

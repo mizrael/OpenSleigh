@@ -24,7 +24,7 @@ public class MessageHandlerManagerTests
     }
 
     [Fact]
-    public async Task ProcessAsync_should_call_rollback_and_throw_SagaException_on_handler_failure()
+    public async Task ProcessAsync_should_throw_SagaException_on_handler_failure()
     {
         var handler = Substitute.For<IHandleMessage<FakeSagaStarter>>();
         var factory = Substitute.For<IMessageHandlerFactory>();
@@ -36,8 +36,9 @@ public class MessageHandlerManagerTests
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
         factory.Create<FakeSagaStarter>(context).Returns(handler);
 
+        var handlerError = new InvalidOperationException("test error");
         handler.HandleAsync(messageContext, Arg.Any<CancellationToken>())
-            .Returns(x => throw new InvalidOperationException("test error"));
+            .Returns(x => throw handlerError);
 
         var sut = new MessageHandlerManager(factory, logger);
 
@@ -45,11 +46,11 @@ public class MessageHandlerManagerTests
             () => sut.ProcessAsync(context, messageContext, CancellationToken.None).AsTask());
 
         Assert.Contains("test error", ex.Message);
-        await handler.Received(1).RollbackAsync(messageContext, Arg.Any<CancellationToken>());
+        Assert.Same(handlerError, ex.InnerException);
     }
 
     [Fact]
-    public async Task ProcessAsync_should_not_roll_back_a_handler_that_was_interrupted_by_a_stop()
+    public async Task ProcessAsync_should_not_wrap_the_exception_of_a_handler_that_was_interrupted_by_a_stop()
     {
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
         var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
@@ -66,8 +67,37 @@ public class MessageHandlerManagerTests
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => sut.ProcessAsync(saga, messageContext, stopping.Token).AsTask());
+    }
 
-        await handler.DidNotReceiveWithAnyArgs().RollbackAsync(default!, default);
+    public interface ICompensatingHandler : IHandleMessage<FakeSagaStarter>, ICompensateMessage<FakeSagaStarter>
+    {
+    }
+
+    [Fact]
+    public async Task CompensateAsync_should_invoke_the_compensation_handler_of_the_saga()
+    {
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
+        var handler = Substitute.For<ICompensatingHandler>();
+        var failure = new MessageFailure(new InvalidOperationException("whoops"), Attempts: 1);
+        var sut = CreateSut(saga, handler);
+
+        await sut.CompensateAsync(saga, messageContext, failure, CancellationToken.None);
+
+        await handler.Received(1).CompensateAsync(messageContext, failure, Arg.Any<CancellationToken>());
+        await handler.DidNotReceiveWithAnyArgs().HandleAsync(default!, default);
+    }
+
+    [Fact]
+    public async Task CompensateAsync_should_throw_when_the_saga_has_no_compensation_handler_for_the_message()
+    {
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var saga = new SagaInstance("instance-1", "trigger-1", messageContext.CorrelationId, SagaDescriptor.Create<FakeSaga>());
+        var sut = CreateSut(saga, Substitute.For<IHandleMessage<FakeSagaStarter>>());
+        var failure = new MessageFailure(new InvalidOperationException("whoops"), Attempts: 1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => sut.CompensateAsync(saga, messageContext, failure, CancellationToken.None).AsTask());
     }
 
     private static MessageHandlerManager CreateSut(ISagaInstance saga, IHandleMessage<FakeSagaStarter> handler)

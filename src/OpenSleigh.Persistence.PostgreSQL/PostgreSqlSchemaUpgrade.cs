@@ -8,16 +8,19 @@ using OpenSleigh.Persistence.SQL.Entities;
 namespace OpenSleigh.Persistence.PostgreSQL;
 
 /// <summary>
-/// adds the outbox due time, and its index, to a database created before delayed delivery existed.
-/// Both require the user to own the outbox table.
+/// brings a database created by an earlier version up to date: the outbox due time and its index, for delayed delivery,
+/// and the table of the messages whose handler failed.
+/// The first two require the user to own the outbox table, the last one to be allowed to create tables in the schema.
 /// </summary>
 /// <remarks>
 /// The column has no default, so adding it does not rewrite the table: it needs the table for a moment only.
 /// The index is built concurrently, which does not stop the outbox from being read and written while it lasts.
+/// A table created by another user than the one the application runs as has to be granted to it.
 /// </remarks>
 internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
 {
     private const string OutboxTable = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
+    private const string FailuresTable = $"{Constants.DbSchema}.\"{SagaFailureRecord.TableName}\"";
     private const string DeliverAtColumn = nameof(OutboxMessage.DeliverAt);
     private const string DeliverAtIndex = $"{Constants.DbSchema}.\"{OutboxMessage.DeliverAtIndexName}\"";
     private const string PermissionDeniedSqlState = "42501";
@@ -66,6 +69,35 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
                 $"CREATE INDEX CONCURRENTLY IF NOT EXISTS \"{OutboxMessage.DeliverAtIndexName}\" ON {OutboxTable} (\"{DeliverAtColumn}\")",
             ],
             RunsInTransaction: false),
+
+        // one transaction: the table is there with its indexes, or not at all. It is new, so nothing waits for it
+        new SagaDbSchemaChange(
+            "the table of the messages whose handler failed",
+            $"SELECT CASE WHEN to_regclass('{FailuresTable}') IS NOT NULL THEN 1 ELSE 0 END AS \"{ResultColumn}\"",
+            [
+                $"""
+                 CREATE TABLE IF NOT EXISTS {FailuresTable} (
+                     "{nameof(SagaFailureRecord.Id)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.InstanceId)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.CorrelationId)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.SagaType)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.MessageId)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.MessageType)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.Attempt)}" integer NOT NULL,
+                     "{nameof(SagaFailureRecord.OccurredAt)}" timestamp with time zone NOT NULL,
+                     "{nameof(SagaFailureRecord.ExceptionType)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.ExceptionMessage)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.StackTrace)}" text,
+                     "{nameof(SagaFailureRecord.Decision)}" text NOT NULL,
+                     "{nameof(SagaFailureRecord.RetryAt)}" timestamp with time zone,
+                     "{nameof(SagaFailureRecord.CompensationError)}" text,
+                     CONSTRAINT "PK_{SagaFailureRecord.TableName}" PRIMARY KEY ("{nameof(SagaFailureRecord.Id)}")
+                 )
+                 """,
+                $"CREATE INDEX IF NOT EXISTS \"{SagaFailureRecord.MessageIndexName}\" ON {FailuresTable} (\"{nameof(SagaFailureRecord.InstanceId)}\", \"{nameof(SagaFailureRecord.MessageId)}\")",
+                $"CREATE INDEX IF NOT EXISTS \"{SagaFailureRecord.CorrelationIndexName}\" ON {FailuresTable} (\"{nameof(SagaFailureRecord.CorrelationId)}\")",
+                $"CREATE INDEX IF NOT EXISTS \"{SagaFailureRecord.OccurredAtIndexName}\" ON {FailuresTable} (\"{nameof(SagaFailureRecord.OccurredAt)}\")",
+            ]),
     ];
 
     public PostgreSqlSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)

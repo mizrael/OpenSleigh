@@ -122,7 +122,7 @@ docker-compose down && docker-compose up -d
 1. **MessageProcessor**: Entry point that routes messages from outbox to applicable sagas (src/OpenSleigh/Transport/MessageProcessor.cs)
 2. **SagaRunner**: Orchestrates processing for a single saga/message pair (src/OpenSleigh/SagaRunner.cs)
 3. **SagaExecutionService**: Two-phase execution: BeginProcessingAsync (fetch/lock) + CommitAsync (persist/unlock) (src/OpenSleigh/SagaExecutionService.cs)
-4. **MessageHandlerManager**: Invokes the actual handler with error handling and rollback (src/OpenSleigh/MessageHandlerManager.cs)
+4. **MessageHandlerManager**: Invokes the handler and, when it failed, the saga's compensation handler (`ICompensateMessage<TM>`); `SagaExecutionService.HandleFailureAsync` decides between compensating and dead-lettering, and records the failure (src/OpenSleigh/MessageHandlerManager.cs, SagaExecutionService.Failures.cs)
 
 **Outbox Pattern:**
 - `MessageEnvelope`: Wraps messages with metadata (correlation ID, message ID, sender) (src/OpenSleigh/Outbox/MessageEnvelope.cs)
@@ -157,7 +157,7 @@ docker-compose down && docker-compose up -d
 **4. Two-Phase Processing**
 - Phase 1: `BeginProcessingAsync()` - fetch/lock saga, check idempotency, execute handler
 - Phase 2: `CommitAsync()` - persist state and outbox messages, release lock
-- Allows rollback without persisting partial state
+- Allows rollback without persisting partial state: a failed handler leaves the saga as it was stored (`ISagaStateRepository.AbandonAsync`)
 
 **5. Discovery via Reflection**
 - `TypeExtensions.GetHandledMessageTypes()` discovers all `IHandleMessage<>` implementations

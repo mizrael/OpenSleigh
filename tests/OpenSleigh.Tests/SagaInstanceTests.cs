@@ -272,32 +272,34 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public async Task ProcessAsync_should_release_lock_and_rethrow_when_handler_throws()
+    public async Task ProcessAsync_should_abandon_the_saga_and_rethrow_when_the_handler_is_interrupted()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
 
         var handler = Substitute.For<IMessageHandlerManager>();
         var executionService = Substitute.For<ISagaExecutionService>();
-        var sagaStateRepo = Substitute.For<ISagaStateRepository>();
-
-        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
-
-        sagaStateRepo.LockAsync(sut, Arg.Any<CancellationToken>()).Returns("lock-123");
-        await sut.LockAsync(sagaStateRepo, CancellationToken.None);
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
 
         handler.When(x => x.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>()))
-               .Do(_ => throw new InvalidOperationException("handler failed"));
+               .Do(_ =>
+               {
+                   sut.Publish(DummyMessage.CreateEnvelope());
+                   throw new OperationCanceledException("stopping");
+               });
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<OperationCanceledException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
 
-        await executionService.Received(1).ReleaseAsync(sut, CancellationToken.None);
+        await executionService.Received(1).AbandonAsync(sut, CancellationToken.None);
+        await executionService.DidNotReceiveWithAnyArgs().HandleFailureAsync<FakeSagaStarter>(default!, default!, default!, default!, default);
+        Assert.Empty(sut.Outbox);
+        Assert.Empty(sut.ProcessedMessages);
         Assert.Empty(sut.LockId);
     }
 
     [Fact]
-    public async Task ProcessAsync_should_release_without_committing_or_recording_the_message_when_the_handler_failed()
+    public async Task ProcessAsync_should_leave_the_decision_to_the_execution_service_when_the_handler_failed()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
@@ -309,18 +311,37 @@ public class SagaInstanceTests
         handler.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>())
                .Returns(_ => ValueTask.FromException(failure));
 
+        await sut.ProcessAsync(handler, messageContext, executionService);
+
+        await executionService.Received(1).HandleFailureAsync(sut, messageContext, handler, failure, Arg.Any<CancellationToken>());
+        await executionService.DidNotReceive().CommitAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+        await executionService.DidNotReceive().AbandonAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+        Assert.Empty(sut.ProcessedMessages);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_should_rethrow_what_the_execution_service_throws_for_a_failed_handler()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var failure = new SagaException("the handler failed", new InvalidOperationException("whoops"));
+
+        var handler = Substitute.For<IMessageHandlerManager>();
+        var executionService = Substitute.For<ISagaExecutionService>();
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
+        handler.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>())
+               .Returns(_ => ValueTask.FromException(failure));
+        executionService.HandleFailureAsync(sut, messageContext, handler, failure, Arg.Any<CancellationToken>())
+                        .Returns(_ => ValueTask.FromException(failure));
+
         var thrown = await Assert.ThrowsAsync<SagaException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
 
         Assert.Same(failure, thrown);
-        await executionService.DidNotReceive().CommitAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
-        await executionService.Received(1).ReleaseAsync(sut, CancellationToken.None);
-        Assert.Empty(sut.ProcessedMessages);
-        Assert.Empty(sut.LockId);
     }
 
     [Fact]
-    public async Task ProcessAsync_should_not_release_the_message_as_processed_when_the_commit_fails()
+    public async Task ProcessAsync_should_abandon_the_saga_without_the_message_as_processed_when_the_commit_fails()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
@@ -336,14 +357,15 @@ public class SagaInstanceTests
                });
         executionService.CommitAsync(sut, Arg.Any<CancellationToken>())
                         .Returns(_ => ValueTask.FromException(new InvalidOperationException("the database is gone")));
-        var processedWhenReleased = true;
-        executionService.When(x => x.ReleaseAsync(sut, Arg.Any<CancellationToken>()))
-                        .Do(_ => processedWhenReleased = sut.ProcessedMessages.Count != 0);
+        var processedWhenAbandoned = true;
+        executionService.When(x => x.AbandonAsync(sut, Arg.Any<CancellationToken>()))
+                        .Do(_ => processedWhenAbandoned = sut.ProcessedMessages.Count != 0);
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
 
-        Assert.False(processedWhenReleased);
+        await executionService.Received(1).AbandonAsync(sut, CancellationToken.None);
+        Assert.False(processedWhenAbandoned);
         Assert.Empty(sut.Outbox);
         Assert.True(sut.CanProcess(messageContext));
     }
@@ -358,24 +380,19 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public async Task ProcessAsync_should_rethrow_original_exception_when_release_also_fails()
+    public async Task ProcessAsync_should_rethrow_original_exception_when_abandon_also_fails()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
 
         var handler = Substitute.For<IMessageHandlerManager>();
         var executionService = Substitute.For<ISagaExecutionService>();
-        var sagaStateRepo = Substitute.For<ISagaStateRepository>();
-
-        var sut = new SagaInstance("lorem", "ipsum", messageContext.CorrelationId, descriptor);
-
-        sagaStateRepo.LockAsync(sut, Arg.Any<CancellationToken>()).Returns("lock-123");
-        await sut.LockAsync(sagaStateRepo, CancellationToken.None);
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
 
         handler.When(x => x.ProcessAsync(sut, messageContext, Arg.Any<CancellationToken>()))
                .Do(_ => throw new InvalidOperationException("handler failed"));
-        executionService.When(x => x.ReleaseAsync(sut, CancellationToken.None))
-                        .Do(_ => throw new Exception("release failed"));
+        executionService.When(x => x.AbandonAsync(sut, CancellationToken.None))
+                        .Do(_ => throw new Exception("abandon failed"));
 
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
@@ -385,7 +402,7 @@ public class SagaInstanceTests
     }
 
     [Fact]
-    public async Task ProcessAsync_should_not_call_release_when_lock_not_held()
+    public async Task ProcessAsync_should_not_abandon_when_lock_not_held()
     {
         var descriptor = SagaDescriptor.Create<FakeSaga>();
         var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
@@ -401,7 +418,33 @@ public class SagaInstanceTests
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => sut.ProcessAsync(handler, messageContext, executionService).AsTask());
 
-        await executionService.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+        await executionService.DidNotReceive().AbandonAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task HandLockTo_should_move_the_lock_to_another_instance_of_the_same_saga()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
+        var other = new SagaInstance(sut.InstanceId, "ipsum", messageContext.CorrelationId, descriptor);
+
+        sut.HandLockTo(other);
+
+        Assert.Equal("lock-123", other.LockId);
+        Assert.Empty(sut.LockId);
+    }
+
+    [Fact]
+    public async Task HandLockTo_should_refuse_an_instance_of_another_saga()
+    {
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var sut = await CreateLockedSagaAsync(descriptor, messageContext);
+        var other = new SagaInstance("another saga", "ipsum", messageContext.CorrelationId, descriptor);
+
+        Assert.Throws<ArgumentException>(() => sut.HandLockTo(other));
+        Assert.Equal("lock-123", sut.LockId);
     }
 
     [Fact]

@@ -7,7 +7,9 @@ namespace OpenSleigh;
 public record SagaInstance : ISagaInstance 
 {
     private readonly Dictionary<string, ProcessedMessage> _processedMessages = new();
-    private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
+
+    // created by the first message that is published: an instance is built for every message, and most publish nothing
+    private ConcurrentQueue<MessageEnvelope>? _outbox;
 
     public SagaInstance(
         string instanceId, 
@@ -73,11 +75,27 @@ public record SagaInstance : ISagaInstance
     {
         ArgumentNullException.ThrowIfNull(message);
 
-        _outbox.Enqueue(message);
+        LazyInitializer.EnsureInitialized(ref _outbox).Enqueue(message);
     }
 
     public void ClearOutbox()
-        => _outbox.Clear();
+        => _outbox?.Clear();
+
+    public SagaMessageFailure? Failure { get; private set; }
+
+    public void RecordFailure(SagaMessageFailure? failure)
+        => Failure = failure;
+
+    public void HandLockTo(ISagaInstance other)
+    {
+        ArgumentNullException.ThrowIfNull(other);
+
+        if (other is not SagaInstance target || target.InstanceId != InstanceId)
+            throw new ArgumentException($"the lock of saga '{InstanceId}' can only be handed to another instance of it.", nameof(other));
+
+        target.LockId = LockId;
+        LockId = string.Empty;
+    }
 
     public async ValueTask ProcessAsync<TM>(
         IMessageHandlerManager messageHandlerManager,
@@ -93,12 +111,27 @@ public record SagaInstance : ISagaInstance
         {
             await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
                                        .ConfigureAwait(false);
+        }
+        catch (SagaException failure)
+        {
+            // the handler failed. The saga is still locked: whatever is decided for the message is stored under its lock
+            await sagaExecutionService.HandleFailureAsync(this, messageContext, messageHandlerManager, failure, cancellationToken)
+                                      .ConfigureAwait(false);
+            return;
+        }
+        catch
+        {
+            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
+            throw;
+        }
 
+        try
+        {
             await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
-            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
+            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
             throw;
         }
     }
@@ -128,14 +161,17 @@ public record SagaInstance : ISagaInstance
         this.LockId = string.Empty;
     }
 
-    private async ValueTask TryReleaseAsync(ISagaExecutionService sagaExecutionService)
+    // nothing of what the handler did is stored: the saga stays as it was before the message
+    private async ValueTask TryAbandonAsync(ISagaExecutionService sagaExecutionService)
     {
         if (string.IsNullOrEmpty(this.LockId))
             return;
 
+        ClearOutbox();
+
         try
         {
-            await sagaExecutionService.ReleaseAsync(this, CancellationToken.None)
+            await sagaExecutionService.AbandonAsync(this, CancellationToken.None)
                                       .ConfigureAwait(false);
         }
         catch
@@ -159,7 +195,9 @@ public record SagaInstance : ISagaInstance
     public string LockId { get; private set; }
 
     public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages.Values;
-    public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
+    public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox ?? NoMessages;
+
+    private static readonly IReadOnlyCollection<MessageEnvelope> NoMessages = Array.Empty<MessageEnvelope>();
 }
 
 public record SagaInstance<TS> : SagaInstance, ISagaInstance<TS>

@@ -1,25 +1,30 @@
-﻿using OpenSleigh.Outbox;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 
 namespace OpenSleigh;
 
-public class SagaExecutionService : ISagaExecutionService
+public partial class SagaExecutionService : ISagaExecutionService
 {
     private readonly ISagaInstanceFactory _sagaExecCtxFactory;
     private readonly ISagaStateRepository _sagaStateRepository;
     private readonly IOutboxRepository _outboxRepository;
     private readonly IOutboxSignal? _outboxSignal;
+    private readonly ILogger<SagaExecutionService> _logger;
 
     public SagaExecutionService(
         ISagaInstanceFactory sagaExecCtxFactory,
         ISagaStateRepository sagaStateRepository,
         IOutboxRepository outboxRepository,
-        IOutboxSignal? outboxSignal = null)
+        IOutboxSignal? outboxSignal = null,
+        ILogger<SagaExecutionService>? logger = null)
     {
         _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
         _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         _outboxSignal = outboxSignal;
+        _logger = logger ?? NullLogger<SagaExecutionService>.Instance;
     }
 
     public async ValueTask<ISagaInstance> BeginProcessingAsync<TM>(
@@ -69,7 +74,7 @@ public class SagaExecutionService : ISagaExecutionService
         // processed the same message between the initial check and lock acquisition
         if (!sagaInstance.CanProcess(messageContext))
         {
-            await _sagaStateRepository.ReleaseAsync(sagaInstance, cancellationToken)
+            await _sagaStateRepository.AbandonAsync(sagaInstance, cancellationToken)
                                       .ConfigureAwait(false);
             return NoOpSagaInstance.Create(messageContext, descriptor);
         }
@@ -77,12 +82,12 @@ public class SagaExecutionService : ISagaExecutionService
         return sagaInstance;
     }
 
-    public ValueTask ReleaseAsync(
+    public ValueTask AbandonAsync(
         ISagaInstance context,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(context);
-        return _sagaStateRepository.ReleaseAsync(context, cancellationToken);
+        return _sagaStateRepository.AbandonAsync(context, cancellationToken);
     }
 
     public async ValueTask CommitAsync(

@@ -19,9 +19,9 @@ public class PostgreSQLSchemaInitializationTests :
 
     protected override string ReleasedSchemaScriptFileName => "v3.3.0.postgres.sql";
 
-    protected override string OutboxIndexNamesQuery =>
+    protected override string IndexNamesQuery(string tableName) =>
         "SELECT indexname::text AS \"Value\" FROM pg_indexes " +
-        $"WHERE schemaname = '{Constants.DbSchema}' AND tablename = '{Entities.OutboxMessage.TableName}'";
+        $"WHERE schemaname = '{Constants.DbSchema}' AND tablename = '{tableName}'";
 
     protected override async Task<string> CreateUserWithoutSchemaPermissionsAsync(SagaDbContext admin, string connectionString)
     {

@@ -15,7 +15,15 @@ public class DbContext : IDbContext
         ConfigureMappings();
     }
 
-    public DbContext(IMongoDatabase db)
+    public DbContext(IMongoDatabase db) : this(db, failureRecordsExpireAfter: null)
+    {
+    }
+
+    /// <param name="failureRecordsExpireAfter">
+    /// how long the records of failed messages are kept before the server removes them. Null to keep them
+    /// until they are purged.
+    /// </param>
+    public DbContext(IMongoDatabase db, TimeSpan? failureRecordsExpireAfter)
     {
         ArgumentNullException.ThrowIfNull(db);
 
@@ -24,6 +32,39 @@ public class DbContext : IDbContext
 
         SagaStates = db.GetCollection<Entities.SagaState>("sagaStates");
         BuildSagaStatesIndexes();
+
+        SagaMessageFailures = db.GetCollection<Entities.SagaFailureRecord>("sagaMessageFailures");
+        BuildSagaMessageFailuresIndexes(failureRecordsExpireAfter);
+    }
+
+    internal const string FailuresOccurredAtIndexName = "ix_occurred_at";
+
+    private void BuildSagaMessageFailuresIndexes(TimeSpan? expireAfter)
+    {
+        var indexBuilder = Builders<Entities.SagaFailureRecord>.IndexKeys;
+
+        SagaMessageFailures.Indexes.CreateOne(new CreateIndexModel<Entities.SagaFailureRecord>(
+            indexBuilder.Combine(indexBuilder.Ascending(e => e.InstanceId), indexBuilder.Ascending(e => e.MessageId)),
+            new CreateIndexOptions { Name = "ix_instance_message" }));
+
+        SagaMessageFailures.Indexes.CreateOne(new CreateIndexModel<Entities.SagaFailureRecord>(
+            indexBuilder.Ascending(e => e.CorrelationId),
+            new CreateIndexOptions { Name = "ix_correlation_id" }));
+
+        // sorts and purges the records, and expires them when asked to
+        var occurredAtIndex = new CreateIndexModel<Entities.SagaFailureRecord>(
+            indexBuilder.Ascending(e => e.OccurredAt),
+            new CreateIndexOptions { Name = FailuresOccurredAtIndexName, ExpireAfter = expireAfter });
+        try
+        {
+            SagaMessageFailures.Indexes.CreateOne(occurredAtIndex);
+        }
+        catch (MongoCommandException ex) when (ex.Code is IndexOptionsConflictCode or IndexKeySpecsConflictCode)
+        {
+            // the index exists with another expiry, or none: an index cannot be created again with other options
+            SagaMessageFailures.Indexes.DropOne(FailuresOccurredAtIndexName);
+            SagaMessageFailures.Indexes.CreateOne(occurredAtIndex);
+        }
     }
 
     private void BuildOutboxIndexes()
@@ -157,4 +198,6 @@ public class DbContext : IDbContext
     public IMongoCollection<Entities.SagaState> SagaStates { get; }
 
     public IMongoCollection<Entities.OutboxMessage> OutboxMessages { get; }
+
+    public IMongoCollection<Entities.SagaFailureRecord> SagaMessageFailures { get; }
 }

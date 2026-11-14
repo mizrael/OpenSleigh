@@ -12,6 +12,7 @@ This section contains step-by-step guides to help you get started with OpenSleig
 - [Installation]({% link how-to/installation.md %}) — Install the NuGet packages
 - [First Steps]({% link how-to/first-steps.md %}) — Configure transport, persistence, and your first Saga
 - [Handling Messages]({% link how-to/handling-messages.md %}) — Start, handle, and stop Sagas
+- [Handling Failures]({% link how-to/handling-failures.md %}) — Compensate or dead-letter a failed message, and read the failure records
 - [Multiple Starters]({% link how-to/multiple-starters.md %}) — Start a saga from different message types
 - [Publishing Messages]({% link how-to/publishing-messages.md %}) — Publish messages and use publish-only mode
 - [Reporting & Monitoring]({% link how-to/reporting.md %}) — Query saga state via REST endpoints

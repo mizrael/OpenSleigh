@@ -13,8 +13,8 @@ internal static class SagaEndpoints
         int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
-        if (page < 1 || pageSize < 1 || pageSize > 100)
-            return Results.BadRequest("Invalid pagination parameters. Page must be >= 1, pageSize must be between 1 and 100.");
+        if (!Pagination.IsValid(page, pageSize))
+            return Results.BadRequest(Pagination.InvalidMessage);
 
         var filter = new SagaQueryFilter
         {

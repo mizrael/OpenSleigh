@@ -54,6 +54,10 @@ All endpoints are grouped under the configured prefix (default `/opensleigh`):
 | `GET` | `/sagas/{instanceId}` | Get a saga instance by its unique ID |
 | `GET` | `/sagas/correlation/{correlationId}?sagaType=...` | Get a saga instance by correlation ID and saga type |
 | `GET` | `/sagas/types` | List all registered message types with saga handlers |
+| `GET` | `/sagas/{instanceId}/failures` | List the messages whose handler failed on a saga instance (paginated) |
+| `GET` | `/failures` | List the messages whose handler failed (paginated, with optional filters) |
+
+Both failure endpoints return the most recent failures first. See [Handling Failures]({% link how-to/handling-failures.md %}) for what a failure record holds.
 
 ### Query Parameters
 
@@ -67,6 +71,19 @@ The **list sagas** endpoint (`GET /sagas`) supports the following query paramete
 | `pageSize` | `int` | `20` | Results per page (1–100) |
 
 The **get by correlation ID** endpoint (`GET /sagas/correlation/{correlationId}`) requires a `sagaType` query parameter.
+
+The **list failures** endpoint (`GET /failures`) supports the following query parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `correlationId` | `string?` | `null` | Filter by correlation ID |
+| `sagaType` | `string?` | `null` | Filter by saga type name |
+| `messageType` | `string?` | `null` | Filter by message type name |
+| `decision` | `string?` | `null` | Filter by decision: `Compensated`, `CompensationFailed` or `DeadLettered` |
+| `page` | `int` | `1` | Page number (must be ≥ 1) |
+| `pageSize` | `int` | `20` | Results per page (1–100) |
+
+The **saga failures** endpoint (`GET /sagas/{instanceId}/failures`) supports `page` and `pageSize`.
 
 ### Response Format
 
@@ -102,7 +119,7 @@ On .NET 9+, `AddOpenSleighReporting()` automatically registers OpenAPI services,
 ## Security
 
 {: .warning }
-> The reporting endpoints expose saga state data, which may contain sensitive information. Always configure appropriate authentication and authorization middleware **before** calling `MapOpenSleighReporting()` in production environments.
+> The reporting endpoints expose saga state data, and the messages and stack traces of the exceptions thrown by message handlers, which may contain sensitive information. Always configure appropriate authentication and authorization middleware **before** calling `MapOpenSleighReporting()` in production environments.
 
 For example:
 

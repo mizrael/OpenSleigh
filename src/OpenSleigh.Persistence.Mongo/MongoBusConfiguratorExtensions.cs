@@ -27,10 +27,12 @@ public static class MongoBusConfiguratorExtensions
 
             // one context per service provider: it only holds the collections, which are safe to share,
             // and creating it asks the server to create the indexes
-            .AddSingleton<IDbContext, DbContext>()
+            .AddSingleton<IDbContext>(ctx => new DbContext(ctx.GetRequiredService<IMongoDatabase>(), config.FailureRecordsExpireAfter))
             .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
             .AddTransient<IOutboxRepository, MongoOutboxRepository>()
-            .AddTransient<ISagaStateQuery, MongoSagaStateQuery>();
+            .AddTransient<ISagaStateQuery, MongoSagaStateQuery>()
+            .AddTransient<ISagaFailureQuery, MongoSagaFailureQuery>()
+            .AddTransient<ISagaFailurePurger, MongoSagaFailureQuery>();
 
         // the relay asks for a transaction around each pass. On MongoDB there is none to give: a relay claims
         // the messages it reads instead, and whatever it does not delete is read again when the claim expires.

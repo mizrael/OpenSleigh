@@ -18,4 +18,22 @@ public record MongoConfiguration(string ConnectionString, string DbName)
 
     public MongoOutboxRepositoryOptions OutboxRepositoryOptions { get; init; } =
         MongoOutboxRepositoryOptions.Default;
+
+    /// <summary>
+    /// how long the records of the messages whose handler failed are kept before the server removes them,
+    /// with an expiry index. Null, the default, keeps them until they are purged (<c>ISagaFailurePurger</c>).
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">the value is not positive.</exception>
+    public TimeSpan? FailureRecordsExpireAfter
+    {
+        get => _failureRecordsExpireAfter;
+        init
+        {
+            if (value is { } expiry)
+                ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(expiry, TimeSpan.Zero);
+            _failureRecordsExpireAfter = value;
+        }
+    }
+
+    private readonly TimeSpan? _failureRecordsExpireAfter;
 }

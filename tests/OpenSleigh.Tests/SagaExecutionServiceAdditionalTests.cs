@@ -115,7 +115,7 @@ public class SagaExecutionServiceAdditionalTests
     }
 
     [Fact]
-    public async Task ReleaseAsync_should_throw_when_context_is_null()
+    public async Task AbandonAsync_should_throw_when_context_is_null()
     {
         var sagaStateRepository = Substitute.For<ISagaStateRepository>();
         var outboxRepository = Substitute.For<IOutboxRepository>();
@@ -124,7 +124,7 @@ public class SagaExecutionServiceAdditionalTests
         var sut = new SagaExecutionService(sagaInstanceFactory, sagaStateRepository, outboxRepository);
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => sut.ReleaseAsync(null!, CancellationToken.None).AsTask());
+            () => sut.AbandonAsync(null!, CancellationToken.None).AsTask());
     }
 
     [Fact]

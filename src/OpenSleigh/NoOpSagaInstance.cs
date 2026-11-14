@@ -67,6 +67,16 @@ internal class NoOpSagaInstance : ISagaInstance
     {
     }
 
+    public SagaMessageFailure? Failure => null;
+
+    public void RecordFailure(SagaMessageFailure? failure)
+    {
+    }
+
+    public void HandLockTo(ISagaInstance other)
+    {
+    }
+
     public void SetAsProcessed<TM>(IMessageContext<TM> messageContext) where TM : IMessage
     {
     }

@@ -34,7 +34,9 @@ public static class SqlBusConfiguratorExtensions
                 ctx.GetRequiredService<DuplicateKeyDetector>(),
                 () => ctx.GetRequiredService<SqlTransactionManager>().DbContext))
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>()
-            .AddTransient<ISagaStateQuery, SqlSagaStateQuery>();
+            .AddTransient<ISagaStateQuery, SqlSagaStateQuery>()
+            .AddTransient<ISagaFailureQuery, SqlSagaFailureQuery>()
+            .AddTransient<ISagaFailurePurger, SqlSagaFailureQuery>();
         
         return busConfigurator;
     }

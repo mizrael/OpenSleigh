@@ -67,7 +67,8 @@ public abstract class SqlSchemaInitializationTests
     private const string OutboxTable = $"{Constants.DbSchema}.\"{Entities.OutboxMessage.TableName}\"";
     private const int InstancesStartingTogether = 8;
 
-    private static readonly string[] TablesInDropOrder = ["SagaProcessedMessages", "SagaStates", Entities.OutboxMessage.TableName];
+    private static readonly string[] TablesInDropOrder =
+        [Entities.SagaFailureRecord.TableName, "SagaProcessedMessages", "SagaStates", Entities.OutboxMessage.TableName];
 
     /// <summary>
     /// the script EF Core generates for the model of the released version, stored with the tests.
@@ -75,9 +76,9 @@ public abstract class SqlSchemaInitializationTests
     protected abstract string ReleasedSchemaScriptFileName { get; }
 
     /// <summary>
-    /// a query returning the names of the indexes of the outbox table, in a column named Value.
+    /// a query returning the names of the indexes of a table, in a column named Value.
     /// </summary>
-    protected abstract string OutboxIndexNamesQuery { get; }
+    protected abstract string IndexNamesQuery(string tableName);
 
     /// <summary>
     /// creates a user that can read and write the tables but not change them, and returns its connection string.
@@ -129,6 +130,53 @@ public abstract class SqlSchemaInitializationTests
         Assert.Equal(await DescribeOutboxColumnsAsync(newProvider), await DescribeOutboxColumnsAsync(upgradedProvider));
         Assert.Equal(await ReadOutboxIndexNamesAsync(newProvider), await ReadOutboxIndexNamesAsync(upgradedProvider));
         Assert.Contains(Entities.OutboxMessage.DeliverAtIndexName, await ReadOutboxIndexNamesAsync(upgradedProvider));
+    }
+
+    [Fact]
+    public async Task An_upgraded_database_should_have_the_failures_table_of_a_new_one()
+    {
+        var released = await CreateDatabaseWithReleasedSchemaAsync();
+        await using var upgradedProvider = BuildProvider(released.ConnectionString);
+        var (_, newConnectionString) = _fixture.CreateDbContext();
+        await using var newProvider = BuildProvider(newConnectionString);
+        const string table = Entities.SagaFailureRecord.TableName;
+
+        var upgradedColumns = await DescribeColumnsAsync(upgradedProvider, table);
+        Assert.NotEmpty(upgradedColumns);
+        Assert.Equal(await DescribeColumnsAsync(newProvider, table), upgradedColumns);
+
+        var upgradedIndexes = await QueryStringsAsync(upgradedProvider, IndexNamesQuery(table));
+        Assert.Equal(await QueryStringsAsync(newProvider, IndexNamesQuery(table)), upgradedIndexes);
+        Assert.Contains(Entities.SagaFailureRecord.MessageIndexName, upgradedIndexes);
+        Assert.Contains(Entities.SagaFailureRecord.CorrelationIndexName, upgradedIndexes);
+        Assert.Contains(Entities.SagaFailureRecord.OccurredAtIndexName, upgradedIndexes);
+    }
+
+    [Fact]
+    public async Task An_upgraded_database_should_record_and_return_the_failure_of_a_message()
+    {
+        var released = await CreateDatabaseWithReleasedSchemaAsync();
+        await using var provider = BuildProvider(released.ConnectionString);
+        var messageContext = Substitute.For<OpenSleigh.Transport.IMessageContext<FakeMessage>>();
+        messageContext.MessageId.Returns(Guid.NewGuid().ToString());
+        messageContext.CorrelationId.Returns(Guid.NewGuid().ToString());
+        var saga = new SagaInstanceFactory().Create(SagaDescriptor.Create<FakeSagaNoState>(), messageContext);
+
+        using (var scope = provider.CreateScope())
+        {
+            var repository = scope.ServiceProvider.GetRequiredService<ISagaStateRepository>();
+            await saga.LockAsync(repository, CancellationToken.None);
+            saga.RecordFailure(SagaMessageFailure.Create(
+                saga, messageContext, new InvalidOperationException("whoops"), attempt: 1, FailureDecision.DeadLettered));
+            await repository.AbandonAsync(saga);
+        }
+
+        using var queryScope = provider.CreateScope();
+        var failures = await queryScope.ServiceProvider.GetRequiredService<OpenSleigh.Queries.ISagaFailureQuery>().GetAllAsync();
+        var failure = Assert.Single(failures.Items);
+        Assert.Equal(saga.InstanceId, failure.InstanceId);
+        Assert.Equal(FailureDecision.DeadLettered, failure.Decision);
+        Assert.Equal("whoops", failure.ExceptionMessage);
     }
 
     [Fact]
@@ -269,18 +317,21 @@ public abstract class SqlSchemaInitializationTests
         return messages.ToArray();
     }
 
-    private static async Task<IReadOnlyList<string>> DescribeOutboxColumnsAsync(IServiceProvider provider)
+    private static Task<IReadOnlyList<string>> DescribeOutboxColumnsAsync(IServiceProvider provider)
+        => DescribeColumnsAsync(provider, Entities.OutboxMessage.TableName);
+
+    private static async Task<IReadOnlyList<string>> DescribeColumnsAsync(IServiceProvider provider, string tableName)
     {
-        const string query =
-            "SELECT CONCAT(column_name, ' ', data_type, ' ', is_nullable, ' ', column_default) AS \"Value\" " +
+        var query =
+            "SELECT CONCAT(column_name, ' ', data_type, ' ', character_maximum_length, ' ', is_nullable, ' ', column_default) AS \"Value\" " +
             "FROM information_schema.columns " +
-            "WHERE table_schema = '" + Constants.DbSchema + "' AND table_name = '" + Entities.OutboxMessage.TableName + "'";
+            "WHERE table_schema = '" + Constants.DbSchema + "' AND table_name = '" + tableName + "'";
 
         return await QueryStringsAsync(provider, query);
     }
 
     private Task<IReadOnlyList<string>> ReadOutboxIndexNamesAsync(IServiceProvider provider)
-        => QueryStringsAsync(provider, OutboxIndexNamesQuery);
+        => QueryStringsAsync(provider, IndexNamesQuery(Entities.OutboxMessage.TableName));
 
     private static async Task<IReadOnlyList<string>> QueryStringsAsync(IServiceProvider provider, string query)
     {

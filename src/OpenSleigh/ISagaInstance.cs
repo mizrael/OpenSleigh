@@ -55,7 +55,22 @@ public interface ISagaInstance
         CancellationToken cancellationToken) where TM : IMessage;
 
     void Publish(MessageEnvelope message);
-    void ClearOutbox();        
+    void ClearOutbox();
+
+    /// <summary>
+    /// the record of the failure of the message being processed, stored when the instance is committed, released or abandoned.
+    /// Null when the handler did not fail.
+    /// </summary>
+    SagaMessageFailure? Failure { get; }
+
+    /// <param name="failure">the record to store with the instance, or null to store none.</param>
+    void RecordFailure(SagaMessageFailure? failure);
+
+    /// <summary>
+    /// hands the lock this instance holds over to <paramref name="other"/>: the same saga, read again from its
+    /// repository while this instance held the lock. This instance no longer holds it.
+    /// </summary>
+    void HandLockTo(ISagaInstance other);
 }
 
 public interface ISagaInstance<TS> : ISagaInstance 

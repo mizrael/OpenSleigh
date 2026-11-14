@@ -100,6 +100,7 @@ internal static class Stages
     public const string Lock = "consumer: saga LockAsync";
     public const string Commit = "consumer: saga CommitAsync";
     public const string Release = "consumer: saga ReleaseAsync";
+    public const string Abandon = "consumer: saga AbandonAsync";
     public const string Append = "outbox AppendAsync";
     public const string StartTransaction = "relay: StartTransactionAsync";
     public const string ReadPending = "relay: outbox ReadPendingAsync";
@@ -129,6 +130,11 @@ internal class TimedSagaStateRepository : ISagaStateRepository
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
         => Timings.MeasureAsync(Stages.Release, () => Inner.ReleaseAsync(state, cancellationToken));
+
+#if SAGA_ABANDON
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+        => Timings.MeasureAsync(Stages.Abandon, () => Inner.AbandonAsync(state, cancellationToken));
+#endif
 }
 
 internal sealed class TimedCommittingSagaStateRepository : TimedSagaStateRepository, ISagaStateCommitter

@@ -38,12 +38,22 @@ public class MessageHandlerManager : IMessageHandlerManager
                 ex.Message
             );
 
-            await handler.RollbackAsync(messageContext, cancellationToken)
-                         .ConfigureAwait(false);
-
             throw new SagaException(
                 $"an error has occurred while processing message '{messageContext.MessageId}' from Saga '{executionContext.Descriptor.SagaType}/{executionContext.InstanceId}' : {ex.Message}",
                 ex);
         }
+    }
+
+    public ValueTask CompensateAsync<TM>(
+        ISagaInstance executionContext,
+        IMessageContext<TM> messageContext,
+        MessageFailure failure,
+        CancellationToken cancellationToken = default) where TM : IMessage
+    {
+        if (_messageHandlerFactory.Create<TM>(executionContext) is not ICompensateMessage<TM> compensation)
+            throw new InvalidOperationException(
+                $"Saga '{executionContext.Descriptor.SagaType}' has no compensation handler for messages of type '{typeof(TM)}'");
+
+        return compensation.CompensateAsync(messageContext, failure, cancellationToken);
     }
 }

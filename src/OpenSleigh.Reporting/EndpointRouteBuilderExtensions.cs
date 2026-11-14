@@ -56,6 +56,20 @@ public static class EndpointRouteBuilderExtensions
             .WithSummary("List registered message types")
             .WithDescription("Returns the message types that have registered saga handlers.");
 
+        group.MapGet("/sagas/{instanceId}/failures", FailureEndpoints.GetByInstanceId)
+            .WithName("GetSagaFailures")
+            .WithSummary("List the failed messages of a saga instance")
+            .WithDescription("Returns a paginated list of the messages whose handler failed on the saga instance, most recent first, with what was decided for each.")
+            .Produces<PagedResult<SagaMessageFailure>>()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
+        group.MapGet("/failures", FailureEndpoints.GetAll)
+            .WithName("GetAllFailures")
+            .WithSummary("List failed messages")
+            .WithDescription("Returns a paginated list of the messages whose handler failed, most recent first, optionally filtered by correlation ID, saga type, message type and decision.")
+            .Produces<PagedResult<SagaMessageFailure>>()
+            .ProducesProblem(StatusCodes.Status400BadRequest);
+
         return endpoints;
     }
 }
