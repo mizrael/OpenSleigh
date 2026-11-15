@@ -59,31 +59,27 @@ public sealed class SagaDbSchemaInitializer
             return;
         }
 
-        var tablesWereMissing = _schemaUpgrade.EnsureCreated(database, creator, created => Seed(database, created));
-        if (tablesWereMissing)
-            return;
-
-        // tables that were just created have the current schema: only the ones that were there are upgraded
-        _schemaUpgrade.Apply(database);
-        Seed(database, created: false);
+        _schemaUpgrade.EnsureCreatedAndCurrent(database, creator, FindSeeding(database));
     }
 
     // what EnsureCreated does once the database is there, for a context that was configured with UseSeeding
-    private static void Seed(DatabaseFacade database, bool created)
+    private static Action<bool>? FindSeeding(DatabaseFacade database)
     {
         var options = database.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>();
 
         if (options?.Seeder is { } seeder)
-        {
-            using var transaction = database.BeginTransaction();
-            seeder(database.GetService<ICurrentDbContext>().Context, created);
-            transaction.Commit();
-        }
-        else if (options?.AsyncSeeder is not null)
-        {
+            return created =>
+            {
+                using var transaction = database.BeginTransaction();
+                seeder(database.GetService<ICurrentDbContext>().Context, created);
+                transaction.Commit();
+            };
+
+        if (options?.AsyncSeeder is not null)
             throw new InvalidOperationException(
                 $"The saga database is seeded when the first context is created, which cannot wait for '{nameof(DbContextOptionsBuilder.UseAsyncSeeding)}': " +
                 $"configure '{nameof(DbContextOptionsBuilder.UseSeeding)}' as well.");
-        }
+
+        return null;
     }
 }

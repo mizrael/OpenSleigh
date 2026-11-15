@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Entities;
 
@@ -94,7 +95,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
             }
             finally
             {
-                TryReleaseLock(database);
+                ReleaseLockOrConnection(database);
             }
         }
         finally
@@ -114,7 +115,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         {
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException(
-                    $"another instance has been upgrading the schema for more than {CommandTimeout.TotalMinutes} minutes.");
+                    $"another instance has been creating, upgrading or seeding the schema for more than {CommandTimeout.TotalMinutes} minutes.");
 
             Thread.Sleep(LockRetryInterval);
         }
@@ -130,7 +131,9 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         transaction.Commit();
     }
 
-    private static void TryReleaseLock(DatabaseFacade database)
+    // a connection goes back to its pool as it is, and is only reset when it is taken out again:
+    // one that still has the lock would keep every other instance waiting until then, so it is not kept
+    private static void ReleaseLockOrConnection(DatabaseFacade database)
     {
         try
         {
@@ -138,29 +141,25 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         }
         catch
         {
-            // the connection is gone, and its lock with it: the failure that broke it is the one to report
+            if (database.GetDbConnection() is NpgsqlConnection connection)
+                NpgsqlConnection.ClearPool(connection);
         }
     }
-
-    private const string AdminDatabase = "postgres";
 
     // another arbitrary number: creating a database does not wait for the upgrade of another one
     private const string ConcurrentCreationsLockKey = "7308325172346594412";
 
-    // the server has a database before any other: instances that find theirs missing wait for each other there.
-    // The lock belongs to the connection, which is not pooled: closing it lets go of the lock
+    // the server has a database before any other: instances that find theirs missing wait for each other there,
+    // on the connection the provider creates the database with, which signs in the way the application configured.
+    // The lock belongs to that connection, which is not pooled: closing it lets go of the lock
     protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
     {
-        var connectionString = new NpgsqlConnectionStringBuilder(database.GetConnectionString())
-        {
-            Database = AdminDatabase,
-            Pooling = false,
-        };
-
-        using var admin = new NpgsqlConnection(connectionString.ConnectionString);
+#pragma warning disable EF1001 // the provider has no public way to its connection to the administration database
+        using var admin = database.GetService<INpgsqlRelationalConnection>().CreateAdminConnection();
+#pragma warning restore EF1001
         admin.Open();
 
-        using (var command = admin.CreateCommand())
+        using (var command = admin.DbConnection.CreateCommand())
         {
             command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
             command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";

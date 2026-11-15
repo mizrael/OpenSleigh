@@ -145,6 +145,103 @@ public class SagaDbSchemaInitializerTests
             () => new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database));
     }
 
+    [Fact]
+    public void EnsureCreated_should_seed_tables_that_were_there_while_no_other_instance_does()
+    {
+        using var database = new SqliteFile();
+        using (var existing = database.CreateContext())
+            existing.Database.EnsureCreated();
+
+        var upgrade = new RecordingSchemaUpgrade();
+        var exclusiveWhenSeeding = -1;
+        using var context = database.CreateContext(
+            options => options.UseSeeding((_, _) => exclusiveWhenSeeding = upgrade.ExclusiveSectionsRunning));
+
+        new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database);
+
+        Assert.Equal(1, exclusiveWhenSeeding);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_not_wait_for_other_instances_when_the_tables_are_there_and_nothing_seeds_them()
+    {
+        using var database = new SqliteFile();
+        using (var existing = database.CreateContext())
+            existing.Database.EnsureCreated();
+
+        var upgrade = new RecordingSchemaUpgrade();
+        using var context = database.CreateContext();
+
+        new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database);
+
+        Assert.Equal(0, upgrade.ExclusiveCreations);
+        Assert.Equal(0, upgrade.ExclusiveDatabaseCreations);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_give_the_creation_of_the_database_more_time_than_a_query_and_restore_the_timeout()
+    {
+        const int applicationTimeout = 7;
+        var upgrade = new RecordingSchemaUpgrade();
+        using var database = new SqliteFile();
+        using var context = database.CreateContext();
+        context.Database.SetCommandTimeout(applicationTimeout);
+
+        new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database);
+
+        Assert.True(upgrade.TimeoutWhenCreatingTheDatabase > applicationTimeout);
+        Assert.Equal(applicationTimeout, context.Database.GetCommandTimeout());
+    }
+
+    [Fact]
+    public void EnsureCreated_should_fail_and_try_again_when_the_lock_to_create_the_database_cannot_be_taken()
+    {
+        var upgrade = new RecordingSchemaUpgrade { DatabaseCreationLocksRefused = 1 };
+        var sut = new SagaDbSchemaInitializer(upgrade);
+        using var database = new SqliteFile();
+        using var context = database.CreateContext();
+
+        Assert.Throws<TimeoutException>(() => sut.EnsureCreated(context.Database));
+        Assert.Equal(0, upgrade.ExclusiveCreations);
+
+        sut.EnsureCreated(context.Database);
+
+        Assert.False(context.Set<Entities.SagaState>().Any());
+    }
+
+    public static TheoryData<SagaDbSchemaUpgrade, Action<DbContextOptionsBuilder>> ServersThatCannotBeReached => new()
+    {
+        {
+            new SQLServer.SqlServerSchemaUpgrade(),
+            options => options.UseSqlServer("Server=tcp:127.0.0.1,1;Database=missing;User Id=sa;Password=none;Connect Timeout=2;Encrypt=False")
+        },
+        {
+            new PostgreSQL.PostgreSqlSchemaUpgrade(),
+            options => options.UseNpgsql("Host=127.0.0.1;Port=1;Database=missing;Username=postgres;Password=none;Timeout=2")
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(ServersThatCannotBeReached))]
+    public void EnsureCreated_should_fail_when_the_server_cannot_be_reached(
+        SagaDbSchemaUpgrade upgrade, Action<DbContextOptionsBuilder> useServer)
+    {
+        var options = new DbContextOptionsBuilder<NotInitializedSagaDbContext>();
+        useServer(options);
+        using var context = new NotInitializedSagaDbContext(options.Options);
+
+        var failure = Assert.ThrowsAny<Exception>(() => new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database));
+
+        // the failure to connect is reported, as it is or as the cause of what the provider reports
+        Assert.Contains(Causes(failure), cause => cause is System.Data.Common.DbException);
+    }
+
+    private static IEnumerable<Exception> Causes(Exception? failure)
+    {
+        for (var current = failure; current is not null; current = current.InnerException)
+            yield return current;
+    }
+
     private sealed class SqliteFile : IDisposable
     {
         private readonly string _path = Path.Combine(Path.GetTempPath(), $"osl_create_{Guid.NewGuid():N}.db");
@@ -221,6 +318,9 @@ public class SagaDbSchemaInitializerTests
         public int ExclusiveCreations { get; private set; }
         public int ExclusiveDatabaseCreations { get; private set; }
         public int FailuresLeft { get; set; }
+        public int DatabaseCreationLocksRefused { get; set; }
+        public int ExclusiveSectionsRunning { get; private set; }
+        public int? TimeoutWhenCreatingTheDatabase { get; private set; }
 
         /// <summary>what happens between the moment this instance asks for its turn and the moment it has it.</summary>
         public Action WhileWaiting { get; init; } = () => { };
@@ -232,6 +332,10 @@ public class SagaDbSchemaInitializerTests
         protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
         {
             ExclusiveDatabaseCreations++;
+            if (DatabaseCreationLocksRefused-- > 0)
+                throw new TimeoutException("the lock was not granted");
+
+            TimeoutWhenCreatingTheDatabase = database.GetCommandTimeout();
             createDatabase();
         }
 
@@ -239,7 +343,10 @@ public class SagaDbSchemaInitializerTests
         {
             ExclusiveCreations++;
             WhileWaiting();
+
+            ExclusiveSectionsRunning++;
             createTables();
+            ExclusiveSectionsRunning--;
         }
 
         public override void Apply(DatabaseFacade database)

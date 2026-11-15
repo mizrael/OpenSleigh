@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Entities;
@@ -72,7 +73,7 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
             $"EXEC @result = sp_getapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockMode = N'Exclusive', " +
             $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
             "IF @result < 0 BEGIN; " +
-            "THROW 51000, N'the lock that makes schema upgrades wait for each other was not granted.', 1; " +
+            "THROW 51000, N'the lock that makes instances wait for each other to create, upgrade or seed the schema was not granted.', 1; " +
             "END";
 
         _waitForTableLocks = $"SET LOCK_TIMEOUT {(int)TableLockTimeout.TotalMilliseconds}";
@@ -145,42 +146,48 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
             SqlConnection.ClearPool(connection);
     }
 
-    private const string MasterDatabase = "master";
     private const string CreationLockPrefix = "OpenSleigh.CreateDatabase.";
     private const int MaxLockNameLength = 255;
 
-    // the server has a database before any other: instances that find theirs missing wait for each other there.
-    // The lock belongs to the connection, which is not pooled: closing it lets go of the lock
+    // the server has a database before any other: instances that find theirs missing wait for each other there,
+    // on the connection the provider creates the database with, which signs in the way the application configured.
+    // The lock belongs to that connection: closing it for good lets go of the lock
     protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
     {
-        var connectionString = new SqlConnectionStringBuilder(database.GetConnectionString());
-        var lockName = CreationLockPrefix + connectionString.InitialCatalog;
-        connectionString.InitialCatalog = MasterDatabase;
-        connectionString.AttachDBFilename = string.Empty;
-        connectionString.Pooling = false;
+        var lockName = CreationLockPrefix + new SqlConnectionStringBuilder(database.GetConnectionString()).InitialCatalog;
 
-        using var master = new SqlConnection(connectionString.ConnectionString);
+#pragma warning disable EF1001 // the provider has no public way to its connection to the system database
+        using var master = database.GetService<ISqlServerConnection>().CreateMasterConnection();
+#pragma warning restore EF1001
+        var connection = (SqlConnection)master.DbConnection;
         master.Open();
-
-        using (var command = master.CreateCommand())
+        try
         {
-            command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
-            command.CommandText =
-                "DECLARE @result int; " +
-                "EXEC @result = sp_getapplock @Resource = @name, @LockMode = N'Exclusive', " +
-                $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
-                "IF @result < 0 BEGIN; " +
-                "THROW 51000, N'the lock that makes instances wait for each other to create the database was not granted.', 1; " +
-                "END";
-            command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
-            command.ExecuteNonQuery();
+            using (var command = connection.CreateCommand())
+            {
+                command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+                command.CommandText =
+                    "DECLARE @result int; " +
+                    "EXEC @result = sp_getapplock @Resource = @name, @LockMode = N'Exclusive', " +
+                    $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
+                    "IF @result < 0 BEGIN; " +
+                    "THROW 51000, N'the lock that makes instances wait for each other to create the database was not granted.', 1; " +
+                    "END";
+                command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
+                command.ExecuteNonQuery();
+            }
+
+            // the login that failed because the database was missing is remembered by the pool for a while,
+            // and answered with again without asking the server: the database another instance created would not be seen
+            ClearConnectionPool(database);
+
+            createDatabase();
         }
-
-        // the login that failed because the database was missing is remembered by the pool for a while,
-        // and answered with again without asking the server: the database another instance created would not be seen
-        ClearConnectionPool(database);
-
-        createDatabase();
+        finally
+        {
+            // a pool that was cleared does not take the connection back, with its lock, when it is closed
+            SqlConnection.ClearPool(connection);
+        }
     }
 
     // the setting belongs to the connection, which goes back to its pool
