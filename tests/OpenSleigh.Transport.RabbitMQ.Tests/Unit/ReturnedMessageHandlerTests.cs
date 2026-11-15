@@ -25,6 +25,7 @@ public class ReturnedMessageHandlerTests
     private const string DeadLetterExchange = "the-exchange.dead";
     private const string DeadLetterQueue = "the-exchange.dead.api";
     private static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Period = TimeSpan.FromMinutes(5);
     private static readonly DateTimeOffset Now = new(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
 
     private readonly IOutboxRepository _outbox = Substitute.For<IOutboxRepository, IOutboxReturnRepository>();
@@ -32,24 +33,29 @@ public class ReturnedMessageHandlerTests
     private readonly IBusConnection _connection = Substitute.For<IBusConnection>();
     private readonly List<(LogLevel Level, string Text)> _log = [];
     private readonly List<MessageEnvelope> _putBack = [];
+    private readonly Clock _clock = new() { Now = Now };
+
+    private IOutboxReturnRepository Returns => (IOutboxReturnRepository)_outbox;
 
     public ReturnedMessageHandlerTests()
     {
         _deadLetterChannel.IsOpen.Returns(true);
         _connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_deadLetterChannel);
 
-        ((IOutboxReturnRepository)_outbox)
-            .PutBackAsync(Arg.Do<IReadOnlyCollection<MessageEnvelope>>(_putBack.AddRange), Arg.Any<CancellationToken>())
-            .Returns(ValueTask.CompletedTask);
+        Returns.PutBackAsync(Arg.Do<IReadOnlyCollection<MessageEnvelope>>(_putBack.AddRange), Arg.Any<CancellationToken>())
+               .Returns(ValueTask.CompletedTask);
     }
 
     [Fact]
     public async Task A_returned_message_should_go_back_to_the_outbox_to_be_published_again_after_the_retry_delay()
     {
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        var sut = CreateSut(Period);
 
         sut.Accept(Returned("message-1"));
-        await sut.StopAsync(CancellationToken.None);
+
+        // the worker is behind: the period, and the delay, count from the return
+        _clock.Now = Now.AddMinutes(10);
+        await sut.StoppedAsync(CancellationToken.None);
 
         var putBack = Assert.Single(_putBack);
         Assert.Equal("message-1", putBack.MessageId);
@@ -69,32 +75,51 @@ public class ReturnedMessageHandlerTests
     public async Task A_message_that_comes_back_again_within_its_period_should_keep_the_time_it_first_came_back()
     {
         var firstReturnedAt = Now.AddMinutes(-4);
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        var sut = CreateSut(Period);
 
         sut.Accept(Returned("message-1", firstReturnedAt));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         var putBack = Assert.Single(_putBack);
         Assert.Equal(firstReturnedAt, putBack.FirstReturnedAt);
         Assert.Equal(Now + RetryDelay, putBack.DeliverAt);
     }
 
+    [Theory]
+    [InlineData(5)]
+    [InlineData(0)]
+    public async Task A_time_of_first_return_in_the_future_should_not_extend_the_period(int periodInMinutes)
+    {
+        var sut = CreateSut(TimeSpan.FromMinutes(periodInMinutes));
+
+        sut.Accept(Returned("message-1", firstReturnedAt: Now.AddYears(1)));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        if (periodInMinutes == 0)
+        {
+            Assert.Empty(_putBack);
+            await AssertDeadLetteredAsync("message-1", times: 1);
+        }
+        else
+        {
+            Assert.Equal(Now, Assert.Single(_putBack).FirstReturnedAt);
+        }
+    }
+
     [Fact]
     public async Task A_message_that_still_comes_back_when_its_period_is_over_should_go_to_its_dead_letter_exchange_and_declare_no_queue()
     {
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        var sut = CreateSut(Period);
 
-        sut.Accept(Returned("message-1", firstReturnedAt: Now.AddMinutes(-5)));
-        await sut.StopAsync(CancellationToken.None);
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        await sut.StoppedAsync(CancellationToken.None);
 
         Assert.Empty(_putBack);
         await _deadLetterChannel.Received(1).ExchangeDeclareAsync(
             DeadLetterExchange, ExchangeType.Topic, Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<IDictionary<string, object?>>(),
             Arg.Any<bool>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
         await _deadLetterChannel.DidNotReceiveWithAnyArgs().QueueDeclareAsync(default!, default, default, default, default, default, default, default);
-        await _deadLetterChannel.Received(1).BasicPublishAsync(
-            DeadLetterExchange, DeadLetterQueue, true, Arg.Is<BasicProperties>(properties => properties.MessageId == "message-1"),
-            Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
+        await AssertDeadLetteredAsync("message-1", times: 1);
 
         var error = Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text;
         Assert.Contains("message-1", error);
@@ -102,11 +127,51 @@ public class ReturnedMessageHandlerTests
     }
 
     [Fact]
+    public async Task A_message_should_be_given_to_its_dead_letter_exchange_again_on_another_channel_when_the_first_one_fails()
+    {
+        var secondChannel = Substitute.For<IChannel>();
+        secondChannel.IsOpen.Returns(true);
+        _connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_deadLetterChannel, secondChannel);
+        _deadLetterChannel
+            .BasicPublishAsync(string.Empty, string.Empty, default, default(BasicProperties)!, default, default)
+            .ReturnsForAnyArgs(_ => ValueTask.FromException(new InvalidOperationException("the channel is closed")));
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        await secondChannel.Received(1).BasicPublishAsync(
+            DeadLetterExchange, DeadLetterQueue, true, Arg.Is<BasicProperties>(properties => properties.MessageId == "message-1"),
+            Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
+        _deadLetterChannel.Received(1).Dispose();
+        Assert.Empty(_putBack);
+        Assert.Single(_log, entry => entry.Level == LogLevel.Error);
+    }
+
+    [Fact]
+    public async Task A_message_that_cannot_be_given_to_its_dead_letter_exchange_should_go_back_to_the_outbox_and_not_be_reported_as_dead_lettered()
+    {
+        _connection.CreateChannelAsync(Arg.Any<CancellationToken>())
+                   .Returns(_ => Task.FromException<IChannel>(new InvalidOperationException("the broker is away")));
+        var firstReturnedAt = Now - Period;
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1", firstReturnedAt));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        var putBack = Assert.Single(_putBack);
+        Assert.Equal(firstReturnedAt, putBack.FirstReturnedAt);
+        Assert.Equal(Now + RetryDelay, putBack.DeliverAt);
+        Assert.DoesNotContain(_log, entry => entry.Level == LogLevel.Error);
+        await _connection.Received(2).CreateChannelAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task A_message_no_queue_takes_from_its_dead_letter_exchange_should_be_reported_as_dropped()
     {
         var sut = CreateSut(TimeSpan.Zero);
         sut.Accept(Returned("message-1"));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         var deadLetter = new BasicReturnEventArgs(
             312, "NO_ROUTE", DeadLetterExchange, DeadLetterQueue, Properties("message-1", firstReturnedAt: null), ReadOnlyMemory<byte>.Empty, CancellationToken.None);
@@ -125,22 +190,61 @@ public class ReturnedMessageHandlerTests
         var sut = CreateSut(TimeSpan.MaxValue);
 
         sut.Accept(Returned("message-1", firstReturnedAt: DateTimeOffset.MinValue.AddDays(1)));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         Assert.Single(_putBack);
     }
 
     [Fact]
-    public async Task Messages_returned_together_should_be_put_back_together_and_one_that_cannot_be_read_should_not_stop_the_others()
+    public async Task A_message_returned_twice_should_be_handled_once_as_it_first_came_back()
     {
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        var sut = CreateSut(Period);
+        var release = HoldTheOutbox();
+
+        // the worker is busy with the first one: the next two are handled together
+        sut.Accept(Returned("message-0"));
+        await OutboxIsAskedAsync();
+        sut.Accept(Returned("message-1", firstReturnedAt: Now.AddMinutes(-1)));
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        release.SetResult();
+        await sut.StoppedAsync(CancellationToken.None);
+
+        Assert.Equal("message-0", Assert.Single(_putBack).MessageId);
+        await AssertDeadLetteredAsync("message-1", times: 1);
+    }
+
+    [Fact]
+    public async Task Messages_within_their_period_should_be_put_back_before_the_others_are_dead_lettered()
+    {
+        var sut = CreateSut(Period);
+        var release = HoldTheOutbox();
+        var putBackWhenDeadLettering = -1;
+        _deadLetterChannel
+            .WhenForAnyArgs(channel => channel.BasicPublishAsync(string.Empty, string.Empty, default, default(BasicProperties)!, default, default))
+            .Do(_ => putBackWhenDeadLettering = _putBack.Count);
+
+        sut.Accept(Returned("message-0"));
+        await OutboxIsAskedAsync();
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        sut.Accept(Returned("message-2"));
+        release.SetResult();
+        await sut.StoppedAsync(CancellationToken.None);
+
+        Assert.Equal(["message-0", "message-2"], _putBack.Select(message => message.MessageId));
+        Assert.Equal(2, putBackWhenDeadLettering);
+    }
+
+    [Fact]
+    public async Task A_message_that_cannot_be_read_should_be_reported_and_not_stop_the_others()
+    {
+        var sut = CreateSut(Period);
 
         var unreadable = Properties("message-0", firstReturnedAt: null);
         unreadable.Headers![nameof(MessageEnvelope.MessageType)] = Encoding.UTF8.GetBytes("Not.A.Type");
         sut.Accept(new BasicReturnEventArgs(312, "NO_ROUTE", Exchange, Exchange, unreadable, Body(), CancellationToken.None));
         sut.Accept(Returned("message-1"));
         sut.Accept(Returned("message-2"));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         Assert.Equal(["message-1", "message-2"], _putBack.Select(message => message.MessageId).Order());
         Assert.Contains("message-0", Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text);
@@ -150,43 +254,131 @@ public class ReturnedMessageHandlerTests
     public async Task A_message_should_be_put_back_again_when_the_outbox_fails_once()
     {
         var failures = 1;
-        ((IOutboxReturnRepository)_outbox)
-            .PutBackAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
-            .Returns(_ => failures-- > 0
-                ? throw new InvalidOperationException("the outbox is away")
-                : ValueTask.CompletedTask);
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        Returns.PutBackAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+               .Returns(_ => failures-- > 0
+                   ? throw new InvalidOperationException("the outbox is away")
+                   : ValueTask.CompletedTask);
+        var sut = CreateSut(Period);
 
         sut.Accept(Returned("message-1"));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         // asked twice: the first time failed
         Assert.Equal(["message-1", "message-1"], _putBack.Select(message => message.MessageId));
         Assert.DoesNotContain(_log, entry => entry.Level == LogLevel.Error);
+        Assert.Contains(_log, entry => entry.Level == LogLevel.Warning && entry.Text.Contains("is back in the outbox"));
+    }
+
+    [Fact]
+    public async Task A_message_should_be_reported_as_lost_and_not_as_put_back_when_the_outbox_keeps_failing()
+    {
+        Returns.PutBackAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+               .Returns(_ => throw new InvalidOperationException("the outbox is away"));
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1"));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        await Returns.Received(5).PutBackAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>());
+        Assert.Contains("message-1", Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text);
+        Assert.DoesNotContain(_log, entry => entry.Text.Contains("is back in the outbox"));
     }
 
     [Fact]
     public async Task A_message_should_be_reported_as_lost_when_the_outbox_cannot_take_it_back()
     {
-        var sut = CreateSut(TimeSpan.FromMinutes(5), Substitute.For<IOutboxRepository>());
+        var sut = CreateSut(Period, Substitute.For<IOutboxRepository>());
 
         sut.Accept(Returned("message-1"));
-        await sut.StopAsync(CancellationToken.None);
+        await sut.StoppedAsync(CancellationToken.None);
 
         Assert.Contains("message-1", Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text);
     }
 
     [Fact]
-    public async Task A_message_returned_once_the_host_has_stopped_should_be_reported_as_lost()
+    public async Task Messages_should_still_be_taken_once_the_relay_was_told_to_stop_and_until_every_service_has_stopped()
     {
-        var sut = CreateSut(TimeSpan.FromMinutes(5));
+        var sut = CreateSut(Period);
+
+        await sut.StoppingAsync(CancellationToken.None);
         await sut.StopAsync(CancellationToken.None);
-
         sut.Accept(Returned("message-1"));
+        await sut.StoppedAsync(CancellationToken.None);
 
-        Assert.Empty(_putBack);
-        Assert.Contains("message-1", Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text);
+        Assert.Equal("message-1", Assert.Single(_putBack).MessageId);
+
+        sut.Accept(Returned("message-2"));
+
+        Assert.Contains("message-2", Assert.Single(_log, entry => entry.Level == LogLevel.Error).Text);
+        Assert.Single(_putBack);
     }
+
+    [Fact]
+    public async Task Every_message_that_is_left_should_be_reported_as_lost_when_the_host_does_not_wait_for_them()
+    {
+        var sut = CreateSut(Period);
+        HoldTheOutbox();
+        using var hostGivesUp = new CancellationTokenSource();
+
+        for (var index = 0; index < 150; index++)
+            sut.Accept(Returned($"message-{index:000}"));
+
+        hostGivesUp.Cancel();
+        await sut.StoppedAsync(hostGivesUp.Token);
+
+        var lost = _log.Where(entry => entry.Level == LogLevel.Error).Select(entry => entry.Text).ToArray();
+        Assert.Equal(150, lost.Length);
+        Assert.All(Enumerable.Range(0, 150), index => Assert.Contains(lost, text => text.Contains($"message-{index:000}")));
+
+        await sut.DisposeAsync();
+        await sut.DisposeAsync();
+    }
+
+    [Fact]
+    public async Task Messages_should_be_refused_and_reported_when_too_many_are_waiting()
+    {
+        const int capacity = 10_000;
+        const int batchInFlight = 100;
+        var sut = CreateSut(Period);
+        var release = HoldTheOutbox();
+
+        for (var index = 0; index < capacity + batchInFlight + 50; index++)
+            sut.Accept(Returned($"message-{index}"));
+
+        var refused = _log.Count(entry => entry.Level == LogLevel.Error);
+        Assert.InRange(refused, 50, 50 + batchInFlight);
+
+        release.SetResult();
+        await sut.StoppedAsync(CancellationToken.None);
+
+        Assert.Equal(capacity + batchInFlight + 50 - refused, _putBack.Count);
+    }
+
+    // the outbox does not answer until it is told to, or until whoever asks gives up
+    private TaskCompletionSource HoldTheOutbox()
+    {
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        Returns.PutBackAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+               .Returns(call => new ValueTask(HeldAsync(call.Arg<CancellationToken>())));
+        return release;
+
+        // what it is asked to store is recorded as it is asked
+        async Task HeldAsync(CancellationToken cancellationToken)
+        {
+            _outboxAsked.Release();
+            await release.Task.WaitAsync(cancellationToken);
+        }
+    }
+
+    private readonly SemaphoreSlim _outboxAsked = new(0);
+
+    private async Task OutboxIsAskedAsync()
+        => Assert.True(await _outboxAsked.WaitAsync(TimeSpan.FromSeconds(20)), "the outbox was not asked to take a message back.");
+
+    private ValueTask AssertDeadLetteredAsync(string messageId, int times)
+        => _deadLetterChannel.Received(times).BasicPublishAsync(
+            DeadLetterExchange, DeadLetterQueue, true, Arg.Is<BasicProperties>(properties => properties.MessageId == messageId),
+            Arg.Any<ReadOnlyMemory<byte>>(), Arg.Any<CancellationToken>());
 
     private ReturnedMessageHandler CreateSut(TimeSpan retryPeriod, IOutboxRepository? outbox = null)
     {
@@ -208,9 +400,6 @@ public class ReturnedMessageHandlerTests
                       _log.Add((call.Arg<LogLevel>(), call.Args()[2]!.ToString()!));
               });
 
-        var clock = Substitute.For<TimeProvider>();
-        clock.GetUtcNow().Returns(Now);
-
         return new ReturnedMessageHandler(
             services.GetRequiredService<IServiceScopeFactory>(),
             new RabbitMessageParser(typeResolver, serializer),
@@ -218,13 +407,15 @@ public class ReturnedMessageHandlerTests
             _connection,
             configuration,
             logger,
-            clock);
+            _clock);
     }
 
     private static BasicReturnEventArgs Returned(string messageId, DateTimeOffset? firstReturnedAt = null)
         => new(312, "NO_ROUTE", Exchange, Exchange, Properties(messageId, firstReturnedAt), Body(), CancellationToken.None);
 
-    private static ReadOnlyMemory<byte> Body() => new JsonSerializer().Serialize(new FakeSagaStarter());
+    private static readonly byte[] SerializedMessage = new JsonSerializer().Serialize(new FakeSagaStarter());
+
+    private static ReadOnlyMemory<byte> Body() => SerializedMessage;
 
     // as the broker hands them back: the text of a header is bytes
     private static BasicProperties Properties(string messageId, DateTimeOffset? firstReturnedAt)
@@ -239,5 +430,16 @@ public class ReturnedMessageHandlerTests
             headers[nameof(MessageEnvelope.FirstReturnedAt)] = Encoding.UTF8.GetBytes(firstReturnedAt.Value.ToString("O", CultureInfo.InvariantCulture));
 
         return new BasicProperties { MessageId = messageId, CorrelationId = "correlation", Headers = headers };
+    }
+
+    /// <summary>the time the test says it is. What waits for a delay does not wait.</summary>
+    private sealed class Clock : TimeProvider
+    {
+        public DateTimeOffset Now { get; set; }
+
+        public override DateTimeOffset GetUtcNow() => Now;
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+            => base.CreateTimer(callback, state, TimeSpan.Zero, period);
     }
 }

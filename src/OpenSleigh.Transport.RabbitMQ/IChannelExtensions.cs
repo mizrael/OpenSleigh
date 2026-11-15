@@ -44,7 +44,7 @@ public static class IChannelExtensions
     /// declares the exchange a message is published to, and nothing else: what a host needs to publish a message
     /// it does not consume. The queues belong to the services that consume the message, which declare their own.
     /// </summary>
-    public static async ValueTask EnsureExchangeAsync(
+    public static ValueTask EnsureExchangeAsync(
         this IChannel channel,
         QueueReferences queueReferences,
         RabbitConfiguration rabbitCfg,
@@ -54,37 +54,31 @@ public static class IChannelExtensions
         ArgumentNullException.ThrowIfNull(rabbitCfg);
         ArgumentNullException.ThrowIfNull(channel);
 
-        var declared = _declared.GetOrCreateValue(channel);
-        var key = (queueReferences.ExchangeName, (string?)null);
-        if (declared.Done.ContainsKey(key))
-            return;
-
-        await EnsureOnceAsync(
-            declared,
-            key,
-            () => EnsureExchangeAsync(key.ExchangeName, channel, rabbitCfg, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
+        return EnsureExchangeOnceAsync(channel, queueReferences.ExchangeName, rabbitCfg, cancellationToken);
     }
 
     /// <summary>
     /// declares the exchange the dead letters of a message go to, and no queue: what a host needs to dead-letter
     /// a message it does not consume.
     /// </summary>
-    internal static async ValueTask EnsureDeadLetterExchangeAsync(
+    internal static ValueTask EnsureDeadLetterExchangeAsync(
         this IChannel channel,
         QueueReferences queueReferences,
         RabbitConfiguration rabbitCfg,
         CancellationToken cancellationToken = default)
+        => EnsureExchangeOnceAsync(channel, queueReferences.DeadLetterExchangeName, rabbitCfg, cancellationToken);
+
+    private static async ValueTask EnsureExchangeOnceAsync(IChannel channel, string exchangeName, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
     {
         var declared = _declared.GetOrCreateValue(channel);
-        var key = (queueReferences.DeadLetterExchangeName, (string?)null);
+        var key = (exchangeName, (string?)null);
         if (declared.Done.ContainsKey(key))
             return;
 
         await EnsureOnceAsync(
             declared,
             key,
-            () => EnsureExchangeAsync(key.DeadLetterExchangeName, channel, rabbitCfg, cancellationToken),
+            () => EnsureExchangeAsync(exchangeName, channel, rabbitCfg, cancellationToken),
             cancellationToken).ConfigureAwait(false);
     }
 

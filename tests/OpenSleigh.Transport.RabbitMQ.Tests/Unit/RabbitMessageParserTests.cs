@@ -202,6 +202,25 @@ public class RabbitMessageParserTests
         await Assert.ThrowsAsync<ArgumentException>(() => sut.ParseMessageAsync(eventArgs));
     }
 
+    [Theory]
+    [InlineData("not a date")]
+    [InlineData(null)]
+    [InlineData(42)]
+    public async Task ParseMessageAsync_should_take_a_time_of_first_return_it_cannot_read_for_none(object? firstReturnedAt)
+    {
+        var typeResolver = Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(Arg.Any<string>(), throwOnError: true).Returns(typeof(FakeSagaStarter));
+        var sut = new RabbitMessageParser(typeResolver, new FakeSerializer { DeserializeResult = new FakeSagaStarter() });
+        var eventArgs = CreateBasicDeliverEventArgs(
+            Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow, typeof(FakeSagaStarter).FullName!);
+        var headers = (Dictionary<string, object?>)eventArgs.BasicProperties.Headers!;
+        headers[nameof(MessageEnvelope.FirstReturnedAt)] = firstReturnedAt is string text ? Encoding.UTF8.GetBytes(text) : firstReturnedAt;
+
+        var result = await sut.ParseMessageAsync(eventArgs);
+
+        Assert.Null(result.FirstReturnedAt);
+    }
+
     private static BasicDeliverEventArgs CreateBasicDeliverEventArgs(
         string? messageId,
         string? correlationId,

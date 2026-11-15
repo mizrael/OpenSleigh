@@ -71,7 +71,7 @@ public record RabbitConfiguration
 
     /// <summary>
     /// Gets for how long a message that the broker returns, because no queue takes it, keeps going back to the outbox
-    /// to be published again after <see cref="RetryDelay"/>. It counts from the first time the message is returned.
+    /// to be published again after <see cref="RetryDelay"/>, or after one second when that is shorter. It counts from the first time the message is returned.
     /// Once it is over the message goes to its dead letter exchange. Defaults to 5 minutes; with zero, a returned
     /// message is never published again.
     /// </summary>

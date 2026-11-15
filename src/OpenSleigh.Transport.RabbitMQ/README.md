@@ -76,8 +76,8 @@ When the routing key of a message type is the name of its queue (a custom naming
 - A host declares the queue of its service, with its retry and dead letter queues, for every message type its sagas handle: when it starts consuming, and when it publishes one of them.
 - For a message type it only publishes, a host declares the exchange and nothing else. This is the case of a host set to publish only (`SetPublishOnly()`), and of a service that publishes a message handled by the sagas of another service.
 - A publish does not wait for the broker. A message that no queue takes, because no service that consumes its type has declared its queue yet, is sent back by the broker afterwards, and then:
-  - it goes back to the outbox, with a Warning in the log (message id, type, exchange and the reason the broker gave), and is published again after `RetryDelay`;
-  - this repeats for `ReturnedMessageRetryPeriod`, 5 minutes by default, counted from the first time the message came back. That time is stored with the message in the outbox and published with it (a `FirstReturnedAt` header): the period is the same for every instance, and survives a restart. Once it is over the message is published to the dead letter exchange of its type instead, with an Error in the log;
+  - it goes back to the outbox, with a Warning in the log once it is there (message id, type, exchange and the reason the broker gave), and is published again after `RetryDelay`, or after one second when `RetryDelay` is shorter;
+  - this repeats for `ReturnedMessageRetryPeriod`, 5 minutes by default, counted from the first time the message came back. That time is stored with the message in the outbox and published with it (a `FirstReturnedAt` header): the period is the same for every instance, and survives a restart. A time that is later than the return itself is not believed, and the period starts again. Once the period is over the message is published to the dead letter exchange of its type instead, with an Error in the log once it is. When that fails twice, because the broker cannot be reached, the message goes back to the outbox and is given to the dead letter exchange the next time it comes back;
   - a publisher declares no dead letter queue of its own. When no queue takes the message from the dead letter exchange either, it is dropped, and a second Error in the log (message id, type, exchange) is the only trace of it. With the default naming a dead letter queue takes it only when hosts of the same client group consume the type.
 
 ```
@@ -89,10 +89,12 @@ var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
 
 - With a period of zero a returned message is never published again: it goes to the dead letter exchange the first time it comes back.
 - A message type that no service ever consumes is published about every `RetryDelay` for `ReturnedMessageRetryPeriod`, and then dropped as above.
-- What this does not cover:
-  - a returned message is in the memory of the instance until it is back in the outbox. Up to 10,000 can be waiting there; beyond that, and when the application stops before they are stored, they are lost, with an Error in the log. A stop waits for them for as long as the host allows;
-  - a message that cannot be put back after 5 attempts, because the outbox cannot be reached, is lost, with an Error in the log. So is every returned message when the outbox is a custom one that does not implement `IOutboxReturnRepository`; the outboxes of the library do;
-  - a publish that never reached the broker, because the connection was lost at that moment, still counts as published: there are no publisher confirms.
+- What this does not cover, each with an Error in the log that names the message:
+  - a returned message is in the memory of the instance until it is back in the outbox. Up to 10,000 can be waiting there; the ones that come back beyond that are lost;
+  - when the application stops, the returned messages are stored once every hosted service has stopped, the outbox relay included, for as long as the host allows (`HostOptions.ShutdownTimeout`): the ones that are left then are lost. So is a message the broker returns after that, which is possible for the last ones the relay published;
+  - a message that cannot be put back after 5 attempts, because the outbox cannot be reached, is lost. So is every returned message when the outbox is a custom one that does not implement `IOutboxReturnRepository`, or is wrapped in something that hides it; the outboxes of the library implement it;
+  - a publish that never reached the broker, because the connection was lost at that moment, still counts as published: there are no publisher confirms. This one leaves no trace.
+- Rolling upgrade from 3.3.0: an instance of that version on the same outbox does not know the due time or the time of first return of a message that was put back. See the README of the persistence library: set `ReturnedMessageRetryPeriod` to zero until every instance is upgraded.
 - In 3.3.0 and earlier such a message was kept by the broker in the queue the publisher declared for its own service. That was the queue of the consumers when they have the same client group as the publisher (a publish-only host of the same application, for instance) or when a custom naming policy gives a message type one queue: there, a message published before any consumer had started waited in the broker for as long as it took, and now waits in the outbox for `ReturnedMessageRetryPeriod`.
 
 #### Queues left behind by 3.3.0 or earlier
