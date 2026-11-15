@@ -51,7 +51,7 @@ public abstract class SagaDbSchemaUpgrade
     protected virtual TimeSpan CommandTimeout => TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// runs <paramref name="action"/> while no other instance is creating or upgrading the schema of the same database:
+    /// runs <paramref name="action"/> while no other instance is creating, upgrading or seeding the schema of the same database:
     /// instances that start together wait for each other here, and all but the first find the work done.
     /// </summary>
     /// <remarks>
@@ -81,35 +81,55 @@ public abstract class SagaDbSchemaUpgrade
     /// created in between.
     /// </summary>
     /// <param name="seed">
-    /// called once the tables are there, while no other instance creates them, and told whether this instance created them.
-    /// It is not called when the tables were there already.
+    /// called once the tables are there and current, while no other instance creates, upgrades or seeds them,
+    /// and told whether this instance created them. Null when the context has no seeding: tables that are there
+    /// then make no instance wait.
     /// </param>
-    /// <returns>whether the tables were missing.</returns>
-    internal bool EnsureCreated(DatabaseFacade database, IRelationalDatabaseCreator creator, Action<bool> seed)
-    {
-        if (!creator.Exists())
-            RunDatabaseCreationExclusively(database, () =>
-            {
-                // the instance this one waited for has created it
-                if (!creator.Exists())
-                    creator.Create();
-            });
-
-        // the same two checks EnsureCreated makes: a schema that is there costs nothing more than it did
-        if (creator.HasTables())
-            return false;
-
-        // instances that wait for each other here run the same version: whichever creates the tables, they are current
-        WithCommandTimeout(database, () => RunExclusively(database, () =>
+    internal void EnsureCreatedAndCurrent(DatabaseFacade database, IRelationalDatabaseCreator creator, Action<bool>? seed)
+        => WithCommandTimeout(database, () =>
         {
-            var create = !creator.HasTables();
-            if (create)
-                creator.CreateTables();
+            EnsureDatabaseCreated(database, creator);
 
-            seed(create);
-        }));
+            // the same two checks EnsureCreated makes: a schema that is there costs nothing more than it did
+            if (creator.HasTables())
+            {
+                // tables that were just created have the current schema: only the ones that were there are upgraded
+                Apply(database);
+                if (seed is not null)
+                {
+                    _logger.LogInformation("Seeding the saga database. Waiting for other instances creating, upgrading or seeding it...");
+                    RunExclusively(database, () => seed(false));
+                }
 
-        return true;
+                return;
+            }
+
+            _logger.LogInformation("The saga database has no tables: creating them. Waiting for other instances doing the same...");
+
+            // instances that wait for each other here run the same version: whichever creates the tables, they are current
+            RunExclusively(database, () =>
+            {
+                var create = !creator.HasTables();
+                if (create)
+                    creator.CreateTables();
+
+                seed?.Invoke(create);
+            });
+        });
+
+    private void EnsureDatabaseCreated(DatabaseFacade database, IRelationalDatabaseCreator creator)
+    {
+        if (creator.Exists())
+            return;
+
+        _logger.LogInformation("The saga database is missing: creating it. Waiting for other instances doing the same...");
+
+        RunDatabaseCreationExclusively(database, () =>
+        {
+            // the instance this one waited for has created it
+            if (!creator.Exists())
+                creator.Create();
+        });
     }
 
     // a statement of the schema can take longer than a query, and waits that long for another instance
