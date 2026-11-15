@@ -81,6 +81,13 @@ internal sealed class StageTimings
         services.TryDecorate<IOutboxRepository>((provider, inner) =>
         {
             var timings = provider.GetRequiredService<StageTimings>();
+#if OUTBOX_PUT_BACK
+            // the transport finds out by asking the repository what else it is: the replacement is what the original is
+            if (inner is IOutboxReturnRepository)
+                return inner is IOutboxBatchRepository
+                    ? new TimedBatchReturnOutboxRepository(inner, timings)
+                    : new TimedReturnOutboxRepository(inner, timings);
+#endif
 #if OUTBOX_BATCH_DELETE
             if (inner is IOutboxBatchRepository)
                 return new TimedBatchOutboxRepository(inner, timings);
@@ -169,7 +176,7 @@ internal class TimedOutboxRepository : IOutboxRepository
 }
 
 #if OUTBOX_BATCH_DELETE
-internal sealed class TimedBatchOutboxRepository : TimedOutboxRepository, IOutboxBatchRepository
+internal class TimedBatchOutboxRepository : TimedOutboxRepository, IOutboxBatchRepository
 {
     public TimedBatchOutboxRepository(IOutboxRepository inner, StageTimings timings) : base(inner, timings)
     {
@@ -177,6 +184,28 @@ internal sealed class TimedBatchOutboxRepository : TimedOutboxRepository, IOutbo
 
     public ValueTask DeleteAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
         => Timings.MeasureAsync(Stages.DeleteBatch, () => ((IOutboxBatchRepository)Inner).DeleteAsync(messages, cancellationToken));
+}
+#endif
+
+#if OUTBOX_PUT_BACK
+internal sealed class TimedReturnOutboxRepository : TimedOutboxRepository, IOutboxReturnRepository
+{
+    public TimedReturnOutboxRepository(IOutboxRepository inner, StageTimings timings) : base(inner, timings)
+    {
+    }
+
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+        => ((IOutboxReturnRepository)Inner).PutBackAsync(messages, cancellationToken);
+}
+
+internal sealed class TimedBatchReturnOutboxRepository : TimedBatchOutboxRepository, IOutboxReturnRepository
+{
+    public TimedBatchReturnOutboxRepository(IOutboxRepository inner, StageTimings timings) : base(inner, timings)
+    {
+    }
+
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+        => ((IOutboxReturnRepository)Inner).PutBackAsync(messages, cancellationToken);
 }
 #endif
 

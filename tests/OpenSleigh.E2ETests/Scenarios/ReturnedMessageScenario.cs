@@ -21,6 +21,7 @@ public class ReturnedMessageScenario(ITestOutputHelper console) : ScenarioBase(c
     // published once, returned, and published again from the outbox at least once
     private const int PublishesOfAMessageThatCameBack = 2;
     private static readonly TimeSpan DeadLettersPollingInterval = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan ClockMargin = TimeSpan.FromSeconds(1);
 
     [Theory]
     [MatrixData(Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq], HostsCounts = [1])]
@@ -68,7 +69,11 @@ public class ReturnedMessageScenario(ITestOutputHelper console) : ScenarioBase(c
 
                 // someone who wants to keep what the API gives up on: the API declares no queue, this one included
                 await DeclareDeadLetterQueueAsync(api, cancellationToken);
-                clock.Advance(api.Services.GetRequiredService<RabbitConfiguration>().ReturnedMessageRetryPeriod);
+
+                // from here on the message is past its period whenever it comes back: it was put back at least once,
+                // so it carries the time it first came back, which is before the clock moved. Nothing is put back
+                // with a due time on the moved clock, which the relay, on the system clock, would wait minutes for
+                clock.Advance(api.Services.GetRequiredService<RabbitConfiguration>().ReturnedMessageRetryPeriod + ClockMargin);
 
                 while (!(await run.ReadDeadLettersAsync(cancellationToken)).ContainsKey(typeof(StartSimpleSaga)))
                     await Task.Delay(DeadLettersPollingInterval, cancellationToken);

@@ -38,6 +38,26 @@ public class DecorationTests
     }
 
     [Fact]
+    public async Task an_intercepted_outbox_repository_takes_returned_messages_back_exactly_when_the_original_does()
+    {
+        var plain = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var returning = Substitute.For<IOutboxRepository, IOutboxReturnRepository>();
+        var batchingAndReturning = Substitute.For<IOutboxRepository, IOutboxBatchRepository, IOutboxReturnRepository>();
+        IReadOnlyCollection<MessageEnvelope> messages = [];
+
+        Assert.IsNotAssignableFrom<IOutboxReturnRepository>(Resolve(plain, services => services.Intercept(_ => new OutboxRepositoryInterceptor())));
+
+        foreach (var original in new[] { returning, batchingAndReturning })
+        {
+            var intercepted = Resolve(original, services => services.Intercept(_ => new OutboxRepositoryInterceptor()));
+            await Assert.IsAssignableFrom<IOutboxReturnRepository>(intercepted).PutBackAsync(messages);
+
+            Assert.Equal(original is IOutboxBatchRepository, intercepted is IOutboxBatchRepository);
+            await ((IOutboxReturnRepository)original).Received(1).PutBackAsync(messages, Arg.Any<CancellationToken>());
+        }
+    }
+
+    [Fact]
     public void a_decorator_that_hides_what_the_library_looks_for_is_refused()
     {
         var committing = Substitute.For<ISagaStateRepository, ISagaStateCommitter>();
