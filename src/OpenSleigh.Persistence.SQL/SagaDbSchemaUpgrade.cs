@@ -96,7 +96,11 @@ public abstract class SagaDbSchemaUpgrade
                 // tables that were just created have the current schema: only the ones that were there are upgraded
                 Apply(database);
                 if (seed is not null)
+                {
+                    _logger.LogInformation("Seeding the saga database. Waiting for other instances creating, upgrading or seeding it...");
                     RunExclusively(database, () => seed(false));
+                }
+
                 return;
             }
 

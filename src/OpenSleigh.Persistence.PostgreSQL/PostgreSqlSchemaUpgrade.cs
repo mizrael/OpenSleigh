@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Logging;
 using Npgsql;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal;
@@ -133,7 +134,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
 
     // a connection goes back to its pool as it is, and is only reset when it is taken out again:
     // one that still has the lock would keep every other instance waiting until then, so it is not kept
-    private static void ReleaseLockOrConnection(DatabaseFacade database)
+    internal static void ReleaseLockOrConnection(DatabaseFacade database)
     {
         try
         {
@@ -141,10 +142,25 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         }
         catch
         {
-            if (database.GetDbConnection() is NpgsqlConnection connection)
-                NpgsqlConnection.ClearPool(connection);
+            ClearConnectionPool(database);
         }
     }
+
+    // the connections of a data source are pooled by the data source, not by their connection string
+    private static void ClearConnectionPool(DatabaseFacade database)
+    {
+#pragma warning disable EF1001 // the provider has no public way to the data source of its connection
+        var dataSource = database.GetService<INpgsqlRelationalConnection>().DataSource;
+#pragma warning restore EF1001
+
+        if (dataSource is NpgsqlDataSource npgsqlDataSource)
+            npgsqlDataSource.Clear();
+        else if (database.GetDbConnection() is NpgsqlConnection connection)
+            NpgsqlConnection.ClearPool(connection);
+    }
+
+    // what PostgreSQL copies a new database from, unless the model names another one
+    private const string DefaultTemplateDatabase = "template1";
 
     // another arbitrary number: creating a database does not wait for the upgrade of another one
     private const string ConcurrentCreationsLockKey = "7308325172346594412";
@@ -157,6 +173,8 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
 #pragma warning disable EF1001 // the provider has no public way to its connection to the administration database
         using var admin = database.GetService<INpgsqlRelationalConnection>().CreateAdminConnection();
 #pragma warning restore EF1001
+        ThrowIfTheTemplate(database, admin.DbConnection.Database);
+
         admin.Open();
         try
         {
@@ -174,6 +192,20 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
             // disposing it does not close a connection the provider cloned from a data source
             admin.Close();
         }
+    }
+
+    // PostgreSQL does not copy a database another session is connected to, and the one that has the lock
+    // stays connected to the administration database while the saga database is created
+    private static void ThrowIfTheTemplate(DatabaseFacade database, string adminDatabase)
+    {
+        var template = database.GetService<IDesignTimeModel>().Model.GetDatabaseTemplate() ?? DefaultTemplateDatabase;
+
+        if (string.Equals(adminDatabase, template, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"The saga database is missing, and cannot be created: '{adminDatabase}' is both the administration database " +
+                "and the template a new database is copied from, and PostgreSQL does not copy a database that is in use. " +
+                $"Configure another administration database ('{nameof(Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder.UseAdminDatabase)}'), " +
+                "or create the saga database before the application starts.");
     }
 
     protected override bool IsPermissionDenied(Exception exception)

@@ -161,26 +161,32 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
 #pragma warning restore EF1001
         master.ConnectionString = new SqlConnectionStringBuilder(master.ConnectionString) { Pooling = false }.ConnectionString;
         master.Open();
-
-        using (var command = (SqlCommand)master.DbConnection.CreateCommand())
+        try
         {
-            command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
-            command.CommandText =
-                "DECLARE @result int; " +
-                "EXEC @result = sp_getapplock @Resource = @name, @LockMode = N'Exclusive', " +
-                $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
-                "IF @result < 0 BEGIN; " +
-                "THROW 51000, N'the lock that makes instances wait for each other to create the database was not granted.', 1; " +
-                "END";
-            command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
-            command.ExecuteNonQuery();
+            using (var command = (SqlCommand)master.DbConnection.CreateCommand())
+            {
+                command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+                command.CommandText =
+                    "DECLARE @result int; " +
+                    "EXEC @result = sp_getapplock @Resource = @name, @LockMode = N'Exclusive', " +
+                    $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
+                    "IF @result < 0 BEGIN; " +
+                    "THROW 51000, N'the lock that makes instances wait for each other to create the database was not granted.', 1; " +
+                    "END";
+                command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
+                command.ExecuteNonQuery();
+            }
+
+            // the login that failed because the database was missing is remembered by the pool for a while,
+            // and answered with again without asking the server: the database another instance created would not be seen
+            ClearConnectionPool(database);
+
+            createDatabase();
         }
-
-        // the login that failed because the database was missing is remembered by the pool for a while,
-        // and answered with again without asking the server: the database another instance created would not be seen
-        ClearConnectionPool(database);
-
-        createDatabase();
+        finally
+        {
+            master.Close();
+        }
     }
 
     // the setting belongs to the connection, which goes back to its pool

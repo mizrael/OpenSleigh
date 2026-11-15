@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -209,31 +210,72 @@ public class SagaDbSchemaInitializerTests
         Assert.False(context.Set<Entities.SagaState>().Any());
     }
 
-    public static TheoryData<SagaDbSchemaUpgrade, Action<DbContextOptionsBuilder>> ServersThatCannotBeReached => new()
+    public static TheoryData<SagaDbSchemaUpgrade, Action<DbContextOptionsBuilder>, Func<string, bool>> ServersThatCannotBeReached => new()
     {
         {
             new SQLServer.SqlServerSchemaUpgrade(),
-            options => options.UseSqlServer("Server=tcp:127.0.0.1,1;Database=missing;User Id=sa;Password=none;Connect Timeout=2;Encrypt=False")
+            options => options.UseSqlServer("Server=tcp:127.0.0.1,1;Database=missing;User Id=sa;Password=none;Connect Timeout=2;Encrypt=False"),
+            connectionString => new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(connectionString) is { InitialCatalog: "master", Pooling: false }
         },
         {
             new PostgreSQL.PostgreSqlSchemaUpgrade(),
-            options => options.UseNpgsql("Host=127.0.0.1;Port=1;Database=missing;Username=postgres;Password=none;Timeout=2")
+            options => options.UseNpgsql("Host=127.0.0.1;Port=1;Database=missing;Username=postgres;Password=none;Timeout=2"),
+            connectionString => new Npgsql.NpgsqlConnectionStringBuilder(connectionString) is { Database: "postgres", Pooling: false }
         },
     };
 
     [Theory]
     [MemberData(nameof(ServersThatCannotBeReached))]
-    public void EnsureCreated_should_fail_when_the_server_cannot_be_reached(
-        SagaDbSchemaUpgrade upgrade, Action<DbContextOptionsBuilder> useServer)
+    public void The_lock_to_create_the_database_should_be_asked_for_on_a_connection_of_the_provider_that_is_not_pooled(
+        SagaDbSchemaUpgrade upgrade, Action<DbContextOptionsBuilder> useServer, Func<string, bool> isUnpooledConnectionToTheSystemDatabase)
     {
-        var options = new DbContextOptionsBuilder<NotInitializedSagaDbContext>();
+        var connections = new RecordingConnectionInterceptor();
+        var options = new DbContextOptionsBuilder<NotInitializedSagaDbContext>().AddInterceptors(connections);
         useServer(options);
         using var context = new NotInitializedSagaDbContext(options.Options);
 
-        var failure = Assert.ThrowsAny<Exception>(() => new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database));
+        var failure = Assert.ThrowsAny<Exception>(
+            () => upgrade.EnsureCreatedAndCurrent(context.Database, DatabaseThatIsMissing(), seed: null));
 
         // the failure to connect is reported, as it is or as the cause of what the provider reports
         Assert.Contains(Causes(failure), cause => cause is System.Data.Common.DbException);
+        Assert.True(isUnpooledConnectionToTheSystemDatabase(Assert.Single(connections.Opening)));
+    }
+
+    [Fact]
+    public void A_PostgreSQL_database_should_not_be_created_when_the_administration_database_is_its_template()
+    {
+        const string template = "template1";
+        var connections = new RecordingConnectionInterceptor();
+        var options = new DbContextOptionsBuilder<NotInitializedSagaDbContext>()
+            .AddInterceptors(connections)
+            .UseNpgsql("Host=127.0.0.1;Port=1;Database=missing;Timeout=2", npgsql => npgsql.UseAdminDatabase(template));
+        using var context = new NotInitializedSagaDbContext(options.Options);
+
+        var failure = Assert.Throws<InvalidOperationException>(
+            () => new PostgreSQL.PostgreSqlSchemaUpgrade().EnsureCreatedAndCurrent(context.Database, DatabaseThatIsMissing(), seed: null));
+
+        Assert.Contains(template, failure.Message);
+        Assert.Empty(connections.Opening);
+    }
+
+    private static Microsoft.EntityFrameworkCore.Storage.IRelationalDatabaseCreator DatabaseThatIsMissing()
+    {
+        var creator = Substitute.For<Microsoft.EntityFrameworkCore.Storage.IRelationalDatabaseCreator>();
+        creator.Exists().Returns(false);
+        return creator;
+    }
+
+    private sealed class RecordingConnectionInterceptor : DbConnectionInterceptor
+    {
+        public List<string> Opening { get; } = [];
+
+        public override InterceptionResult ConnectionOpening(
+            System.Data.Common.DbConnection connection, ConnectionEventData eventData, InterceptionResult result)
+        {
+            Opening.Add(connection.ConnectionString);
+            return result;
+        }
     }
 
     private static IEnumerable<Exception> Causes(Exception? failure)
