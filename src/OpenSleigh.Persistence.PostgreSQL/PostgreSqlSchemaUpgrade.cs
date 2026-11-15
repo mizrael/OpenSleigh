@@ -158,15 +158,22 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         using var admin = database.GetService<INpgsqlRelationalConnection>().CreateAdminConnection();
 #pragma warning restore EF1001
         admin.Open();
-
-        using (var command = admin.DbConnection.CreateCommand())
+        try
         {
-            command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
-            command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";
-            command.ExecuteNonQuery();
-        }
+            using (var command = admin.DbConnection.CreateCommand())
+            {
+                command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+                command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";
+                command.ExecuteNonQuery();
+            }
 
-        createDatabase();
+            createDatabase();
+        }
+        finally
+        {
+            // disposing it does not close a connection the provider cloned from a data source
+            admin.Close();
+        }
     }
 
     protected override bool IsPermissionDenied(Exception exception)
