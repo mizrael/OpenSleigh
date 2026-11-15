@@ -52,6 +52,11 @@ internal class NoOpSagaInstance : ISagaInstance
         CancellationToken cancellationToken)
         => ValueTask.CompletedTask;
 
+    public ValueTask ReleaseAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken)
+        => ValueTask.CompletedTask;
+
     public void MarkAsCompleted()
     {
     }
