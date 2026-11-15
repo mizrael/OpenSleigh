@@ -31,9 +31,12 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     // One reference, replaced as a whole: a repository shared by several messages can lose it, never corrupt it
     private string? _sagaNotFound;
 
-    // the lock each new saga was stored with: abandoned under that lock, the saga is removed.
-    // Only there once this repository has stored a saga
-    private ConditionalWeakTable<ISagaInstance, string>? _creationLocks;
+    // the lock a new saga was stored with: abandoned under that lock, the saga is removed.
+    // A repository handles one message, which starts one saga at most: that one costs a field
+    private string? _creationLockId;
+
+    // only there when this repository stored another saga before the first one was released
+    private ConditionalWeakTable<ISagaInstance, string>? _otherCreationLocks;
 
     private sealed record FoundSaga(string? LockId);
 
@@ -297,25 +300,35 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
         RememberCreatedSaga(state, lockId);
     }
 
-    // created by whoever gets there first: a repository shared by several messages keeps one table
+    // taken by whoever gets there first: a repository shared by several messages loses none of them
     private void RememberCreatedSaga(ISagaInstance state, string lockId)
     {
-        if (_creationLocks is null)
-            Interlocked.CompareExchange(ref _creationLocks, new ConditionalWeakTable<ISagaInstance, string>(), null);
+        if (Interlocked.CompareExchange(ref _creationLockId, lockId, null) is null)
+            return;
 
-        _creationLocks!.AddOrUpdate(state, lockId);
+        if (_otherCreationLocks is null)
+            Interlocked.CompareExchange(ref _otherCreationLocks, new ConditionalWeakTable<ISagaInstance, string>(), null);
+
+        _otherCreationLocks!.AddOrUpdate(state, lockId);
     }
 
     private bool WasCreatedByLockOf(ISagaInstance state)
-        => _creationLocks is { } creationLocks &&
-           creationLocks.TryGetValue(state, out var creationLockId) &&
-           creationLockId == state.LockId;
+        => _creationLockId == state.LockId ||
+           (_otherCreationLocks is { } others &&
+            others.TryGetValue(state, out var creationLockId) &&
+            creationLockId == state.LockId);
 
     // the saga is released: what this repository knows about it is of no use to whoever locks it next
     private void Forget(ISagaInstance state)
     {
         _foundSagas.Remove(state);
-        _creationLocks?.Remove(state);
+
+        // only if it is still the lock that was just compared: someone else may have taken the field since
+        var creationLockId = _creationLockId;
+        if (creationLockId is not null && creationLockId == state.LockId)
+            Interlocked.CompareExchange(ref _creationLockId, null, creationLockId);
+
+        _otherCreationLocks?.Remove(state);
     }
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)

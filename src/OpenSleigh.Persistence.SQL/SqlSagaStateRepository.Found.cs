@@ -16,10 +16,13 @@ public partial class SqlSagaStateRepository
     // the saga this repository last looked for and did not find
     private string? _sagaNotFound;
 
-    // the lock each new saga was stored with: abandoned under that lock, the saga is removed.
+    // the lock a new saga was stored with: abandoned under that lock, the saga is removed.
     // Kept apart from what is known of a stored saga, which is forgotten whenever a save fails.
-    // Only there once this repository has stored a saga
-    private ConditionalWeakTable<ISagaInstance, string>? _creationLocks;
+    // A repository handles one message, which starts one saga at most: that one costs a field
+    private string? _creationLockId;
+
+    // only there when this repository stored another saga before the first one was released
+    private ConditionalWeakTable<ISagaInstance, string>? _otherCreationLocks;
 
     private sealed class KnownSaga
     {
@@ -54,15 +57,29 @@ public partial class SqlSagaStateRepository
         });
 
     private void RememberCreatedSaga(ISagaInstance instance, string lockId)
-        => (_creationLocks ??= new()).AddOrUpdate(instance, lockId);
+    {
+        if (_creationLockId is null)
+            _creationLockId = lockId;
+        else
+            (_otherCreationLocks ??= new()).AddOrUpdate(instance, lockId);
+    }
 
     private bool WasCreatedByLockOf(ISagaInstance state)
-        => _creationLocks is not null &&
-           _creationLocks.TryGetValue(state, out var creationLockId) &&
-           creationLockId == state.LockId;
+        => IsCreationLockOf(state) ||
+           (_otherCreationLocks is not null &&
+            _otherCreationLocks.TryGetValue(state, out var creationLockId) &&
+            creationLockId == state.LockId);
+
+    private bool IsCreationLockOf(ISagaInstance state)
+        => _creationLockId is not null && _creationLockId == state.LockId;
 
     private void ForgetCreatedSaga(ISagaInstance state)
-        => _creationLocks?.Remove(state);
+    {
+        if (IsCreationLockOf(state))
+            _creationLockId = null;
+
+        _otherCreationLocks?.Remove(state);
+    }
 
     private bool TryGetFoundRow(ISagaInstance instance, [NotNullWhen(true)] out SagaState? foundRow)
     {

@@ -149,7 +149,12 @@ public class SqlSagaStateCommitTests
             await db.SaveChangesAsync();
         }
 
-        var neverLocked = new SagaInstance(saga.InstanceId, saga.TriggerMessageId, saga.CorrelationId, saga.Descriptor);
+        var neverLocked = Substitute.For<ISagaInstance>();
+        neverLocked.InstanceId.Returns(saga.InstanceId);
+        neverLocked.CorrelationId.Returns(saga.CorrelationId);
+        neverLocked.TriggerMessageId.Returns(saga.TriggerMessageId);
+        neverLocked.Descriptor.Returns(saga.Descriptor);
+        neverLocked.LockId.Returns((string?)null);
         await Assert.ThrowsAsync<LockException>(async () => await CreateSut(dbName).AbandonAsync(neverLocked));
 
         await using var verificationDb = CreateDbContext(dbName);
