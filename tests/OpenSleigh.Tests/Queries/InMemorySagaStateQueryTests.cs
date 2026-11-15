@@ -35,7 +35,7 @@ public class InMemorySagaStateQueryTests
 
     private async Task StoreAndRelease(ISagaInstance instance)
     {
-        await _repo.LockAsync(instance);
+        await instance.LockAsync(_repo, CancellationToken.None);
         await _repo.ReleaseAsync(instance);
     }
 
@@ -48,7 +48,7 @@ public class InMemorySagaStateQueryTests
         var messageContext = Substitute.For<OpenSleigh.Transport.IMessageContext<FakeSagaStarter>>();
         messageContext.MessageId.Returns("message-1");
 
-        await _repo.LockAsync(instance);
+        await instance.LockAsync(_repo, CancellationToken.None);
         instance.SetAsProcessed(messageContext);
 
         // the owner of the lock is still at work: its message is not there for anyone else yet

@@ -42,14 +42,59 @@ public class InMemorySagaStateRepositoryTests
             new FakeSagaStarter(),
             correlationId: correlationId);
 
-        // Act - Lock instance (which stores it)
-        await repository.LockAsync(instance, CancellationToken.None);
+        // Act - Store it by locking and releasing it
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
 
         // Assert - Should be able to find it by correlation ID
         var found = await repository.FindAsync(descriptor, messageContext, CancellationToken.None);
         Assert.NotNull(found);
         Assert.Equal(correlationId, found!.CorrelationId);
         Assert.Equal(instance.InstanceId, found.InstanceId);
+    }
+
+    [Fact]
+    public async Task FindAsync_should_not_hand_out_a_saga_while_its_owner_is_changing_it()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<CounterSaga, CounterState>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var instance = new SagaInstance<CounterState>(
+            Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor, new CounterState { Count = 1 });
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        // the handler completes the saga, and nothing of it is stored yet
+        await instance.LockAsync(repository, CancellationToken.None);
+        instance.State.Count = 2;
+        instance.MarkAsCompleted();
+
+        await Assert.ThrowsAsync<LockException>(
+            () => repository.FindAsync(descriptor, messageContext, CancellationToken.None).AsTask());
+
+        var stored = await repository.GetByInstanceIdAsync(instance.InstanceId);
+        Assert.True(stored!.IsLocked);
+        Assert.False(stored.IsCompleted);
+        Assert.Equal(1, Assert.IsType<CounterState>(stored.StateData).Count);
+        Assert.Empty((await repository.GetAllAsync(new OpenSleigh.Queries.SagaQueryFilter { IsCompleted = true })).Items);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_and_AbandonAsync_should_throw_when_the_saga_is_not_locked_by_the_instance()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var instance = new SagaInstance(
+            Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), SagaDescriptor.Create<FakeSaga>());
+
+        // never locked
+        await Assert.ThrowsAsync<LockException>(() => repository.ReleaseAsync(instance, CancellationToken.None).AsTask());
+        await Assert.ThrowsAsync<LockException>(() => repository.AbandonAsync(instance, CancellationToken.None).AsTask());
+
+        // released already: the instance still has the lock id it had
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+        await Assert.ThrowsAsync<LockException>(() => repository.ReleaseAsync(instance, CancellationToken.None).AsTask());
+        await Assert.ThrowsAsync<LockException>(() => repository.AbandonAsync(instance, CancellationToken.None).AsTask());
     }
 
     [Fact]
@@ -115,7 +160,7 @@ public class InMemorySagaStateRepositoryTests
             descriptor);
 
         // Act - Lock and then release
-        await repository.LockAsync(instance, CancellationToken.None);
+        await instance.LockAsync(repository, CancellationToken.None);
         await repository.ReleaseAsync(instance, CancellationToken.None);
 
         // Assert - Should be able to lock again after release
@@ -213,6 +258,88 @@ public class InMemorySagaStateRepositoryTests
         Assert.Same(state, Assert.IsAssignableFrom<ISagaInstance<CyclicState>>(found).State);
         Assert.False(found.IsCompleted);
         Assert.True(found.CanProcess(secondMessage));
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_unlock_a_saga_whose_state_cannot_be_read_back()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<UnreadableSaga, UnreadableState>();
+        var firstMessage = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var secondMessage = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter(), correlationId: firstMessage.CorrelationId);
+        var instance = new SagaInstance<UnreadableState>(
+            Guid.NewGuid().ToString(), firstMessage.MessageId, firstMessage.CorrelationId, descriptor, new UnreadableState());
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        await instance.LockAsync(repository, CancellationToken.None);
+        instance.MarkAsCompleted();
+        await repository.AbandonAsync(instance, CancellationToken.None);
+
+        var found = await repository.FindAsync(descriptor, secondMessage, CancellationToken.None);
+        Assert.False(found!.IsCompleted);
+        await found.LockAsync(repository, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task ReleaseAsync_should_copy_a_state_again_after_a_release_that_could_not()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<SometimesCyclicSaga, SometimesCyclicState>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var state = new SometimesCyclicState();
+        state.Other = state;
+        var instance = new SagaInstance<SometimesCyclicState>(
+            Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor, state);
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        await instance.LockAsync(repository, CancellationToken.None);
+        state.Other = null;
+        state.Count = 1;
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        await instance.LockAsync(repository, CancellationToken.None);
+        state.Count = 2;
+        await repository.AbandonAsync(instance, CancellationToken.None);
+
+        var found = await repository.FindAsync(descriptor, messageContext, CancellationToken.None);
+        Assert.Equal(1, Assert.IsAssignableFrom<ISagaInstance<SometimesCyclicState>>(found).State.Count);
+    }
+
+    private interface IPart
+    {
+        int Size { get; }
+    }
+
+    private sealed class Part : IPart
+    {
+        public int Size { get; set; }
+    }
+
+    // written through the interface of its part, which cannot be created when reading it back
+    private sealed class UnreadableState
+    {
+        public IPart Part { get; set; } = new Part();
+    }
+
+    private sealed class UnreadableSaga(ISagaInstance<UnreadableState> context) : Saga<UnreadableState>(context), IStartedBy<FakeSagaStarter>
+    {
+        public ValueTask HandleAsync(IMessageContext<FakeSagaStarter> messageContext, CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
+    }
+
+    private sealed class SometimesCyclicState
+    {
+        public int Count { get; set; }
+
+        public SometimesCyclicState? Other { get; set; }
+    }
+
+    private sealed class SometimesCyclicSaga(ISagaInstance<SometimesCyclicState> context) : Saga<SometimesCyclicState>(context), IStartedBy<FakeSagaStarter>
+    {
+        public ValueTask HandleAsync(IMessageContext<FakeSagaStarter> messageContext, CancellationToken cancellationToken = default)
+            => ValueTask.CompletedTask;
     }
 
     private sealed class CounterState

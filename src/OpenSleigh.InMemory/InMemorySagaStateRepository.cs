@@ -2,17 +2,16 @@
 using OpenSleigh.Transport;
 using OpenSleigh.Utils;
 using System.Collections.Concurrent;
-using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.InMemory;
 
 internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQuery
 {
     /// <summary>
-    /// what a saga was when it was last released. The instance itself keeps changing while its owner handles a message:
-    /// its list cannot be read from another thread in the meantime, and this is what the saga goes back to when abandoned.
+    /// what a saga was when it was last released: what a query reads while its owner handles a message,
+    /// and what the saga goes back to when abandoned.
     /// </summary>
-    /// <param name="StateData">null when the saga has no state, or one that cannot be serialized.</param>
+    /// <param name="StateData">null when the saga has no state, or one that could not be serialized that time.</param>
     private sealed record Snapshot(ProcessedMessage[] ProcessedMessages, bool IsCompleted, byte[]? StateData);
 
     /// <param name="Released">null for a saga that was locked and never released.</param>
@@ -22,12 +21,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
     private readonly ConcurrentDictionary<string, Entry> _statesById = new();
     private readonly object _lockSync = new();
 
-    // instances that were abandoned: whoever found one before that has to look for the saga again
-    private readonly ConditionalWeakTable<ISagaInstance, object> _abandoned = new();
-    private static readonly object Abandoned = new();
-
     private static readonly ConcurrentDictionary<Type, ISagaStateAccessor> StateAccessors = new();
-    private static readonly ConcurrentDictionary<Type, byte> StatesThatCannotBeSerialized = new();
 
     private readonly ISerializer _serializer;
 
@@ -36,17 +30,21 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         _serializer = serializer ?? new JsonSerializer();
     }
 
+    /// <exception cref="LockException">
+    /// the saga is locked: its instance holds what its owner is doing to it, which may never be stored.
+    /// </exception>
     public ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
         where TM : IMessage
     {
         string key = BuildKey(descriptor, messageContext.CorrelationId);
 
-        ISagaInstance? state = null;
+        if (!_statesByDescriptor.TryGetValue(key, out var entry))
+            return ValueTask.FromResult<ISagaInstance?>(null);
 
-        if (_statesByDescriptor.TryGetValue(key, out var val))
-            state = val.State;
+        if (entry.LockId is not null)
+            throw new LockException($"saga '{entry.State.InstanceId}' is locked");
 
-        return ValueTask.FromResult(state);
+        return ValueTask.FromResult<ISagaInstance?>(entry.State);
     }
 
     public ValueTask<string> LockAsync(ISagaInstance state, CancellationToken cancellationToken = default)
@@ -56,11 +54,15 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
         lock (_lockSync)
         {
-            if (_abandoned.TryGetValue(state, out _))
-                throw new OptimisticLockException($"saga '{state.InstanceId}' has changed since it was found");
+            if (_statesById.TryGetValue(state.InstanceId, out var byId))
+            {
+                if (byId.LockId is not null)
+                    throw new LockException($"saga '{state.InstanceId}' is already locked");
 
-            if (_statesById.TryGetValue(state.InstanceId, out var byId) && byId.LockId is not null)
-                throw new LockException($"saga '{state.InstanceId}' is already locked");
+                // an abandoned saga has a new instance: the one found before that holds what was dropped
+                if (!ReferenceEquals(byId.State, state))
+                    throw new OptimisticLockException($"saga '{state.InstanceId}' has changed since it was found");
+            }
 
             if (_statesByDescriptor.TryGetValue(key, out var byDesc) && byDesc.LockId is not null)
                 throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
@@ -80,12 +82,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
         lock (_lockSync)
         {
-            if (!string.IsNullOrEmpty(state.LockId)
-                && _statesById.TryGetValue(state.InstanceId, out var entry)
-                && entry.LockId is not null
-                && entry.LockId != state.LockId)
-                throw new LockException($"unable to release saga '{state.InstanceId}' with lock id '{state.LockId}'");
-
+            EntryLockedBy(state);
             Store(key, new Entry(state, null, new Snapshot(CopyProcessedMessages(state), state.IsCompleted, stateData)));
         }
 
@@ -97,7 +94,8 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
     /// A saga that was never released is removed: the message that starts it again gets a new instance.
     /// </summary>
     /// <remarks>
-    /// A state that cannot be serialized cannot be put back: such a saga keeps what the handler did to its state.
+    /// A state that could not be serialized when the saga was last released, or that cannot be read back,
+    /// cannot be put back: such a saga keeps what the handler did to its state, and nothing else of what it did.
     /// </remarks>
     public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
     {
@@ -105,13 +103,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
 
         lock (_lockSync)
         {
-            if (!_statesById.TryGetValue(state.InstanceId, out var entry))
-                return ValueTask.CompletedTask;
-
-            if (!string.IsNullOrEmpty(state.LockId) && entry.LockId is not null && entry.LockId != state.LockId)
-                throw new LockException($"unable to release saga '{state.InstanceId}' with lock id '{state.LockId}'");
-
-            _abandoned.AddOrUpdate(entry.State, Abandoned);
+            var entry = EntryLockedBy(state);
 
             if (entry.Released is null)
             {
@@ -127,6 +119,16 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         return ValueTask.CompletedTask;
     }
 
+    private Entry EntryLockedBy(ISagaInstance state)
+    {
+        if (string.IsNullOrEmpty(state.LockId)
+            || !_statesById.TryGetValue(state.InstanceId, out var entry)
+            || entry.LockId != state.LockId)
+            throw new LockException($"saga '{state.InstanceId}' is not locked with lock id '{state.LockId}'");
+
+        return entry;
+    }
+
     private void Store(string key, Entry entry)
     {
         _statesById[entry.State.InstanceId] = entry;
@@ -137,7 +139,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
     private byte[]? SerializeState(ISagaInstance instance)
     {
         var stateType = instance.Descriptor.SagaStateType;
-        if (stateType is null || StatesThatCannotBeSerialized.ContainsKey(stateType))
+        if (stateType is null)
             return null;
 
         var state = StateAccessorFor(stateType).GetState(instance);
@@ -150,8 +152,6 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         }
         catch (Exception e) when (e is NotSupportedException or InvalidOperationException or System.Text.Json.JsonException)
         {
-            // remembered: failing for every message would cost more than its handler does
-            StatesThatCannotBeSerialized.TryAdd(stateType, 0);
             return null;
         }
     }
@@ -171,9 +171,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         else
         {
             var accessor = StateAccessorFor(stateType);
-            var state = released.StateData is null
-                ? accessor.GetState(abandoned)
-                : _serializer.Deserialize(released.StateData, stateType);
+            var state = DeserializeState(released, stateType) ?? accessor.GetState(abandoned);
             restored = accessor.CreateInstance(abandoned, state, released.ProcessedMessages);
         }
 
@@ -181,6 +179,22 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             restored.MarkAsCompleted();
 
         return restored;
+    }
+
+    /// <returns>null when there is no copy of the state, or one that cannot be read back.</returns>
+    private object? DeserializeState(Snapshot released, Type stateType)
+    {
+        if (released.StateData is null)
+            return null;
+
+        try
+        {
+            return _serializer.Deserialize(released.StateData, stateType);
+        }
+        catch (Exception e) when (e is NotSupportedException or InvalidOperationException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
     private static ISagaStateAccessor StateAccessorFor(Type stateType)
@@ -233,7 +247,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         if (filter?.SagaType is not null)
             query = query.Where(e => e.State.Descriptor.SagaType.FullName == filter.SagaType);
         if (filter?.IsCompleted is not null)
-            query = query.Where(e => e.State.IsCompleted == filter.IsCompleted);
+            query = query.Where(e => IsCompleted(e) == filter.IsCompleted);
 
         var totalCount = query.Count();
         var page = filter?.Page ?? 1;
@@ -248,7 +262,11 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         return ValueTask.FromResult(new PagedResult<SagaInstanceInfo>(items, totalCount, page, pageSize));
     }
 
-    private static SagaInstanceInfo MapToInfo(Entry entry)
+    // the instance of a locked saga holds what its owner is doing to it: a query reads what was last released
+    private static bool IsCompleted(Entry entry)
+        => entry.Released?.IsCompleted ?? false;
+
+    private SagaInstanceInfo MapToInfo(Entry entry)
         => new()
         {
             InstanceId = entry.State.InstanceId,
@@ -256,24 +274,23 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             TriggerMessageId = entry.State.TriggerMessageId,
             SagaType = entry.State.Descriptor.SagaType.FullName ?? entry.State.Descriptor.SagaType.Name,
             SagaStateType = entry.State.Descriptor.SagaStateType?.FullName,
-            IsCompleted = entry.State.IsCompleted,
+            IsCompleted = IsCompleted(entry),
             IsLocked = entry.LockId is not null,
             ProcessedMessages = (entry.Released?.ProcessedMessages ?? [])
                 .Select(pm => new ProcessedMessageInfo(pm.MessageId, pm.When))
                 .ToList(),
-            StateData = ExtractStateData(entry.State)
+            StateData = StateData(entry)
         };
 
-    private static object? ExtractStateData(ISagaInstance instance)
+    private object? StateData(Entry entry)
     {
-        var sagaInstanceType = instance.GetType();
-        var stateInterface = sagaInstanceType.GetInterfaces()
-            .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISagaInstance<>));
-        if (stateInterface is null)
+        if (entry.State.Descriptor.SagaStateType is not { } stateType)
             return null;
 
-        var stateProperty = stateInterface.GetProperty("State");
-        return stateProperty?.GetValue(instance);
+        if (entry.LockId is null)
+            return StateAccessorFor(stateType).GetState(entry.State);
+
+        return entry.Released is null ? null : DeserializeState(entry.Released, stateType);
     }
 
     private static string BuildKey(SagaDescriptor descriptor, string correlationId)

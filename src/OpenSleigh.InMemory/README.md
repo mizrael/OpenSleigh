@@ -42,7 +42,12 @@ Nothing outlives the process: a message that is being processed, or is waiting t
 
 ### When a saga cannot be stored
 
-When the commit of a saga fails, or its handler is interrupted by a stop, the saga goes back to what it was when it was last released: its state, whether it is completed, and the messages it has processed. A saga whose first message ends that way is removed. The state is kept as a serialized copy for that, taken every time the saga is released; a state that cannot be serialized is not copied, and such a saga keeps what the handler did to its state.
+When the commit of a saga fails, or its handler is interrupted by a stop, the saga goes back to what it was when it was last released: its state, whether it is completed, and the messages it has processed. A saga whose first message ends that way is removed.
+
+- The state is kept as a serialized copy for that, taken every time the saga is released, with the serializer of the application (JSON by default). The state has to come back from it as it went in: what the serializer does not write, or cannot set when reading (a property without a setter, a collection it cannot fill), comes back empty, with no error.
+- A state that cannot be serialized, or whose copy cannot be read back, is not put back: such a saga keeps what the handler did to its state, and goes back to what it was for the rest.
+- While a saga is locked, looking for it fails with a `LockException`, and the message is processed again after the delay above: its instance holds what the handler is doing, which may never be stored. Queries (`ISagaStateQuery`) return what the saga was when it was last released.
+- Releasing or abandoning a saga with a lock that is not the one it is locked with fails with a `LockException`.
 
 If you decide to use the InMemory Transport, you also have to configure each Saga :
 
