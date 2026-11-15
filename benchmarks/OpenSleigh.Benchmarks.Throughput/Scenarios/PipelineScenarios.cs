@@ -127,7 +127,10 @@ internal static class PipelineScenarios
         {
             var tracker = host.Services.GetRequiredService<WorkTracker>();
 
-            // the first publish declares exchanges and queues
+            if (transport is not null)
+                await transport.DeclareConsumerQueueAsync(host.Services, typeof(StartBench));
+
+            // the first publish declares the exchange
             var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
             await host.Services.GetRequiredService<IPublisher>().PublishAsync(NewStart(systemInfo));
             tracker.Reset();
@@ -221,6 +224,7 @@ internal static class PipelineScenarios
             var publisher = host.Services.GetRequiredService<IPublisher>();
             var systemInfo = host.Services.GetRequiredService<ISystemInfo>();
 
+            await transport.DeclareConsumerQueueAsync(host.Services, typeof(Ping));
             await publisher.PublishAsync(NewPing(systemInfo));
 
             var stopwatch = Stopwatch.StartNew();

@@ -1,4 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Transactions;
 
 namespace OpenSleigh.Persistence.SQL;
 
@@ -35,12 +38,52 @@ public sealed class SagaDbSchemaInitializer
             if (_created)
                 return;
 
-            // a database that was just created has the current schema
-            var alreadyExisted = !database.EnsureCreated();
-            if (alreadyExisted)
-                _schemaUpgrade?.Apply(database);
+            // creating and upgrading the schema open connections and transactions of their own:
+            // a transaction of whoever asked for the first context is not theirs to take part in
+            using (new TransactionScope(TransactionScopeOption.Suppress))
+                EnsureCreatedAndCurrent(database);
 
             _created = true;
+        }
+    }
+
+    // instances that start together on a database that is missing, or empty, wait for each other
+    // through the schema upgrade, which knows how to on its database
+    private void EnsureCreatedAndCurrent(DatabaseFacade database)
+    {
+        if (_schemaUpgrade is null || database.GetService<IDatabaseCreator>() is not IRelationalDatabaseCreator creator)
+        {
+            // a database that was just created has the current schema
+            if (!database.EnsureCreated())
+                _schemaUpgrade?.Apply(database);
+            return;
+        }
+
+        var tablesWereMissing = _schemaUpgrade.EnsureCreated(database, creator, created => Seed(database, created));
+        if (tablesWereMissing)
+            return;
+
+        // tables that were just created have the current schema: only the ones that were there are upgraded
+        _schemaUpgrade.Apply(database);
+        Seed(database, created: false);
+    }
+
+    // what EnsureCreated does once the database is there, for a context that was configured with UseSeeding
+    private static void Seed(DatabaseFacade database, bool created)
+    {
+        var options = database.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>();
+
+        if (options?.Seeder is { } seeder)
+        {
+            using var transaction = database.BeginTransaction();
+            seeder(database.GetService<ICurrentDbContext>().Context, created);
+            transaction.Commit();
+        }
+        else if (options?.AsyncSeeder is not null)
+        {
+            throw new InvalidOperationException(
+                $"The saga database is seeded when the first context is created, which cannot wait for '{nameof(DbContextOptionsBuilder.UseAsyncSeeding)}': " +
+                $"configure '{nameof(DbContextOptionsBuilder.UseSeeding)}' as well.");
         }
     }
 }

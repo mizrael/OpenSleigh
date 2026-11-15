@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
 
 namespace OpenSleigh.Tests;
@@ -136,7 +137,8 @@ public class SagaExecutionServiceTests
         var result = await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
 
         Assert.IsType<NoOpSagaInstance>(result);
-        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.Received(1).AbandonAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -158,6 +160,64 @@ public class SagaExecutionServiceTests
         await sut.ReleaseAsync(sagaInstance, CancellationToken.None);
 
         await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_delegate_to_repository()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+
+        var sut = new SagaExecutionService(Substitute.For<ISagaInstanceFactory>(), sagaStateRepository, Substitute.For<IOutboxRepository>());
+
+        await sut.AbandonAsync(sagaInstance, CancellationToken.None);
+
+        await sagaStateRepository.Received(1).AbandonAsync(sagaInstance, Arg.Any<CancellationToken>());
+        await sagaStateRepository.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_log_and_rethrow_when_the_saga_could_not_be_released()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var logger = Substitute.For<ILogger<SagaExecutionService>>();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaStateRepository.AbandonAsync(sagaInstance, Arg.Any<CancellationToken>())
+                           .Returns(_ => ValueTask.FromException(new InvalidOperationException("the database is gone")));
+
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(), sagaStateRepository, Substitute.For<IOutboxRepository>(), logger: logger);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.AbandonAsync(sagaInstance, CancellationToken.None).AsTask());
+
+        Assert.Equal(LogLevel.Warning, Assert.Single(logger.ReceivedCalls()).GetArguments().OfType<LogLevel>().Single());
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_not_let_the_release_be_cancelled_once_the_messages_are_in_the_outbox()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        using var stopping = new CancellationTokenSource();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance));
+
+        var sut = new SagaExecutionService(Substitute.For<ISagaInstanceFactory>(), sagaStateRepository, Substitute.For<IOutboxRepository>());
+
+        await sut.CommitAsync(sagaInstance, stopping.Token);
+
+        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, CancellationToken.None);
     }
 
     [Fact]

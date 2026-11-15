@@ -24,6 +24,10 @@ services.AddOpenSleigh(cfg =>{
 
 Of course it can be used in conjunction with any other Transport library as well (eg. [InMemory](https://www.nuget.org/packages/OpenSleigh.InMemory/) or [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/).
 
+## The first start
+
+The database and its tables are created when the application starts, if they are missing. Several instances can start together on a server that does not have the database yet: they wait for each other to create it (an application lock in `master`), and then to create the tables (an application lock in the database), which only the first one does. When the tables are there, a start costs the same two checks as before, and takes no lock.
+
 ## Upgrading a database created by version 3.3.0 or earlier
 
 Delayed messages need a column on the outbox table and an index on it. A new database is created with both. A database that already exists gets them from the library when the application starts (or, without a host, the first time it uses the database):

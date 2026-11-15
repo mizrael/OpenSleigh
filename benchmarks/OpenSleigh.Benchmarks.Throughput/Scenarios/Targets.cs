@@ -126,6 +126,12 @@ internal sealed record TransportTarget(string Name, Action<IBusConfigurator> Con
 {
     private static readonly TimeSpan RabbitRetryDelay = TimeSpan.FromMilliseconds(500);
 
+    /// <summary>
+    /// declares what a service that consumes the message type would have declared, for a scenario whose host only publishes:
+    /// where a publisher declares no queue of its own, its messages would have nowhere to go.
+    /// </summary>
+    public Func<IServiceProvider, Type, Task> DeclareConsumerQueueAsync { get; init; } = (_, _) => Task.CompletedTask;
+
     public static TransportTarget Rabbit(ScenarioContext context)
         => Rabbit(context, configuration => configuration);
 
@@ -159,7 +165,14 @@ internal sealed record TransportTarget(string Name, Action<IBusConfigurator> Con
                 $"{exchangeName}.dead.workers");
         };
 
-        return new TransportTarget("rabbit", cfg => cfg.UseRabbitMQTransport(configuration, creator), () => Task.CompletedTask);
+        return new TransportTarget("rabbit", cfg => cfg.UseRabbitMQTransport(configuration, creator), () => Task.CompletedTask)
+        {
+            DeclareConsumerQueueAsync = async (services, messageType) =>
+            {
+                var channel = await services.GetRequiredService<OpenSleigh.Transport.RabbitMQ.IChannelFactory>().GetConsumeChannelAsync();
+                await channel.EnsureTopologyAsync(creator(messageType), configuration);
+            }
+        };
     }
 
     public static TransportTarget Kafka(ScenarioContext context, params Type[] messageTypes)
