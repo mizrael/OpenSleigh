@@ -8,7 +8,7 @@ public record VerifyIdentity : IMessage;
 
 public record ActivateAccount : IMessage;
 
-public record OnboardingState
+public class OnboardingState
 {
     public string Customer { get; set; } = string.Empty;
 
@@ -16,51 +16,36 @@ public record OnboardingState
     public List<string> Steps { get; set; } = [];
 }
 
-/// <summary>tells the scenario which host handled a step: every host has its own.</summary>
-public delegate void OnboardingStepHandled(string step);
-
 /// <summary>
 /// three steps in a row, each started by the message the previous one published, and each adding to the state.
 /// </summary>
-public class OnboardingSaga :
-    Saga<OnboardingState>,
+public class OnboardingSaga(ISagaInstance<OnboardingState> context) :
+    Saga<OnboardingState>(context),
     IStartedBy<StartOnboarding>,
     IHandleMessage<VerifyIdentity>,
     IHandleMessage<ActivateAccount>
 {
-    private readonly OnboardingStepHandled _onStepHandled;
-
-    public OnboardingSaga(OnboardingStepHandled onStepHandled, ISagaInstance<OnboardingState> context) : base(context)
-    {
-        _onStepHandled = onStepHandled ?? throw new ArgumentNullException(nameof(onStepHandled));
-    }
-
     public ValueTask HandleAsync(IMessageContext<StartOnboarding> context, CancellationToken cancellationToken = default)
     {
         Context.State.Customer = context.Message.Customer;
+        Context.State.Steps.Add(nameof(StartOnboarding));
         Publish(new VerifyIdentity());
 
-        return StepHandled(nameof(StartOnboarding));
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask HandleAsync(IMessageContext<VerifyIdentity> context, CancellationToken cancellationToken = default)
     {
+        Context.State.Steps.Add(nameof(VerifyIdentity));
         Publish(new ActivateAccount());
 
-        return StepHandled(nameof(VerifyIdentity));
+        return ValueTask.CompletedTask;
     }
 
     public ValueTask HandleAsync(IMessageContext<ActivateAccount> context, CancellationToken cancellationToken = default)
     {
+        Context.State.Steps.Add(nameof(ActivateAccount));
         Context.MarkAsCompleted();
-
-        return StepHandled(nameof(ActivateAccount));
-    }
-
-    private ValueTask StepHandled(string step)
-    {
-        Context.State.Steps.Add(step);
-        _onStepHandled(step);
 
         return ValueTask.CompletedTask;
     }

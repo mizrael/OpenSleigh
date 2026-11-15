@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Sagas;
 using OpenSleigh.Transport;
 using Xunit.Abstractions;
@@ -14,15 +13,22 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
     private const int Cycles = 100;
     private const decimal Fee = 9.99m;
 
+    // the message that starts the subscription, and one per cycle
+    private const int MessagesHandledByASubscription = Cycles + 1;
+
     // a pair of hosts: a step is rarely handled by the host that handled the previous one.
     // More hosts add nothing to a saga that has one message in flight at a time, and one host is what in-memory has
     private const int TwoHosts = 2;
 
     /// <summary>
     /// the order of the PizzaTracker sample: one event at a time from outside, each sent once the previous one is stored.
+    /// Loading a saga with what it has handled so far, and storing it again, is code of the store:
+    /// every store runs it, and one combination has Kafka.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [TwoHosts])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [TwoHosts])]
     public Task a_saga_is_moved_on_by_one_event_after_the_other(string combination, int hostsCount)
         => TrackPizzaOrderAsync(combination, hostsCount);
 
@@ -32,10 +38,12 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
         => TrackPizzaOrderAsync(combination, hostsCount);
 
     /// <summary>
-    /// a subscription billed a hundred times, each cycle published by the previous one.
+    /// a subscription billed a hundred times, each cycle published by the previous one. On the same combinations.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [TwoHosts])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [TwoHosts])]
     public Task a_saga_goes_through_a_hundred_steps_without_losing_count(string combination, int hostsCount)
         => BillSubscriptionAsync(combination, hostsCount);
 
@@ -67,17 +75,14 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
                 var (stageEvent, status) = stages[index];
 
                 // each event through another host, the way requests reach the replicas of an API
-                await hosts[index % hosts.Count].PublishAsync(stageEvent, cancellationToken);
+                await hosts[index % hosts.Count].PublishNewAsync(stageEvent, cancellationToken);
 
-                await run.WaitForSagaAsync<PizzaOrderSaga>(correlationId,
-                    saga => !saga.IsLocked && saga.StateData is PizzaOrderState state && state.Status == status,
-                    cancellationToken);
+                var moved = await run.WaitForReleasedSagaAsync<PizzaOrderSaga>(correlationId, handledMessages: index + 1, cancellationToken);
+                Assert.Equal(status, Assert.IsType<PizzaOrderState>(moved.StateData).Status);
             }
 
-            var stored = await run.FindSagaAsync<PizzaOrderSaga>(correlationId, cancellationToken);
-            Assert.NotNull(stored);
+            var stored = await run.WaitForReleasedSagaAsync<PizzaOrderSaga>(correlationId, stages.Length, cancellationToken);
             Assert.True(stored.IsCompleted);
-            Assert.Equal(stages.Length, stored.ProcessedMessages.Count);
 
             var state = Assert.IsType<PizzaOrderState>(stored.StateData);
             Assert.Equal("Ada Lovelace", state.Customer);
@@ -89,23 +94,17 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
     private async Task BillSubscriptionAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString("N");
-        var lastCycleBilled = new Expectation(1);
-        Action<IMessageContext<BillCycle>> onLastCycleBilled = _ => lastCycleBilled.Signal();
-
-        var setup = new HostSetup(bus => bus.AddSaga<SubscriptionSaga, SubscriptionState>())
-        {
-            ConfigureServices = services => services.AddSingleton(onLastCycleBilled)
-        };
+        var setup = new HostSetup(bus => bus.AddSaga<SubscriptionSaga, SubscriptionState>());
 
         await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
         {
-            await run.AnyHost.PublishAsync(new StartSubscription(correlationId, Cycles, Fee), cancellationToken);
-            await lastCycleBilled.Reached.WaitAsync(cancellationToken);
+            await run.AnyHost.PublishNewAsync(new StartSubscription(correlationId, Cycles, Fee), cancellationToken);
 
-            // the handler reports before its saga is stored
-            var stored = await run.WaitForSagaAsync<SubscriptionSaga>(correlationId,
-                saga => saga.IsCompleted && !saga.IsLocked, cancellationToken);
+            var stored = await run.WaitForReleasedSagaAsync<SubscriptionSaga>(correlationId, MessagesHandledByASubscription, cancellationToken);
+            Assert.True(stored.IsCompleted);
+            Assert.Equal(MessagesHandledByASubscription, stored.ProcessedMessages.Select(message => message.MessageId).Distinct().Count());
 
+            // a cycle billed twice, or on a state that misses the one before it, shows in the count, the total or the turns
             var expected = new SubscriptionState
             {
                 Cycles = Cycles,
@@ -115,12 +114,6 @@ public class LongRunningSagaScenario(ITestOutputHelper console) : ScenarioBase(c
                 CyclesOutOfTurn = 0,
             };
             Assert.Equal(expected, Assert.IsType<SubscriptionState>(stored.StateData));
-
-            // the message that started it, and one per cycle
-            Assert.Equal(Cycles + 1, stored.ProcessedMessages.Count);
-            Assert.Equal(Cycles + 1, stored.ProcessedMessages.Select(message => message.MessageId).Distinct().Count());
         });
-
-        Assert.Equal(1, lastCycleBilled.Count);
     }
 }

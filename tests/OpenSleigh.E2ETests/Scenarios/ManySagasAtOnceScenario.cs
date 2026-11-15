@@ -13,8 +13,8 @@ public class ManySagasAtOnceScenario(ITestOutputHelper console) : ScenarioBase(c
     private const int HostsCount = 3;
 
     // what keeps the instances apart is code of the store (the lookup by correlation id, the lock, and on the SQL
-    // stores the pooled contexts, used by several messages at once): every store runs it, on RabbitMQ.
-    // One combination has Kafka, where the messages of an instance are spread over partitions and hosts
+    // stores the pooled contexts): every store runs it, on RabbitMQ. One combination has Kafka,
+    // where the messages of an instance are spread over partitions and hosts
     [Theory]
     [MatrixData(
         Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
@@ -22,7 +22,6 @@ public class ManySagasAtOnceScenario(ITestOutputHelper console) : ScenarioBase(c
     public Task every_instance_ends_with_its_own_state_on_several_hosts(string combination, int hostsCount)
         => RunTransfersAsync(combination, hostsCount);
 
-    // one host handles several messages at a time here
     [Theory]
     [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
     public Task every_instance_ends_with_its_own_state_in_memory(string combination, int hostsCount)
@@ -37,14 +36,21 @@ public class ManySagasAtOnceScenario(ITestOutputHelper console) : ScenarioBase(c
             ConfigureServices = services => workload.AddTo(services)
         };
 
-        await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
-        {
-            await workload.OpenAllAsync(run.Hosts, cancellationToken);
-            await workload.Completed.Reached.WaitAsync(cancellationToken);
+        await RunScenarioAsync(combination, hostsCount, setup,
+            async (run, cancellationToken) =>
+            {
+                await workload.OpenAllAsync(run.Hosts, cancellationToken);
+                await workload.WaitUntilAllAreDebitedAsync(run, cancellationToken);
 
-            await workload.AssertEachIsStoredAsCompletedAsync(run, cancellationToken);
-        });
+                // all of them are in flight now, none can end before its settlement: each is stored with what it did so far
+                await workload.AssertEachIsStoredAsync(run, settled: false, cancellationToken);
 
-        workload.AssertEachCompletedOnce();
+                await workload.SettleAllAsync(run.Hosts, cancellationToken);
+                await workload.WaitUntilAllAreSettledAsync(run, cancellationToken);
+                await workload.AssertEachIsStoredAsync(run, settled: true, cancellationToken);
+            },
+            AssertOnlyLockConflictsAsync);
+
+        workload.AssertEveryMessageWasHandledOnce();
     }
 }

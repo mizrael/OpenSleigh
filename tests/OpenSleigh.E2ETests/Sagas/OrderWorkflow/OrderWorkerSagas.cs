@@ -17,7 +17,8 @@ public class StockReservationSaga(ISagaInstance context) : Saga(context), IStart
 {
     public ValueTask HandleAsync(IMessageContext<ReserveStock> context, CancellationToken cancellationToken = default)
     {
-        Publish(new StockReserved(context.Message.OrderId));
+        foreach (var sku in context.Message.Skus)
+            Publish(new StockReserved(context.Message.OrderId, sku));
         Context.MarkAsCompleted();
 
         return ValueTask.CompletedTask;

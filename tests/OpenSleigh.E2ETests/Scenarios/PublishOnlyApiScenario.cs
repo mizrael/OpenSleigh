@@ -14,33 +14,37 @@ namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
 /// the topology of Sample2: an API that only publishes, and workers that do the work. The API is configured
-/// like the workers, sagas included, and set to publish only: it must never handle a message.
+/// like the workers, sagas included, and set to publish only: it must never be given a message.
 /// </summary>
 public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const string Api = "api";
     private const int TransfersCount = 20;
+    private const int MessagesHandledByAnOpenTransfer = 2;
 
+    /// <summary>
+    /// not subscribing is up to the transport, whatever the store: each transport runs it.
+    /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq, Combinations.MongoDbKafka], HostsCounts = [2])]
     public async Task an_api_that_only_publishes_leaves_the_work_to_the_workers(string combination, int hostsCount)
     {
         var workload = new TransferWorkload(TransfersCount);
-        var apiActivity = new HostActivity();
+        var api = new ApiActivity();
 
-        await RunScenarioAsync(combination, async (run, cancellationToken) =>
-        {
-            await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
-            var api = await run.StartHostAsync(ApiSetup(apiActivity));
+        await RunScenarioAsync(combination,
+            async (run, cancellationToken) =>
+            {
+                await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
+                var apiHost = await run.StartHostAsync(ApiSetup(api));
 
-            await workload.OpenAllAsync([api], cancellationToken);
-            await workload.Completed.Reached.WaitAsync(cancellationToken);
+                await workload.RunToSettlementAsync(run, [apiHost], cancellationToken);
+                await workload.AssertEachIsStoredAsync(run, settled: true, cancellationToken);
+            },
+            AssertOnlyLockConflictsAsync);
 
-            await workload.AssertEachIsStoredAsCompletedAsync(run, cancellationToken);
-        });
-
-        workload.AssertEachCompletedOnce();
-        Assert.Equal(0, apiActivity.ProcessedCount);
+        workload.AssertEveryMessageWasHandledOnce();
+        Assert.Equal(0, api.Deliveries.Count);
     }
 
     /// <summary>
@@ -55,56 +59,61 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
     public async Task messages_appended_by_an_api_are_relayed_by_workers_that_poll_the_outbox(string combination, int hostsCount)
     {
         var workload = new TransferWorkload(TransfersCount);
-        var apiActivity = new HostActivity();
+        var api = new ApiActivity();
         var apiRelay = new PausableRelay(isPaused: true);
 
-        await RunScenarioAsync(combination, async (run, cancellationToken) =>
-        {
-            await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
-            var api = await run.StartHostAsync(ApiSetup(apiActivity, apiRelay));
+        await RunScenarioAsync(combination,
+            async (run, cancellationToken) =>
+            {
+                await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
+                var apiHost = await run.StartHostAsync(ApiSetup(api, apiRelay));
+                ScenarioHost[] publishers = [apiHost];
 
-            // on its own, while the workers are idle: a relay that is busy reads the outbox again anyway
-            var first = workload.Transfers[0];
-            await api.PublishAsync(first, cancellationToken);
-            await run.WaitForSagaAsync<TransferSaga>(first.CorrelationId, saga => saga.IsCompleted, cancellationToken);
+                // on its own, while the workers are idle: a relay that is busy reads the outbox again anyway
+                var first = workload.Transfers[0];
+                await workload.OpenAsync([first], publishers, cancellationToken);
+                await run.WaitForReleasedSagaAsync<TransferSaga>(first.CorrelationId, MessagesHandledByAnOpenTransfer, cancellationToken);
 
-            await workload.OpenAsync(workload.Transfers.Skip(1).ToArray(), [api], cancellationToken);
-            await workload.Completed.Reached.WaitAsync(cancellationToken);
+                await workload.OpenAsync(workload.Transfers.Skip(1), publishers, cancellationToken);
+                await workload.WaitUntilAllAreDebitedAsync(run, cancellationToken);
+                await workload.SettleAllAsync(publishers, cancellationToken);
+                await workload.WaitUntilAllAreSettledAsync(run, cancellationToken);
 
-            await workload.AssertEachIsStoredAsCompletedAsync(run, cancellationToken);
-        });
+                await workload.AssertEachIsStoredAsync(run, settled: true, cancellationToken);
+            },
+            AssertOnlyLockConflictsAsync);
 
-        workload.AssertEachCompletedOnce();
-        Assert.Equal(0, apiActivity.ProcessedCount);
-        Assert.Empty(apiActivity.PublishedTypes);
+        workload.AssertEveryMessageWasHandledOnce();
+        Assert.Equal(0, api.Deliveries.Count);
+        Assert.Empty(api.PublishedTypes);
     }
 
     /// <summary>
     /// a host that only publishes has no consumer: a queue of its own would keep a copy of every message for nobody.
+    /// The queues are declared by the transport, whatever the store.
     /// </summary>
     [Theory]
-    [MatrixData(
-        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq],
-        HostsCounts = [1])]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1])]
     public async Task an_api_that_only_publishes_leaves_no_message_behind_on_rabbitmq(string combination, int hostsCount)
     {
         var workload = new TransferWorkload(TransfersCount);
-        var apiActivity = new HostActivity();
+        var api = new ApiActivity();
         IReadOnlyDictionary<string, uint> leftBehind = new Dictionary<string, uint>();
 
-        await RunScenarioAsync(combination, async (run, cancellationToken) =>
-        {
-            await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
-            var api = await run.StartHostAsync(ApiSetup(apiActivity));
+        await RunScenarioAsync(combination,
+            async (run, cancellationToken) =>
+            {
+                await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
+                var apiHost = await run.StartHostAsync(ApiSetup(api));
 
-            await workload.OpenAllAsync([api], cancellationToken);
-            await workload.Completed.Reached.WaitAsync(cancellationToken);
-            await workload.AssertEachIsStoredAsCompletedAsync(run, cancellationToken);
+                await workload.RunToSettlementAsync(run, [apiHost], cancellationToken);
+                await workload.AssertEachIsStoredAsync(run, settled: true, cancellationToken);
 
-            leftBehind = await ReadMessagesLeftInQueuesOfAsync(api, apiActivity.PublishedTypes.Distinct(), cancellationToken);
-            foreach (var (queueName, messagesCount) in leftBehind)
-                Console.WriteLine($"queue '{queueName}' has no consumer and holds {messagesCount} messages");
-        });
+                leftBehind = await ReadMessagesLeftInQueuesOfAsync(apiHost, api.PublishedTypes.Distinct(), cancellationToken);
+                foreach (var (queueName, messagesCount) in leftBehind)
+                    Console.WriteLine($"queue '{queueName}' has no consumer and holds {messagesCount} messages");
+            },
+            AssertOnlyLockConflictsAsync);
 
         Assert.Empty(leftBehind);
     }
@@ -115,17 +124,16 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
             ConfigureServices = services => workload.AddTo(services)
         };
 
-    private static HostSetup ApiSetup(HostActivity activity, PausableRelay? relay = null)
+    private static HostSetup ApiSetup(ApiActivity activity, PausableRelay? relay = null)
         => new(bus => bus.AddSaga<TransferSaga, TransferState>().SetPublishOnly())
         {
             Service = Api,
             ConfigureServices = services =>
             {
-                // never called, unless the API handles a message after all
-                Action<IMessageContext<CreditAccount>> onCompleted = _ => { };
-
-                services.AddSingleton(onCompleted)
-                    .Decorate<IMessageProcessor>((_, inner) => new ObservedProcessor(inner, activity))
+                services
+                    .ObserveDeliveriesOf<OpenTransfer>(activity.Deliveries)
+                    .ObserveDeliveriesOf<DebitAccount>(activity.Deliveries)
+                    .ObserveDeliveriesOf<SettleTransfer>(activity.Deliveries)
                     .Decorate<IPublisher>((_, inner) => new ObservedPublisher(inner, activity));
 
                 if (relay is not null)
@@ -133,21 +141,13 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
             }
         };
 
-    // the queues the host declared for itself, one per message type it published, that still hold messages
+    // the queues the host declared for itself, one per message type it published, that still hold messages.
+    // Asked on a channel of its own, on the connection of the host: its publish channel belongs to its relay
     private static async Task<IReadOnlyDictionary<string, uint>> ReadMessagesLeftInQueuesOfAsync(
         ScenarioHost host, IEnumerable<Type> messageTypes, CancellationToken cancellationToken)
     {
-        var configuration = host.Services.GetRequiredService<RabbitConfiguration>();
+        var connection = host.Services.GetRequiredService<IBusConnection>();
         var queueReferences = host.Services.GetRequiredService<IQueueReferenceFactory>();
-
-        var connectionFactory = new ConnectionFactory
-        {
-            HostName = configuration.HostName,
-            UserName = configuration.UserName,
-            Password = configuration.Password,
-            VirtualHost = configuration.VirtualHost,
-        };
-        await using var connection = await connectionFactory.CreateConnectionAsync(cancellationToken);
 
         var leftBehind = new Dictionary<string, uint>();
         foreach (var messageType in messageTypes)
@@ -155,7 +155,7 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
             var queueName = queueReferences.Create(messageType).QueueName;
 
             // a channel is closed by the broker when it asks for a queue that does not exist: one per question
-            await using var channel = await connection.CreateChannelAsync(cancellationToken: cancellationToken);
+            await using var channel = await connection.CreateChannelAsync(cancellationToken);
             try
             {
                 var queue = await channel.QueueDeclarePassiveAsync(queueName, cancellationToken);
@@ -171,32 +171,21 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
         return leftBehind;
     }
 
-    /// <summary>what a host did with the transport.</summary>
-    private sealed class HostActivity
+    /// <summary>what the API did with the transport.</summary>
+    private sealed class ApiActivity
     {
         private readonly ConcurrentQueue<Type> _publishedTypes = new();
-        private int _processedCount;
 
-        public int ProcessedCount => Volatile.Read(ref _processedCount);
+        /// <summary>counts the messages the API was given, whatever it did with them.</summary>
+        public Expectation Deliveries { get; } = new(1);
 
-        /// <summary>the type of every message the host relayed, one entry per message.</summary>
+        /// <summary>the type of every message the API relayed, one entry per message.</summary>
         public IReadOnlyCollection<Type> PublishedTypes => _publishedTypes;
-
-        public void MessageProcessed() => Interlocked.Increment(ref _processedCount);
 
         public void MessagePublished(Type messageType) => _publishedTypes.Enqueue(messageType);
     }
 
-    private sealed class ObservedProcessor(IMessageProcessor inner, HostActivity activity) : IMessageProcessor
-    {
-        public ValueTask ProcessAsync(MessageEnvelope outboxMessage, CancellationToken cancellationToken = default)
-        {
-            activity.MessageProcessed();
-            return inner.ProcessAsync(outboxMessage, cancellationToken);
-        }
-    }
-
-    private sealed class ObservedPublisher(IPublisher inner, HostActivity activity) : IPublisher
+    private sealed class ObservedPublisher(IPublisher inner, ApiActivity activity) : IPublisher
     {
         public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
         {

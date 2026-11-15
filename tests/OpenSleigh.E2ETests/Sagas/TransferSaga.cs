@@ -6,36 +6,30 @@ public record OpenTransfer(Guid TransferId, string CorrelationId, decimal Amount
 
 public record DebitAccount(Guid TransferId, decimal Amount) : IMessage;
 
-public record CreditAccount(Guid TransferId, decimal Amount) : IMessage;
+public record SettleTransfer(Guid TransferId, string CorrelationId, decimal Amount) : IMessage, IHasCorrelationId;
 
 public record TransferState
 {
     public Guid TransferId { get; set; }
     public decimal Amount { get; set; }
     public decimal Debited { get; set; }
-    public decimal Credited { get; set; }
+    public decimal Settled { get; set; }
 
     /// <summary>how many messages of another transfer this one was given.</summary>
     public int MessagesOfOtherTransfers { get; set; }
 }
 
 /// <summary>
-/// a money transfer in three steps, each started by the message the previous one published.
-/// Every message says which transfer it belongs to, so that one handled by another instance shows in the state.
+/// a money transfer: it debits the account as soon as it is opened, then stays in flight until the settlement
+/// comes from outside. Every message says which transfer it belongs to, and how much it moves,
+/// so that one handled by another instance shows in the state.
 /// </summary>
-public class TransferSaga :
-    Saga<TransferState>,
+public class TransferSaga(ISagaInstance<TransferState> context) :
+    Saga<TransferState>(context),
     IStartedBy<OpenTransfer>,
     IHandleMessage<DebitAccount>,
-    IHandleMessage<CreditAccount>
+    IHandleMessage<SettleTransfer>
 {
-    private readonly Action<IMessageContext<CreditAccount>> _onCompleted;
-
-    public TransferSaga(Action<IMessageContext<CreditAccount>> onCompleted, ISagaInstance<TransferState> context) : base(context)
-    {
-        _onCompleted = onCompleted ?? throw new ArgumentNullException(nameof(onCompleted));
-    }
-
     public ValueTask HandleAsync(IMessageContext<OpenTransfer> context, CancellationToken cancellationToken = default)
     {
         var transfer = context.Message;
@@ -53,19 +47,15 @@ public class TransferSaga :
         CountWhenOfAnotherTransfer(debit.TransferId);
         Context.State.Debited += debit.Amount;
 
-        Publish(new CreditAccount(Context.State.TransferId, Context.State.Amount));
-
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask HandleAsync(IMessageContext<CreditAccount> context, CancellationToken cancellationToken = default)
+    public ValueTask HandleAsync(IMessageContext<SettleTransfer> context, CancellationToken cancellationToken = default)
     {
-        var credit = context.Message;
-        CountWhenOfAnotherTransfer(credit.TransferId);
-        Context.State.Credited += credit.Amount;
+        var settlement = context.Message;
+        CountWhenOfAnotherTransfer(settlement.TransferId);
+        Context.State.Settled += settlement.Amount;
         Context.MarkAsCompleted();
-
-        _onCompleted(context);
 
         return ValueTask.CompletedTask;
     }

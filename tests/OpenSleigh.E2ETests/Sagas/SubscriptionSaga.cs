@@ -21,19 +21,12 @@ public record SubscriptionState
 /// a saga that keeps itself going for many steps: every billing cycle publishes the next one, until the last.
 /// Each step builds on what the previous ones left in the state.
 /// </summary>
-public class SubscriptionSaga :
-    Saga<SubscriptionState>,
+public class SubscriptionSaga(ISagaInstance<SubscriptionState> context) :
+    Saga<SubscriptionState>(context),
     IStartedBy<StartSubscription>,
     IHandleMessage<BillCycle>
 {
     private const int FirstCycle = 1;
-
-    private readonly Action<IMessageContext<BillCycle>> _onLastCycleBilled;
-
-    public SubscriptionSaga(Action<IMessageContext<BillCycle>> onLastCycleBilled, ISagaInstance<SubscriptionState> context) : base(context)
-    {
-        _onLastCycleBilled = onLastCycleBilled ?? throw new ArgumentNullException(nameof(onLastCycleBilled));
-    }
 
     /// <summary>what a subscription has billed once its cycles are over: cycle n costs n times the fee.</summary>
     public static decimal TotalOf(int cycles, decimal fee) => fee * cycles * (cycles + 1) / 2;
@@ -58,13 +51,9 @@ public class SubscriptionSaga :
         Context.State.TotalBilled += Context.State.Fee * cycle;
 
         if (cycle < Context.State.Cycles)
-        {
             Publish(new BillCycle(cycle + 1));
-            return ValueTask.CompletedTask;
-        }
-
-        Context.MarkAsCompleted();
-        _onLastCycleBilled(context);
+        else
+            Context.MarkAsCompleted();
 
         return ValueTask.CompletedTask;
     }

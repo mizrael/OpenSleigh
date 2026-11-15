@@ -1,24 +1,29 @@
-using System.Collections.Concurrent;
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.DependencyInjection;
+using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas.OrderWorkflow;
-using OpenSleigh.Queries;
 using OpenSleigh.Transport;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
-/// the order workflow of the ECommerce sample: an orchestrator asks two services at once, waits for both answers
-/// on one saga instance, then asks a third. Several orders go through it at the same time.
+/// the order workflow of the ECommerce sample: an orchestrator asks two services at once, collects their answers
+/// on one saga instance, then asks a third. Several orders go through it; the answers of the first one are made
+/// to arrive while the saga is busy with another of them.
 /// </summary>
 public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const int OrdersCount = 10;
-    private const int Replicas = 3;
+    private const int LinesOfAnOrder = 2;
 
-    // PlaceOrder, CreditChecked, StockReserved and OrderShipped
-    private const int MessagesHandledByAnOrder = 4;
+    // the answers to the first order contend for its saga: one of them keeps it, on one host, and another has to
+    // reach a host that is free. The warehouse answers once per line, so there are enough of them for that
+    private const int LinesOfTheContendedOrder = 16;
+
+    // PlaceOrder, CreditChecked and OrderShipped, besides one StockReserved per line
+    private const int MessagesHandledBesidesTheLines = 3;
+
+    private const int Replicas = 3;
 
     private const string Orders = "orders";
     private const string Payments = "payments";
@@ -26,8 +31,8 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
     private const string Shipping = "shipping";
 
     /// <summary>
-    /// replicas of one application that has the four sagas: the two answers reach different hosts at the same time.
-    /// A single replica is left out: it takes the answers one at a time, on RabbitMQ and on Kafka alike.
+    /// replicas of one application that has the four sagas. A single replica is left out: it takes the answers
+    /// one at a time, on RabbitMQ and on Kafka alike, and they could not be made to meet.
     /// </summary>
     [Theory]
     [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [Replicas])]
@@ -35,7 +40,7 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
         => RunOnOneApplicationAsync(combination, hostsCount);
 
     /// <summary>
-    /// one host, which handles several messages at a time in memory: the two answers meet there as well.
+    /// one host, which handles the messages it reads together at the same time: the answers meet there as well.
     /// </summary>
     [Theory]
     [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
@@ -57,10 +62,14 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
     }
 
     /// <summary>
-    /// the topology of the sample: every saga in a service of its own, each with its replicas.
+    /// the topology of the sample: every saga in a service of its own, each with its replicas. What it adds to the
+    /// replicas of one application is up to the transport, a queue or a consumer group per service:
+    /// each transport runs it, over the three stores.
     /// </summary>
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    [MatrixData(
+        Only = [Combinations.SqlServerKafka, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbKafka],
+        HostsCounts = [2])]
     public Task orders_are_fulfilled_by_a_service_per_saga(string combination, int hostsCount)
     {
         var workflow = new Workflow();
@@ -81,78 +90,94 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
 
     private async Task RunWorkflowAsync(string combination, Workflow workflow, Func<ScenarioRun, Task> startHostsAsync)
     {
-        var orders = Enumerable.Range(1, OrdersCount)
-            .Select(number => new PlaceOrder(Guid.NewGuid(), Guid.NewGuid().ToString("N"), Amount: 10m * number, Quantity: number))
-            .ToArray();
+        var contended = NewOrder(number: 1, LinesOfTheContendedOrder);
+        var others = Enumerable.Range(2, OrdersCount - 1).Select(number => NewOrder(number, LinesOfAnOrder)).ToArray();
+        PlaceOrder[] orders = [contended, .. others];
+        var runs = workflow.Runs;
 
-        await RunScenarioAsync(combination, async (run, cancellationToken) =>
-        {
-            await startHostsAsync(run);
+        await RunScenarioAsync(combination,
+            async (run, cancellationToken) =>
+            {
+                await startHostsAsync(run);
+                var publisher = run.AnyHost;
 
-            var publisher = run.AnyHost;
-            await Task.WhenAll(orders.Select(order => publisher.PublishAsync(order, cancellationToken)));
+                // the first order is kept in its first step, with nothing else on its way to a host:
+                // from here on an in-memory host can be told to read the messages that follow together
+                var placing = runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(PlaceOrder));
+                await publisher.PublishNewAsync(contended, cancellationToken);
+                await run.WaitForAsync("the first order to reach its saga", placing.Entered, cancellationToken);
 
-            await workflow.Completed.Reached.WaitAsync(cancellationToken);
+                using (workflow.Batch.Of(2))
+                    await run.ForceLockConflictAsync(runs,
+                        handlerRun => IsAnswerTo(contended, handlerRun),
+                        () =>
+                        {
+                            placing.Release();
+                            return Task.CompletedTask;
+                        },
+                        cancellationToken);
 
-            foreach (var order in orders)
-                await AssertIsStoredAsFulfilledAsync(run, order, cancellationToken);
-        });
+                await Task.WhenAll(others.Select(order => publisher.PublishNewAsync(order, cancellationToken)));
 
-        // also after the observation window: nothing completed an order a second time
+                await run.WaitUntilAsync($"the {OrdersCount} orders to be shipped",
+                    () => runs.RunsOf<OrderShipped>().Count == OrdersCount, cancellationToken);
+
+                foreach (var order in orders)
+                    await AssertIsStoredAsFulfilledAsync(run, order, cancellationToken);
+            },
+            // an answer that finds its order busy with another one is retried
+            AssertOnlyLockConflictsAsync);
+
+        // also after the observation window: no handler ran twice for a message, and every order was completed once
+        Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
         Assert.Equal(
-            orders.Select(order => order.OrderId).Order(),
-            workflow.CompletedOrders.Order());
+            orders.Select(order => order.CorrelationId).Order(),
+            runs.RunsOf<OrderShipped>().Select(handlerRun => handlerRun.CorrelationId).Order());
     }
+
+    private static PlaceOrder NewOrder(int number, int lines)
+        => new(
+            Guid.NewGuid(),
+            Guid.NewGuid().ToString("N"),
+            Amount: 10m * number,
+            Skus: Enumerable.Range(1, lines).Select(line => $"SKU-{number}-{line}").ToArray());
+
+    private static bool IsAnswerTo(PlaceOrder order, HandlerRun handlerRun)
+        => handlerRun.CorrelationId == order.CorrelationId
+           && (handlerRun.MessageType == typeof(CreditChecked) || handlerRun.MessageType == typeof(StockReserved));
 
     private static async Task AssertIsStoredAsFulfilledAsync(ScenarioRun run, PlaceOrder order, CancellationToken cancellationToken)
     {
-        // the handler reports before its saga is stored
-        var saga = await run.WaitForSagaAsync<OrderSaga>(order.CorrelationId, IsCompletedAndReleased, cancellationToken);
+        var handledMessages = MessagesHandledBesidesTheLines + order.Skus.Count;
+        var saga = await run.WaitForReleasedSagaAsync<OrderSaga>(order.CorrelationId, handledMessages, cancellationToken);
+        Assert.True(saga.IsCompleted);
+        Assert.Equal(handledMessages, saga.ProcessedMessages.Select(message => message.MessageId).Distinct().Count());
 
-        var expected = new OrderState
-        {
-            OrderId = order.OrderId,
-            Amount = order.Amount,
-            Quantity = order.Quantity,
-            CreditChecked = true,
-            StockReserved = true,
-            ShipmentsRequested = 1,
-            TrackingNumber = ShippingSaga.TrackingNumberOf(order.OrderId),
-        };
-        Assert.Equal(expected, Assert.IsType<OrderState>(saga.StateData));
-        Assert.Equal(MessagesHandledByAnOrder, saga.ProcessedMessages.Select(message => message.MessageId).Distinct().Count());
-        Assert.Equal(MessagesHandledByAnOrder, saga.ProcessedMessages.Count);
+        var state = Assert.IsType<OrderState>(saga.StateData);
+        Assert.Equal(order.OrderId, state.OrderId);
+        Assert.Equal(order.Amount, state.Amount);
+        Assert.True(state.CreditChecked);
+        Assert.Equal(order.Skus.Order(), state.ReservedSkus.Order());
+        Assert.Equal(1, state.ShipmentsRequested);
+        Assert.Equal(ShippingSaga.TrackingNumberOf(order.OrderId), state.TrackingNumber);
 
-        await run.WaitForSagaAsync<CreditCheckSaga>(order.CorrelationId, IsCompletedAndReleased, cancellationToken);
-        await run.WaitForSagaAsync<StockReservationSaga>(order.CorrelationId, IsCompletedAndReleased, cancellationToken);
-        await run.WaitForSagaAsync<ShippingSaga>(order.CorrelationId, IsCompletedAndReleased, cancellationToken);
+        Assert.True((await run.WaitForReleasedSagaAsync<CreditCheckSaga>(order.CorrelationId, handledMessages: 1, cancellationToken)).IsCompleted);
+        Assert.True((await run.WaitForReleasedSagaAsync<StockReservationSaga>(order.CorrelationId, handledMessages: 1, cancellationToken)).IsCompleted);
+        Assert.True((await run.WaitForReleasedSagaAsync<ShippingSaga>(order.CorrelationId, handledMessages: 1, cancellationToken)).IsCompleted);
     }
 
-    private static bool IsCompletedAndReleased(SagaInstanceInfo saga) => saga.IsCompleted && !saga.IsLocked;
-
-    /// <summary>what the hosts of one run report to.</summary>
+    /// <summary>what the hosts of one run have in common, whatever their service.</summary>
     private sealed class Workflow
     {
-        private readonly ConcurrentQueue<Guid> _completedOrders = new();
+        public HandlerRuns Runs { get; } = new();
 
-        public Expectation Completed { get; } = new(OrdersCount);
-
-        /// <summary>one entry for every time an order was completed.</summary>
-        public IReadOnlyCollection<Guid> CompletedOrders => _completedOrders;
+        public InMemoryBatch Batch { get; } = new();
 
         public HostSetup SetupOf(string service, Action<IBusConfigurator> configureBus)
-        {
-            Action<IMessageContext<OrderShipped>> onCompleted = context =>
-            {
-                _completedOrders.Enqueue(context.Message.OrderId);
-                Completed.Signal();
-            };
-
-            return new HostSetup(configureBus)
+            => new(configureBus)
             {
                 Service = service,
-                ConfigureServices = services => services.AddSingleton(onCompleted)
+                ConfigureServices = services => services.RecordHandlerRuns(Runs).ReadInMemoryMessagesIn(Batch)
             };
-        }
     }
 }
