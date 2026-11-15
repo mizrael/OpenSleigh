@@ -4,7 +4,6 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using RabbitMQ.Client;
-using RabbitMQ.Client.Exceptions;
 
 namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 
@@ -13,7 +12,7 @@ namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 /// and closed through the management API of the broker, as a network that drops them would.
 /// The connections of the other runs, on the same broker, are left alone.
 /// </summary>
-public sealed class RabbitMqConnections : IAsyncDisposable
+public sealed class RabbitMqConnections : IDisposable
 {
     private const string SettingsSection = "Rabbit";
     private const int DefaultManagementPort = 15672;
@@ -23,9 +22,7 @@ public sealed class RabbitMqConnections : IAsyncDisposable
 
     private readonly string _connectionName;
     private readonly HttpClient _management;
-    private readonly ConnectionFactory _connectionFactory;
     private readonly string _virtualHost;
-    private IConnection? _connection;
 
     private RabbitMqConnections(string connectionName, IConfiguration settings)
     {
@@ -40,15 +37,6 @@ public sealed class RabbitMqConnections : IAsyncDisposable
         _management = new HttpClient { BaseAddress = new Uri($"http://{hostName}:{managementPort}/api/") };
         _management.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));
-
-        _connectionFactory = new ConnectionFactory
-        {
-            HostName = hostName,
-            UserName = userName,
-            Password = password,
-            VirtualHost = _virtualHost,
-            Port = AmqpTcpEndpoint.UseDefaultPort,
-        };
     }
 
     /// <param name="connectionName">the name given to the hosts with <see cref="RabbitMqConnectionExtensions.NameRabbitMqConnections"/>.</param>
@@ -107,40 +95,7 @@ public sealed class RabbitMqConnections : IAsyncDisposable
             await Task.Delay(PollingInterval, cancellationToken);
     }
 
-    /// <summary>how many consumers a queue has. Null when the queue does not exist.</summary>
-    public async Task<uint?> CountConsumersAsync(string queueName, CancellationToken cancellationToken)
-    {
-        // a connection of its own, which has no name and is not among the ones that are closed.
-        // One channel per question: the broker closes a channel that asks for a queue that does not exist
-        _connection ??= await _connectionFactory.CreateConnectionAsync(cancellationToken);
-        await using var channel = await _connection.CreateChannelAsync(cancellationToken: cancellationToken);
-        try
-        {
-            return (await channel.QueueDeclarePassiveAsync(queueName, cancellationToken)).ConsumerCount;
-        }
-        catch (OperationInterruptedException e) when (e.ShutdownReason?.ReplyCode == Constants.NotFound)
-        {
-            return null;
-        }
-    }
-
-    /// <summary>returns once every queue has that many consumers.</summary>
-    public async Task WaitForConsumersAsync(IReadOnlyCollection<string> queueNames, uint consumersOfEach, CancellationToken cancellationToken)
-    {
-        foreach (var queueName in queueNames)
-        {
-            while ((await CountConsumersAsync(queueName, cancellationToken) ?? 0) < consumersOfEach)
-                await Task.Delay(PollingInterval, cancellationToken);
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        _management.Dispose();
-
-        if (_connection is not null)
-            await _connection.DisposeAsync();
-    }
+    public void Dispose() => _management.Dispose();
 }
 
 public static class RabbitMqConnectionExtensions

@@ -38,7 +38,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                await using var connections = RabbitMqConnections.Named(connectionName);
+                using var connections = RabbitMqConnections.Named(connectionName);
 
                 // the handler that sends the invoice waits until the connections are closed: its message is unacknowledged
                 var sending = runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(SendInvoice));

@@ -246,8 +246,10 @@ the scenario is ready for it. A timeout that must *not* be handled, because its 
 completed, reaches no handler: `services.ObserveDeliveriesOf<TMessage>(expectation)` tells when a host is done with it.
 The in-memory outbox count leaves out a message that is not due, so "the outbox is empty" proves nothing there.
 
-**Failures injected in a host**, on every combination: in memory with its one host, elsewhere with three, where
-whatever follows the failure can reach a host that only knows what is in the store. A `Fault` is turned on and off
+**Failures injected in a host**: in memory with its one host, elsewhere with three, where whatever follows the
+failure can reach a host that only knows what is in the store. A failure injected before the transport is asked runs
+on every store with RabbitMQ and on one combination with Kafka; a failed commit, whose message the transport has to
+dead-letter, on every combination. A `Fault` is turned on and off
 by the scenario, which waits
 for it to have been hit (`run.WaitUntilAsync(..., () => fault.Hits.Count >= n, ...)`) rather than for a time:
 

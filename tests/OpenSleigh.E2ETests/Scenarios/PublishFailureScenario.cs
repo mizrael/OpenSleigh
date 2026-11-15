@@ -24,9 +24,13 @@ public class PublishFailureScenario(ITestOutputHelper console) : ScenarioBase(co
     public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_published_once_afterwards(string combination, int hostsCount)
         => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
 
-    // every relay finds the broker down, and only one of them may publish the message when it is back
+    // every relay finds the broker down, and only one of them may publish the message when it is back.
+    // The publisher fails before the transport is asked, and what keeps the message is the outbox of the store:
+    // every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [3])]
     public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_published_once_afterwards_with_several_hosts(string combination, int hostsCount)
         => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
 

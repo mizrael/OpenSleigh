@@ -20,9 +20,12 @@ public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioB
     public Task the_timeout_of_an_order_paid_in_time_is_delivered_and_not_handled(string combination, int hostsCount)
         => PayAnOrderInTimeAsync(combination, hostsCount);
 
-    // the timeout is one row in an outbox that every host relays, and whichever host receives it has to leave it alone
+    // the timeout is one row in an outbox that every host relays, and whichever host receives it has to leave it alone.
+    // That is up to the store, which says the saga is completed: every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [3])]
     public Task the_timeout_of_an_order_paid_in_time_is_delivered_and_not_handled_with_several_hosts(string combination, int hostsCount)
         => PayAnOrderInTimeAsync(combination, hostsCount);
 

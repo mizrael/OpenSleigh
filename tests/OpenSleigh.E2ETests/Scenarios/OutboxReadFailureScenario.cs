@@ -15,9 +15,13 @@ public class OutboxReadFailureScenario(ITestOutputHelper console) : ScenarioBase
     // One that tried again without waiting would be back within a few milliseconds
     private static readonly TimeSpan ShortestPauseOfARelayThatBacksOff = TimeSpan.FromMilliseconds(200);
 
-    // one host: a relay that stops for good after a failed pass is the relay of one host, however many there are
+    // one host: a relay that stops for good after a failed pass is the relay of one host, however many there are.
+    // The read fails before the store is asked, and the transport is not asked at all: what is under test is the relay,
+    // with the transaction of each store around its pass. Every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [1])]
+    [MatrixData(
+        Only = [Combinations.InMemory, Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [1])]
     public async Task a_relay_that_cannot_read_its_outbox_keeps_trying_and_relays_what_is_in_it_afterwards(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();

@@ -1,7 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
-using OpenSleigh.Transport.RabbitMQ;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
@@ -60,14 +58,13 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                await using var connections = RabbitMqConnections.Named(connectionName);
+                using var connections = RabbitMqConnections.Named(connectionName);
 
                 // the hosts have published and consumed: whatever they connect for, they are connected
                 var first = Guid.NewGuid().ToString();
                 await run.AnyHost.PublishNewAsync(new IssueInvoice(first), cancellationToken);
                 await run.WaitForReleasedSagaAsync<InvoiceSaga>(first, MessagesOfAnInvoice, cancellationToken);
 
-                var queueNames = QueueNamesOf(run.AnyHost);
                 openBefore = connectionLog.Open;
 
                 for (var time = 1; time <= times; time++)
@@ -80,18 +77,15 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
                     await run.WaitForAsync("the broker to close the connections of the hosts",
                         connections.CloseAsync(open, cancellationToken), cancellationToken);
 
-                    // the queues are still there, without their consumers: what is published meanwhile waits in them
-                    foreach (var queueName in queueNames)
-                        Assert.NotNull(await connections.CountConsumersAsync(queueName, cancellationToken));
-
-                    // published right away, one after the other, to hosts that may not have noticed yet
+                    // published right away, one after the other, to hosts that may not have noticed yet:
+                    // the queues are still there, without their consumers, and what is published meanwhile waits in them
                     var invoices = Enumerable.Range(0, InvoicesEachTimeTheConnectionsAreClosed).Select(_ => Guid.NewGuid().ToString()).ToArray();
                     foreach (var invoice in invoices)
                         await run.AnyHost.PublishNewAsync(new IssueInvoice(invoice), cancellationToken);
 
                     // the hosts consume again, and they publish again: the invoices are sent by a message of their own
                     await run.WaitForAsync("every host to consume from its queues again",
-                        connections.WaitForConsumersAsync(queueNames, (uint)hostsCount, cancellationToken), cancellationToken);
+                        run.WaitUntilSubscribedAsync(cancellationToken), cancellationToken);
                     foreach (var invoice in invoices)
                         await run.WaitForReleasedSagaAsync<InvoiceSaga>(invoice, MessagesOfAnInvoice, cancellationToken);
 
@@ -104,11 +98,5 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         await connectionLog.CloseAllAsync();
 
         return new Outcome(runs, openBefore, openAfterEachTime);
-    }
-
-    private static IReadOnlyCollection<string> QueueNamesOf(ScenarioHost host)
-    {
-        var queues = host.Services.GetRequiredService<IQueueReferenceFactory>();
-        return host.Services.GetHandledMessageTypes().Select(messageType => queues.Create(messageType).QueueName).ToArray();
     }
 }

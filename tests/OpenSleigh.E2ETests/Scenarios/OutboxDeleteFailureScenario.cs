@@ -20,9 +20,12 @@ public class OutboxDeleteFailureScenario(ITestOutputHelper console) : ScenarioBa
     public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once(string combination, int hostsCount)
         => PublishWithoutRemovingAsync(combination, hostsCount);
 
-    // the second copy can reach another host than the first, which only knows what is in the store
+    // the second copy can reach another host than the first, which only knows what is in the store.
+    // What fails, and what tells the copies apart, is the store: every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [3])]
     public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once_with_several_hosts(string combination, int hostsCount)
         => PublishWithoutRemovingAsync(combination, hostsCount);
 

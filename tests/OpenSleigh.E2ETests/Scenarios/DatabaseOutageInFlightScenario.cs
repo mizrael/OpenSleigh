@@ -51,13 +51,19 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
 
                 // the invoice is asked to be sent again, as whoever looks after the dead letters would,
                 // until a host gets as far as handling it: one that still has a broken connection gives it back
-                var completed = false;
-                while (!completed)
+                async Task SendAgainUntilCompletedAsync()
                 {
-                    var timesGivenBackBefore = invoices.TimesGivenBack(correlationId);
-                    if (await TryPublishAsync(run, new SendInvoice(correlationId), cancellationToken))
-                        completed = await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore, cancellationToken);
+                    var completed = false;
+                    while (!completed)
+                    {
+                        var timesGivenBackBefore = invoices.TimesGivenBack(correlationId);
+                        if (await TryPublishAsync(run, new SendInvoice(correlationId), cancellationToken))
+                            completed = await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore, cancellationToken);
+                    }
                 }
+
+                await run.WaitForAsync("the invoice to be sent again and completed once the database is back",
+                    SendAgainUntilCompletedAsync(), cancellationToken, IsInfrastructureFailure);
             },
             AssertOnlyInfrastructureFailuresWereDeadLetteredAsync);
 

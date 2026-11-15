@@ -17,9 +17,12 @@ public class PaymentTimeoutScenario(ITestOutputHelper console) : ScenarioBase(co
         => LetAnOrderExpireAsync(combination, hostsCount);
 
     // every host relays the outbox, and the timeout is one row in it: several hosts, one timeout.
-    // One host on these combinations is PaymentTimeoutAfterRestartScenario
+    // One host on these combinations is PaymentTimeoutAfterRestartScenario. A delay is kept by the outbox of the store,
+    // and a transport is given the timeout like any message: every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [3])]
     public Task an_order_that_is_not_paid_in_time_expires_once_with_several_hosts(string combination, int hostsCount)
         => LetAnOrderExpireAsync(combination, hostsCount);
 
