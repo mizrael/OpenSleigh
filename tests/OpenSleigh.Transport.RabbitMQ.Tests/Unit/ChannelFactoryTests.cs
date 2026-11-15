@@ -1,7 +1,9 @@
-﻿using NSubstitute;
+﻿using Microsoft.Extensions.Logging;
+using NSubstitute;
 using RabbitMQ.Client;
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -10,26 +12,43 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit;
 public class ChannelFactoryTests
 {
     [Fact]
-    public async Task GetPublishChannel_should_create_a_channel_and_hand_the_messages_the_broker_returns_to_their_handler()
+    public async Task GetPublishChannel_should_create_a_channel_and_report_the_messages_the_broker_returns()
     {
         var channel = Substitute.For<IChannel>();
         channel.IsOpen.Returns(true);
 
         var connection = Substitute.For<IBusConnection>();
         connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
-        var returnedMessages = Substitute.For<IReturnedMessageHandler>();
+        var warnings = new List<string>();
+        var logger = Substitute.For<ILogger<ChannelFactory>>();
+        logger.IsEnabled(LogLevel.Warning).Returns(true);
+        logger.WhenForAnyArgs(l => l.Log<object>(default, default, default!, default, default!))
+              .Do(call =>
+              {
+                  if (call.Arg<LogLevel>() == LogLevel.Warning)
+                      warnings.Add(call.Args()[2]!.ToString()!);
+              });
 
-        var sut = new ChannelFactory(connection, returnedMessages);
+        var sut = new ChannelFactory(connection, logger);
         var result = await sut.GetPublishChannelAsync(CancellationToken.None);
 
         Assert.Same(channel, result);
         await connection.Received(1).CreateChannelAsync(Arg.Any<CancellationToken>());
 
+        var properties = new BasicProperties
+        {
+            MessageId = "message-1",
+            Headers = new Dictionary<string, object?> { ["MessageType"] = Encoding.UTF8.GetBytes("Some.Message") }
+        };
         var returned = new global::RabbitMQ.Client.Events.BasicReturnEventArgs(
-            312, "NO_ROUTE", "foo", "bar", new BasicProperties(), ReadOnlyMemory<byte>.Empty, CancellationToken.None);
+            312, "NO_ROUTE", "the-exchange", "bar", properties, ReadOnlyMemory<byte>.Empty, CancellationToken.None);
         channel.BasicReturnAsync += Raise.Event<global::RabbitMQ.Client.Events.AsyncEventHandler<global::RabbitMQ.Client.Events.BasicReturnEventArgs>>(channel, returned);
 
-        await returnedMessages.Received(1).HandleAsync(channel, returned);
+        var warning = Assert.Single(warnings);
+        Assert.Contains("message-1", warning);
+        Assert.Contains("Some.Message", warning);
+        Assert.Contains("the-exchange", warning);
+        Assert.Contains("NO_ROUTE", warning);
     }
 
     [Fact]

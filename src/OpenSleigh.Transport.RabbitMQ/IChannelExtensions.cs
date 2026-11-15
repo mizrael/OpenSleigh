@@ -66,32 +66,6 @@ public static class IChannelExtensions
             cancellationToken).ConfigureAwait(false);
     }
 
-    /// <summary>
-    /// declares the exchange the dead letters of a message go to, and no queue: what a host needs to dead-letter
-    /// a message it does not consume.
-    /// </summary>
-    public static async ValueTask EnsureDeadLetterExchangeAsync(
-        this IChannel channel,
-        QueueReferences queueReferences,
-        RabbitConfiguration rabbitCfg,
-        CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(queueReferences);
-        ArgumentNullException.ThrowIfNull(rabbitCfg);
-        ArgumentNullException.ThrowIfNull(channel);
-
-        var declared = _declared.GetOrCreateValue(channel);
-        var key = (queueReferences.DeadLetterExchangeName, (string?)null);
-        if (declared.Done.ContainsKey(key))
-            return;
-
-        await EnsureOnceAsync(
-            declared,
-            key,
-            () => EnsureExchangeAsync(key.DeadLetterExchangeName, channel, rabbitCfg, cancellationToken),
-            cancellationToken).ConfigureAwait(false);
-    }
-
     private static async ValueTask EnsureOnceAsync(
         DeclaredTopology declared,
         (string ExchangeName, string? QueueName) key,

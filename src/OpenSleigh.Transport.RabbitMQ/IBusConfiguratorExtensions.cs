@@ -26,7 +26,6 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton<IQueueReferenceFactory, QueueReferenceFactory>();
         busConfigurator.Services.AddSingleton<IPublisher, RabbitPublisher>();
         busConfigurator.Services.AddSingleton<IChannelFactory, ChannelFactory>();
-        busConfigurator.Services.AddSingleton<IReturnedMessageHandler, ReturnedMessageHandler>();
         busConfigurator.Services.AddSingleton<IRabbitMessageParser, RabbitMessageParser>();
 
         busConfigurator.Services.AddSingleton<IConnectionFactory>(ctx =>

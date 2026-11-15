@@ -75,7 +75,7 @@ public class RabbitPublisher : IPublisher
 
         await policy.ExecuteAsync(async () =>
         {
-            // mandatory: a message that no queue takes is sent back by the broker, to whoever handles returned messages
+            // mandatory: a message that no queue takes is sent back by the broker, and reported in the log
             await channel.BasicPublishAsync(
                 exchange: queueRef.ExchangeName,
                 routingKey: queueRef.RoutingKey,

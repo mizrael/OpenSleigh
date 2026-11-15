@@ -75,24 +75,9 @@ When the routing key of a message type is the name of its queue (a custom naming
 
 - A host declares the queue of its service, with its retry and dead letter queues, for every message type its sagas handle: when it starts consuming, and when it publishes one of them.
 - For a message type it only publishes, a host declares the exchange and nothing else. This is the case of a host set to publish only (`SetPublishOnly()`), and of a service that publishes a message handled by the sagas of another service.
-- A publish does not wait for the broker. A message that no queue takes, because no service that consumes its type has declared its queue yet, is sent back by the broker afterwards, and then:
-  - it goes back to the outbox, with a Warning in the log (message id, type, exchange and the reason the broker gave), and is published again after `RetryDelay`;
-  - this repeats for `ReturnedMessageRetryPeriod`, 5 minutes by default, counted from the first time the message came back. Once it is over the message is published to the dead letter exchange of its type instead, with an Error in the log;
-  - a publisher declares no dead letter queue of its own. When no queue takes the message from the dead letter exchange either, it is dropped, and a second Error in the log (message id, type, exchange) is the only trace of it. With the default naming a dead letter queue takes it only when hosts of the same client group consume the type.
-
-```
-var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
-{
-    ReturnedMessageRetryPeriod = TimeSpan.FromMinutes(30)
-};
-```
-
-- What this does not cover:
-  - the first return of a message is remembered in memory, by the instance that published it: the period starts again when the process restarts, and each instance that publishes the message counts its own;
-  - a message that the broker returns while the process is stopping, or that cannot be put back because the outbox cannot be reached, is lost, with an Error in the log when there is still time to write one;
-  - a publish that never reached the broker, because the connection was lost at that moment, still counts as published: there are no publisher confirms.
-- A message type that no service ever consumes is published about every `RetryDelay` for `ReturnedMessageRetryPeriod`, and then dropped as above.
-- In 3.3.0 and earlier such a message was kept by the broker in the queue the publisher declared for its own service. That was the queue of the consumers when they have the same client group as the publisher (a publish-only host of the same application, for instance) or when a custom naming policy gives a message type one queue: there, a message published before any consumer had started waited in the broker for as long as it took, and now waits in the outbox for `ReturnedMessageRetryPeriod`.
+- A publish does not wait for the broker. A message that no queue takes, because no service that consumes its type has declared its queue yet, is sent back by the broker afterwards and is **dropped**. A Warning in the log (message id, type, exchange and the reason the broker gave) is the only trace of it: the message is not in the outbox any more, and it is not published again. Start the services that consume a message type before the ones that publish it, and watch for that warning. Publishing returned messages again is planned as a follow-up.
+- A publish that never reached the broker, because the connection was lost at that moment, still counts as published: there are no publisher confirms.
+- In 3.3.0 and earlier such a message was kept by the broker in the queue the publisher declared for its own service. That was the queue of the consumers when they have the same client group as the publisher (a publish-only host of the same application, for instance) or when a custom naming policy gives a message type one queue: there, a message published before any consumer had started waited in the broker until one did, and is now dropped.
 
 #### Queues left behind by 3.3.0 or earlier
 

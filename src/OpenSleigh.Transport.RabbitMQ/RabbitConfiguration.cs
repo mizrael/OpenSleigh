@@ -68,23 +68,4 @@ public record RabbitConfiguration
     /// Set it when several workers share a queue, so one worker cannot hoard the backlog.
     /// </summary>
     public ushort PrefetchCount { get; init; }
-
-    /// <summary>
-    /// Gets for how long a message that the broker returns, because no queue takes it, keeps going back to the outbox
-    /// to be published again after <see cref="RetryDelay"/>. It counts from the first time the message is returned.
-    /// Once it is over the message goes to its dead letter exchange. Defaults to 5 minutes; with zero, a returned
-    /// message is never published again.
-    /// </summary>
-    /// <exception cref="ArgumentOutOfRangeException">the value is negative.</exception>
-    public TimeSpan ReturnedMessageRetryPeriod
-    {
-        get => _returnedMessageRetryPeriod;
-        init
-        {
-            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
-            _returnedMessageRetryPeriod = value;
-        }
-    }
-
-    private readonly TimeSpan _returnedMessageRetryPeriod = TimeSpan.FromMinutes(5);
 }

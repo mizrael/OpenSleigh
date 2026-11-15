@@ -1,39 +1,58 @@
 ﻿using Microsoft.Extensions.Logging;
+using OpenSleigh.Outbox;
 using RabbitMQ.Client;
-using System.Collections.Concurrent;
+using RabbitMQ.Client.Events;
+using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
 public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 {
     private readonly IBusConnection _connection;
-    private readonly IReturnedMessageHandler? _returnedMessages;
+    private readonly ILogger<ChannelFactory>? _logger;
     private readonly SemaphoreSlim _semaphore;
 
     private IChannel? _publishChannel;
     private IChannel? _consumeChannel;
 
-    /// <param name="returnedMessages">
-    /// what is told about the messages the broker sends back because no queue took them. Without it they are lost unnoticed.
+    /// <param name="logger">
+    /// where the messages the broker sends back, because no queue took them, are reported. Without it they are dropped unnoticed.
     /// </param>
-    public ChannelFactory(IBusConnection connection, IReturnedMessageHandler? returnedMessages = null)
+    public ChannelFactory(IBusConnection connection, ILogger<ChannelFactory>? logger = null)
     {
         _semaphore = new SemaphoreSlim(1);
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
-        _returnedMessages = returnedMessages;
+        _logger = logger;
     }
 
-    private void ListenForReturnedMessages(IChannel channel)
+    private void ReportReturnedMessages(IChannel channel)
     {
-        if (_returnedMessages is not { } returnedMessages)
+        if (_logger is null)
             return;
 
-        // not awaited: the channel waits for this to return, and what is done with the message uses the channel
         channel.BasicReturnAsync += (_, returned) =>
         {
-            _ = returnedMessages.HandleAsync(channel, returned);
+            LogReturned(_logger, returned);
             return Task.CompletedTask;
         };
+    }
+
+    // the channel waits for this to return: it reads four values and writes one log entry, nothing else
+    private static void LogReturned(ILogger logger, BasicReturnEventArgs returned)
+    {
+        if (!logger.IsEnabled(LogLevel.Warning))
+            return;
+
+        var messageType = returned.BasicProperties.Headers is { } headers
+            && headers.TryGetValue(nameof(MessageEnvelope.MessageType), out var value)
+            && value is byte[] bytes
+                ? Encoding.UTF8.GetString(bytes)
+                : null;
+
+        logger.LogWarning(
+            "message '{MessageId}' of type '{MessageType}' was returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}': " +
+            "no queue took it, and it is dropped. No service that consumes it had declared its queue when it was published.",
+            returned.BasicProperties.MessageId, messageType, returned.Exchange, returned.ReplyText);
     }
 
     public async ValueTask<IChannel> GetPublishChannelAsync(CancellationToken cancellationToken = default)
@@ -49,7 +68,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 
             _publishChannel?.Dispose();
             _publishChannel = await _connection.CreateChannelAsync(cancellationToken);
-            ListenForReturnedMessages(_publishChannel);
+            ReportReturnedMessages(_publishChannel);
             return _publishChannel;
         }
         finally

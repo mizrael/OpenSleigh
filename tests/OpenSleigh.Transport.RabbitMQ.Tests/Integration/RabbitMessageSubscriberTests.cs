@@ -246,57 +246,29 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     }
 
     [Fact]
-    public async Task A_message_no_service_consumes_yet_should_go_back_to_the_outbox_and_be_delivered_once_one_has_started()
+    public async Task A_message_no_queue_takes_should_be_reported_and_dropped()
     {
         var exchangeName = NewExchangeName();
-        var putBack = new TaskCompletionSource<MessageEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var outbox = Substitute.For<IOutboxRepository>();
-        outbox.AppendAsync(Arg.Do<IEnumerable<MessageEnvelope>>(messages => putBack.TrySetResult(messages.Single())), Arg.Any<CancellationToken>())
-              .Returns(OutboxAppendResult.Success);
+        var reported = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = Substitute.For<ILogger<ChannelFactory>>();
+        logger.IsEnabled(LogLevel.Warning).Returns(true);
+        logger.WhenForAnyArgs(l => l.Log<object>(default, default, default!, default, default!))
+              .Do(call =>
+              {
+                  if (call.Arg<LogLevel>() == LogLevel.Warning)
+                      reported.TrySetResult(call.Args()[2]!.ToString()!);
+              });
         var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
-            configure: services => services.AddSingleton(outbox));
+            configure: services => services.AddSingleton(logger));
         var message = CreateMessage();
 
         // the publish does not wait for the broker, which sends the message back afterwards
         await publisher.PublishAsync(message);
-        var returned = await putBack.Task.WaitAsync(TimeSpan.FromSeconds(20));
-        Assert.Equal(message.MessageId, returned.MessageId);
-        Assert.NotNull(returned.DeliverAt);
 
-        var received = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var (_, worker) = CreateSUT(envelope => received.TrySetResult(envelope.MessageId), out _, exchangeName, clientGroup: "workers");
-        await worker.StartAsync();
-
-        // what the relay does once the message is due
-        await publisher.PublishAsync(returned);
-        Assert.Equal(message.MessageId, await received.Task.WaitAsync(TimeSpan.FromSeconds(20)));
-    }
-
-    [Fact]
-    public async Task A_message_no_service_consumes_should_be_dropped_and_reported_when_its_period_is_over_and_nothing_takes_its_dead_letter()
-    {
-        var exchangeName = NewExchangeName();
-        var dropped = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var logger = Substitute.For<ILogger<ReturnedMessageHandler>>();
-        logger.WhenForAnyArgs(l => l.Log<object>(default, default, default!, default, default!))
-              .Do(call =>
-              {
-                  var text = call.Args()[2]!.ToString()!;
-                  if (call.Arg<LogLevel>() == LogLevel.Error && text.Contains("was dropped"))
-                      dropped.TrySetResult(text);
-              });
-        var outbox = Substitute.For<IOutboxRepository>();
-        var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
-            configure: services => services.AddSingleton(outbox).AddSingleton(logger),
-            configuration: _fixture.RabbitConfiguration with { ReturnedMessageRetryPeriod = TimeSpan.Zero });
-        var message = CreateMessage();
-
-        await publisher.PublishAsync(message);
-
-        var report = await dropped.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        var report = await reported.Task.WaitAsync(TimeSpan.FromSeconds(20));
         Assert.Contains(message.MessageId, report);
         Assert.Contains(typeof(FakeSagaStarter).FullName!, report);
-        await outbox.DidNotReceiveWithAnyArgs().AppendAsync(default!, default);
+        Assert.Contains(exchangeName, report);
 
         // the channel is still there to publish with
         await publisher.PublishAsync(CreateMessage());
@@ -357,8 +329,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         string? exchangeName = null,
         string clientGroup = "test",
         bool handlesTheMessage = true,
-        Action<IServiceCollection>? configure = null,
-        RabbitConfiguration? configuration = null)
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -370,7 +341,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         busConfig.Services.Returns(services);
 
         exchangeName ??= NewExchangeName();
-        busConfig.UseRabbitMQTransport(configuration ?? _fixture.RabbitConfiguration, _ => DefaultReferences(exchangeName, clientGroup));
+        busConfig.UseRabbitMQTransport(_fixture.RabbitConfiguration, _ => DefaultReferences(exchangeName, clientGroup));
 
         var sysInfo = NSubstitute.Substitute.For<ISystemInfo>();
         sysInfo.ClientGroup.Returns(clientGroup);
