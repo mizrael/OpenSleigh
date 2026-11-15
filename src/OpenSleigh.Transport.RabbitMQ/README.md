@@ -71,6 +71,40 @@ With the default naming, the retry queue of those versions (`<queue>.retry`) sen
 
 When the routing key of a message type is the name of its queue (a custom naming policy), the retry queue already returned its messages to that queue only, and it is kept as it is.
 
+### What a host declares on the broker
+
+- A host declares the queue of its service, with its retry and dead letter queues, for every message type its sagas handle: when it starts consuming, and when it publishes one of them.
+- For a message type it only publishes, a host declares the exchange and nothing else. This is the case of a host set to publish only (`SetPublishOnly()`), and of a service that publishes a message handled by the sagas of another service.
+- A publish does not wait for the broker. A message that no queue takes, because no service that consumes its type has declared its queue yet, is sent back by the broker afterwards, and then:
+  - it goes back to the outbox, with a Warning in the log (message id, type, exchange and the reason the broker gave), and is published again after `RetryDelay`;
+  - this repeats for `ReturnedMessageRetryPeriod`, 5 minutes by default, counted from the first time the message came back. Once it is over the message is published to the dead letter exchange of its type instead, with an Error in the log;
+  - a publisher declares no dead letter queue of its own. When no queue takes the message from the dead letter exchange either, it is dropped, and a second Error in the log (message id, type, exchange) is the only trace of it. With the default naming a dead letter queue takes it only when hosts of the same client group consume the type.
+
+```
+var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
+{
+    ReturnedMessageRetryPeriod = TimeSpan.FromMinutes(30)
+};
+```
+
+- What this does not cover:
+  - the first return of a message is remembered in memory, by the instance that published it: the period starts again when the process restarts, and each instance that publishes the message counts its own;
+  - a message that the broker returns while the process is stopping, or that cannot be put back because the outbox cannot be reached, is lost, with an Error in the log when there is still time to write one;
+  - a publish that never reached the broker, because the connection was lost at that moment, still counts as published: there are no publisher confirms.
+- A message type that no service ever consumes is published about every `RetryDelay` for `ReturnedMessageRetryPeriod`, and then dropped as above.
+- In 3.3.0 and earlier such a message was kept by the broker in the queue the publisher declared for its own service. That was the queue of the consumers when they have the same client group as the publisher (a publish-only host of the same application, for instance) or when a custom naming policy gives a message type one queue: there, a message published before any consumer had started waited in the broker for as long as it took, and now waits in the outbox for `ReturnedMessageRetryPeriod`.
+
+#### Queues left behind by 3.3.0 or earlier
+
+In those versions a publisher also declared the queue of its own service for every message type it published, and bound it to the exchange of the type. When no host of that service handles the type nobody consumes from that queue, which receives a copy of every message and keeps it.
+
+This version no longer declares those queues, and does not delete them either: a queue that exists stays bound and keeps receiving copies until it is removed. The library cannot tell such a queue from one that is consumed from, so removing them is left to the operator:
+
+- only the queues of a client group that no consuming host uses are copies: the ones named after a service that publishes the message type and has no host that handles it (`<message type>.<client group>.workers` with the default naming). A queue whose client group is shared with hosts that handle the type is their queue, and must stay. With a custom naming policy, check which hosts consume from a queue before touching it;
+- a queue of copies has no consumers and a number of messages that only grows; its retry queue (`<queue>.retry` or `<queue>.retry.direct`) and its dead letter queue (`<message type>.dead.<client group>.workers`) stay empty;
+- once every instance of the service runs this version, delete the three of them and let the broker refuse when it is not safe: `rabbitmqctl delete_queue <queue> --if-unused` for the queue, which fails when the queue has consumers, and `rabbitmqctl delete_queue <name> --if-unused --if-empty` for its retry and dead letter queues, which fails when they hold messages. The messages in the queue itself are copies: the services that handle the message type received their own;
+- an instance of an earlier version that is still running declares them again, so delete them after the upgrade, not during it.
+
 
 If your application has to handle messages and events, not just dispatch them, you also have to configure each Saga :
 

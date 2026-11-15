@@ -7,15 +7,33 @@ namespace OpenSleigh.Transport.RabbitMQ;
 public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 {
     private readonly IBusConnection _connection;
+    private readonly IReturnedMessageHandler? _returnedMessages;
     private readonly SemaphoreSlim _semaphore;
 
     private IChannel? _publishChannel;
     private IChannel? _consumeChannel;
 
-    public ChannelFactory(IBusConnection connection)
+    /// <param name="returnedMessages">
+    /// what is told about the messages the broker sends back because no queue took them. Without it they are lost unnoticed.
+    /// </param>
+    public ChannelFactory(IBusConnection connection, IReturnedMessageHandler? returnedMessages = null)
     {
         _semaphore = new SemaphoreSlim(1);
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+        _returnedMessages = returnedMessages;
+    }
+
+    private void ListenForReturnedMessages(IChannel channel)
+    {
+        if (_returnedMessages is not { } returnedMessages)
+            return;
+
+        // not awaited: the channel waits for this to return, and what is done with the message uses the channel
+        channel.BasicReturnAsync += (_, returned) =>
+        {
+            _ = returnedMessages.HandleAsync(channel, returned);
+            return Task.CompletedTask;
+        };
     }
 
     public async ValueTask<IChannel> GetPublishChannelAsync(CancellationToken cancellationToken = default)
@@ -31,6 +49,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 
             _publishChannel?.Dispose();
             _publishChannel = await _connection.CreateChannelAsync(cancellationToken);
+            ListenForReturnedMessages(_publishChannel);
             return _publishChannel;
         }
         finally

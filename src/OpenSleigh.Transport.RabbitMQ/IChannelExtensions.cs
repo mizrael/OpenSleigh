@@ -1,12 +1,22 @@
 ﻿using RabbitMQ.Client;
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
 public static class IChannelExtensions
 {
-    private static readonly ConcurrentDictionary<string, SemaphoreSlim> _semaphores = new();
-    private static readonly ConcurrentDictionary<string, byte> _initialized = new();
+    // what was declared, by the channel it was declared on: another channel can be on another broker or virtual host,
+    // and a channel that replaces a closed one declares again what a restarted broker may have lost
+    private static readonly ConditionalWeakTable<IChannel, DeclaredTopology> _declared = new();
+
+    private sealed class DeclaredTopology
+    {
+        /// <summary>exchange and queue of a whole topology, or an exchange alone, with no queue.</summary>
+        public ConcurrentDictionary<(string ExchangeName, string? QueueName), byte> Done { get; } = new();
+
+        public SemaphoreSlim Gate { get; } = new(1, 1);
+    }
 
     public static async ValueTask EnsureTopologyAsync(
         this IChannel channel,
@@ -18,49 +28,105 @@ public static class IChannelExtensions
         ArgumentNullException.ThrowIfNull(rabbitCfg);
         ArgumentNullException.ThrowIfNull(channel);
 
-        var topologyKey = $"{queueReferences.ExchangeName}|{queueReferences.QueueName}";
-        if (_initialized.ContainsKey(topologyKey))
+        var declared = _declared.GetOrCreateValue(channel);
+        var key = (queueReferences.ExchangeName, (string?)queueReferences.QueueName);
+        if (declared.Done.ContainsKey(key))
             return;
 
-        var semaphore = _semaphores.GetOrAdd(topologyKey, _ => new SemaphoreSlim(1, 1));
-
-        await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
+        await EnsureOnceAsync(declared, key, async () =>
         {
-            if (_initialized.ContainsKey(topologyKey))
-                return;
-
             await EnsureExchangesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
             await EnsureQueuesAsync(queueReferences, channel, rabbitCfg, cancellationToken);
+        }, cancellationToken).ConfigureAwait(false);
+    }
 
-            _initialized.TryAdd(topologyKey, 0);
+    /// <summary>
+    /// declares the exchange a message is published to, and nothing else: what a host needs to publish a message
+    /// it does not consume. The queues belong to the services that consume the message, which declare their own.
+    /// </summary>
+    public static async ValueTask EnsureExchangeAsync(
+        this IChannel channel,
+        QueueReferences queueReferences,
+        RabbitConfiguration rabbitCfg,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(queueReferences);
+        ArgumentNullException.ThrowIfNull(rabbitCfg);
+        ArgumentNullException.ThrowIfNull(channel);
+
+        var declared = _declared.GetOrCreateValue(channel);
+        var key = (queueReferences.ExchangeName, (string?)null);
+        if (declared.Done.ContainsKey(key))
+            return;
+
+        await EnsureOnceAsync(
+            declared,
+            key,
+            () => EnsureExchangeAsync(key.ExchangeName, channel, rabbitCfg, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// declares the exchange the dead letters of a message go to, and no queue: what a host needs to dead-letter
+    /// a message it does not consume.
+    /// </summary>
+    public static async ValueTask EnsureDeadLetterExchangeAsync(
+        this IChannel channel,
+        QueueReferences queueReferences,
+        RabbitConfiguration rabbitCfg,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(queueReferences);
+        ArgumentNullException.ThrowIfNull(rabbitCfg);
+        ArgumentNullException.ThrowIfNull(channel);
+
+        var declared = _declared.GetOrCreateValue(channel);
+        var key = (queueReferences.DeadLetterExchangeName, (string?)null);
+        if (declared.Done.ContainsKey(key))
+            return;
+
+        await EnsureOnceAsync(
+            declared,
+            key,
+            () => EnsureExchangeAsync(key.DeadLetterExchangeName, channel, rabbitCfg, cancellationToken),
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    private static async ValueTask EnsureOnceAsync(
+        DeclaredTopology declared,
+        (string ExchangeName, string? QueueName) key,
+        Func<ValueTask> declare,
+        CancellationToken cancellationToken)
+    {
+        await declared.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (declared.Done.ContainsKey(key))
+                return;
+
+            await declare().ConfigureAwait(false);
+
+            declared.Done.TryAdd(key, 0);
         }
         finally
         {
-            semaphore.Release();
+            declared.Gate.Release();
         }
     }
 
-    private static async ValueTask EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
-    {
-        await channel.ExchangeDeclareAsync(
-            exchange: queueReferences.ExchangeName,
+    private static async ValueTask EnsureExchangeAsync(string exchangeName, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
+        => await channel.ExchangeDeclareAsync(
+            exchange: exchangeName,
             type: ExchangeType.Topic,
             durable: rabbitCfg.Durable,
             autoDelete: rabbitCfg.AutoDelete,
             cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(
-           exchange: queueReferences.DeadLetterExchangeName,
-           type: ExchangeType.Topic,
-           durable: rabbitCfg.Durable,
-           autoDelete: rabbitCfg.AutoDelete,
-           cancellationToken: cancellationToken);
-        await channel.ExchangeDeclareAsync(
-           exchange: queueReferences.RetryExchangeName,
-           type: ExchangeType.Topic,
-           durable: rabbitCfg.Durable,
-           autoDelete: rabbitCfg.AutoDelete,
-           cancellationToken: cancellationToken);
+
+    private static async ValueTask EnsureExchangesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
+    {
+        await EnsureExchangeAsync(queueReferences.ExchangeName, channel, rabbitCfg, cancellationToken);
+        await EnsureExchangeAsync(queueReferences.DeadLetterExchangeName, channel, rabbitCfg, cancellationToken);
+        await EnsureExchangeAsync(queueReferences.RetryExchangeName, channel, rabbitCfg, cancellationToken);
     }
 
     private static async ValueTask EnsureQueuesAsync(QueueReferences queueReferences, IChannel channel, RabbitConfiguration rabbitCfg, CancellationToken cancellationToken)
@@ -132,8 +198,11 @@ public static class IChannelExtensions
         await channel.QueueDeleteAsync(queueRef.RetryQueueName);
         await channel.QueueDeleteAsync(queueRef.LegacyRetryQueueName);
 
-        var topologyKey = $"{queueRef.ExchangeName}|{queueRef.QueueName}";
-        _initialized.TryRemove(topologyKey, out _);
-        _semaphores.TryRemove(topologyKey, out _);
+        // only this channel is told: the others declare again what they find missing when they are replaced
+        if (_declared.TryGetValue(channel, out var declared))
+        {
+            declared.Done.TryRemove((queueRef.ExchangeName, queueRef.QueueName), out _);
+            declared.Done.TryRemove((queueRef.ExchangeName, null), out _);
+        }
     }
 }

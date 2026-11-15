@@ -10,19 +10,26 @@ namespace OpenSleigh.Transport.RabbitMQ.Tests.Unit;
 public class ChannelFactoryTests
 {
     [Fact]
-    public async Task GetPublishChannel_should_create_channel()
+    public async Task GetPublishChannel_should_create_a_channel_and_hand_the_messages_the_broker_returns_to_their_handler()
     {
         var channel = Substitute.For<IChannel>();
         channel.IsOpen.Returns(true);
 
         var connection = Substitute.For<IBusConnection>();
         connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
+        var returnedMessages = Substitute.For<IReturnedMessageHandler>();
 
-        var sut = new ChannelFactory(connection);
+        var sut = new ChannelFactory(connection, returnedMessages);
         var result = await sut.GetPublishChannelAsync(CancellationToken.None);
 
         Assert.Same(channel, result);
         await connection.Received(1).CreateChannelAsync(Arg.Any<CancellationToken>());
+
+        var returned = new global::RabbitMQ.Client.Events.BasicReturnEventArgs(
+            312, "NO_ROUTE", "foo", "bar", new BasicProperties(), ReadOnlyMemory<byte>.Empty, CancellationToken.None);
+        channel.BasicReturnAsync += Raise.Event<global::RabbitMQ.Client.Events.AsyncEventHandler<global::RabbitMQ.Client.Events.BasicReturnEventArgs>>(channel, returned);
+
+        await returnedMessages.Received(1).HandleAsync(channel, returned);
     }
 
     [Fact]
