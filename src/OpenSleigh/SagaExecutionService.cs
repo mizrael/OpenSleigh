@@ -72,10 +72,12 @@ public class SagaExecutionService : ISagaExecutionService
 
         // re-check after lock to close TOCTOU window: another thread may have
         // processed the same message between the initial check and lock acquisition
+        // nothing was done to the saga, so it is released and not abandoned: in memory an abandon replaces
+        // the stored instance with one built from its serialized copy. Nothing else lets go of the lock
         if (!sagaInstance.CanProcess(messageContext))
         {
-            await _sagaStateRepository.AbandonAsync(sagaInstance, cancellationToken)
-                                      .ConfigureAwait(false);
+            await sagaInstance.ReleaseAsync(_sagaStateRepository, CancellationToken.None)
+                              .ConfigureAwait(false);
             return NoOpSagaInstance.Create(messageContext, descriptor);
         }
 

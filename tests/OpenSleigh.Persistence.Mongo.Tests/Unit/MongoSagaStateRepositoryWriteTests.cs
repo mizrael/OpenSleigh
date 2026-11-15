@@ -78,6 +78,33 @@ public class MongoSagaStateRepositoryWriteTests
     }
 
     [Fact]
+    public async Task AbandonAsync_should_fail_with_a_lock_exception_and_write_nothing_when_the_instance_holds_no_lock()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+
+        await Assert.ThrowsAsync<LockException>(async () => await sut.AbandonAsync(CreateSaga()));
+
+        Assert.Empty(collection.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_fail_with_a_lock_exception_without_reading_the_saga_when_the_lock_is_not_held()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        collection.ClearReceivedCalls();
+        collection.UpdateOneAsync(default!, default!, default, default).ReturnsForAnyArgs(new UpdateResult.Acknowledged(0, 0, null));
+
+        await Assert.ThrowsAsync<LockException>(async () => await sut.AbandonAsync(saga));
+
+        var release = Assert.Single(collection.ReceivedCalls());
+        Assert.Equal(nameof(IMongoCollection<Entities.SagaState>.UpdateOneAsync), release.GetMethodInfo().Name);
+    }
+
+    [Fact]
     public async Task CommitAsync_should_not_be_interrupted_once_it_started_storing_the_messages()
     {
         using var stopping = new CancellationTokenSource();

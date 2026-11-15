@@ -27,6 +27,10 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     // so it only applies while the lock is still the one this instance holds
     private async ValueTask AbandonAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
+        // an instance that holds no lock would otherwise match a saga stored without a lock id
+        if (string.IsNullOrEmpty(state.LockId))
+            throw LockLost(state);
+
         var entity = FindTracked(state.InstanceId);
         if (entity is null)
         {
@@ -68,8 +72,7 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             ForgetUnsavedChanges(state);
         }
 
-        if (createdByThisLock)
-            _createdWithLockId = null;
+        ForgetCreatedSaga(state);
     }
 
     // only what identifies the saga and its lock: nothing else is written
@@ -83,9 +86,6 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             SagaStateType = state.Descriptor.SagaStateType?.FullName,
             LockId = state.LockId,
         };
-
-    private bool WasCreatedByLockOf(ISagaInstance state)
-        => _createdWithLockId is not null && _createdWithLockId == state.LockId;
 
     /// <summary>
     /// stores the messages the saga published and releases it, in one transaction.
@@ -167,7 +167,7 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
 
         // the saga is released: what this repository knows about it is of no use to whoever locks it next
         ForgetUnsavedChanges(state);
-        _createdWithLockId = null;
+        ForgetCreatedSaga(state);
     }
 
     // after a failed save the context would keep the saga as released and the new rows as pending:
@@ -199,26 +199,11 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
             return;
 
         var storedMessageIds = await ReadStoredMessageIdsAsync(state.InstanceId, cancellationToken).ConfigureAwait(false);
+        // the lock is still this instance's: reported as a lost lock, nobody would release it.
+        // Reported as out of date, whoever holds the instance abandons it, and its message is delivered again
         if (storedMessageIds.Overlaps(newMessageIds))
-        {
-            // the lock is still this instance's, and whoever is told that it is not will not release it
-            await TryAbandonAsync(state).ConfigureAwait(false);
-
-            throw new LockException(
+            throw new OptimisticLockException(
                 $"unable to release Saga State '{state.InstanceId}': a message it processed was processed and stored by someone else");
-        }
-    }
-
-    private async ValueTask TryAbandonAsync(ISagaInstance state)
-    {
-        try
-        {
-            await AbandonAsyncCore(state, CancellationToken.None).ConfigureAwait(false);
-        }
-        catch
-        {
-            // the lock expires
-        }
     }
 
     private async ValueTask<IReadOnlyCollection<MessageEnvelope>> ExcludeStoredMessagesAsync(

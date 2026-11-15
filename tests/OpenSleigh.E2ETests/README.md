@@ -153,6 +153,7 @@ A host must still be running when the scenario returns: the checks read the stor
 | messages that must not run a handler | `services.ObserveDeliveriesOf<TMessage>(expectation)`: wait until the hosts are done with them, then assert that nothing ran |
 | messages for one saga that must meet, not merely may | `run.ForceLockConflictAsync(...)`: the first to get the saga keeps it until another found it locked. In memory, with `InMemoryBatch`, so that the host reads them together |
 | a wait that names itself when it times out, and gives up as soon as a host fails a message | `run.WaitUntilAsync`, `run.WaitForAsync`, `run.WaitForReleasedSagaAsync` |
+| a host that leaves the outbox to the relays of the others, from the start or from a point the scenario chooses | `services.Intercept(_ => relay)` with a `PausableRelay`: what the host appends stays in the outbox |
 | anything else in a host | `host.Services` |
 
 ### Making a service fail on purpose
