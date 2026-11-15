@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -50,11 +51,72 @@ public abstract class SagaDbSchemaUpgrade
     protected virtual TimeSpan CommandTimeout => TimeSpan.FromMinutes(10);
 
     /// <summary>
-    /// runs <paramref name="apply"/>, which applies a change if it is still missing, while no other instance
-    /// is upgrading the same database: instances that start together wait for each other here,
-    /// and all but the first find the change applied.
+    /// runs <paramref name="action"/> while no other instance is creating or upgrading the schema of the same database:
+    /// instances that start together wait for each other here, and all but the first find the work done.
     /// </summary>
-    protected abstract void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply);
+    /// <remarks>
+    /// No transaction is open when <paramref name="action"/> runs: the tables are created in a transaction of their own,
+    /// so what makes the instances wait has to belong to the connection.
+    /// </remarks>
+    protected abstract void RunExclusively(DatabaseFacade database, Action action);
+
+    /// <summary>
+    /// runs <paramref name="apply"/>, which applies a change if it is still missing, the way
+    /// <see cref="RunExclusively(DatabaseFacade, Action)"/> does. Override it to open the transaction a change runs in.
+    /// </summary>
+    protected virtual void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        => RunExclusively(database, apply);
+
+    /// <summary>
+    /// whether creating the database failed because another instance is creating it, or just has:
+    /// this instance then waits for the database instead of failing.
+    /// </summary>
+    protected virtual bool IsBeingCreatedByAnotherInstance(Exception exception) => false;
+
+    /// <summary>
+    /// called before asking again whether a database that another instance is creating exists,
+    /// for a provider whose connection pool keeps answering with the failure of an earlier attempt.
+    /// </summary>
+    protected virtual void ForgetFailedConnections(DatabaseFacade database)
+    {
+    }
+
+    /// <summary>
+    /// runs <paramref name="createDatabase"/>, which creates the database if it is still missing, while no other instance
+    /// does the same, on a server that has something to make them wait with before the database exists.
+    /// Unless it is overridden nothing does, and <see cref="IsBeingCreatedByAnotherInstance"/> tells who lost the race.
+    /// </summary>
+    protected virtual void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+        => createDatabase();
+
+    /// <summary>
+    /// creates the database and its tables when they are missing, one instance at a time.
+    /// </summary>
+    internal SagaDbCreationOutcome EnsureCreated(DatabaseFacade database, IRelationalDatabaseCreator creator, CancellationToken cancellationToken)
+        => new SagaDbCreation(
+                creator,
+                IsBeingCreatedByAnotherInstance,
+                () => ForgetFailedConnections(database),
+                createDatabase => RunDatabaseCreationExclusively(database, createDatabase),
+                _logger)
+            .EnsureCreated(
+                createTables => WithCommandTimeout(database, () => RunExclusively(database, createTables)),
+                cancellationToken);
+
+    // a statement of the schema can take longer than a query, and waits that long for another instance
+    private void WithCommandTimeout(DatabaseFacade database, Action action)
+    {
+        var previousTimeout = database.GetCommandTimeout();
+        database.SetCommandTimeout(CommandTimeout);
+        try
+        {
+            action();
+        }
+        finally
+        {
+            database.SetCommandTimeout(previousTimeout);
+        }
+    }
 
     /// <summary>
     /// whether the database refused a statement because the user is not allowed to run it.
@@ -75,17 +137,11 @@ public abstract class SagaDbSchemaUpgrade
                 "Either another instance is creating them right now, and starting again is enough, " +
                 "or the database is used for something else: create the tables of OpenSleigh in it by hand, or use an empty database.");
 
-        var previousTimeout = database.GetCommandTimeout();
-        database.SetCommandTimeout(CommandTimeout);
-        try
+        WithCommandTimeout(database, () =>
         {
             foreach (var change in missing)
                 ApplyAndReport(database, change);
-        }
-        finally
-        {
-            database.SetCommandTimeout(previousTimeout);
-        }
+        });
     }
 
     private void ApplyAndReport(DatabaseFacade database, SagaDbSchemaChange change)

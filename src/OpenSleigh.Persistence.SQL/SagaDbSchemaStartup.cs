@@ -21,12 +21,12 @@ internal sealed class SagaDbSchemaStartup : IHostedLifecycleService
 
     // not on the thread that starts the host: the initializer waits for the database
     public Task StartingAsync(CancellationToken cancellationToken)
-        => Task.Run(EnsureSchema, cancellationToken);
+        => Task.Run(() => EnsureSchema(cancellationToken), cancellationToken);
 
-    private void EnsureSchema()
+    private void EnsureSchema(CancellationToken cancellationToken)
     {
         using var dbContext = _dbContextFactory.CreateDbContext();
-        _schemaInitializer.EnsureCreated(dbContext.Database);
+        _schemaInitializer.EnsureCreated(dbContext.Database, cancellationToken);
     }
 
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;

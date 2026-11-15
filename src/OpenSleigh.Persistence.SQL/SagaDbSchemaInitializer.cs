@@ -1,4 +1,7 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Storage;
+using System.Transactions;
 
 namespace OpenSleigh.Persistence.SQL;
 
@@ -22,7 +25,7 @@ public sealed class SagaDbSchemaInitializer
         _schemaUpgrade = schemaUpgrade;
     }
 
-    public void EnsureCreated(DatabaseFacade database)
+    public void EnsureCreated(DatabaseFacade database, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(database);
 
@@ -35,12 +38,37 @@ public sealed class SagaDbSchemaInitializer
             if (_created)
                 return;
 
-            // a database that was just created has the current schema
-            var alreadyExisted = !database.EnsureCreated();
-            if (alreadyExisted)
-                _schemaUpgrade?.Apply(database);
+            // creating and upgrading the schema open connections and transactions of their own:
+            // a transaction of whoever asked for the first context is not theirs to take part in
+            using (new TransactionScope(TransactionScopeOption.Suppress))
+            {
+                // a database that was just created has the current schema
+                var alreadyExisted = !EnsureDatabaseCreated(database, cancellationToken);
+                if (alreadyExisted)
+                    _schemaUpgrade?.Apply(database);
+            }
 
             _created = true;
         }
+    }
+
+    // instances that start together on a database that is missing, or empty, wait for each other
+    // through the schema upgrade, which knows how to on its database
+    private bool EnsureDatabaseCreated(DatabaseFacade database, CancellationToken cancellationToken)
+    {
+        if (_schemaUpgrade is null || database.GetService<IDatabaseCreator>() is not IRelationalDatabaseCreator creator)
+            return database.EnsureCreated();
+
+        var outcome = _schemaUpgrade.EnsureCreated(database, creator, cancellationToken);
+        Seed(database, created: outcome == SagaDbCreationOutcome.Created);
+
+        return outcome != SagaDbCreationOutcome.AlreadyThere;
+    }
+
+    // what EnsureCreated does once the database is there, for a context that was configured with UseSeeding
+    private static void Seed(DatabaseFacade database, bool created)
+    {
+        var seeder = database.GetService<IDbContextOptions>().FindExtension<CoreOptionsExtension>()?.Seeder;
+        seeder?.Invoke(database.GetService<ICurrentDbContext>().Context, created);
     }
 }
