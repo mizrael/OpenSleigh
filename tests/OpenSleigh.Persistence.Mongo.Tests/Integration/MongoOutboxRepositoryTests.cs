@@ -5,6 +5,7 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport;
 using System.ComponentModel;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration;
 
@@ -346,16 +347,16 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task DeleteAsync_should_leave_a_message_that_was_put_back_since_the_relay_read_it()
+    public async Task DeleteAsync_should_leave_a_message_that_was_put_back_since_the_relay_read_it_even_with_the_due_time_it_had()
     {
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
-        await sut.AppendAsync([CreateMessage()]);
+        await sut.AppendAsync([CreateMessageDueSince(TimeSpan.FromMinutes(1))]);
         var published = Assert.Single(await sut.ReadPendingAsync());
         var returnedAt = DateTimeOffset.UtcNow;
 
-        // the broker returns the message before the relay deletes it
-        await sut.PutBackAsync([published.Returned(returnedAt, returnedAt.AddSeconds(-1))]);
+        // the broker returns the message before the relay deletes it, and nothing delays its next publish
+        await sut.PutBackAsync([published.Returned(returnedAt, published.DeliverAt!.Value)]);
         await sut.DeleteAsync(published);
 
         var readAgain = Assert.Single(await sut.ReadPendingAsync());
@@ -365,6 +366,27 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
 
         await sut.DeleteAsync(readAgain);
         Assert.Equal(0, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
+    }
+
+    [Fact]
+    public async Task PutBackAsync_should_keep_the_earliest_time_a_message_first_came_back_and_not_fail_when_several_hosts_store_it_together()
+    {
+        var db = _fixture.CreateDbContext();
+        var messages = System.Linq.Enumerable.Range(0, 20).Select(_ => CreateMessage()).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var earliest = now.AddMinutes(-3);
+
+        // each host got the messages back at another time, and none of them is in the outbox any more
+        await Task.WhenAll(System.Linq.Enumerable.Range(0, 8).Select(host => Task.Run(async () =>
+        {
+            var returned = messages.Select(message => message.Returned(earliest.AddSeconds(host), now.AddHours(1))).ToArray();
+            await CreateSut(db).PutBackAsync(returned);
+        })));
+
+        var ids = messages.Select(message => message.MessageId).ToArray();
+        var stored = await (await db.OutboxMessages.FindAsync(Builders<Entities.OutboxMessage>.Filter.In(e => e.MessageId, ids))).ToListAsync();
+        Assert.Equal(messages.Length, stored.Count);
+        Assert.All(stored, message => Assert.Equal(earliest.ToUnixTimeMilliseconds(), new DateTimeOffset(message.FirstReturnedAt!.Value, TimeSpan.Zero).ToUnixTimeMilliseconds()));
     }
 
     [Fact]

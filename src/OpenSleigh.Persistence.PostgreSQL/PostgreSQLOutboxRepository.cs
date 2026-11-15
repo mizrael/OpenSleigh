@@ -34,4 +34,27 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
     }
 
     protected override string ReadPendingQuery => ReadQuery;
+
+    private static readonly string PutBackColumns = string.Join(", ", new[]
+    {
+        nameof(OutboxMessage.MessageId), nameof(OutboxMessage.CorrelationId), nameof(OutboxMessage.Body), nameof(OutboxMessage.MessageType),
+        nameof(OutboxMessage.CreatedAt), nameof(OutboxMessage.SenderId), nameof(OutboxMessage.DeliverAt), nameof(OutboxMessage.FirstReturnedAt),
+    }.Select(column => $"\"{column}\""));
+
+    private const string FirstReturnedAt = $"\"{nameof(OutboxMessage.FirstReturnedAt)}\"";
+
+    // one statement: a row that conflicts is waited for when a relay holds it, and inserted after all when the relay
+    // deleted it. LEAST leaves out a time of first return that is null
+    protected override string BuildPutBackCommand(int messagesCount)
+    {
+        var rows = Enumerable.Range(0, messagesCount).Select(row =>
+        {
+            var first = row * PutBackParametersPerMessage;
+            return "(" + string.Join(", ", Enumerable.Range(first, PutBackParametersPerMessage).Select(parameter => $"{{{parameter}}}")) + ")";
+        });
+
+        return $"INSERT INTO {Table} AS stored ({PutBackColumns}) VALUES {string.Join(", ", rows)} " +
+               $"ON CONFLICT (\"{nameof(OutboxMessage.MessageId)}\") DO UPDATE SET " +
+               $"{DeliverAt} = EXCLUDED.{DeliverAt}, {FirstReturnedAt} = LEAST(stored.{FirstReturnedAt}, EXCLUDED.{FirstReturnedAt})";
+    }
 }

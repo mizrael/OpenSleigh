@@ -424,6 +424,10 @@ public class MessageEnvelopeTests
         Assert.Equal(firstReturn.AddMinutes(2), returnedTwice.DeliverAt);
         Assert.Equal(envelope.MessageId, returnedTwice.MessageId);
         Assert.Same(envelope.Message, returnedTwice.Message);
+
+        // a message cannot have come back for the first time after it came back
+        var earlier = firstReturn.AddMinutes(-1);
+        Assert.Equal(earlier, returnedOnce.Returned(earlier, firstReturn).FirstReturnedAt);
     }
 
     #region Helper Classes

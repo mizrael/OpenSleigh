@@ -46,6 +46,43 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
 
     protected override string ReadPendingQuery => ReadQuery;
 
+    private const string FirstReturnedAt = $"[{nameof(OutboxMessage.FirstReturnedAt)}]";
+
+    private static readonly string PutBackColumns = string.Join(", ", new[]
+    {
+        nameof(OutboxMessage.MessageId), nameof(OutboxMessage.CorrelationId), nameof(OutboxMessage.Body), nameof(OutboxMessage.MessageType),
+        nameof(OutboxMessage.CreatedAt), nameof(OutboxMessage.SenderId), nameof(OutboxMessage.DeliverAt), nameof(OutboxMessage.FirstReturnedAt),
+    }.Select(column => $"[{column}]"));
+
+    private const int MessageIdParameter = 0;
+    private const int DeliverAtParameter = 6;
+    private const int FirstReturnedAtParameter = 7;
+
+    // a pair of statements for each message, all sent together in one transaction: the row is looked up by key,
+    // waited for when a relay holds it, and inserted when it is not there. The lock on the key, or on where it would be,
+    // is kept until the end: nobody else stores the same message in between
+    protected override string BuildPutBackCommand(int messagesCount)
+    {
+        var command = new System.Text.StringBuilder("SET XACT_ABORT ON; BEGIN TRANSACTION; ");
+
+        for (var row = 0; row < messagesCount; row++)
+        {
+            var first = row * PutBackParametersPerMessage;
+            var messageId = $"{{{first + MessageIdParameter}}}";
+            var deliverAt = $"{{{first + DeliverAtParameter}}}";
+            var firstReturnedAt = $"{{{first + FirstReturnedAtParameter}}}";
+            var values = string.Join(", ", Enumerable.Range(first, PutBackParametersPerMessage).Select(parameter => $"{{{parameter}}}"));
+
+            command
+                .Append($"UPDATE {Table} WITH (UPDLOCK, HOLDLOCK) SET {DeliverAt} = {deliverAt}, ")
+                .Append($"{FirstReturnedAt} = CASE WHEN {FirstReturnedAt} < {firstReturnedAt} THEN {FirstReturnedAt} ELSE {firstReturnedAt} END ")
+                .Append($"WHERE {MessageId} = {messageId}; ")
+                .Append($"IF @@ROWCOUNT = 0 INSERT INTO {Table} ({PutBackColumns}) VALUES ({values}); ");
+        }
+
+        return command.Append("COMMIT TRANSACTION; SET XACT_ABORT OFF;").ToString();
+    }
+
     // SQL Server is not given one statement listing the keys: depending on the version it reads the list as JSON,
     // which needs compatibility level 130, and it may scan the table for it, waiting on rows another relay holds.
     // The rows are deleted by key instead, one statement each, all sent together

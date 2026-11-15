@@ -59,35 +59,24 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
         return DeleteAsyncCore(message, cancellationToken);
     }
 
-    // a message the transport returned is put back with a new due time, possibly before the relay that published it
-    // deletes it: only the message as the relay read it is deleted, and one that is gone is not an error
+    // only the message as this repository last read it is deleted: one the transport returned is put back without
+    // its claim, possibly before the relay that published it deletes it, and one that is gone is not an error.
+    // A repository that never read deletes a message nobody has claimed
     private async ValueTask DeleteAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
         var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
         var filter = filterBuilder.And(
             filterBuilder.Eq(e => e.MessageId, message.MessageId),
-            filterBuilder.Eq(e => e.DeliverAt, AsStored(message.DeliverAt)));
+            filterBuilder.Eq(e => e.LockId, _claimId));
 
-        // looked up by its id, as before there was a second condition: left to choose between the index on the id
-        // and the one on the due time, the server tries both
-        await _dbContext.OutboxMessages.DeleteOneAsync(filter, DeleteByMessageId, cancellationToken)
+        await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
                                        .ConfigureAwait(false);
     }
 
-    private static readonly DeleteOptions DeleteByMessageId = new()
-    {
-        Hint = new MongoDB.Bson.BsonDocument(nameof(Entities.OutboxMessage.MessageId), 1)
-    };
+    // the claim of the last read of this repository, which the relay creates for one pass
+    private string? _claimId;
 
-    // dates are stored to the millisecond
-    private static DateTime? AsStored(DateTimeOffset? time)
-    {
-        if (time is null)
-            return null;
-
-        var utc = time.Value.UtcDateTime;
-        return utc.AddTicks(-(utc.Ticks % TimeSpan.TicksPerMillisecond));
-    }
+    private const int MaxPutBackAttempts = 3;
 
     /// <summary>
     /// stores each message again with its new due time, in place when the relay has not deleted it yet,
@@ -106,14 +95,14 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
     {
         var update = Builders<Entities.OutboxMessage>.Update;
 
-        // a message that came back twice is stored as it came back last
+        // each message once. The time of first return that is kept is the earliest, whoever stores it
         var writes = messages
             .GroupBy(message => message.MessageId)
-            .Select(sameMessage => Entities.OutboxMessage.Create(sameMessage.Last(), _serializer))
+            .Select(sameMessage => Entities.OutboxMessage.Create(sameMessage.MinBy(message => message.FirstReturnedAt)!, _serializer))
             .Select(entity => new UpdateOneModel<Entities.OutboxMessage>(
                 Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, entity.MessageId),
                 update.Set(e => e.DeliverAt, entity.DeliverAt)
-                      .Set(e => e.FirstReturnedAt, entity.FirstReturnedAt)
+                      .Min(e => e.FirstReturnedAt, entity.FirstReturnedAt)
                       .Unset(e => e.LockId)
                       .Unset(e => e.LockTime)
                       .SetOnInsert(e => e.Body, entity.Body)
@@ -126,8 +115,20 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
             })
             .ToArray();
 
-        await _dbContext.OutboxMessages.BulkWriteAsync(writes, new BulkWriteOptions { IsOrdered = false }, cancellationToken)
-                                       .ConfigureAwait(false);
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                await _dbContext.OutboxMessages.BulkWriteAsync(writes, new BulkWriteOptions { IsOrdered = false }, cancellationToken)
+                                               .ConfigureAwait(false);
+                return;
+            }
+            // two hosts that insert the same message at the same time: one of them is refused, and finds it there
+            // when it asks again. The other messages were stored, and storing them again changes nothing
+            catch (MongoBulkWriteException ex) when (attempt < MaxPutBackAttempts && ex.WriteErrors.All(error => error.Category == ServerErrorCategory.DuplicateKey))
+            {
+            }
+        }
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
@@ -138,6 +139,7 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
         // the messages are claimed before they are read, so that another relay reading at the same time
         // does not publish them too. A claim that is not followed by a delete expires after LockMaxDuration
         var claimId = Guid.NewGuid().ToString();
+        _claimId = claimId;
         var claim = Builders<Entities.OutboxMessage>.Update
             .Set(e => e.LockId, claimId)
             .Set(e => e.LockTime, now);

@@ -231,10 +231,11 @@ public abstract class SqlOutboxRelayTests
             await transaction.CommitAsync();
         }
 
-        // twice, as when two relays published it and both got it back
-        var returned = published.Returned(firstReturnedAt, DateTimeOffset.UtcNow.AddMinutes(-1));
-        await PutBackAsync(provider, returned);
-        await PutBackAsync(provider, returned.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(-1)));
+        // twice, as when two relays published it and each got it back: the later one stores it first
+        var later = firstReturnedAt.AddMinutes(1);
+        await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await PutBackAsync(provider, published.Returned(firstReturnedAt, DateTimeOffset.UtcNow.AddSeconds(-1)));
+        await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddSeconds(-1)));
 
         await using var nextRelay = provider.CreateAsyncScope();
         await using var nextTransaction = await StartTransactionAsync(nextRelay);
@@ -243,6 +244,36 @@ public abstract class SqlOutboxRelayTests
         Assert.Equal(published.MessageId, readAgain.MessageId);
         Assert.NotNull(readAgain.FirstReturnedAt);
         Assert.Equal(firstReturnedAt.ToUnixTimeMilliseconds(), readAgain.FirstReturnedAt.Value.ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
+    public async Task Messages_put_back_by_several_hosts_together_should_all_be_stored_once_with_the_earliest_time_they_first_came_back()
+    {
+        const int hosts = 8;
+        const int messagesCount = 2 * BatchSize * 25;
+        await using var provider = BuildProvider();
+        var systemInfo = provider.GetRequiredService<ISystemInfo>();
+        var messages = Enumerable.Range(0, messagesCount).Select(_ => MessageEnvelope.Create(new FakeMessage(), systemInfo)).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var earliest = now.AddMinutes(-3);
+
+        // none of the messages is in the outbox any more, each host got them back at another time and in another order
+        await Task.WhenAll(Enumerable.Range(0, hosts).Select(host => Task.Run(async () =>
+        {
+            var returned = messages
+                .Select(message => message.Returned(earliest.AddSeconds(host), now + NotDueDelay))
+                .OrderBy(_ => Random.Shared.Next())
+                .ToArray();
+
+            await using var scope = provider.CreateAsyncScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
+            await ((IOutboxReturnRepository)repository).PutBackAsync(returned);
+        })));
+
+        await using var reader = provider.CreateAsyncScope();
+        var stored = await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.AsNoTracking().ToListAsync();
+        Assert.Equal(messages.Select(message => message.MessageId).Order(), stored.Select(row => row.MessageId).Order());
+        Assert.All(stored, row => Assert.Equal(earliest.ToUnixTimeMilliseconds(), row.FirstReturnedAt!.Value.ToUnixTimeMilliseconds()));
     }
 
     private static async Task PutBackAsync(IServiceProvider provider, MessageEnvelope returned)

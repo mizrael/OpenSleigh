@@ -35,7 +35,7 @@ Instances of the earlier version cannot read an outbox document that has a `Deli
 - with the RabbitMQ transport, a message the broker returns is put back in the outbox with a `DeliverAt` date: set `ReturnedMessageRetryPeriod` to zero on the new instances until every instance runs the new version, so that returned messages are not put back;
 - before going back to the earlier version, wait until no delayed message is left in the outbox, or remove them: `db.outbox.deleteMany({ DeliverAt: { $exists: true } })`.
 
-A message that was put back also has a `FirstReturnedAt` date, the first time the transport returned it. Deleting a message from the outbox that is no longer there is not an error any more: it may have been put back, or deleted, by someone else.
+A message that was put back also has a `FirstReturnedAt` date, the first time the transport returned it. A repository deletes a message only while it holds the claim of its own last read: deleting one that is no longer there, or that was put back or claimed by someone else since, does nothing and is not an error any more.
 
 From this version on, the outbox ignores document elements it does not know.
 

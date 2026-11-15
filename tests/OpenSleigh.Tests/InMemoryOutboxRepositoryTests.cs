@@ -75,6 +75,39 @@ public class InMemoryOutboxRepositoryTests
         Assert.Equal(returned.FirstReturnedAt, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task A_message_put_back_with_the_due_time_it_had_should_survive_the_delete_of_the_relay_that_published_it(bool delayed)
+    {
+        var clock = new SettableClock();
+        var sut = new InMemoryOutboxRepository(clock);
+        var dueTime = clock.UtcNow - ShortDelay;
+        var appended = CreateEnvelope(deliverAt: delayed ? dueTime : null);
+        await sut.AppendAsync(new[] { appended });
+        var published = delayed ? appended : Assert.Single(await sut.ReadPendingAsync());
+
+        // a retry delay of zero: the message is due again at once, when the relay has not deleted it yet
+        await sut.PutBackAsync([published.Returned(clock.UtcNow, published.DeliverAt ?? clock.UtcNow)]);
+        await sut.DeleteAsync(published);
+
+        Assert.Equal(published.MessageId, Assert.Single(await sut.ReadPendingAsync()).MessageId);
+    }
+
+    [Fact]
+    public async Task A_message_put_back_by_two_hosts_should_keep_the_earliest_time_it_first_came_back()
+    {
+        var clock = new SettableClock();
+        var sut = new InMemoryOutboxRepository(clock);
+        var published = CreateEnvelope(deliverAt: null);
+        var earlier = clock.UtcNow - LongDelay;
+
+        await sut.PutBackAsync([published.Returned(earlier, clock.UtcNow)]);
+        await sut.PutBackAsync([published.Returned(clock.UtcNow, clock.UtcNow)]);
+
+        Assert.Equal(earlier, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
+    }
+
     [Fact]
     public async Task DeleteAsync_should_remove_message()
     {

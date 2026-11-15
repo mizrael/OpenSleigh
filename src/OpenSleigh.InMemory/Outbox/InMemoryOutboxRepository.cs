@@ -104,12 +104,10 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
         return ValueTask.CompletedTask;
     }
 
-    // a message the transport returned is put back with a later due time, possibly before the relay that published it
-    // deletes it: only the message as the relay read it is deleted
+    // a message the transport returned is put back, possibly before the relay that published it deletes it:
+    // only the message the relay read is deleted, not another one with its id
     private bool TryDeletePending(MessageEnvelope message)
-        => _messages.TryGetValue(message.MessageId, out var pending)
-           && pending.DeliverAt == message.DeliverAt
-           && _messages.TryRemove(new KeyValuePair<string, MessageEnvelope>(message.MessageId, pending));
+        => _messages.TryRemove(new KeyValuePair<string, MessageEnvelope>(message.MessageId, message));
 
     private void DeleteDelayed(MessageEnvelope message)
     {
@@ -118,7 +116,7 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
             // it may have become pending while this delete waited for the gate
             if (_delayedMessages.TryGetValue(message.MessageId, out var delayed))
             {
-                if (delayed.DeliverAt == message.DeliverAt)
+                if (ReferenceEquals(delayed, message))
                     _delayedMessages.Remove(message.MessageId);
 
                 _delayedMessagesCount = _delayedMessages.Count;
@@ -138,9 +136,15 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
         {
             foreach (var message in messages)
             {
+                // the time of first return that is kept is the earliest, whoever stores it
+                var stored = _delayedMessages.GetValueOrDefault(message.MessageId) ?? _messages.GetValueOrDefault(message.MessageId);
+                var putBack = stored?.FirstReturnedAt is { } storedFirstReturn && message.DeliverAt is { } dueTime
+                    ? message.Returned(storedFirstReturn, dueTime)
+                    : message;
+
                 _messages.TryRemove(message.MessageId, out _);
                 _delayedMessages.Remove(message.MessageId);
-                TryAppend(message);
+                TryAppend(putBack);
             }
 
             _delayedMessagesCount = _delayedMessages.Count;
