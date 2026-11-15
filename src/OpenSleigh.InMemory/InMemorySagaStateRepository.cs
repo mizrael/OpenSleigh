@@ -64,8 +64,10 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
                     throw new OptimisticLockException($"saga '{state.InstanceId}' has changed since it was found");
             }
 
-            if (_statesByDescriptor.TryGetValue(key, out var byDesc) && byDesc.LockId is not null)
-                throw new OptimisticLockException($"saga '{state.InstanceId}' is already locked");
+            // the saga is stored with another instance: this one was created by a message that looked for it too early
+            if (_statesByDescriptor.TryGetValue(key, out var byDesc)
+                && (byDesc.LockId is not null || !ReferenceEquals(byDesc.State, state)))
+                throw new OptimisticLockException($"saga '{byDesc.State.InstanceId}' is already stored for '{state.InstanceId}'");
 
             Store(key, new Entry(state, lockId, byId.Released));
         }
@@ -150,7 +152,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         {
             return _serializer.Serialize(state);
         }
-        catch (Exception e) when (e is NotSupportedException or InvalidOperationException or System.Text.Json.JsonException)
+        catch
         {
             return null;
         }
@@ -191,7 +193,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
         {
             return _serializer.Deserialize(released.StateData, stateType);
         }
-        catch (Exception e) when (e is NotSupportedException or InvalidOperationException or System.Text.Json.JsonException)
+        catch
         {
             return null;
         }

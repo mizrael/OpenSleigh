@@ -137,8 +137,8 @@ public class SagaExecutionServiceTests
         var result = await sut.BeginProcessingAsync(messageContext, descriptor, CancellationToken.None);
 
         Assert.IsType<NoOpSagaInstance>(result);
-        await sagaStateRepository.Received(1).AbandonAsync(sagaInstance, Arg.Any<CancellationToken>());
-        await sagaStateRepository.DidNotReceive().ReleaseAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
+        await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, CancellationToken.None);
+        await sagaStateRepository.DidNotReceive().AbandonAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]

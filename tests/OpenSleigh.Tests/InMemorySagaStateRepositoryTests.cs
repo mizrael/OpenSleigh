@@ -307,6 +307,96 @@ public class InMemorySagaStateRepositoryTests
         Assert.Equal(1, Assert.IsAssignableFrom<ISagaInstance<SometimesCyclicState>>(found).State.Count);
     }
 
+    [Fact]
+    public async Task ReleaseAsync_should_release_a_saga_whose_state_the_serializer_fails_on()
+    {
+        var repository = new InMemorySagaStateRepository(new FailingSerializer());
+        var descriptor = SagaDescriptor.Create<CounterSaga, CounterState>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var instance = new SagaInstance<CounterState>(
+            Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor, new CounterState());
+        await instance.LockAsync(repository, CancellationToken.None);
+
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        Assert.Same(instance, await repository.FindAsync(descriptor, messageContext, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_unlock_a_saga_whose_copy_the_serializer_fails_on()
+    {
+        var repository = new InMemorySagaStateRepository(new FailingSerializer(failsOnSerialize: false));
+        var descriptor = SagaDescriptor.Create<CounterSaga, CounterState>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var state = new CounterState();
+        var instance = new SagaInstance<CounterState>(
+            Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor, state);
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+
+        await instance.LockAsync(repository, CancellationToken.None);
+        await repository.AbandonAsync(instance, CancellationToken.None);
+
+        var found = await repository.FindAsync(descriptor, messageContext, CancellationToken.None);
+        Assert.Same(state, Assert.IsAssignableFrom<ISagaInstance<CounterState>>(found).State);
+        await found.LockAsync(repository, CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_lock_taken_as_soon_as_the_saga_is_released_should_not_be_lost_to_the_one_that_released_it()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var instance = new SagaInstance(Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor);
+        await instance.LockAsync(repository, CancellationToken.None);
+
+        // the next message locks the saga after the store released it, and before its owner is told so
+        var executionService = Substitute.For<ISagaExecutionService>();
+        executionService.CommitAsync(instance, Arg.Any<CancellationToken>())
+                        .Returns(_ => ReleaseAndLockAgainAsync());
+
+        async ValueTask ReleaseAndLockAgainAsync()
+        {
+            await repository.ReleaseAsync(instance, CancellationToken.None);
+            await instance.LockAsync(repository, CancellationToken.None);
+        }
+
+        await instance.ProcessAsync(Substitute.For<IMessageHandlerManager>(), messageContext, executionService);
+
+        Assert.NotEmpty(instance.LockId);
+        await repository.ReleaseAsync(instance, CancellationToken.None);
+        Assert.False((await repository.GetByInstanceIdAsync(instance.InstanceId))!.IsLocked);
+    }
+
+    [Fact]
+    public async Task LockAsync_should_refuse_another_instance_of_a_saga_that_is_stored()
+    {
+        var repository = new InMemorySagaStateRepository();
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var stored = new SagaInstance(Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor);
+        await stored.LockAsync(repository, CancellationToken.None);
+        stored.SetAsProcessed(messageContext);
+        await repository.ReleaseAsync(stored, CancellationToken.None);
+
+        // created by a message that looked for the saga before it was stored
+        var late = new SagaInstance(Guid.NewGuid().ToString(), messageContext.MessageId, messageContext.CorrelationId, descriptor);
+
+        await Assert.ThrowsAsync<OptimisticLockException>(() => repository.LockAsync(late, CancellationToken.None).AsTask());
+        Assert.Same(stored, await repository.FindAsync(descriptor, messageContext, CancellationToken.None));
+        Assert.Null(await repository.GetByInstanceIdAsync(late.InstanceId));
+    }
+
+    private sealed class FailingSerializer(bool failsOnSerialize = true) : OpenSleigh.Utils.ISerializer
+    {
+        public byte[] Serialize(object data)
+            => failsOnSerialize ? throw new FormatException("not a JSON failure") : [1];
+
+        public object? Deserialize(ReadOnlySpan<byte> data, Type returnType)
+            => throw new FormatException("not a JSON failure");
+    }
+
     private interface IPart
     {
         int Size { get; }

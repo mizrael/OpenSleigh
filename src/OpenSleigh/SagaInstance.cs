@@ -8,6 +8,7 @@ public record SagaInstance : ISagaInstance
 {
     private readonly Dictionary<string, ProcessedMessage> _processedMessages = new();
     private readonly ConcurrentQueue<MessageEnvelope> _outbox = new();
+    private string _lockId = string.Empty;
 
     public SagaInstance(
         string instanceId, 
@@ -65,8 +66,8 @@ public record SagaInstance : ISagaInstance
         ISagaStateRepository sagaStateRepository,
         CancellationToken cancellationToken) 
     {
-        this.LockId = await sagaStateRepository.LockAsync(this, cancellationToken)
-                                              .ConfigureAwait(false);
+        _lockId = await sagaStateRepository.LockAsync(this, cancellationToken)
+                                           .ConfigureAwait(false);
     }
 
     public void Publish(MessageEnvelope message)
@@ -89,6 +90,8 @@ public record SagaInstance : ISagaInstance
         ArgumentNullException.ThrowIfNull(messageContext);
         ArgumentNullException.ThrowIfNull(sagaExecutionService);
 
+        var heldLockId = _lockId;
+
         try
         {
             await messageHandlerManager.ProcessAsync(this, messageContext, cancellationToken)
@@ -97,36 +100,41 @@ public record SagaInstance : ISagaInstance
         catch (SagaException)
         {
             // the handler failed and was rolled back: the state is stored as the rollback left it
-            await TryReleaseAsync(sagaExecutionService).ConfigureAwait(false);
+            await TryReleaseAsync(sagaExecutionService, heldLockId).ConfigureAwait(false);
             throw;
         }
         catch
         {
             // the handler was interrupted by a stop, or could not be rolled back: the message is not done with
-            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
+            await TryAbandonAsync(sagaExecutionService, heldLockId).ConfigureAwait(false);
             throw;
         }
 
         try
         {
-            await CommitAsProcessedAsync(messageContext, sagaExecutionService, cancellationToken).ConfigureAwait(false);
+            await CommitAsProcessedAsync(messageContext, sagaExecutionService, heldLockId, cancellationToken).ConfigureAwait(false);
         }
         catch (LockException)
         {
             // the lock is no longer this instance's: there is nothing left to release
-            this.LockId = string.Empty;
+            ClearLock(heldLockId);
             throw;
         }
         catch
         {
-            await TryAbandonAsync(sagaExecutionService).ConfigureAwait(false);
+            await TryAbandonAsync(sagaExecutionService, heldLockId).ConfigureAwait(false);
             throw;
         }
     }
 
+    // in memory the instance is the stored one: once released it can be locked again, with another id, before this runs
+    private void ClearLock(string heldLockId)
+        => Interlocked.CompareExchange(ref _lockId, string.Empty, heldLockId);
+
     private async ValueTask CommitAsProcessedAsync<TM>(
         IMessageContext<TM> messageContext,
         ISagaExecutionService sagaExecutionService,
+        string heldLockId,
         CancellationToken cancellationToken) where TM : IMessage
     {
         this.SetAsProcessed(messageContext);
@@ -146,12 +154,12 @@ public record SagaInstance : ISagaInstance
         }
 
         // to be done after Commit, as it will be checked when releasing the state
-        this.LockId = string.Empty;
+        ClearLock(heldLockId);
     }
 
-    private async ValueTask TryReleaseAsync(ISagaExecutionService sagaExecutionService)
+    private async ValueTask TryReleaseAsync(ISagaExecutionService sagaExecutionService, string heldLockId)
     {
-        if (string.IsNullOrEmpty(this.LockId))
+        if (string.IsNullOrEmpty(heldLockId))
             return;
 
         try
@@ -164,13 +172,13 @@ public record SagaInstance : ISagaInstance
             // best effort: lock will expire via LockMaxDuration for SQL/Mongo
         }
 
-        this.LockId = string.Empty;
+        ClearLock(heldLockId);
     }
 
     // nothing of what the handler did is stored: the saga stays as it was before the message
-    private async ValueTask TryAbandonAsync(ISagaExecutionService sagaExecutionService)
+    private async ValueTask TryAbandonAsync(ISagaExecutionService sagaExecutionService, string heldLockId)
     {
-        if (string.IsNullOrEmpty(this.LockId))
+        if (string.IsNullOrEmpty(heldLockId))
             return;
 
         ClearOutbox();
@@ -185,7 +193,7 @@ public record SagaInstance : ISagaInstance
             // best effort: lock will expire via LockMaxDuration for SQL/Mongo
         }
 
-        this.LockId = string.Empty;
+        ClearLock(heldLockId);
     }
 
     public string TriggerMessageId { get; }
@@ -198,7 +206,7 @@ public record SagaInstance : ISagaInstance
 
     public bool IsCompleted { get; private set; }
 
-    public string LockId { get; private set; }
+    public string LockId => _lockId;
 
     public IReadOnlyCollection<ProcessedMessage> ProcessedMessages => _processedMessages.Values;
     public IReadOnlyCollection<MessageEnvelope> Outbox => _outbox;
