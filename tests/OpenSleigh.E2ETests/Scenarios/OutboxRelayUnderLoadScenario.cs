@@ -9,8 +9,8 @@ using Xunit.Abstractions;
 namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
-/// several hosts relay one outbox: a backlog that all of them start on together, then the messages the sagas
-/// publish while handling it and the ones a second burst of requests appends.
+/// several hosts relay one outbox: a backlog that each of them has read part of before any publishes, then the
+/// messages the sagas publish while handling it and the ones a second burst of requests appends.
 /// </summary>
 public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
@@ -43,7 +43,7 @@ public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioB
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                // nothing is relayed until every request is in the outbox, then every host reads it at the same time
+                // nothing is relayed until every request is in the outbox, then every host reads it before any publishes
                 await workload.OpenAllAsync(run.Hosts, cancellationToken);
                 Assert.Equal(TransfersCount, await run.CountOutboxMessagesAsync(cancellationToken));
                 startLine.Open();
@@ -51,7 +51,7 @@ public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioB
                 await workload.WaitUntilAllAreDebitedAsync(run, cancellationToken);
                 await workload.SettleAllAsync(run.Hosts, cancellationToken);
                 await run.WaitUntilAsync($"the {workload.MessagesCount} messages to be processed",
-                    () => deliveries.Count == workload.MessagesCount, cancellationToken);
+                    () => deliveries.Count >= workload.MessagesCount, cancellationToken);
             },
             AssertOnlyLockConflictsAsync);
 
@@ -63,40 +63,45 @@ public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioB
         Assert.Equal(workload.MessagesCount, relayed.Select(message => message.MessageId).Distinct().Count());
         Assert.DoesNotContain(deliveries, delivery => delivery.Value != 1);
 
-        var relayedByHost = relayed.GroupBy(message => message.Host).ToDictionary(messages => messages.Key, messages => messages.Count());
-        Console.WriteLine($"relayed by host: {string.Join(", ", relayedByHost.Values.Order())}");
+        // the backlog only: what a saga publishes later is first seen by the relay of the host that handled its message
+        var backlogByHost = relayed.Where(message => message.MessageType == typeof(OpenTransfer))
+            .GroupBy(message => message.Host)
+            .ToDictionary(messages => messages.Key, messages => messages.Count());
+        Console.WriteLine($"backlog relayed by host: {string.Join(", ", backlogByHost.Values.Order())}");
+        Assert.Equal(TransfersCount, backlogByHost.Values.Sum());
 
-        // a relay on a SQL store locks the few rows of its pass and the others skip them: each found rows of its own
-        // in the backlog. On MongoDB a relay claims every message that is due at once, and may leave the others none
+        // a relay on a SQL store locks the few rows of its pass, and the others skip them: every relay had read rows
+        // of its own before any of them published. On MongoDB a relay claims every message that is due at once,
+        // and may leave the others none
         if (!Combinations.Uses(combination, Combinations.MongoDb))
-            Assert.Equal(hostsCount, relayedByHost.Count);
+            Assert.Equal(hostsCount, backlogByHost.Count);
     }
 
     private static string HostOf(IServiceProvider provider) => provider.GetRequiredService<ISystemInfo>().ClientId;
 
-    private sealed record Relayed(string Host, string MessageId);
+    private sealed record Relayed(string Host, string MessageId, Type MessageType);
 
     /// <summary>
-    /// keeps the relays from reading the outbox until it is opened, and then until each of them is about to read:
-    /// their first passes run at the same time, on the same messages.
+    /// keeps the relays from reading the outbox until it is opened, and then keeps each of them from publishing
+    /// what its first pass read until every relay has read: they hold messages of the same backlog at the same time.
     /// </summary>
     private sealed class RelayStartLine(int relaysCount)
     {
-        private readonly ConcurrentDictionary<string, byte> _arrived = new();
-        private readonly TaskCompletionSource _everyRelayArrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly ConcurrentDictionary<string, byte> _haveRead = new();
+        private readonly TaskCompletionSource _everyRelayHasRead = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private volatile bool _isOpen;
 
         public bool IsOpen => _isOpen;
 
         public void Open() => _isOpen = true;
 
-        public Task ArriveAsync(string relay)
+        public Task HasReadAsync(string relay)
         {
-            _arrived.TryAdd(relay, 0);
-            if (_arrived.Count >= relaysCount)
-                _everyRelayArrived.TrySetResult();
+            _haveRead.TryAdd(relay, 0);
+            if (_haveRead.Count >= relaysCount)
+                _everyRelayHasRead.TrySetResult();
 
-            return _everyRelayArrived.Task;
+            return _everyRelayHasRead.Task;
         }
     }
 
@@ -107,8 +112,10 @@ public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioB
             if (!startLine.IsOpen)
                 return [];
 
-            await startLine.ArriveAsync(relay).WaitAsync(cancellationToken);
-            return await base.ReadPendingAsync(repository, cancellationToken);
+            // read first: a relay that waited before reading could publish and remove its pass before another one reads
+            var messages = await base.ReadPendingAsync(repository, cancellationToken);
+            await startLine.HasReadAsync(relay).WaitAsync(cancellationToken);
+            return messages;
         }
     }
 
@@ -117,7 +124,7 @@ public class OutboxRelayUnderLoadScenario(ITestOutputHelper console) : ScenarioB
         public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
         {
             await inner.PublishAsync(envelope, cancellationToken);
-            relayed.Enqueue(new Relayed(host, envelope.MessageId));
+            relayed.Enqueue(new Relayed(host, envelope.MessageId, envelope.MessageType));
         }
     }
 

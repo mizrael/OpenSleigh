@@ -45,7 +45,7 @@ internal sealed class TransferWorkload
 
     public Task WaitUntilAllAreDebitedAsync(ScenarioRun run, CancellationToken cancellationToken)
         => run.WaitUntilAsync($"the {Transfers.Count} transfers to be debited",
-            () => CountRunsOf<DebitAccount>() == Transfers.Count, cancellationToken);
+            () => CountTransfersThatHandled<DebitAccount>() >= Transfers.Count, cancellationToken);
 
     public Task SettleAllAsync(IReadOnlyList<ScenarioHost> publishers, CancellationToken cancellationToken)
         => PublishAsync(
@@ -55,7 +55,7 @@ internal sealed class TransferWorkload
 
     public Task WaitUntilAllAreSettledAsync(ScenarioRun run, CancellationToken cancellationToken)
         => run.WaitUntilAsync($"the {Transfers.Count} transfers to be settled",
-            () => CountRunsOf<SettleTransfer>() == Transfers.Count, cancellationToken);
+            () => CountTransfersThatHandled<SettleTransfer>() >= Transfers.Count, cancellationToken);
 
     /// <summary>every transfer from the request that opens it to its settlement, all of them through the same hosts.</summary>
     public async Task RunToSettlementAsync(ScenarioRun run, IReadOnlyList<ScenarioHost> publishers, CancellationToken cancellationToken)
@@ -101,9 +101,14 @@ internal sealed class TransferWorkload
                 Assert.Equal(expected, Assert.IsType<TransferState>(saga.StateData));
             });
 
-    private int CountRunsOf<TMessage>()
+    // by transfer, not by handler run: a handler that runs twice does not carry the count past what a wait expects,
+    // and the wait ends for the assertions to say what went wrong
+    private int CountTransfersThatHandled<TMessage>()
         where TMessage : IMessage
-        => Runs.Runs.Count(handlerRun => handlerRun.MessageType == typeof(TMessage));
+        => Runs.Runs.Where(handlerRun => handlerRun.MessageType == typeof(TMessage))
+            .Select(handlerRun => handlerRun.CorrelationId)
+            .Distinct()
+            .Count();
 
     private static Task PublishAsync(IEnumerable<IMessage> messages, IReadOnlyList<ScenarioHost> publishers, CancellationToken cancellationToken)
         => Parallel.ForEachAsync(

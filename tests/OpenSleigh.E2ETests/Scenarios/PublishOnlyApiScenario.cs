@@ -90,7 +90,8 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
 
     /// <summary>
     /// a host that only publishes has no consumer: a queue of its own would keep a copy of every message for nobody.
-    /// The queues are declared by the transport, whatever the store.
+    /// The queues are declared by the transport, whatever the store. The workers relay nothing here: every message
+    /// goes to the broker through the API, the ones the workers' sagas publish included.
     /// </summary>
     [Theory]
     [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1])]
@@ -103,13 +104,18 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
         await RunScenarioAsync(combination,
             async (run, cancellationToken) =>
             {
-                await run.StartHostsAsync(hostsCount, WorkerSetup(workload));
+                await run.StartHostsAsync(hostsCount, WorkerSetup(workload, new PausableRelay(isPaused: true)));
                 var apiHost = await run.StartHostAsync(ApiSetup(api));
 
                 await workload.RunToSettlementAsync(run, [apiHost], cancellationToken);
                 await workload.AssertEachIsStoredAsync(run, settled: true, cancellationToken);
 
-                leftBehind = await ReadMessagesLeftInQueuesOfAsync(apiHost, api.PublishedTypes.Distinct(), cancellationToken);
+                // the queues that are looked at are those of the types the API published: all of them, every message
+                Assert.Equal(
+                    MessageTypesOfATransfer.ToDictionary(messageType => messageType, _ => TransfersCount),
+                    api.PublishedTypes.GroupBy(messageType => messageType).ToDictionary(messages => messages.Key, messages => messages.Count()));
+
+                leftBehind = await ReadMessagesLeftInQueuesOfAsync(apiHost, MessageTypesOfATransfer, cancellationToken);
                 foreach (var (queueName, messagesCount) in leftBehind)
                     Console.WriteLine($"queue '{queueName}' has no consumer and holds {messagesCount} messages");
             },
@@ -118,10 +124,17 @@ public class PublishOnlyApiScenario(ITestOutputHelper console) : ScenarioBase(co
         Assert.Empty(leftBehind);
     }
 
-    private static HostSetup WorkerSetup(TransferWorkload workload)
+    private static readonly Type[] MessageTypesOfATransfer = [typeof(OpenTransfer), typeof(DebitAccount), typeof(SettleTransfer)];
+
+    private static HostSetup WorkerSetup(TransferWorkload workload, PausableRelay? relay = null)
         => new(bus => bus.AddSaga<TransferSaga, TransferState>())
         {
-            ConfigureServices = services => workload.AddTo(services)
+            ConfigureServices = services =>
+            {
+                workload.AddTo(services);
+                if (relay is not null)
+                    services.Intercept(_ => relay);
+            }
         };
 
     private static HostSetup ApiSetup(ApiActivity activity, PausableRelay? relay = null)

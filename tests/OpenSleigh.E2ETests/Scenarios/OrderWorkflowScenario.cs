@@ -16,8 +16,8 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
     private const int OrdersCount = 10;
     private const int LinesOfAnOrder = 2;
 
-    // the answers to the first order contend for its saga: one of them keeps it, on one host, and another has to
-    // reach a host that is free. The warehouse answers once per line, so there are enough of them for that
+    // the answers of the warehouse to the first order contend for its saga: one of them keeps it, on one host, and
+    // another has to reach a host that is free. The warehouse answers once per line, so there are enough of them for that
     private const int LinesOfTheContendedOrder = 16;
 
     // PlaceOrder, CreditChecked and OrderShipped, besides one StockReserved per line
@@ -108,19 +108,32 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
                 await run.WaitForAsync("the first order to reach its saga", placing.Entered, cancellationToken);
 
                 using (workflow.Batch.Of(2))
+                {
+                    // the warehouse is kept from answering until the conflict is armed. Only its answers are held
+                    // then: a host of these transports handles one message at a time, and one that held the answer
+                    // of the credit check could have the request to the warehouse waiting behind it, for ever
+                    var reserving = runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(ReserveStock));
+                    placing.Release();
+                    await run.WaitForAsync("the warehouse to be asked for the stock of the first order", reserving.Entered, cancellationToken);
+
                     await run.ForceLockConflictAsync(runs,
-                        handlerRun => IsAnswerTo(contended, handlerRun),
+                        handlerRun => handlerRun.MessageType == typeof(StockReserved) && handlerRun.CorrelationId == contended.CorrelationId,
                         () =>
                         {
-                            placing.Release();
+                            reserving.Release();
                             return Task.CompletedTask;
                         },
                         cancellationToken);
+                }
+
+                // nothing else was in flight: the saga that was found locked is the first order, busy with another answer
+                Assert.Contains(run.ProcessingFailures, failure => failure.IsLockConflict && AnswerTypes.Contains(failure.MessageType));
 
                 await Task.WhenAll(others.Select(order => publisher.PublishNewAsync(order, cancellationToken)));
 
+                // at least: an order shipped twice ends the wait and fails the assertions, instead of running out of time
                 await run.WaitUntilAsync($"the {OrdersCount} orders to be shipped",
-                    () => runs.RunsOf<OrderShipped>().Count == OrdersCount, cancellationToken);
+                    () => ShippedOrders(runs).Distinct().Count() >= OrdersCount, cancellationToken);
 
                 foreach (var order in orders)
                     await AssertIsStoredAsFulfilledAsync(run, order, cancellationToken);
@@ -130,10 +143,14 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
 
         // also after the observation window: no handler ran twice for a message, and every order was completed once
         Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
-        Assert.Equal(
-            orders.Select(order => order.CorrelationId).Order(),
-            runs.RunsOf<OrderShipped>().Select(handlerRun => handlerRun.CorrelationId).Order());
+        Assert.Equal(orders.Select(order => order.CorrelationId).Order(), ShippedOrders(runs).Order());
     }
+
+    private static readonly Type[] AnswerTypes = [typeof(CreditChecked), typeof(StockReserved)];
+
+    /// <summary>the correlation id of an order, once for every time it was completed.</summary>
+    private static IEnumerable<string> ShippedOrders(HandlerRuns runs)
+        => runs.RunsOf<OrderShipped>().Select(handlerRun => handlerRun.CorrelationId);
 
     private static PlaceOrder NewOrder(int number, int lines)
         => new(
@@ -141,10 +158,6 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
             Guid.NewGuid().ToString("N"),
             Amount: 10m * number,
             Skus: Enumerable.Range(1, lines).Select(line => $"SKU-{number}-{line}").ToArray());
-
-    private static bool IsAnswerTo(PlaceOrder order, HandlerRun handlerRun)
-        => handlerRun.CorrelationId == order.CorrelationId
-           && (handlerRun.MessageType == typeof(CreditChecked) || handlerRun.MessageType == typeof(StockReserved));
 
     private static async Task AssertIsStoredAsFulfilledAsync(ScenarioRun run, PlaceOrder order, CancellationToken cancellationToken)
     {
