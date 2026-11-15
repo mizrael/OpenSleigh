@@ -24,6 +24,12 @@ public record OutboxMessage
     /// </summary>
     public DateTimeOffset? DeliverAt { get; set; }
 
+    /// <summary>
+    /// when the transport first gave the message back because nothing could take it. Null when it never did,
+    /// which is also what a row written by a version of the library that does not know the column has.
+    /// </summary>
+    public DateTimeOffset? FirstReturnedAt { get; set; }
+
     public bool TryMap(
         ITypeResolver typeResolver, 
         ISerializer serializer,
@@ -46,6 +52,7 @@ public record OutboxMessage
             type,
             senderId: SenderId,
             deliverAt: DeliverAt,
+            firstReturnedAt: FirstReturnedAt,
             serializer,
             out envelope);
     }
@@ -66,6 +73,7 @@ public record OutboxMessage
             MessageType = message.MessageType.FullName,
             SenderId = message.SenderId,
             DeliverAt = message.DeliverAt,
+            FirstReturnedAt = message.FirstReturnedAt,
         };
     }
 }

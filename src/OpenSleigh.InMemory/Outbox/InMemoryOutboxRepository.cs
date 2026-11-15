@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace OpenSleigh.InMemory.Outbox;
 
-internal class InMemoryOutboxRepository : IOutboxRepository
+internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnRepository
 {
     private readonly ConcurrentDictionary<string, MessageEnvelope> _messages = new();
 
@@ -98,21 +98,54 @@ internal class InMemoryOutboxRepository : IOutboxRepository
         // read before looking at the pending messages: one that becomes pending in between was counted as delayed
         var hasDelayedMessages = _delayedMessagesCount > 0;
 
-        if (!_messages.TryRemove(message.MessageId, out _) && hasDelayedMessages)
-            DeleteDelayed(message.MessageId);
+        if (!TryDeletePending(message) && hasDelayedMessages)
+            DeleteDelayed(message);
 
         return ValueTask.CompletedTask;
     }
 
-    private void DeleteDelayed(string messageId)
+    // a message the transport returned is put back with a later due time, possibly before the relay that published it
+    // deletes it: only the message as the relay read it is deleted
+    private bool TryDeletePending(MessageEnvelope message)
+        => _messages.TryGetValue(message.MessageId, out var pending)
+           && pending.DeliverAt == message.DeliverAt
+           && _messages.TryRemove(new KeyValuePair<string, MessageEnvelope>(message.MessageId, pending));
+
+    private void DeleteDelayed(MessageEnvelope message)
     {
         lock (_gate)
         {
             // it may have become pending while this delete waited for the gate
-            if (_delayedMessages.Remove(messageId))
+            if (_delayedMessages.TryGetValue(message.MessageId, out var delayed))
+            {
+                if (delayed.DeliverAt == message.DeliverAt)
+                    _delayedMessages.Remove(message.MessageId);
+
                 _delayedMessagesCount = _delayedMessages.Count;
+            }
             else
-                _messages.TryRemove(messageId, out _);
+            {
+                TryDeletePending(message);
+            }
         }
+    }
+
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+
+        lock (_gate)
+        {
+            foreach (var message in messages)
+            {
+                _messages.TryRemove(message.MessageId, out _);
+                _delayedMessages.Remove(message.MessageId);
+                TryAppend(message);
+            }
+
+            _delayedMessagesCount = _delayedMessages.Count;
+        }
+
+        return ValueTask.CompletedTask;
     }
 }

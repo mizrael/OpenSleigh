@@ -183,6 +183,75 @@ public abstract class SqlOutboxRelayTests
 
     private static readonly TimeSpan NotDueDelay = TimeSpan.FromHours(1);
 
+    [Fact]
+    public async Task A_message_put_back_while_the_relay_that_published_it_still_holds_it_should_wait_for_the_relay_and_stay()
+    {
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 1);
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        Task putBack;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            var repository = relay.ServiceProvider.GetRequiredService<IOutboxRepository>();
+            var published = Assert.Single(await repository.ReadPendingAsync());
+
+            // the broker returns the message before the pass ends
+            putBack = PutBackAsync(provider, published.Returned(returnedAt, returnedAt + NotDueDelay));
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Assert.False(putBack.IsCompleted);
+
+            await ((IOutboxBatchRepository)repository).DeleteAsync([published]);
+            await transaction.CommitAsync();
+        }
+
+        await putBack.WaitAsync(TimeSpan.FromSeconds(20));
+
+        var (db, _) = _fixture.CreateDbContext();
+        var stored = await db.OutboxMessages.AsNoTracking().SingleAsync();
+        Assert.NotNull(stored.DeliverAt);
+        Assert.NotNull(stored.FirstReturnedAt);
+    }
+
+    [Fact]
+    public async Task A_message_put_back_should_be_published_again_when_it_is_due_with_the_time_it_first_came_back()
+    {
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 1);
+        var firstReturnedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+
+        MessageEnvelope published;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            var repository = relay.ServiceProvider.GetRequiredService<IOutboxRepository>();
+            published = Assert.Single(await repository.ReadPendingAsync());
+            await ((IOutboxBatchRepository)repository).DeleteAsync([published]);
+            await transaction.CommitAsync();
+        }
+
+        // twice, as when two relays published it and both got it back
+        var returned = published.Returned(firstReturnedAt, DateTimeOffset.UtcNow.AddMinutes(-1));
+        await PutBackAsync(provider, returned);
+        await PutBackAsync(provider, returned.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddSeconds(-1)));
+
+        await using var nextRelay = provider.CreateAsyncScope();
+        await using var nextTransaction = await StartTransactionAsync(nextRelay);
+        var readAgain = Assert.Single(await nextRelay.ServiceProvider.GetRequiredService<IOutboxRepository>().ReadPendingAsync());
+
+        Assert.Equal(published.MessageId, readAgain.MessageId);
+        Assert.NotNull(readAgain.FirstReturnedAt);
+        Assert.Equal(firstReturnedAt.ToUnixTimeMilliseconds(), readAgain.FirstReturnedAt.Value.ToUnixTimeMilliseconds());
+    }
+
+    private static async Task PutBackAsync(IServiceProvider provider, MessageEnvelope returned)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
+        await Assert.IsAssignableFrom<IOutboxReturnRepository>(repository).PutBackAsync([returned]);
+    }
+
     private sealed class RecordingPublisher : IPublisher
     {
         private readonly System.Collections.Concurrent.ConcurrentQueue<string> _publishedIds = new();

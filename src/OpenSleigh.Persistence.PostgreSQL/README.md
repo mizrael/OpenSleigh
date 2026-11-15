@@ -42,6 +42,8 @@ Delayed messages need a column on the outbox table and an index on it. A new dat
 ```sql
 ALTER TABLE opensleigh."OutboxMessages" ADD COLUMN IF NOT EXISTS "DeliverAt" timestamp with time zone;
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "IX_OutboxMessages_DeliverAt" ON opensleigh."OutboxMessages" ("DeliverAt");
+-- when a transport first returned a message that nothing could take (RabbitMQ)
+ALTER TABLE opensleigh."OutboxMessages" ADD COLUMN IF NOT EXISTS "FirstReturnedAt" timestamp with time zone;
 ```
 
 - It first checks, with one query each, whether the column and the index are there. When they are, nothing else runs: this is all that happens at every later start.

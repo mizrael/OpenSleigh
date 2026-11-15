@@ -34,6 +34,30 @@ public class MessageEnvelope
     /// </summary>
     public DateTimeOffset? DeliverAt { get; init; }
 
+    /// <summary>
+    /// when, in UTC, the transport first gave the message back because nothing could take it.
+    /// Null for a message that never came back. It is stored with the message and published with it,
+    /// so that whoever gets it back again knows for how long it has been coming back.
+    /// </summary>
+    public DateTimeOffset? FirstReturnedAt { get; init; }
+
+    /// <summary>
+    /// the same message, to be put back in the outbox after the transport gave it back.
+    /// </summary>
+    /// <param name="returnedAt">when it was given back. Kept only when the message never came back before.</param>
+    /// <param name="deliverAt">the earliest time at which the relay publishes it again.</param>
+    public MessageEnvelope Returned(DateTimeOffset returnedAt, DateTimeOffset deliverAt)
+        => new()
+        {
+            Message = Message,
+            MessageId = MessageId,
+            CorrelationId = CorrelationId,
+            CreatedAt = CreatedAt,
+            SenderId = SenderId,
+            DeliverAt = deliverAt.ToUniversalTime(),
+            FirstReturnedAt = FirstReturnedAt ?? returnedAt.ToUniversalTime(),
+        };
+
     #region Factory
 
     public static bool TryCreate(
@@ -56,6 +80,21 @@ public class MessageEnvelope
         Type messageType,
         string senderId,
         DateTimeOffset? deliverAt,
+        ISerializer serializer,
+        [NotNullWhen(true)] out MessageEnvelope? result)
+        => TryCreate(body, messageId, correlationId, createdAt, messageType, senderId, deliverAt, firstReturnedAt: null, serializer, out result);
+
+    /// <param name="deliverAt">the earliest time at which the relay publishes the message, null for no delay.</param>
+    /// <param name="firstReturnedAt">when the transport first gave the message back, null when it never did.</param>
+    public static bool TryCreate(
+        ReadOnlySpan<byte> body,
+        string messageId,
+        string correlationId,
+        DateTimeOffset createdAt,
+        Type messageType,
+        string senderId,
+        DateTimeOffset? deliverAt,
+        DateTimeOffset? firstReturnedAt,
         ISerializer serializer,
         [NotNullWhen(true)] out MessageEnvelope? result)
     {
@@ -93,7 +132,8 @@ public class MessageEnvelope
             CorrelationId = correlationId,
             CreatedAt = createdAt,
             SenderId = senderId,
-            DeliverAt = deliverAt?.ToUniversalTime()
+            DeliverAt = deliverAt?.ToUniversalTime(),
+            FirstReturnedAt = firstReturnedAt?.ToUniversalTime()
         };
         return true;
     }

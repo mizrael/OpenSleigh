@@ -408,6 +408,24 @@ public class MessageEnvelopeTests
         Assert.Equal(TimeSpan.Zero, envelope.DeliverAt!.Value.Offset);
     }
 
+    [Fact]
+    public void Returned_ShouldKeepTheTimeTheMessageFirstCameBack_AndSetTheNewDueTime()
+    {
+        var envelope = DummyMessage.CreateEnvelope();
+        var firstReturn = DateTimeOffset.UtcNow;
+
+        var returnedOnce = envelope.Returned(firstReturn, firstReturn.AddSeconds(30));
+        var returnedTwice = returnedOnce.Returned(firstReturn.AddMinutes(1), firstReturn.AddMinutes(2));
+
+        Assert.Null(envelope.FirstReturnedAt);
+        Assert.Equal(firstReturn, returnedOnce.FirstReturnedAt);
+        Assert.Equal(firstReturn.AddSeconds(30), returnedOnce.DeliverAt);
+        Assert.Equal(firstReturn, returnedTwice.FirstReturnedAt);
+        Assert.Equal(firstReturn.AddMinutes(2), returnedTwice.DeliverAt);
+        Assert.Equal(envelope.MessageId, returnedTwice.MessageId);
+        Assert.Same(envelope.Message, returnedTwice.Message);
+    }
+
     #region Helper Classes
 
     private class MessageWithCorrelationId : IMessage, IHasCorrelationId

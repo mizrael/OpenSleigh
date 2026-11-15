@@ -42,6 +42,10 @@ IF COL_LENGTH(N'[opensleigh].[OutboxMessages]', N'DeliverAt') IS NULL
 GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'[opensleigh].[OutboxMessages]') AND name = N'IX_OutboxMessages_DeliverAt')
     CREATE INDEX [IX_OutboxMessages_DeliverAt] ON [opensleigh].[OutboxMessages] ([DeliverAt]); -- WITH (ONLINE = ON) where the edition can
+GO
+-- when a transport first returned a message that nothing could take (RabbitMQ)
+IF COL_LENGTH(N'[opensleigh].[OutboxMessages]', N'FirstReturnedAt') IS NULL
+    ALTER TABLE [opensleigh].[OutboxMessages] ADD [FirstReturnedAt] datetimeoffset NULL;
 ```
 
 - It first checks, with one query each, whether the column and the index are there. When they are, nothing else runs: this is all that happens at every later start.

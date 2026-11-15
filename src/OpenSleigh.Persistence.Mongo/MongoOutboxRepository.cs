@@ -10,7 +10,7 @@ public record MongoOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly MongoOutboxRepositoryOptions Default = new(TimeSpan.FromMinutes(1));
 }
 
-public class MongoOutboxRepository : IOutboxRepository
+public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
 {
     private readonly IDbContext _dbContext;
     private readonly MongoOutboxRepositoryOptions _options;
@@ -59,14 +59,68 @@ public class MongoOutboxRepository : IOutboxRepository
         return DeleteAsyncCore(message, cancellationToken);
     }
 
+    // a message the transport returned is put back with a new due time, possibly before the relay that published it
+    // deletes it: only the message as the relay read it is deleted, and one that is gone is not an error
     private async ValueTask DeleteAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
-        var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+        var filter = filterBuilder.And(
+            filterBuilder.Eq(e => e.MessageId, message.MessageId),
+            filterBuilder.Eq(e => e.DeliverAt, AsStored(message.DeliverAt)));
 
-        var result = await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
-                                                    .ConfigureAwait(false);
-        if (result.IsAcknowledged && result.DeletedCount == 0)
-            throw new ArgumentException($"message '{message.MessageId}' not found");
+        await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
+                                       .ConfigureAwait(false);
+    }
+
+    // dates are stored to the millisecond
+    private static DateTime? AsStored(DateTimeOffset? time)
+    {
+        if (time is null)
+            return null;
+
+        var utc = time.Value.UtcDateTime;
+        return utc.AddTicks(-(utc.Ticks % TimeSpan.TicksPerMillisecond));
+    }
+
+    /// <summary>
+    /// stores each message again with its new due time, in place when the relay has not deleted it yet,
+    /// and lets go of the claim of the relay that published it.
+    /// </summary>
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        if (messages.Count == 0)
+            return ValueTask.CompletedTask;
+
+        return PutBackAsyncCore(messages, cancellationToken);
+    }
+
+    private async ValueTask PutBackAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
+    {
+        var update = Builders<Entities.OutboxMessage>.Update;
+
+        // a message that came back twice is stored as it came back last
+        var writes = messages
+            .GroupBy(message => message.MessageId)
+            .Select(sameMessage => Entities.OutboxMessage.Create(sameMessage.Last(), _serializer))
+            .Select(entity => new UpdateOneModel<Entities.OutboxMessage>(
+                Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, entity.MessageId),
+                update.Set(e => e.DeliverAt, entity.DeliverAt)
+                      .Set(e => e.FirstReturnedAt, entity.FirstReturnedAt)
+                      .Unset(e => e.LockId)
+                      .Unset(e => e.LockTime)
+                      .SetOnInsert(e => e.Body, entity.Body)
+                      .SetOnInsert(e => e.CorrelationId, entity.CorrelationId)
+                      .SetOnInsert(e => e.MessageType, entity.MessageType)
+                      .SetOnInsert(e => e.CreatedAt, entity.CreatedAt)
+                      .SetOnInsert(e => e.SenderId, entity.SenderId))
+            {
+                IsUpsert = true
+            })
+            .ToArray();
+
+        await _dbContext.OutboxMessages.BulkWriteAsync(writes, new BulkWriteOptions { IsOrdered = false }, cancellationToken)
+                                       .ConfigureAwait(false);
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)

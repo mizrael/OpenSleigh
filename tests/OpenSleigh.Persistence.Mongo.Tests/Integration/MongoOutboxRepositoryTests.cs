@@ -337,15 +337,53 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task DeleteAsync_should_throw_if_message_not_found()
+    public async Task DeleteAsync_should_not_mind_a_message_that_is_gone()
     {
-        var message = CreateMessage();
-
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
-        Assert.Contains($"message '{message.MessageId}' not found", ex.Message);
+        await sut.DeleteAsync(CreateMessage());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_should_leave_a_message_that_was_put_back_since_the_relay_read_it()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync([CreateMessage()]);
+        var published = Assert.Single(await sut.ReadPendingAsync());
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        // the broker returns the message before the relay deletes it
+        await sut.PutBackAsync([published.Returned(returnedAt, returnedAt.AddSeconds(-1))]);
+        await sut.DeleteAsync(published);
+
+        var readAgain = Assert.Single(await sut.ReadPendingAsync());
+        Assert.Equal(published.MessageId, readAgain.MessageId);
+        Assert.NotNull(readAgain.FirstReturnedAt);
+        Assert.Equal(returnedAt.ToUnixTimeMilliseconds(), readAgain.FirstReturnedAt.Value.ToUnixTimeMilliseconds());
+
+        await sut.DeleteAsync(readAgain);
+        Assert.Equal(0, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
+    }
+
+    [Fact]
+    public async Task PutBackAsync_should_store_again_a_message_the_relay_has_deleted()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync([CreateMessage()]);
+        var published = Assert.Single(await sut.ReadPendingAsync());
+        await sut.DeleteAsync(published);
+
+        await sut.PutBackAsync([published.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1))]);
+
+        Assert.Empty(await sut.ReadPendingAsync());
+        var stored = await db.OutboxMessages.FindOneAsync(Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, published.MessageId));
+        Assert.NotNull(stored);
+        Assert.Null(stored.LockId);
+        Assert.Equal(published.CorrelationId, stored.CorrelationId);
+        Assert.NotNull(stored.Body);
     }
 
     [Fact]

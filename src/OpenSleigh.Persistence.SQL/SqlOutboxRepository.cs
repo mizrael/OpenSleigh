@@ -15,7 +15,7 @@ public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration, int MaxMessag
 public delegate bool DuplicateKeyDetector(Exception exception);
 
 
-public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepository
+public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepository, IOutboxReturnRepository
 {
     protected readonly SqlOutboxRepositoryOptions _options;
     protected readonly ISerializer _serializer;
@@ -81,6 +81,52 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         catch (Exception ex) when (_duplicateKeyDetector(ex))
         {
             return OutboxAppendResult.Duplicate;
+        }
+        finally
+        {
+            StopTracking(entities);
+            _appendSemaphore.Release();
+        }
+    }
+
+    /// <summary>
+    /// replaces the rows of the messages in one transaction. The relay that published a message holds its row
+    /// until its pass ends, and deletes it then: the delete made here waits for that, so that the row stored here
+    /// is never the one the relay removes.
+    /// </summary>
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(messages);
+        if (messages.Count == 0)
+            return ValueTask.CompletedTask;
+
+        return PutBackAsyncCore(messages, cancellationToken);
+    }
+
+    private async ValueTask PutBackAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
+    {
+        // a message that came back twice is stored as it came back last
+        var entities = messages
+            .GroupBy(message => message.MessageId)
+            .Select(sameMessage => Entities.OutboxMessage.Map(sameMessage.Last(), _serializer))
+            .ToArray();
+
+        await _appendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await using var transaction = await DbContext.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+
+            // by key, one statement each: a statement listing the keys is not looked up by key on every database
+            foreach (var entity in entities)
+                await DbContext.OutboxMessages.Where(e => e.MessageId == entity.MessageId)
+                                              .ExecuteDeleteAsync(cancellationToken)
+                                              .ConfigureAwait(false);
+
+            DbContext.OutboxMessages.AddRange(entities);
+            await DbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         }
         finally
         {

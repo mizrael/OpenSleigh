@@ -26,6 +26,9 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
 
     private const string HasDeliverAtColumn = $"COL_LENGTH(N'{OutboxTable}', N'{DeliverAtColumn}') IS NOT NULL";
 
+    private const string FirstReturnedAtColumn = nameof(OutboxMessage.FirstReturnedAt);
+    private const string HasFirstReturnedAtColumn = $"COL_LENGTH(N'{OutboxTable}', N'{FirstReturnedAtColumn}') IS NOT NULL";
+
     private const string HasDeliverAtIndex =
         $"EXISTS (SELECT 1 FROM sys.indexes WHERE object_id = OBJECT_ID(N'{OutboxTable}') AND name = N'{OutboxMessage.DeliverAtIndexName}')";
 
@@ -55,6 +58,11 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
                 $"ELSE EXEC(N'{CreateDeliverAtIndex}') " +
                 "END",
             ]),
+
+        new SagaDbSchemaChange(
+            "the time outbox messages were first returned by the transport",
+            $"SELECT CASE WHEN {HasFirstReturnedAtColumn} THEN 1 ELSE 0 END AS [{ResultColumn}]",
+            [$"IF NOT ({HasFirstReturnedAtColumn}) ALTER TABLE {OutboxTable} ADD [{FirstReturnedAtColumn}] datetimeoffset NULL"]),
     ];
 
     private readonly string _lockStatement;

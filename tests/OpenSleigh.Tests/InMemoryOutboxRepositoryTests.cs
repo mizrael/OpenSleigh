@@ -50,6 +50,32 @@ public class InMemoryOutboxRepositoryTests
     }
 
     [Fact]
+    public async Task A_message_put_back_should_survive_the_delete_of_the_relay_that_published_it_and_be_read_again_when_due()
+    {
+        var clock = new SettableClock();
+        var sut = new InMemoryOutboxRepository(clock);
+        var published = CreateEnvelope(deliverAt: null);
+        await sut.AppendAsync(new[] { published });
+        var returned = published.Returned(clock.UtcNow, clock.UtcNow + ShortDelay);
+
+        // the transport returns the message before the relay deletes it
+        await sut.PutBackAsync([returned]);
+        await sut.DeleteAsync(published);
+        Assert.Empty(await sut.ReadPendingAsync());
+
+        clock.UtcNow += ShortDelay;
+        var readAgain = Assert.Single(await sut.ReadPendingAsync());
+        Assert.Equal(published.MessageId, readAgain.MessageId);
+        Assert.NotNull(readAgain.FirstReturnedAt);
+
+        // and after it did
+        await sut.DeleteAsync(readAgain);
+        await sut.PutBackAsync([readAgain.Returned(clock.UtcNow, clock.UtcNow + ShortDelay)]);
+        clock.UtcNow += ShortDelay;
+        Assert.Equal(returned.FirstReturnedAt, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
+    }
+
+    [Fact]
     public async Task DeleteAsync_should_remove_message()
     {
         var sut = new InMemoryOutboxRepository();

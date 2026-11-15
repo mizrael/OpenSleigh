@@ -21,6 +21,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
 {
     private const string OutboxTable = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
     private const string DeliverAtColumn = nameof(OutboxMessage.DeliverAt);
+    private const string FirstReturnedAtColumn = nameof(OutboxMessage.FirstReturnedAt);
     private const string DeliverAtIndex = $"{Constants.DbSchema}.\"{OutboxMessage.DeliverAtIndexName}\"";
     private const string PermissionDeniedSqlState = "42501";
 
@@ -68,6 +69,16 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
                 $"CREATE INDEX CONCURRENTLY IF NOT EXISTS \"{OutboxMessage.DeliverAtIndexName}\" ON {OutboxTable} (\"{DeliverAtColumn}\")",
             ],
             RunsInTransaction: false),
+
+        new SagaDbSchemaChange(
+            "the time outbox messages were first returned by the transport",
+            $"""
+             SELECT CASE WHEN EXISTS (
+                 SELECT 1 FROM information_schema.columns
+                 WHERE table_schema = '{Constants.DbSchema}' AND table_name = '{OutboxMessage.TableName}' AND column_name = '{FirstReturnedAtColumn}')
+             THEN 1 ELSE 0 END AS "{ResultColumn}"
+             """,
+            [$"ALTER TABLE {OutboxTable} ADD COLUMN IF NOT EXISTS \"{FirstReturnedAtColumn}\" timestamp with time zone"]),
     ];
 
     public PostgreSqlSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)
