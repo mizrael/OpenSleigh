@@ -22,10 +22,6 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     private const string DeliverAtIndex = $"{Constants.DbSchema}.\"{OutboxMessage.DeliverAtIndexName}\"";
     private const string PermissionDeniedSqlState = "42501";
 
-    // the database exists, its name was taken while this instance was creating it,
-    // or the template it is copied from is in use by whoever is creating it
-    private static readonly string[] CreatedByAnotherInstanceSqlStates = ["42P04", "23505", "55006"];
-
     // an arbitrary number: all it has to be is the same for every instance of the library
     internal const string ConcurrentUpgradesLockKey = "7308325172346594411";
 
@@ -151,50 +147,27 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     // another arbitrary number: creating a database does not wait for the upgrade of another one
     private const string ConcurrentCreationsLockKey = "7308325172346594412";
 
-    // the server has a database before any other: instances that find theirs missing wait for each other there
+    // the server has a database before any other: instances that find theirs missing wait for each other there.
+    // The lock belongs to the connection, which is not pooled: closing it lets go of the lock
     protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
     {
-        using var admin = TryLockDatabaseCreation(database);
-        createDatabase();
-    }
-
-    // the lock belongs to the connection, which is not pooled: closing it lets go of the lock.
-    // Null when the lock could not be taken: the database is created without it, and whoever loses the race waits
-    private NpgsqlConnection? TryLockDatabaseCreation(DatabaseFacade database)
-    {
-        NpgsqlConnection? admin = null;
-        try
+        var connectionString = new NpgsqlConnectionStringBuilder(database.GetConnectionString())
         {
-            var connectionString = new NpgsqlConnectionStringBuilder(database.GetConnectionString())
-            {
-                Database = AdminDatabase,
-                Pooling = false,
-            };
+            Database = AdminDatabase,
+            Pooling = false,
+        };
 
-            admin = new NpgsqlConnection(connectionString.ConnectionString);
-            admin.Open();
+        using var admin = new NpgsqlConnection(connectionString.ConnectionString);
+        admin.Open();
 
-            using var command = admin.CreateCommand();
+        using (var command = admin.CreateCommand())
+        {
             command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
             command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";
             command.ExecuteNonQuery();
-
-            return admin;
         }
-        catch
-        {
-            admin?.Dispose();
-            return null;
-        }
-    }
 
-    protected override bool IsBeingCreatedByAnotherInstance(Exception exception)
-    {
-        for (var current = exception; current is not null; current = current.InnerException)
-            if (current is PostgresException postgresException && CreatedByAnotherInstanceSqlStates.Contains(postgresException.SqlState))
-                return true;
-
-        return false;
+        createDatabase();
     }
 
     protected override bool IsPermissionDenied(Exception exception)

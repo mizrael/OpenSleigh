@@ -57,6 +57,7 @@ public class SagaDbSchemaInitializerTests
 
         sut.EnsureCreated(context.Database);
 
+        Assert.Equal(1, upgrade.ExclusiveDatabaseCreations);
         Assert.Equal(1, upgrade.ExclusiveCreations);
         Assert.Equal(0, upgrade.Applied);
         Assert.False(context.Set<Entities.SagaState>().Any());
@@ -75,12 +76,14 @@ public class SagaDbSchemaInitializerTests
             }
         };
         var sut = new SagaDbSchemaInitializer(upgrade);
-        using var context = database.CreateContext();
+        var seeded = new List<bool>();
+        using var context = database.CreateContext(options => options.UseSeeding((_, created) => seeded.Add(created)));
 
         sut.EnsureCreated(context.Database);
 
         Assert.Equal(1, upgrade.ExclusiveCreations);
         Assert.Equal(0, upgrade.Applied);
+        Assert.Equal([false], seeded);
     }
 
     [Fact]
@@ -107,6 +110,39 @@ public class SagaDbSchemaInitializerTests
         new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database);
 
         Assert.Equal([true, false], seeded);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_seed_in_a_transaction_once_the_tables_are_there_and_current()
+    {
+        const string seededTable = "SELECT COUNT(*) AS \"Value\" FROM sqlite_master WHERE name = 'seeded'";
+        using var database = new SqliteFile();
+        using (var existing = database.CreateContext())
+            existing.Database.EnsureCreated();
+
+        var upgrade = new RecordingSchemaUpgrade();
+        var appliedWhenSeeding = -1;
+        using var context = database.CreateContext(options => options.UseSeeding((seeding, _) =>
+        {
+            appliedWhenSeeding = upgrade.Applied;
+            seeding.Database.ExecuteSqlRaw("CREATE TABLE seeded (id INTEGER)");
+            throw new InvalidOperationException("the seeding failed");
+        }));
+
+        Assert.Throws<InvalidOperationException>(() => new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database));
+
+        Assert.Equal(1, appliedWhenSeeding);
+        Assert.Equal(0, context.Database.SqlQueryRaw<int>(seededTable).AsEnumerable().Single());
+    }
+
+    [Fact]
+    public void EnsureCreated_should_refuse_a_context_that_can_only_be_seeded_asynchronously()
+    {
+        using var database = new SqliteFile();
+        using var context = database.CreateContext(options => options.UseAsyncSeeding((_, _, _) => Task.CompletedTask));
+
+        Assert.Throws<InvalidOperationException>(
+            () => new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database));
     }
 
     private sealed class SqliteFile : IDisposable
@@ -183,6 +219,7 @@ public class SagaDbSchemaInitializerTests
     {
         public int Applied { get; private set; }
         public int ExclusiveCreations { get; private set; }
+        public int ExclusiveDatabaseCreations { get; private set; }
         public int FailuresLeft { get; set; }
 
         /// <summary>what happens between the moment this instance asks for its turn and the moment it has it.</summary>
@@ -191,6 +228,12 @@ public class SagaDbSchemaInitializerTests
         public override IReadOnlyList<SagaDbSchemaChange> Changes => [];
         protected override string TablesExistQuery => string.Empty;
         protected override bool IsPermissionDenied(Exception exception) => false;
+
+        protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+        {
+            ExclusiveDatabaseCreations++;
+            createDatabase();
+        }
 
         protected override void RunExclusively(DatabaseFacade database, Action createTables)
         {

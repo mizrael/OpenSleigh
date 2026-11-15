@@ -63,9 +63,6 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
     private const string ReleaseLock =
         $"EXEC sp_releaseapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockOwner = N'Session'";
 
-    // the database exists, or one of its files does: someone else got there first
-    private static readonly int[] CreatedByAnotherInstanceErrors = [1801, 5170];
-
     public SqlServerSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)
     {
         // sp_getapplock reports a lock it did not get (timeout, cancellation, deadlock) with a negative return value,
@@ -153,30 +150,20 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
     private const int MaxLockNameLength = 255;
 
     // the server has a database before any other: instances that find theirs missing wait for each other there.
-    // Whoever is creating the database is not disturbed by the others asking whether it is there yet
+    // The lock belongs to the connection, which is not pooled: closing it lets go of the lock
     protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
     {
-        using var master = TryLockDatabaseCreation(database);
-        createDatabase();
-    }
+        var connectionString = new SqlConnectionStringBuilder(database.GetConnectionString());
+        var lockName = CreationLockPrefix + connectionString.InitialCatalog;
+        connectionString.InitialCatalog = MasterDatabase;
+        connectionString.AttachDBFilename = string.Empty;
+        connectionString.Pooling = false;
 
-    // the lock belongs to the connection, which is not pooled: closing it lets go of the lock.
-    // Null when the lock could not be taken: the database is created without it, as on a server that has none
-    private SqlConnection? TryLockDatabaseCreation(DatabaseFacade database)
-    {
-        SqlConnection? master = null;
-        try
+        using var master = new SqlConnection(connectionString.ConnectionString);
+        master.Open();
+
+        using (var command = master.CreateCommand())
         {
-            var connectionString = new SqlConnectionStringBuilder(database.GetConnectionString());
-            var lockName = CreationLockPrefix + connectionString.InitialCatalog;
-            connectionString.InitialCatalog = MasterDatabase;
-            connectionString.AttachDBFilename = string.Empty;
-            connectionString.Pooling = false;
-
-            master = new SqlConnection(connectionString.ConnectionString);
-            master.Open();
-
-            using var command = master.CreateCommand();
             command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
             command.CommandText =
                 "DECLARE @result int; " +
@@ -187,30 +174,14 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
                 "END";
             command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
             command.ExecuteNonQuery();
-
-            return master;
         }
-        catch
-        {
-            master?.Dispose();
-            return null;
-        }
+
+        // the login that failed because the database was missing is remembered by the pool for a while,
+        // and answered with again without asking the server: the database another instance created would not be seen
+        ClearConnectionPool(database);
+
+        createDatabase();
     }
-
-    protected override bool IsBeingCreatedByAnotherInstance(Exception exception)
-    {
-        for (var current = exception; current is not null; current = current.InnerException)
-            if (current is SqlException sqlException &&
-                sqlException.Errors.Cast<SqlError>().Any(error => CreatedByAnotherInstanceErrors.Contains(error.Number)))
-                return true;
-
-        return false;
-    }
-
-    // a login that failed because the database was not there yet is remembered by the pool for a while,
-    // and answered with again without asking the server
-    protected override void ForgetFailedConnections(DatabaseFacade database)
-        => ClearConnectionPool(database);
 
     // the setting belongs to the connection, which goes back to its pool
     private static void TryStopWaitingForTableLocks(DatabaseFacade database)

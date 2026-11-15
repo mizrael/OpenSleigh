@@ -68,40 +68,49 @@ public abstract class SagaDbSchemaUpgrade
         => RunExclusively(database, apply);
 
     /// <summary>
-    /// whether creating the database failed because another instance is creating it, or just has:
-    /// this instance then waits for the database instead of failing.
-    /// </summary>
-    protected virtual bool IsBeingCreatedByAnotherInstance(Exception exception) => false;
-
-    /// <summary>
-    /// called before asking again whether a database that another instance is creating exists,
-    /// for a provider whose connection pool keeps answering with the failure of an earlier attempt.
-    /// </summary>
-    protected virtual void ForgetFailedConnections(DatabaseFacade database)
-    {
-    }
-
-    /// <summary>
     /// runs <paramref name="createDatabase"/>, which creates the database if it is still missing, while no other instance
-    /// does the same, on a server that has something to make them wait with before the database exists.
-    /// Unless it is overridden nothing does, and <see cref="IsBeingCreatedByAnotherInstance"/> tells who lost the race.
+    /// does the same. The database is not there to take a lock in: override it on a server that has another place for one.
+    /// Unless it is overridden nothing makes the instances wait, and all but one of those that start together fail.
     /// </summary>
     protected virtual void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
         => createDatabase();
 
     /// <summary>
-    /// creates the database and its tables when they are missing, one instance at a time.
+    /// creates the database and its tables when they are missing, the way EnsureCreated does, for instances that
+    /// start together: EnsureCreated checks and then creates, and all but one of them would fail on what another one
+    /// created in between.
     /// </summary>
-    internal SagaDbCreationOutcome EnsureCreated(DatabaseFacade database, IRelationalDatabaseCreator creator, CancellationToken cancellationToken)
-        => new SagaDbCreation(
-                creator,
-                IsBeingCreatedByAnotherInstance,
-                () => ForgetFailedConnections(database),
-                createDatabase => RunDatabaseCreationExclusively(database, createDatabase),
-                _logger)
-            .EnsureCreated(
-                createTables => WithCommandTimeout(database, () => RunExclusively(database, createTables)),
-                cancellationToken);
+    /// <param name="seed">
+    /// called once the tables are there, while no other instance creates them, and told whether this instance created them.
+    /// It is not called when the tables were there already.
+    /// </param>
+    /// <returns>whether the tables were missing.</returns>
+    internal bool EnsureCreated(DatabaseFacade database, IRelationalDatabaseCreator creator, Action<bool> seed)
+    {
+        if (!creator.Exists())
+            RunDatabaseCreationExclusively(database, () =>
+            {
+                // the instance this one waited for has created it
+                if (!creator.Exists())
+                    creator.Create();
+            });
+
+        // the same two checks EnsureCreated makes: a schema that is there costs nothing more than it did
+        if (creator.HasTables())
+            return false;
+
+        // instances that wait for each other here run the same version: whichever creates the tables, they are current
+        WithCommandTimeout(database, () => RunExclusively(database, () =>
+        {
+            var create = !creator.HasTables();
+            if (create)
+                creator.CreateTables();
+
+            seed(create);
+        }));
+
+        return true;
+    }
 
     // a statement of the schema can take longer than a query, and waits that long for another instance
     private void WithCommandTimeout(DatabaseFacade database, Action action)
