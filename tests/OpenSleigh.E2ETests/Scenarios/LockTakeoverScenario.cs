@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
+using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.Mongo;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Transport;
@@ -10,196 +11,145 @@ using Xunit.Abstractions;
 namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
-/// a host dies after its handler ran and before the saga is stored: the saga stays locked by a host that is gone,
-/// and its message comes back. The lock is honoured for as long as it lasts, then someone else takes the saga over
-/// and finishes it. Whatever the first owner still tries with its lock is refused.
+/// the owner of a saga stops between its handler and its commit, for longer than its lock lasts: a process that
+/// hangs, or one that died and whose message is delivered again. The lock is honoured for as long as it lasts,
+/// then someone else takes the saga over and finishes it. When the first owner goes on, its commit is refused.
 /// </summary>
 public class LockTakeoverScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
-    // a minute by default: here, as long as the scenario can afford to wait
-    private static readonly TimeSpan LockMaxDuration = TimeSpan.FromSeconds(2);
+    // a minute by default. Here, long enough for the message to be delivered again while the lock still holds:
+    // that takes a few milliseconds, and the scenario fails if it took longer
+    private static readonly TimeSpan LockMaxDuration = TimeSpan.FromSeconds(3);
 
     private const int Messages = 2;
 
-    // not in memory: a host that dies takes its sagas with it, and there the locks never expire.
-    // The host that is left takes the saga over. More hosts would only be more hosts that are left
+    // not in memory, where a lock never expires. The expiry of a lock is the store's and the retry of a message
+    // that finds it is the transport's, so every store runs with one transport and one store with the other.
+    // A second host is there to take the saga over: more would only be more hosts that could
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
-    public Task a_saga_left_locked_by_a_host_that_died_is_taken_over_by_another_when_its_lock_expires(string combination, int hostsCount)
-        => RunAsync(combination, hostsCount);
-
-    // the only host dies, and the one that replaces it takes the saga over. What differs from the case above is how
-    // the message reaches a host that was not there when it was published, which is up to the transport:
-    // the expiry of the lock is the store's, and every store has shown it above. So one store, with each transport
-    [Theory]
-    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq, Combinations.PostgreSqlKafka], HostsCounts = [1])]
-    public Task a_saga_left_locked_by_the_only_host_is_taken_over_by_its_replacement_when_its_lock_expires(string combination, int hostsCount)
-        => RunAsync(combination, hostsCount);
-
-    private async Task RunAsync(string combination, int hostsCount)
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [2])]
+    public async Task a_saga_whose_owner_stalled_is_taken_over_when_its_lock_expires_and_the_first_owner_is_refused(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();
-        var runs = new HandlerRuns(Messages);
-        var crash = new Crash();
+        var runs = new HandlerRuns();
+        var stall = new Stall();
 
-        var setup = new HostSetup(bus => bus.AddSaga<TransferSaga, TransferState>())
+        var setup = new HostSetup(bus => bus.AddSaga<PayoutSaga, PayoutState>())
         {
             ConfigureServices = services => services
-                .AddSingleton(runs)
-                .AddSingleton<HostLife>()
+                .RecordHandlerRuns(runs)
                 .AddSingleton(new SqlSagaStateRepositoryOptions(LockMaxDuration))
                 .AddSingleton(new MongoSagaStateRepositoryOptions(LockMaxDuration))
-                .Intercept(provider => new DiesBeforeItsFirstCommit(crash, provider.GetRequiredService<HostLife>()))
+                .Intercept(_ => new StallsBeforeTheFirstCommit(stall))
         };
 
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                await run.AnyHost.PublishAsync(new StartTransfer(correlationId), cancellationToken);
+                // the first owner is given the message the way a transport gives it, and not by a transport:
+                // the consumer of a host that stalls is stuck with it, and would keep what else it was given
+                var owner = run.Hosts[0];
+                var start = MessageEnvelope.Create(new StartPayout(correlationId), owner.Services.GetRequiredService<ISystemInfo>());
+
+                await using var ownerScope = owner.Services.CreateAsyncScope();
+                var processor = ownerScope.ServiceProvider.GetRequiredService<IMessageProcessor>();
+                var firstOwner = Task.Run(() => processor.ProcessAsync(start, cancellationToken).AsTask(), cancellationToken);
+
+                await run.WaitUntilAsync("the first owner to stall before its commit",
+                    () => stall.Reached.IsCompleted || firstOwner.IsCompleted, cancellationToken);
+                Assert.False(firstOwner.IsCompleted, "the first owner did not stall.");
 
                 // the handler ran, and nothing it did is stored
-                var dead = await crash.Happened.WaitAsync(cancellationToken);
-                var locked = await run.FindSagaAsync<TransferSaga>(correlationId, cancellationToken);
+                var locked = await run.FindSagaAsync<PayoutSaga>(correlationId, cancellationToken);
                 Assert.NotNull(locked);
                 Assert.True(locked.IsLocked);
                 Assert.Empty(locked.ProcessedMessages);
 
-                var deadHost = run.Hosts.Single(host => ReferenceEquals(host.Services.GetRequiredService<HostLife>(), dead.Host));
-                await deadHost.StopAsync();
-                if (hostsCount == 1)
-                    await run.StartHostAsync(setup);
+                // the message is delivered again, by the transport this time, and finds the lock
+                await run.Hosts[^1].Services.GetRequiredService<IPublisher>().PublishAsync(start, cancellationToken);
+                await run.WaitUntilAsync("the message, delivered again, to find the saga locked",
+                    () => run.CountLockConflicts() > 0, cancellationToken);
 
-                await runs.AllHandled.WaitAsync(cancellationToken);
-                var completed = await run.WaitForSagaAsync<TransferSaga>(correlationId,
-                    saga => saga.IsCompleted && !saga.IsLocked, cancellationToken);
-                Assert.Equal(Messages, completed.ProcessedMessages.Count);
+                var takenOver = await run.WaitForReleasedSagaAsync<PayoutSaga>(correlationId, Messages, cancellationToken);
+                Assert.True(takenOver.IsCompleted);
 
-                // the host that died comes back to life with the lock it had: it cannot release the saga, nor change it
-                await using var scope = run.AnyHost.Services.CreateAsyncScope();
-                var repository = scope.ServiceProvider.GetRequiredService<ISagaStateRepository>();
-                var staleOwner = await dead.Owner.WithItsLockAsync(cancellationToken);
-                await Assert.ThrowsAsync<LockException>(() => repository.ReleaseAsync(staleOwner, cancellationToken).AsTask());
+                // the first owner goes on with the commit it was about to make, with the lock it had
+                stall.Resume();
+                var refusal = await Assert.ThrowsAnyAsync<Exception>(() => firstOwner);
+                Assert.True(refusal.IsLockConflict(), refusal.ToString());
 
-                var afterStaleRelease = await run.FindSagaAsync<TransferSaga>(correlationId, cancellationToken);
-                Assert.NotNull(afterStaleRelease);
-                Assert.True(afterStaleRelease.IsCompleted);
-                Assert.Equal(Messages, afterStaleRelease.ProcessedMessages.Count);
-                Assert.Equal(1, Assert.IsType<TransferState>(afterStaleRelease.StateData).Executions);
+                var afterRefusal = await run.FindSagaAsync<PayoutSaga>(correlationId, cancellationToken);
+                Assert.NotNull(afterRefusal);
+                Assert.True(afterRefusal.IsCompleted);
+                Assert.False(afterRefusal.IsLocked);
+                Assert.Equal(Messages, afterRefusal.ProcessedMessages.Count);
+                Assert.Equal(1, Assert.IsType<PayoutState>(afterRefusal.StateData).Executions);
             },
-            async run =>
-            {
-                await AssertNoDeadLettersAsync(run);
+            // whoever is given the message while the lock lasts finds the saga locked, and so does the first owner
+            // in the end: nothing else goes wrong. What the first owner published is not in the outbox
+            AssertOnlyLockConflictsAsync);
 
-                // until the lock expires, whoever is given the message finds the saga locked
-                Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.ToString()));
-            });
-
-        // delivery is at least once: the handler ran on the host that died, and again on the one that took over.
+        // delivery is at least once: the handler ran for the first owner, and again for the one that took over.
         // Only the second run is stored, and only its message was published
-        var executions = runs.RunsOf<StartTransfer>();
+        var executions = runs.RunsOf<StartPayout>();
         Assert.Equal(2, executions.Count);
         Assert.Single(executions.Select(run => run.InstanceId).Distinct());
-        Assert.Single(runs.RunsOf<TransferExecuted>());
+        Assert.Single(runs.RunsOf<PayoutExecuted>());
 
         // the lock was written after this timestamp was taken: nobody had the saga before it expired
-        var takenOverAfter = Stopwatch.GetElapsedTime(crash.LockRequestedAt, executions[1].At);
+        var takenOverAfter = Stopwatch.GetElapsedTime(stall.LockRequestedAt, executions[1].At);
         Assert.True(takenOverAfter >= LockMaxDuration,
             $"the saga was taken over {takenOverAfter.TotalMilliseconds} ms after it was locked: its lock lasts {LockMaxDuration.TotalMilliseconds} ms.");
     }
 
-    /// <summary>whether a host is still alive. One per host.</summary>
-    private sealed class HostLife
+    /// <summary>the one stall the scenario causes, and ends. One for all the hosts.</summary>
+    private sealed class Stall
     {
-        private int _isOver;
-
-        public bool IsOver => Volatile.Read(ref _isOver) != 0;
-
-        public void End() => Volatile.Write(ref _isOver, 1);
-    }
-
-    private sealed record DeadOwner(HostLife Host, SagaOwner Owner);
-
-    /// <summary>what the scenario knows about the one crash it causes. One for all the hosts.</summary>
-    private sealed class Crash
-    {
-        private readonly TaskCompletionSource<DeadOwner> _happened = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _reached = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _resumed = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int _claimed;
         private long _lockRequestedAt;
 
-        public Task<DeadOwner> Happened => _happened.Task;
+        public Task Reached => _reached.Task;
 
-        /// <summary>when the lock that is left behind was asked for: before it was written.</summary>
+        /// <summary>when the first lock of the scenario was asked for: before it was written.</summary>
         public long LockRequestedAt => Interlocked.Read(ref _lockRequestedAt);
 
         public void LockRequested()
+            => Interlocked.CompareExchange(ref _lockRequestedAt, Stopwatch.GetTimestamp(), 0);
+
+        /// <returns>what to wait for before going on, for the first commit of the scenario. Null for the others.</returns>
+        public Task? TryStall(CancellationToken cancellationToken)
         {
-            if (Volatile.Read(ref _claimed) == 0)
-                Interlocked.Exchange(ref _lockRequestedAt, Stopwatch.GetTimestamp());
+            if (Interlocked.CompareExchange(ref _claimed, 1, 0) != 0)
+                return null;
+
+            _reached.TrySetResult();
+            return _resumed.Task.WaitAsync(cancellationToken);
         }
 
-        public bool TryClaim() => Interlocked.CompareExchange(ref _claimed, 1, 0) == 0;
-
-        public void Report(DeadOwner dead) => _happened.TrySetResult(dead);
+        public void Resume() => _resumed.TrySetResult();
     }
 
     /// <summary>
-    /// the first host that is about to store the saga dies instead: its commit never reaches the store, and neither
-    /// does anything it tries afterwards. It stays that way until the scenario stops it, as a process that is gone would.
+    /// the first commit of the scenario waits until the scenario lets it go on, then goes to the store as it is.
     /// </summary>
-    private sealed class DiesBeforeItsFirstCommit(Crash crash, HostLife host) : SagaStateRepositoryInterceptor
+    private sealed class StallsBeforeTheFirstCommit(Stall stall) : SagaStateRepositoryInterceptor
     {
         public override ValueTask<string> LockAsync(ISagaStateRepository repository, ISagaInstance state, CancellationToken cancellationToken)
         {
-            crash.LockRequested();
+            stall.LockRequested();
             return base.LockAsync(repository, state, cancellationToken);
         }
 
         public override async ValueTask CommitAsync(ISagaStateCommitter repository, ISagaInstance state, CancellationToken cancellationToken)
         {
-            if (!crash.TryClaim())
-            {
-                await base.CommitAsync(repository, state, cancellationToken);
-                return;
-            }
+            if (stall.TryStall(cancellationToken) is { } resumed)
+                await resumed;
 
-            host.End();
-            crash.Report(new DeadOwner(host, SagaOwner.Of(state)));
-
-            // until the host is stopped: its message is then left to be delivered again
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            await base.CommitAsync(repository, state, cancellationToken);
         }
-
-        public override ValueTask ReleaseAsync(ISagaStateRepository repository, ISagaInstance state, CancellationToken cancellationToken)
-            => host.IsOver
-                ? throw new InvalidOperationException("this host is dead: it cannot reach the store.")
-                : base.ReleaseAsync(repository, state, cancellationToken);
-    }
-
-    /// <summary>a saga as one of its owners had it: with the lock that owner was given.</summary>
-    private sealed record SagaOwner(string InstanceId, string TriggerMessageId, string CorrelationId, SagaDescriptor Descriptor, string LockId)
-    {
-        public static SagaOwner Of(ISagaInstance state)
-            => new(state.InstanceId, state.TriggerMessageId, state.CorrelationId, state.Descriptor, state.LockId);
-
-        public async Task<ISagaInstance> WithItsLockAsync(CancellationToken cancellationToken)
-        {
-            var instance = new SagaInstance(InstanceId, TriggerMessageId, CorrelationId, Descriptor);
-            await instance.LockAsync(new AlreadyLocked(LockId), cancellationToken);
-            return instance;
-        }
-    }
-
-    /// <summary>gives an instance the lock it once had, without asking the store.</summary>
-    private sealed class AlreadyLocked(string lockId) : ISagaStateRepository
-    {
-        public ValueTask<string> LockAsync(ISagaInstance state, CancellationToken cancellationToken = default)
-            => ValueTask.FromResult(lockId);
-
-        public ValueTask<ISagaInstance?> FindAsync<TM>(SagaDescriptor descriptor, IMessageContext<TM> messageContext, CancellationToken cancellationToken = default)
-            where TM : IMessage
-            => throw new NotSupportedException();
-
-        public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
-            => throw new NotSupportedException();
     }
 }

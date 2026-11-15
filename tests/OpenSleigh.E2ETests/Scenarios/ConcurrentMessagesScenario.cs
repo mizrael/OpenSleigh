@@ -1,6 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
+using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
-using OpenSleigh.Outbox;
 using OpenSleigh.Queries;
 using OpenSleigh.Transport;
 using Xunit.Abstractions;
@@ -13,18 +12,22 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
-    private const int Accounts = 3;
+    private const int OtherAccounts = 2;
     private const int MovementsPerAccount = 12;
     private const int MessagesPerAccount = 1 + MovementsPerAccount;
+    private const int Messages = (1 + OtherAccounts) * MessagesPerAccount;
 
-    // the hosts that compete for the messages of one saga. One host of these transports handles its messages
-    // one at a time, and shows nothing that five hosts do not
+    // the hosts that compete for the messages of one saga: one host of these transports handles its messages
+    // one at a time. The lock is the store's and the retry is the transport's, so every store runs with one
+    // transport and one store with the other: the remaining pairs would show the same lock and the same retry again
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [5])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [5])]
     public Task every_message_for_one_saga_is_handled_exactly_once_by_hosts_that_compete(string combination, int hostsCount)
         => RunAsync(combination, hostsCount);
 
-    // in memory a host handles several messages at the same time: it competes with itself
+    // in memory a host handles the messages it reads together at the same time: it competes with itself
     [Theory]
     [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
     public Task every_message_for_one_saga_is_handled_exactly_once_by_a_host_that_handles_several_at_once(string combination, int hostsCount)
@@ -32,12 +35,16 @@ public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBas
 
     private async Task RunAsync(string combination, int hostsCount)
     {
-        var accounts = Enumerable.Range(0, Accounts).Select(_ => Guid.NewGuid().ToString()).ToArray();
-        var runs = new HandlerRuns(Accounts * MessagesPerAccount);
+        var contended = Guid.NewGuid().ToString();
+        var others = Enumerable.Range(0, OtherAccounts).Select(_ => Guid.NewGuid().ToString()).ToArray();
+        string[] accounts = [contended, .. others];
+
+        var runs = new HandlerRuns();
+        var batch = new InMemoryBatch();
 
         var setup = new HostSetup(bus => bus.AddSaga<AccountSaga, AccountState>())
         {
-            ConfigureServices = services => services.AddSingleton(runs)
+            ConfigureServices = services => services.RecordHandlerRuns(runs).ReadInMemoryMessagesIn(batch)
         };
 
         var stored = new List<SagaInstanceInfo>();
@@ -48,32 +55,31 @@ public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBas
                 // a movement that reached a host before its account is stored would be dead-lettered, by design:
                 // the accounts are opened first, so that no movement can be early and every dead letter is a failure
                 foreach (var account in accounts)
-                    await PublishAsync(run.AnyHost, new OpenAccount(account), cancellationToken);
+                    await run.AnyHost.PublishNewAsync(new OpenAccount(account), cancellationToken);
                 foreach (var account in accounts)
-                    await WaitForAccountAsync(run, account, handledMessages: 1, cancellationToken);
+                    await run.WaitForReleasedSagaAsync<AccountSaga>(account, handledMessages: 1, cancellationToken);
 
-                var hosts = run.Hosts;
-                var movements = accounts.SelectMany(MovementsOf).ToArray();
-                await Task.WhenAll(movements.Select((movement, index)
-                    => PublishAsync(hosts[index % hosts.Count], movement, cancellationToken)));
+                // the movements of one account are made to meet. Those of the others meet if they happen to
+                using (batch.Of(InMemoryBatch.MaxSize))
+                    await run.ForceLockConflictAsync(runs,
+                        handlerRun => handlerRun.CorrelationId == contended,
+                        () => PublishFromEveryHostAsync(run, MovementsOf(contended), cancellationToken),
+                        cancellationToken);
 
-                await runs.AllHandled.WaitAsync(cancellationToken);
+                await PublishFromEveryHostAsync(run, others.SelectMany(MovementsOf), cancellationToken);
+
+                await run.WaitUntilAsync($"the {Messages} messages to be handled",
+                    () => runs.HandledMessages == Messages, cancellationToken);
 
                 foreach (var account in accounts)
-                    stored.Add(await WaitForAccountAsync(run, account, MessagesPerAccount, cancellationToken));
+                    stored.Add(await run.WaitForReleasedSagaAsync<AccountSaga>(account, MessagesPerAccount, cancellationToken));
             },
-            async run =>
-            {
-                await AssertNoDeadLettersAsync(run);
-
-                // the only reason a host gives a message back is a saga that someone else holds
-                Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.ToString()));
-            });
+            AssertOnlyLockConflictsAsync);
 
         Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
-        Assert.Equal(Accounts * MessagesPerAccount, runs.Runs.Count);
+        Assert.Equal(Messages, runs.Runs.Count);
 
-        Assert.Equal(Accounts, runs.Runs.Select(run => run.InstanceId).Distinct().Count());
+        Assert.Equal(accounts.Length, runs.Runs.Select(run => run.InstanceId).Distinct().Count());
         Assert.All(stored, account =>
         {
             var state = Assert.IsType<AccountState>(account.StateData);
@@ -92,12 +98,10 @@ public class ConcurrentMessagesScenario(ITestOutputHelper console) : ScenarioBas
             ? new Deposit(account, 1 << index)
             : new Withdraw(account, 1 << index));
 
-    private static Task<SagaInstanceInfo> WaitForAccountAsync(
-        ScenarioRun run, string account, int handledMessages, CancellationToken cancellationToken)
-        => run.WaitForSagaAsync<AccountSaga>(account,
-            saga => saga.ProcessedMessages.Count == handledMessages && !saga.IsLocked,
-            cancellationToken);
-
-    private static async Task PublishAsync(ScenarioHost host, IMessage message, CancellationToken cancellationToken)
-        => Assert.Equal(OutboxAppendResult.Success, await host.PublishAsync(message, cancellationToken));
+    private static Task PublishFromEveryHostAsync(ScenarioRun run, IEnumerable<IMessage> messages, CancellationToken cancellationToken)
+    {
+        var hosts = run.Hosts;
+        return Task.WhenAll(messages.Select((message, index)
+            => hosts[index % hosts.Count].PublishNewAsync(message, cancellationToken)));
+    }
 }

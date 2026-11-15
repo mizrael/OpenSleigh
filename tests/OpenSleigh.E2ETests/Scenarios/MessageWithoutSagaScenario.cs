@@ -1,4 +1,3 @@
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
 using Xunit.Abstractions;
@@ -12,11 +11,14 @@ namespace OpenSleigh.E2ETests.Scenarios;
 public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const int MessagesOfTheReservation = 2;
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(20);
 
-    // a pair of hosts shows what one would, and whether a message one host gave up on is given to the other
+    // a pair of hosts shows what one would, and whether a message one host gave up on is given to the other.
+    // Finding no saga, or one that is over, is up to the store, and where the message then goes is up to the
+    // transport: every store runs with one transport and one store with the other
     [Theory]
-    [MatrixData(RequiresSharedInfrastructure = true, HostsCounts = [2])]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [2])]
     public Task a_message_with_no_saga_to_go_to_runs_no_handler_on_any_host(string combination, int hostsCount)
         => RunAsync(combination, hostsCount);
 
@@ -29,35 +31,41 @@ public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBas
     {
         var neverReserved = Guid.NewGuid().ToString();
         var reservation = Guid.NewGuid().ToString();
-        var runs = new HandlerRuns(MessagesOfTheReservation);
-        var deliveries = new Deliveries();
+        var runs = new HandlerRuns();
+        var lateCancellationProcessed = new Expectation(1);
+        var reservationsProcessed = new Expectation(2);
 
         var setup = new HostSetup(bus => bus.AddSaga<ReservationSaga>())
         {
-            ConfigureServices = services => services.AddSingleton(runs).CountDeliveries(deliveries)
+            ConfigureServices = services => services
+                .RecordHandlerRuns(runs)
+                .ObserveDeliveriesOf<CancelReservation>(lateCancellationProcessed)
+                .ObserveDeliveriesOf<ReserveSeat>(reservationsProcessed)
         };
+
+        // the one failure this scenario is about
+        static bool HasNoSaga(ProcessingFailure failure) => failure.IsSagaNotFound;
 
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
-                await run.AnyHost.PublishAsync(new CancelReservation(neverReserved), cancellationToken);
-                while (run.ProcessingFailures.Count == 0)
-                    await Task.Delay(PollingInterval, cancellationToken);
+                await run.AnyHost.PublishNewAsync(new CancelReservation(neverReserved), cancellationToken);
+                await run.WaitUntilAsync("the cancellation of a reservation nobody made to be given up on",
+                    () => run.ProcessingFailures.Count > 0, cancellationToken, HasNoSaga);
 
-                await run.AnyHost.PublishAsync(new ReserveSeat(reservation), cancellationToken);
-                await run.WaitForSagaAsync<ReservationSaga>(reservation,
-                    saga => saga.ProcessedMessages.Count == 1 && !saga.IsLocked, cancellationToken);
+                await run.AnyHost.PublishNewAsync(new ReserveSeat(reservation), cancellationToken);
+                await run.WaitForReleasedSagaAsync<ReservationSaga>(reservation, handledMessages: 1, cancellationToken, HasNoSaga);
 
-                await run.AnyHost.PublishAsync(new ConfirmReservation(reservation), cancellationToken);
-                await run.WaitForSagaAsync<ReservationSaga>(reservation,
-                    saga => saga.IsCompleted && !saga.IsLocked, cancellationToken);
+                await run.AnyHost.PublishNewAsync(new ConfirmReservation(reservation), cancellationToken);
+                var confirmed = await run.WaitForReleasedSagaAsync<ReservationSaga>(reservation, MessagesOfTheReservation, cancellationToken, HasNoSaga);
+                Assert.True(confirmed.IsCompleted);
 
                 // a late cancellation for the reservation that is over, and the message that started it, sent again
-                await run.AnyHost.PublishAsync(new CancelReservation(reservation), cancellationToken);
-                await run.AnyHost.PublishAsync(new ReserveSeat(reservation), cancellationToken);
+                await run.AnyHost.PublishNewAsync(new CancelReservation(reservation), cancellationToken);
+                await run.AnyHost.PublishNewAsync(new ReserveSeat(reservation), cancellationToken);
 
-                await deliveries.WaitUntilProcessedAsync<CancelReservation>(1, cancellationToken);
-                await deliveries.WaitUntilProcessedAsync<ReserveSeat>(2, cancellationToken);
+                await run.WaitForAsync("the late cancellation to be processed", lateCancellationProcessed.Reached, cancellationToken, HasNoSaga);
+                await run.WaitForAsync("the reservation, sent again, to be processed", reservationsProcessed.Reached, cancellationToken, HasNoSaga);
 
                 // the saga is as it was when it was over, and it was not started again
                 var stored = await run.FindSagaAsync<ReservationSaga>(reservation, cancellationToken);
