@@ -208,8 +208,8 @@ public abstract class SqlOutboxRelayTests
 
         await putBack.WaitAsync(TimeSpan.FromSeconds(20));
 
-        var (db, _) = _fixture.CreateDbContext();
-        var stored = await db.OutboxMessages.AsNoTracking().SingleAsync();
+        await using var reader = provider.CreateAsyncScope();
+        var stored = await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.AsNoTracking().SingleAsync();
         Assert.NotNull(stored.DeliverAt);
         Assert.NotNull(stored.FirstReturnedAt);
     }
