@@ -14,6 +14,80 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
     }
 
     /// <summary>
+    /// releases the saga. The saga itself stays as it was stored, or is removed when this lock created it.
+    /// </summary>
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return AbandonAsyncCore(state, cancellationToken);
+    }
+
+    // one statement, without reading the saga first: LockId is a concurrency token,
+    // so it only applies while the lock is still the one this instance holds
+    private async ValueTask AbandonAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
+    {
+        var entity = FindTracked(state.InstanceId);
+        if (entity is null)
+        {
+            entity = WithLockOf(state);
+            _dbContext.SagaStates.Attach(entity);
+        }
+        else if (entity.LockId != state.LockId)
+        {
+            ForgetUnsavedChanges(state);
+            throw LockLost(state);
+        }
+
+        var createdByThisLock = WasCreatedByLockOf(state);
+        if (createdByThisLock)
+        {
+            // its first message was not handled: nobody ever saw this saga released
+            _dbContext.SagaStates.Remove(entity);
+        }
+        else
+        {
+            entity.LockTime = null;
+            entity.LockId = NewLockId();
+
+            // an entity that was not read has no lock time to tell this one from
+            _dbContext.Entry(entity).Property(e => e.LockTime).IsModified = true;
+        }
+
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken)
+                            .ConfigureAwait(false);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            throw LockLost(state);
+        }
+        finally
+        {
+            ForgetUnsavedChanges(state);
+        }
+
+        if (createdByThisLock)
+            _createdWithLockId = null;
+    }
+
+    // only what identifies the saga and its lock: nothing else is written
+    private static SagaState WithLockOf(ISagaInstance state)
+        => new()
+        {
+            InstanceId = state.InstanceId,
+            CorrelationId = state.CorrelationId,
+            TriggerMessageId = state.TriggerMessageId,
+            SagaType = state.Descriptor.SagaType.FullName!,
+            SagaStateType = state.Descriptor.SagaStateType?.FullName,
+            LockId = state.LockId,
+        };
+
+    private bool WasCreatedByLockOf(ISagaInstance state)
+        => _createdWithLockId is not null && _createdWithLockId == state.LockId;
+
+    /// <summary>
     /// stores the messages the saga published and releases it, in one transaction.
     /// </summary>
     public ValueTask CommitAsync(ISagaInstance state, CancellationToken cancellationToken = default)
@@ -47,13 +121,7 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
         IReadOnlyCollection<string> newMessageIds = [];
         try
         {
-            newMessageIds = await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
-
-            entity.IsCompleted = state.IsCompleted;
-
-            var stateData = ExtractStateData(state);
-            if (stateData is not null)
-                entity.StateData = stateData;
+            newMessageIds = await StoreInstanceAsync(entity, state, cancellationToken).ConfigureAwait(false);
 
             // the saga is unlocked by its lock time. Its lock id is replaced, not removed:
             // whoever found the saga before this release cannot lock it as it was then
@@ -99,6 +167,7 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
 
         // the saga is released: what this repository knows about it is of no use to whoever locks it next
         ForgetUnsavedChanges(state);
+        _createdWithLockId = null;
     }
 
     // after a failed save the context would keep the saga as released and the new rows as pending:
@@ -131,8 +200,25 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
 
         var storedMessageIds = await ReadStoredMessageIdsAsync(state.InstanceId, cancellationToken).ConfigureAwait(false);
         if (storedMessageIds.Overlaps(newMessageIds))
+        {
+            // the lock is still this instance's, and whoever is told that it is not will not release it
+            await TryAbandonAsync(state).ConfigureAwait(false);
+
             throw new LockException(
                 $"unable to release Saga State '{state.InstanceId}': a message it processed was processed and stored by someone else");
+        }
+    }
+
+    private async ValueTask TryAbandonAsync(ISagaInstance state)
+    {
+        try
+        {
+            await AbandonAsyncCore(state, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // the lock expires
+        }
     }
 
     private async ValueTask<IReadOnlyCollection<MessageEnvelope>> ExcludeStoredMessagesAsync(
@@ -153,6 +239,19 @@ public partial class SqlSagaStateRepository : ISagaStateCommitter
         return storedIds.Count == 0
             ? outbox
             : outbox.Where(message => !storedIds.Contains(message.MessageId)).ToArray();
+    }
+
+    private async ValueTask<IReadOnlyCollection<string>> StoreInstanceAsync(SagaState entity, ISagaInstance state, CancellationToken cancellationToken)
+    {
+        var newMessageIds = await AddNewProcessedMessagesAsync(entity, state, cancellationToken).ConfigureAwait(false);
+
+        entity.IsCompleted = state.IsCompleted;
+
+        var stateData = ExtractStateData(state);
+        if (stateData is not null)
+            entity.StateData = stateData;
+
+        return newMessageIds;
     }
 
     // processed messages are only ever added: the ones already stored are left alone

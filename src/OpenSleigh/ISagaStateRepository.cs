@@ -22,12 +22,24 @@ public interface ISagaStateRepository
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// releases the saga instance from the lock.
+    /// stores the saga instance (state, completed flag and processed messages) and releases it from the lock.
     /// </summary>
+    /// <exception cref="LockException">the lock is no longer held by the instance: nothing was stored.</exception>
     /// <param name="state"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
     ValueTask ReleaseAsync(
         ISagaInstance  state,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// releases the saga instance from the lock and stores nothing of it: the state, the completed flag
+    /// and the processed messages stay as they were stored before the instance was locked.
+    /// A saga that this lock created, and that was never released, is removed: its first message was not handled,
+    /// and a message that cannot start it does not find it.
+    /// </summary>
+    /// <exception cref="LockException">the lock is no longer held by the instance.</exception>
+    ValueTask AbandonAsync(
+        ISagaInstance state,
         CancellationToken cancellationToken = default);
 }

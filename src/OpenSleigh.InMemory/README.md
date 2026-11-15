@@ -40,6 +40,10 @@ var deadLetters = host.Services.GetRequiredService<InMemoryDeadLetters>().Messag
 
 Nothing outlives the process: a message that is being processed, or is waiting to be processed again, when the application stops is lost.
 
+### When a saga cannot be stored
+
+When the commit of a saga fails, or its handler is interrupted by a stop, the saga goes back to what it was when it was last released: its state, whether it is completed, and the messages it has processed. A saga whose first message ends that way is removed. The state is kept as a serialized copy for that, taken every time the saga is released; a state that cannot be serialized is not copied, and such a saga keeps what the handler did to its state.
+
 If you decide to use the InMemory Transport, you also have to configure each Saga :
 
 
