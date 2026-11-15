@@ -109,7 +109,15 @@ public class RabbitPublisher : IPublisher
         if (_consumedMessageTypes.Contains(messageType))
             return channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken);
 
-        _typeResolver.Register(messageType);
+        // once per type: this runs for every message, and the resolver looks a type up by its names
+        if (!_publishedMessageTypes.ContainsKey(messageType))
+        {
+            _typeResolver.Register(messageType);
+            _publishedMessageTypes.TryAdd(messageType, 0);
+        }
+
         return channel.EnsureExchangeAsync(queueRef, _rabbitConfig, cancellationToken);
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, byte> _publishedMessageTypes = new();
 }
