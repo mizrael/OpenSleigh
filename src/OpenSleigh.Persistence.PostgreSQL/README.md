@@ -23,6 +23,18 @@ services.AddOpenSleigh(cfg =>{
 
 Of course it can be used in conjunction with any other Transport library as well (eg. [InMemory](https://www.nuget.org/packages/OpenSleigh.InMemory/) or [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/).
 
+## The first start
+
+The database and its tables are created when the application starts, if they are missing. Several instances can start together on a server that does not have the database yet: they wait for each other to create it (an advisory lock in the `postgres` database), and then to create the tables (an advisory lock in the database), which only the first one does. When the tables are there, a start costs the same two checks as before, and takes no lock.
+
+`UsePostgreSqlPersistence` configures the context this way. A context registered otherwise (`AddSagaDbSchemaInitialization`) differs in what follows:
+
+- **`UseSeeding`:** every start takes the advisory lock in the database to seed, one instance at a time, and can wait up to 10 minutes for another instance.
+- **`UseAdminDatabase`:** the lock for the creation is taken there. It must not be the template the database is copied from (`template1` unless the model names another): PostgreSQL does not copy a database that is in use, and the application fails to start on a missing database, saying so.
+- **Time to create the database:** `CREATE DATABASE` runs with the command timeout of the context (30 seconds unless the connection string has `Command Timeout`), not with the 10 minutes of the other statements.
+
+The lock for the creation is taken through the connection the EF Core provider creates the database with, which is not part of its public API: it was run against Npgsql.EntityFrameworkCore.PostgreSQL 10.0.3 with a server, and 9.0.4 up to opening the connection.
+
 ## Upgrading a database created by version 3.3.0 or earlier
 
 Delayed messages need a column on the outbox table and an index on it. A new database is created with both. A database that already exists gets them from the library when the application starts (or, without a host, the first time it uses the database):

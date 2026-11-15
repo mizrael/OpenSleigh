@@ -24,13 +24,17 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
             return;
         }
 
+        // once the messages are being stored nothing is cancellable: a write that was cancelled can still
+        // have been applied, and its messages would be relayed for a saga that was not released
+        cancellationToken.ThrowIfCancellationRequested();
+
         var holdId = Guid.NewGuid().ToString();
-        await StoreHeldMessagesAsync(state.Outbox, holdId, cancellationToken).ConfigureAwait(false);
         var heldMessages = HeldBy(holdId, state.Outbox);
 
         try
         {
-            await ReleaseAsync(state, cancellationToken).ConfigureAwait(false);
+            await StoreHeldMessagesAsync(state.Outbox, holdId).ConfigureAwait(false);
+            await ReleaseAsync(state, CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -41,7 +45,7 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         await TryLetGoOfHeldMessagesAsync(heldMessages).ConfigureAwait(false);
     }
 
-    private async ValueTask StoreHeldMessagesAsync(IEnumerable<MessageEnvelope> outbox, string holdId, CancellationToken cancellationToken)
+    private async ValueTask StoreHeldMessagesAsync(IEnumerable<MessageEnvelope> outbox, string holdId)
     {
         var heldSince = DateTimeOffset.UtcNow;
         var entities = outbox.Select(message =>
@@ -56,7 +60,7 @@ public partial class MongoSagaStateRepository : ISagaStateCommitter
         {
             // unordered: a message with an idempotency key that is already in the outbox does not stop the others
             await _dbContext.OutboxMessages
-                .InsertManyAsync(entities, new InsertManyOptions { IsOrdered = false }, cancellationToken)
+                .InsertManyAsync(entities, new InsertManyOptions { IsOrdered = false }, CancellationToken.None)
                 .ConfigureAwait(false);
         }
         catch (MongoBulkWriteException ex) when (ex.WriteErrors.All(error => error.Category == ServerErrorCategory.DuplicateKey))

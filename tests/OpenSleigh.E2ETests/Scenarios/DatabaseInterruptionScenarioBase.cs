@@ -24,18 +24,19 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     protected const int InvoicesInARowThatProveRecovery = 5;
 
     private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(50);
-
-    /// <summary>how long to wait before asking again a database that has just refused.</summary>
-    protected static readonly TimeSpan PauseAfterARefusal = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan PauseAfterARefusal = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan DeadLettersTimeout = TimeSpan.FromSeconds(30);
 
     /// <summary>what became of the invoices of a scenario.</summary>
     protected sealed class Invoices
     {
-        private readonly ConcurrentDictionary<string, int> _timesSent = new();
         private readonly ConcurrentDictionary<string, int> _timesGivenBack = new();
         private readonly ConcurrentQueue<string> _issued = new();
         private readonly ConcurrentQueue<string> _completed = new();
         private int _refused;
+
+        /// <summary>the handler runs of every host.</summary>
+        public HandlerRuns Runs { get; } = new();
 
         /// <summary>invoices that got into the outbox.</summary>
         public IReadOnlyCollection<string> Issued => _issued;
@@ -46,36 +47,29 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
         /// <summary>invoices whose saga is stored as completed.</summary>
         public IReadOnlyCollection<string> Completed => _completed;
 
-        /// <summary>how many times the handler that sends an invoice ran, for each invoice.</summary>
-        public IReadOnlyDictionary<string, int> TimesSent => _timesSent;
-
         /// <summary>
-        /// how many times a host gave a message of an invoice back for another reason than a lock, for each invoice:
+        /// how many times a host gave a message of the invoice back for another reason than a lock:
         /// such a message is dead-lettered.
         /// </summary>
-        public IReadOnlyDictionary<string, int> TimesGivenBack => _timesGivenBack;
+        public int TimesGivenBack(string correlationId) => _timesGivenBack.GetValueOrDefault(correlationId);
+
+        /// <summary>how many times the handler that sends the invoice ran.</summary>
+        public int TimesSent(string correlationId)
+            => Runs.RunsOf<SendInvoice>().Count(handlerRun => handlerRun.CorrelationId == correlationId);
 
         public void WasIssued(string correlationId) => _issued.Enqueue(correlationId);
         public void WasRefused() => Interlocked.Increment(ref _refused);
         public void WasCompleted(string correlationId) => _completed.Enqueue(correlationId);
-        public void WasSent(string correlationId) => _timesSent.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
         public void WasGivenBack(string correlationId) => _timesGivenBack.AddOrUpdate(correlationId, 1, (_, times) => times + 1);
     }
 
-    protected static HostSetup CreateHostSetup(
-        Invoices invoices,
-        WhileSendingInvoice? whileSending = null,
-        Action<IServiceCollection>? configureServices = null)
-    {
-        Action<IMessageContext<SendInvoice>> onSent = context => invoices.WasSent(context.CorrelationId);
-
-        return new HostSetup(bus => bus.AddSaga<InvoiceSaga>())
+    protected static HostSetup CreateHostSetup(Invoices invoices, Action<IServiceCollection>? configureServices = null)
+        => new(bus => bus.AddSaga<InvoiceSaga>())
         {
             ConfigureServices = services =>
             {
                 services
-                    .AddSingleton(whileSending ?? ((_, _) => Task.CompletedTask))
-                    .AddSingleton(onSent)
+                    .RecordHandlerRuns(invoices.Runs)
                     .ObserveFailedDeliveries((message, failure) =>
                     {
                         if (!failure.IsLockConflict())
@@ -84,11 +78,13 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
                 configureServices?.Invoke(services);
             }
         };
-    }
 
-    /// <summary>the messages the hosts gave back for another reason than a lock: each of them is dead-lettered.</summary>
-    protected static IReadOnlyCollection<ProcessingFailure> FailuresThatDeadLetter(ScenarioRun run)
-        => run.ProcessingFailures.Where(failure => !failure.IsLockConflict).ToArray();
+    /// <summary>
+    /// what a host gives a message back with when its database is away: anything but a saga that is missing
+    /// or a handler that threw, neither of which an interruption causes. The waits of these scenarios go on past it.
+    /// </summary>
+    protected static bool IsInfrastructureFailure(ProcessingFailure failure)
+        => !failure.IsSagaNotFound && !failure.IsHandlerFailure;
 
     /// <summary>
     /// issues one invoice and follows it until its saga is stored as completed, or a host gives one of its messages back.
@@ -112,22 +108,31 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     /// waits until the invoice is stored as completed, or a host gave one of its messages back
     /// more times than <paramref name="timesGivenBackBefore"/>.
     /// </summary>
-    protected async Task<bool> FollowInvoiceAsync(
+    protected static async Task<bool> FollowInvoiceAsync(
         ScenarioRun run, Invoices invoices, string correlationId, int timesGivenBackBefore, CancellationToken cancellationToken)
     {
-        while (true)
+        async Task<bool> FollowAsync()
         {
-            if (await IsStoredAsCompletedAsync(run, correlationId, cancellationToken))
+            while (true)
             {
-                invoices.WasCompleted(correlationId);
-                return true;
+                if (await IsStoredAsCompletedAsync(run, correlationId, cancellationToken))
+                {
+                    invoices.WasCompleted(correlationId);
+                    return true;
+                }
+
+                if (invoices.TimesGivenBack(correlationId) > timesGivenBackBefore)
+                    return false;
+
+                await Task.Delay(PollingInterval, cancellationToken);
             }
-
-            if (invoices.TimesGivenBack.GetValueOrDefault(correlationId) > timesGivenBackBefore)
-                return false;
-
-            await Task.Delay(PollingInterval, cancellationToken);
         }
+
+        var followed = FollowAsync();
+        await run.WaitForAsync(
+            $"invoice '{correlationId}' to be stored as completed, or one of its messages to be given back",
+            followed, cancellationToken, IsInfrastructureFailure);
+        return await followed;
     }
 
     /// <summary>
@@ -138,10 +143,10 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     {
         try
         {
-            await run.AnyHost.PublishAsync(message, cancellationToken);
+            await run.AnyHost.PublishNewAsync(message, cancellationToken);
             return true;
         }
-        catch (Exception e) when (e is not OperationCanceledException)
+        catch (Exception e) when (e is not OperationCanceledException and not Xunit.Sdk.XunitException)
         {
             Console.WriteLine($"the database refused a {typeof(TMessage).Name}: {e.GetType().Name}: {e.Message}");
             await Task.Delay(PauseAfterARefusal, cancellationToken);
@@ -168,34 +173,38 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
     /// </summary>
     protected async Task IssueInvoicesUntilTheyKeepCompletingAsync(ScenarioRun run, Invoices invoices, CancellationToken cancellationToken)
     {
-        var completedInARow = 0;
-
-        while (completedInARow < InvoicesInARowThatProveRecovery)
+        async Task IssueAsync()
         {
-            if (await IssueAnInvoiceAndFollowItAsync(run, invoices, cancellationToken))
-                completedInARow++;
-            else
-                completedInARow = 0;
+            var completedInARow = 0;
+
+            while (completedInARow < InvoicesInARowThatProveRecovery)
+            {
+                if (await IssueAnInvoiceAndFollowItAsync(run, invoices, cancellationToken))
+                    completedInARow++;
+                else
+                    completedInARow = 0;
+            }
         }
+
+        await run.WaitForAsync(
+            $"{InvoicesInARowThatProveRecovery} invoices in a row to complete: the hosts to work again",
+            IssueAsync(), cancellationToken, IsInfrastructureFailure);
     }
 
     /// <summary>
-    /// every message a host gave back failed on the database, and each of them is in the dead letters, once:
+    /// every message a host gave back failed on the infrastructure, and each of them is in the dead letters, once:
     /// nothing else is, and nothing was dropped on the way.
     /// </summary>
-    protected static async Task AssertOnlyDatabaseFailuresWereDeadLetteredAsync(ScenarioRun run)
+    protected static async Task AssertOnlyInfrastructureFailuresWereDeadLetteredAsync(ScenarioRun run)
     {
-        var failures = FailuresThatDeadLetter(run);
-        Assert.All(failures, failure =>
-        {
-            Assert.False(failure.IsSagaNotFound, failure.Exception.ToString());
-            Assert.False(failure.IsHandlerFailure, failure.Exception.ToString());
-        });
+        var failures = run.ProcessingFailures.Where(failure => !failure.IsLockConflict).ToArray();
+        Assert.All(failures, failure => Assert.True(IsInfrastructureFailure(failure), failure.ToString()));
 
         var expected = failures.GroupBy(failure => failure.MessageType)
             .ToDictionary(group => group.Key, group => group.LongCount());
 
-        var deadLetters = await run.ReadDeadLettersAsync(CancellationToken.None);
+        using var timeout = new CancellationTokenSource(DeadLettersTimeout);
+        var deadLetters = await run.ReadDeadLettersAsync(timeout.Token);
 
         Assert.Equal(
             expected.OrderBy(entry => entry.Key.FullName),
@@ -212,9 +221,9 @@ public abstract class DatabaseInterruptionScenarioBase(ITestOutputHelper console
 
         var unaccountedFor = invoices.Issued
             .Except(invoices.Completed)
-            .Where(correlationId => !invoices.TimesGivenBack.ContainsKey(correlationId));
+            .Where(correlationId => invoices.TimesGivenBack(correlationId) == 0);
         Assert.Empty(unaccountedFor);
 
-        Assert.All(invoices.Completed, correlationId => Assert.Equal(1, invoices.TimesSent.GetValueOrDefault(correlationId)));
+        Assert.All(invoices.Completed, correlationId => Assert.Equal(1, invoices.TimesSent(correlationId)));
     }
 }

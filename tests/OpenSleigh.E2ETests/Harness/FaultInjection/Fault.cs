@@ -12,13 +12,12 @@ public readonly record struct FaultHit(object Source, long Timestamp);
 
 /// <summary>
 /// a failure that the scenario turns on and off: while it is on, the services it was given to throw instead of
-/// doing their work. The scenario decides when it starts and ends, and waits for it to have been hit.
+/// doing their work. The scenario decides when it starts and ends, and waits for <see cref="Hits"/>.
 /// </summary>
 public sealed class Fault(string description)
 {
     private const int Off = 0;
     private const int UntilStopped = -1;
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(20);
 
     private readonly ConcurrentQueue<FaultHit> _hits = new();
     private int _failuresLeft = Off;
@@ -60,13 +59,6 @@ public sealed class Fault(string description)
             if (Interlocked.CompareExchange(ref _failuresLeft, left - 1, left) == left)
                 return true;
         }
-    }
-
-    /// <summary>returns once the fault made that many calls fail.</summary>
-    public async Task WaitForHitsAsync(int count, CancellationToken cancellationToken)
-    {
-        while (_hits.Count < count)
-            await Task.Delay(PollingInterval, cancellationToken);
     }
 
     /// <summary>

@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.Logging;
 using Npgsql;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Storage.Internal;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Entities;
 
@@ -77,9 +79,12 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     protected override string TablesExistQuery
         => $"SELECT CASE WHEN to_regclass('{OutboxTable}') IS NOT NULL THEN 1 ELSE 0 END AS \"{ResultColumn}\"";
 
-    // the lock belongs to the connection, not to a transaction, because the index is built outside one:
-    // the connection is kept for all the statements
+    // the lock belongs to the connection, not to a transaction, because the index is built outside one
+    // and the tables are created in a transaction of their own: the connection is kept for all the statements
     protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        => RunExclusively(database, change.RunsInTransaction ? () => RunInTransaction(database, apply) : apply);
+
+    protected override void RunExclusively(DatabaseFacade database, Action action)
     {
         database.OpenConnection();
         try
@@ -87,14 +92,11 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
             WaitForLock(database);
             try
             {
-                if (change.RunsInTransaction)
-                    RunInTransaction(database, apply);
-                else
-                    apply();
+                action();
             }
             finally
             {
-                TryReleaseLock(database);
+                ReleaseLockOrConnection(database);
             }
         }
         finally
@@ -114,7 +116,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         {
             if (DateTimeOffset.UtcNow > deadline)
                 throw new TimeoutException(
-                    $"another instance has been upgrading the schema for more than {CommandTimeout.TotalMinutes} minutes.");
+                    $"another instance has been creating, upgrading or seeding the schema for more than {CommandTimeout.TotalMinutes} minutes.");
 
             Thread.Sleep(LockRetryInterval);
         }
@@ -130,7 +132,9 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         transaction.Commit();
     }
 
-    private static void TryReleaseLock(DatabaseFacade database)
+    // a connection goes back to its pool as it is, and is only reset when it is taken out again:
+    // one that still has the lock would keep every other instance waiting until then, so it is not kept
+    internal static void ReleaseLockOrConnection(DatabaseFacade database)
     {
         try
         {
@@ -138,8 +142,70 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         }
         catch
         {
-            // the connection is gone, and its lock with it: the failure that broke it is the one to report
+            ClearConnectionPool(database);
         }
+    }
+
+    // the connections of a data source are pooled by the data source, not by their connection string
+    private static void ClearConnectionPool(DatabaseFacade database)
+    {
+#pragma warning disable EF1001 // the provider has no public way to the data source of its connection
+        var dataSource = database.GetService<INpgsqlRelationalConnection>().DataSource;
+#pragma warning restore EF1001
+
+        if (dataSource is NpgsqlDataSource npgsqlDataSource)
+            npgsqlDataSource.Clear();
+        else if (database.GetDbConnection() is NpgsqlConnection connection)
+            NpgsqlConnection.ClearPool(connection);
+    }
+
+    // what PostgreSQL copies a new database from, unless the model names another one
+    private const string DefaultTemplateDatabase = "template1";
+
+    // another arbitrary number: creating a database does not wait for the upgrade of another one
+    private const string ConcurrentCreationsLockKey = "7308325172346594412";
+
+    // the server has a database before any other: instances that find theirs missing wait for each other there,
+    // on the connection the provider creates the database with, which signs in the way the application configured.
+    // The lock belongs to that connection, which is not pooled: closing it lets go of the lock
+    protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+    {
+#pragma warning disable EF1001 // the provider has no public way to its connection to the administration database
+        using var admin = database.GetService<INpgsqlRelationalConnection>().CreateAdminConnection();
+#pragma warning restore EF1001
+        ThrowIfTheTemplate(database, admin.DbConnection.Database);
+
+        admin.Open();
+        try
+        {
+            using (var command = admin.DbConnection.CreateCommand())
+            {
+                command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+                command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";
+                command.ExecuteNonQuery();
+            }
+
+            createDatabase();
+        }
+        finally
+        {
+            // disposing it does not close a connection the provider cloned from a data source
+            admin.Close();
+        }
+    }
+
+    // PostgreSQL does not copy a database another session is connected to, and the one that has the lock
+    // stays connected to the administration database while the saga database is created
+    private static void ThrowIfTheTemplate(DatabaseFacade database, string adminDatabase)
+    {
+        var template = database.GetService<IDesignTimeModel>().Model.GetDatabaseTemplate() ?? DefaultTemplateDatabase;
+
+        if (string.Equals(adminDatabase, template, StringComparison.Ordinal))
+            throw new InvalidOperationException(
+                $"The saga database is missing, and cannot be created: '{adminDatabase}' is both the administration database " +
+                "and the template a new database is copied from, and PostgreSQL does not copy a database that is in use. " +
+                $"Configure another administration database ('{nameof(Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.NpgsqlDbContextOptionsBuilder.UseAdminDatabase)}'), " +
+                "or create the saga database before the application starts.");
     }
 
     protected override bool IsPermissionDenied(Exception exception)

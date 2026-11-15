@@ -1,4 +1,6 @@
-﻿using OpenSleigh.Outbox;
+﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using OpenSleigh.Outbox;
 using OpenSleigh.Transport;
 
 namespace OpenSleigh;
@@ -9,17 +11,20 @@ public class SagaExecutionService : ISagaExecutionService
     private readonly ISagaStateRepository _sagaStateRepository;
     private readonly IOutboxRepository _outboxRepository;
     private readonly IOutboxSignal? _outboxSignal;
+    private readonly ILogger<SagaExecutionService> _logger;
 
     public SagaExecutionService(
         ISagaInstanceFactory sagaExecCtxFactory,
         ISagaStateRepository sagaStateRepository,
         IOutboxRepository outboxRepository,
-        IOutboxSignal? outboxSignal = null)
+        IOutboxSignal? outboxSignal = null,
+        ILogger<SagaExecutionService>? logger = null)
     {
         _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
         _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
         _outboxSignal = outboxSignal;
+        _logger = logger ?? NullLogger<SagaExecutionService>.Instance;
     }
 
     public async ValueTask<ISagaInstance> BeginProcessingAsync<TM>(
@@ -67,10 +72,12 @@ public class SagaExecutionService : ISagaExecutionService
 
         // re-check after lock to close TOCTOU window: another thread may have
         // processed the same message between the initial check and lock acquisition
+        // nothing was done to the saga, so it is released and not abandoned: in memory an abandon replaces
+        // the stored instance with one built from its serialized copy. Nothing else lets go of the lock
         if (!sagaInstance.CanProcess(messageContext))
         {
-            await _sagaStateRepository.ReleaseAsync(sagaInstance, cancellationToken)
-                                      .ConfigureAwait(false);
+            await sagaInstance.ReleaseAsync(_sagaStateRepository, CancellationToken.None)
+                              .ConfigureAwait(false);
             return NoOpSagaInstance.Create(messageContext, descriptor);
         }
 
@@ -83,6 +90,30 @@ public class SagaExecutionService : ISagaExecutionService
     {
         ArgumentNullException.ThrowIfNull(context);
         return _sagaStateRepository.ReleaseAsync(context, cancellationToken);
+    }
+
+    public async ValueTask AbandonAsync(
+        ISagaInstance context,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        try
+        {
+            await _sagaStateRepository.AbandonAsync(context, cancellationToken)
+                                      .ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // whoever abandons a saga is already reporting another failure, and does not report this one
+            _logger.LogWarning(
+                ex,
+                "Saga '{SagaType}/{InstanceId}' could not be released: it stays locked until its lock expires. {Error}",
+                context.Descriptor.SagaType,
+                context.InstanceId,
+                ex.Message);
+            throw;
+        }
     }
 
     public async ValueTask CommitAsync(
@@ -106,6 +137,10 @@ public class SagaExecutionService : ISagaExecutionService
         }
         else
         {
+            // once the messages are in the outbox the release is not cancellable: they would be relayed
+            // for a saga that was not released, and published again when its message is delivered again
+            var releaseToken = hasNewMessages ? CancellationToken.None : cancellationToken;
+
             if (hasNewMessages)
             {
                 await _outboxRepository.AppendAsync(context.Outbox, cancellationToken)
@@ -113,7 +148,7 @@ public class SagaExecutionService : ISagaExecutionService
                 context.ClearOutbox();
             }
 
-            await _sagaStateRepository.ReleaseAsync(context, cancellationToken)
+            await _sagaStateRepository.ReleaseAsync(context, releaseToken)
                                       .ConfigureAwait(false);
         }
 

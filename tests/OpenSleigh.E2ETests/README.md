@@ -149,6 +149,11 @@ A host must still be running when the scenario returns: the checks read the stor
 | why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound`, `IsLockConflict` and `IsHandlerFailure` |
 | dead letters that are expected | pass `assertDeadLetters` to `RunScenarioAsync`, for example `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` |
 | hosts that start on a database nobody prepared | `prepareStore: false` on `RunScenarioAsync`: the first hosts create the database themselves, together |
+| which handler ran, how many times and for which saga instance | `HandlerRuns` with `services.RecordHandlerRuns(runs)`: the sagas know nothing of it. `RunsByMessage()` tells a message handled once from one handled twice |
+| messages that must not run a handler | `services.ObserveDeliveriesOf<TMessage>(expectation)`: wait until the hosts are done with them, then assert that nothing ran |
+| messages for one saga that must meet, not merely may | `run.ForceLockConflictAsync(...)`: the first to get the saga keeps it until another found it locked. In memory, with `InMemoryBatch`, so that the host reads them together |
+| a wait that names itself when it times out, and gives up as soon as a host fails a message | `run.WaitUntilAsync`, `run.WaitForAsync`, `run.WaitForReleasedSagaAsync` |
+| a host that leaves the outbox to the relays of the others, from the start or from a point the scenario chooses | `services.Intercept(_ => relay)` with a `PausableRelay`: what the host appends stays in the outbox |
 | anything else in a host | `host.Services` |
 
 ### Making a service fail on purpose
@@ -203,6 +208,15 @@ requires one dead letter for each such failure and nothing else, so any other de
 `MultipleSagasSameMessagesScenario` is the example. A scenario about a message for a saga that does not exist
 asserts the same thing.
 
+**A message for a saga that is over, or that has handled it already, is ignored**: no handler runs, nothing is
+given back to the transport, nothing is dead-lettered. This holds for a start message too: a completed saga is not
+started again. `MessageWithoutSagaScenario` and `RedeliveryScenario` assert it.
+
+**A lock outlives whoever took it, for `LockMaxDuration`.** An owner that stops between its handler and its commit
+leaves the saga locked; whoever is given the message is retried until the lock expires, then takes the saga over and
+runs the handler again. The first owner can no longer commit: its commit is refused as a lock conflict.
+`LockTakeoverScenario` asserts it, on every store whose locks expire: in memory they do not.
+
 ## What the harness does on purpose
 
 - The SQL database and schema, and the MongoDB collections and indexes, are created by the first host before any
@@ -226,14 +240,16 @@ asserts the same thing.
 
 **Timeouts.** A saga publishes its own timeout with `Publish(message, delay)` and handles it like any other message.
 A scenario asserts that the timeout is never handled before the delay, and that it is not handled more than half a
-minute late; it reads the time before the saga publishes the timeout, and waits for the timeout through a callback.
+minute late, from the `HandlerRuns` of the handler that published the timeout and of the one that handled it.
 What a timeout races with is not left to the clock: `FailPublishingOf<TMessage>(fault)` keeps it in the outbox until
 the scenario is ready for it. A timeout that must *not* be handled, because its saga
 completed, reaches no handler: `services.ObserveDeliveriesOf<TMessage>(expectation)` tells when a host is done with it.
 The in-memory outbox count leaves out a message that is not due, so "the outbox is empty" proves nothing there.
 
-**Failures injected in a host**, on every combination. A `Fault` is turned on and off by the scenario, which waits
-for it to have been hit (`WaitForHitsAsync`) rather than for a time:
+**Failures injected in a host**, on every combination: in memory with its one host, elsewhere with three, where
+whatever follows the failure can reach a host that only knows what is in the store. A `Fault` is turned on and off
+by the scenario, which waits
+for it to have been hit (`run.WaitUntilAsync(..., () => fault.Hits.Count >= n, ...)`) rather than for a time:
 
 | In `ConfigureServices` | While the fault is on |
 |---|---|
@@ -246,7 +262,7 @@ for it to have been hit (`WaitForHitsAsync`) rather than for a time:
 
 | Helper | What it does | Combinations |
 |---|---|---|
-| `DatabaseOutage.Of(run)` | `DropConnectionsAsync`, `BeginAsync`, `EndAsync`: PostgreSQL terminates the sessions of the database of the run and refuses new ones; SQL Server sets it offline and online | `postgresql-*`, `sqlserver-*` |
+| `DatabaseOutage.Of(run)` | `DropConnectionsAsync` (returns how many it closed: none means nothing was interrupted), `BeginAsync`, `EndAsync`: PostgreSQL terminates the sessions of the database of the run and refuses new ones; SQL Server sets it offline and online | `postgresql-*`, `sqlserver-*` |
 | `RabbitMqConnections.Named(name)` | lists and closes the connections of the hosts through the management API; the hosts are given the name with `NameRabbitMqConnections(name)` | `*-rabbitmq` |
 
 What these scenarios assert, because it is how the library behaves today:

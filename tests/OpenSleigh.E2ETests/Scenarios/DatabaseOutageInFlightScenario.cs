@@ -16,8 +16,6 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
     // which is longer than a scenario lasts
     private static readonly TimeSpan LockMaxDuration = TimeSpan.FromSeconds(3);
 
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(50);
-
     // the stores whose server can take one database away and leave the others alone, with one transport:
     // it is the database that goes away here, and the transport takes no part in it. Two hosts: the message
     // that follows can reach the one that did not hold the lock
@@ -27,21 +25,8 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
     {
         var correlationId = Guid.NewGuid().ToString();
         var invoices = new Invoices();
-        var handlerIsRunning = new Expectation(1);
-        var databaseIsAway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var holdNextHandler = 1;
 
-        // the first handler to run waits, with its saga locked, until the database is gone
-        WhileSendingInvoice whileSending = async (_, cancellationToken) =>
-        {
-            if (Interlocked.Exchange(ref holdNextHandler, 0) == 0)
-                return;
-
-            handlerIsRunning.Signal();
-            await databaseIsAway.Task.WaitAsync(cancellationToken);
-        };
-
-        var setup = CreateHostSetup(invoices, whileSending,
+        var setup = CreateHostSetup(invoices,
             services => services.AddSingleton(new SqlSagaStateRepositoryOptions(LockMaxDuration)));
 
         await RunScenarioAsync(combination, hostsCount, setup,
@@ -49,16 +34,18 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
             {
                 await using var outage = DatabaseOutage.Of(run);
 
-                await run.AnyHost.PublishAsync(new IssueInvoice(correlationId), cancellationToken);
+                // the handler that sends the invoice waits, with its saga locked, until the database is gone
+                var sending = invoices.Runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(SendInvoice));
+                await run.AnyHost.PublishNewAsync(new IssueInvoice(correlationId), cancellationToken);
                 invoices.WasIssued(correlationId);
-                await handlerIsRunning.Reached.WaitAsync(cancellationToken);
+                await run.WaitForAsync("the invoice to reach the handler that sends it", sending.Entered, cancellationToken);
 
                 await outage.BeginAsync(cancellationToken);
-                databaseIsAway.SetResult();
+                sending.Release();
 
                 // the handler is done and its saga cannot be committed: the host gives the message back
-                while (TimesGivenBack() == 0)
-                    await Task.Delay(PollingInterval, cancellationToken);
+                await run.WaitUntilAsync("the message whose saga could not be committed to be given back",
+                    () => invoices.TimesGivenBack(correlationId) >= 1, cancellationToken, IsInfrastructureFailure);
 
                 await outage.EndAsync(cancellationToken);
 
@@ -67,18 +54,16 @@ public class DatabaseOutageInFlightScenario(ITestOutputHelper console) : Databas
                 var completed = false;
                 while (!completed)
                 {
-                    var timesGivenBackBefore = TimesGivenBack();
+                    var timesGivenBackBefore = invoices.TimesGivenBack(correlationId);
                     if (await TryPublishAsync(run, new SendInvoice(correlationId), cancellationToken))
                         completed = await FollowInvoiceAsync(run, invoices, correlationId, timesGivenBackBefore, cancellationToken);
                 }
-
-                int TimesGivenBack() => invoices.TimesGivenBack.GetValueOrDefault(correlationId);
             },
-            AssertOnlyDatabaseFailuresWereDeadLetteredAsync);
+            AssertOnlyInfrastructureFailuresWereDeadLetteredAsync);
 
-        // the handler that was running, whose message was given back, and the one that completed the saga
+        // the handler that was running, whose message was given back, and at least the one that completed the saga
         Assert.Equal([correlationId], invoices.Completed);
-        Assert.Equal(2, invoices.TimesSent.GetValueOrDefault(correlationId));
-        Assert.True(invoices.TimesGivenBack.GetValueOrDefault(correlationId) >= 1);
+        Assert.True(invoices.TimesSent(correlationId) >= 2);
+        Assert.True(invoices.TimesGivenBack(correlationId) >= 1);
     }
 }

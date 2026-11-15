@@ -1,8 +1,6 @@
-using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
-using OpenSleigh.Transport;
 using OpenSleigh.Transport.RabbitMQ;
 using Xunit.Abstractions;
 
@@ -15,6 +13,7 @@ namespace OpenSleigh.E2ETests.Scenarios;
 public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
     private const int InvoicesEachTimeTheConnectionsAreClosed = 5;
+    private const int MessagesOfAnInvoice = 2;
 
     // one store: it is the broker that goes away here, and the store takes no part in it.
     // Two hosts, which share their queues
@@ -24,9 +23,9 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
     {
         var outcome = await CloseTheConnectionsOfHostsThatAreIdleAsync(combination, hostsCount, times: 1);
 
-        // each invoice was sent once: nothing was lost with the connections, and nothing was handled twice
-        Assert.Equal(1 + InvoicesEachTimeTheConnectionsAreClosed, outcome.TimesSent.Count);
-        Assert.All(outcome.TimesSent, invoice => Assert.Equal(1, invoice.Value));
+        // every invoice was issued and sent once: nothing was lost with the connections, and nothing was handled twice
+        Assert.Equal(MessagesOfAnInvoice * (1 + InvoicesEachTimeTheConnectionsAreClosed), outcome.Runs.HandledMessages);
+        Assert.All(outcome.Runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
     }
 
     // twice: a host that ends up with one connection more every time is not seen by losing them once
@@ -39,24 +38,18 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         Assert.All(outcome.OpenConnectionsAfterEachTime, open => Assert.Equal(outcome.OpenConnectionsBefore, open));
     }
 
-    private sealed record Outcome(
-        IReadOnlyDictionary<string, int> TimesSent,
-        int OpenConnectionsBefore,
-        IReadOnlyList<int> OpenConnectionsAfterEachTime);
+    private sealed record Outcome(HandlerRuns Runs, int OpenConnectionsBefore, IReadOnlyList<int> OpenConnectionsAfterEachTime);
 
     private async Task<Outcome> CloseTheConnectionsOfHostsThatAreIdleAsync(string combination, int hostsCount, int times)
     {
         var connectionName = $"e2e-{Guid.NewGuid():N}";
         var connectionLog = new RabbitMqConnectionLog();
-        var timesSent = new ConcurrentDictionary<string, int>();
-        Action<IMessageContext<SendInvoice>> onSent = context => timesSent.AddOrUpdate(context.CorrelationId, 1, (_, sent) => sent + 1);
-        WhileSendingInvoice whileSending = (_, _) => Task.CompletedTask;
+        var runs = new HandlerRuns();
 
         var setup = new HostSetup(bus => bus.AddSaga<InvoiceSaga>())
         {
             ConfigureServices = services => services
-                .AddSingleton(onSent)
-                .AddSingleton(whileSending)
+                .RecordHandlerRuns(runs)
                 .NameRabbitMqConnections(connectionName)
                 .LogRabbitMqConnections(connectionLog)
         };
@@ -69,13 +62,10 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
             {
                 await using var connections = RabbitMqConnections.Named(connectionName);
 
-                Task WaitUntilSentAsync(string correlationId)
-                    => run.WaitForSagaAsync<InvoiceSaga>(correlationId, stored => stored.IsCompleted, cancellationToken);
-
                 // the hosts have published and consumed: whatever they connect for, they are connected
                 var first = Guid.NewGuid().ToString();
-                await run.AnyHost.PublishAsync(new IssueInvoice(first), cancellationToken);
-                await WaitUntilSentAsync(first);
+                await run.AnyHost.PublishNewAsync(new IssueInvoice(first), cancellationToken);
+                await run.WaitForReleasedSagaAsync<InvoiceSaga>(first, MessagesOfAnInvoice, cancellationToken);
 
                 var queueNames = QueueNamesOf(run.AnyHost);
                 openBefore = connectionLog.Open;
@@ -83,36 +73,37 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
                 for (var time = 1; time <= times; time++)
                 {
                     // every connection the hosts have open, once the broker lists them all
-                    var open = await connections.WaitForAsync(connectionLog.Open, cancellationToken);
-                    await connections.CloseAsync(open, cancellationToken);
+                    var listed = connections.WaitForAsync(Math.Max(hostsCount, connectionLog.Open), cancellationToken);
+                    await run.WaitForAsync("the broker to list the connections of the hosts", listed, cancellationToken);
+                    var open = await listed;
+                    Assert.True(open.Count >= hostsCount);
+                    await run.WaitForAsync("the broker to close the connections of the hosts",
+                        connections.CloseAsync(open, cancellationToken), cancellationToken);
 
                     // the queues are still there, without their consumers: what is published meanwhile waits in them
                     foreach (var queueName in queueNames)
                         Assert.NotNull(await connections.CountConsumersAsync(queueName, cancellationToken));
 
-                    // published right away, to hosts that may not have noticed yet
+                    // published right away, one after the other, to hosts that may not have noticed yet
                     var invoices = Enumerable.Range(0, InvoicesEachTimeTheConnectionsAreClosed).Select(_ => Guid.NewGuid().ToString()).ToArray();
                     foreach (var invoice in invoices)
-                        await run.AnyHost.PublishAsync(new IssueInvoice(invoice), cancellationToken);
+                        await run.AnyHost.PublishNewAsync(new IssueInvoice(invoice), cancellationToken);
 
                     // the hosts consume again, and they publish again: the invoices are sent by a message of their own
-                    await connections.WaitForConsumersAsync(queueNames, (uint)hostsCount, cancellationToken);
-                    await Task.WhenAll(invoices.Select(WaitUntilSentAsync));
+                    await run.WaitForAsync("every host to consume from its queues again",
+                        connections.WaitForConsumersAsync(queueNames, (uint)hostsCount, cancellationToken), cancellationToken);
+                    foreach (var invoice in invoices)
+                        await run.WaitForReleasedSagaAsync<InvoiceSaga>(invoice, MessagesOfAnInvoice, cancellationToken);
 
                     openAfterEachTime.Add(connectionLog.Open);
                 }
             },
-            async run =>
-            {
-                await AssertNoDeadLettersAsync(run);
-
-                // a message that is delivered again while its first delivery is still being handled finds the saga locked
-                Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.Exception.ToString()));
-            });
+            // a message that is delivered again while its first delivery is still being handled finds the saga locked
+            AssertOnlyLockConflictsAsync);
 
         await connectionLog.CloseAllAsync();
 
-        return new Outcome(timesSent, openBefore, openAfterEachTime);
+        return new Outcome(runs, openBefore, openAfterEachTime);
     }
 
     private static IReadOnlyCollection<string> QueueNamesOf(ScenarioHost host)

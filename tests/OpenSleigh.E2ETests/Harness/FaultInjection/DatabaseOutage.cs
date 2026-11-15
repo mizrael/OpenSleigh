@@ -35,7 +35,8 @@ public abstract class DatabaseOutage : IAsyncDisposable
     /// closes every connection to the database, as a network that drops them would. The database can be connected to
     /// again right away: what the hosts find broken is what they had open.
     /// </summary>
-    public abstract Task DropConnectionsAsync(CancellationToken cancellationToken);
+    /// <returns>how many connections were closed. None when nobody had one open: nothing was interrupted.</returns>
+    public abstract Task<long> DropConnectionsAsync(CancellationToken cancellationToken);
 
     /// <summary>closes every connection to the database and refuses new ones, until <see cref="EndAsync"/>.</summary>
     public async Task BeginAsync(CancellationToken cancellationToken)
@@ -84,8 +85,8 @@ public abstract class DatabaseOutage : IAsyncDisposable
             _serverConnectionString = builder.ConnectionString;
         }
 
-        public override Task DropConnectionsAsync(CancellationToken cancellationToken)
-            => ExecuteAsync(TerminateSessions, cancellationToken);
+        public override Task<long> DropConnectionsAsync(CancellationToken cancellationToken)
+            => ExecuteScalarAsync($"SELECT count(*) FROM ({TerminateSessions}) AS terminated", cancellationToken);
 
         // the refusal is committed before the sessions are closed: sent together they would be one transaction,
         // and a host that connected while it ran would keep its session. A session that was being opened
@@ -101,13 +102,16 @@ public abstract class DatabaseOutage : IAsyncDisposable
             } while (await CountSessionsAsync(cancellationToken) > 0);
         }
 
-        private async Task<long> CountSessionsAsync(CancellationToken cancellationToken)
+        private Task<long> CountSessionsAsync(CancellationToken cancellationToken)
+            => ExecuteScalarAsync(CountSessions, cancellationToken);
+
+        private async Task<long> ExecuteScalarAsync(string sql, CancellationToken cancellationToken)
         {
             await using var connection = new NpgsqlConnection(_serverConnectionString);
             await connection.OpenAsync(cancellationToken);
 
-            await using var command = new NpgsqlCommand(CountSessions, connection) { CommandTimeout = (int)CommandTimeout.TotalSeconds };
-            return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
+            await using var command = new NpgsqlCommand(sql, connection) { CommandTimeout = (int)CommandTimeout.TotalSeconds };
+            return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
         }
 
         private string CountSessions => $"SELECT count(*) FROM pg_stat_activity WHERE datname = '{_database}'";
@@ -152,11 +156,26 @@ public abstract class DatabaseOutage : IAsyncDisposable
 
         // a database that goes offline rolls back what is running and closes its connections.
         // As an outage that ends at once: one that could not be ended is ended when this is disposed
-        public override async Task DropConnectionsAsync(CancellationToken cancellationToken)
+        public override async Task<long> DropConnectionsAsync(CancellationToken cancellationToken)
         {
+            var sessions = await CountSessionsAsync(cancellationToken);
+
             await BeginAsync(cancellationToken);
             await EndAsync(cancellationToken);
+
+            return sessions;
         }
+
+        private async Task<long> CountSessionsAsync(CancellationToken cancellationToken)
+        {
+            await using var connection = new SqlConnection(_serverConnectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            await using var command = new SqlCommand(CountSessions, connection) { CommandTimeout = (int)CommandTimeout.TotalSeconds };
+            return Convert.ToInt64(await command.ExecuteScalarAsync(cancellationToken));
+        }
+
+        private string CountSessions => $"SELECT COUNT(*) FROM sys.dm_exec_sessions WHERE database_id = DB_ID(N'{_database}')";
 
         protected override Task BeginCoreAsync(CancellationToken cancellationToken)
             => ExecuteAsync(SetOffline, cancellationToken);

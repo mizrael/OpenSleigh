@@ -56,6 +56,94 @@ public class MongoSagaStateRepositoryWriteTests
     }
 
     [Fact]
+    public async Task AbandonAsync_should_release_the_lock_and_write_nothing_of_the_saga()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.MarkAsCompleted();
+        collection.ClearReceivedCalls();
+
+        await sut.AbandonAsync(saga);
+
+        var release = Assert.Single(collection.ReceivedCalls());
+        var update = release.GetArguments().OfType<UpdateDefinition<Entities.SagaState>>().Single();
+        var registry = MongoDB.Bson.Serialization.BsonSerializer.SerializerRegistry;
+        var written = update.Render(new RenderArgs<Entities.SagaState>(registry.GetSerializer<Entities.SagaState>(), registry))
+            .AsBsonDocument["$set"].AsBsonDocument;
+        Assert.Equal(
+            new[] { nameof(Entities.SagaState.LockId), nameof(Entities.SagaState.LockTime) },
+            written.Names.Order());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_fail_with_a_lock_exception_and_write_nothing_when_the_instance_holds_no_lock()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+
+        await Assert.ThrowsAsync<LockException>(async () => await sut.AbandonAsync(CreateSaga()));
+
+        Assert.Empty(collection.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_fail_with_a_lock_exception_without_reading_the_saga_when_the_lock_is_not_held()
+    {
+        var collection = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var sut = CreateSut(collection);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        collection.ClearReceivedCalls();
+        collection.UpdateOneAsync(default!, default!, default, default).ReturnsForAnyArgs(new UpdateResult.Acknowledged(0, 0, null));
+
+        await Assert.ThrowsAsync<LockException>(async () => await sut.AbandonAsync(saga));
+
+        var release = Assert.Single(collection.ReceivedCalls());
+        Assert.Equal(nameof(IMongoCollection<Entities.SagaState>.UpdateOneAsync), release.GetMethodInfo().Name);
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_not_be_interrupted_once_it_started_storing_the_messages()
+    {
+        using var stopping = new CancellationTokenSource();
+        var sagas = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var outbox = Substitute.For<IMongoCollection<Entities.OutboxMessage>>();
+        outbox.WhenForAnyArgs(c => c.InsertManyAsync(default!, default, default)).Do(_ => stopping.Cancel());
+        var sut = CreateSut(sagas, outbox);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.Publish(OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga));
+        sagas.ClearReceivedCalls();
+
+        await sut.CommitAsync(saga, stopping.Token);
+
+        var stored = Assert.Single(outbox.ReceivedCalls(), call => call.GetMethodInfo().Name == nameof(IMongoCollection<Entities.OutboxMessage>.InsertManyAsync));
+        Assert.Equal(CancellationToken.None, stored.GetArguments().OfType<CancellationToken>().Single());
+        Assert.Single(sagas.ReceivedCalls());
+    }
+
+    [Fact]
+    public async Task CommitAsync_should_remove_the_messages_it_stored_when_storing_them_failed_half_way()
+    {
+        var sagas = CreateCollection(new UpdateResult.Acknowledged(1, 1, null));
+        var outbox = Substitute.For<IMongoCollection<Entities.OutboxMessage>>();
+        outbox.InsertManyAsync(default!, default, default)
+              .ReturnsForAnyArgs(Task.FromException(new TimeoutException("the server did not answer")));
+        var sut = CreateSut(sagas, outbox);
+        var saga = CreateSaga();
+        await saga.LockAsync(sut, CancellationToken.None);
+        saga.Publish(OpenSleigh.Outbox.MessageEnvelope.Create(new FakeMessage(), saga));
+        sagas.ClearReceivedCalls();
+
+        await Assert.ThrowsAsync<TimeoutException>(async () => await sut.CommitAsync(saga));
+
+        Assert.Contains(outbox.ReceivedCalls(), call => call.GetMethodInfo().Name == nameof(IMongoCollection<Entities.OutboxMessage>.DeleteManyAsync));
+        Assert.Empty(sagas.ReceivedCalls());
+    }
+
+    [Fact]
     public async Task ReleaseAsync_should_throw_when_the_state_is_null()
     {
         var sut = CreateSut(CreateCollection(UpdateResult.Unacknowledged.Instance));
@@ -70,10 +158,14 @@ public class MongoSagaStateRepositoryWriteTests
         return collection;
     }
 
-    private static MongoSagaStateRepository CreateSut(IMongoCollection<Entities.SagaState> collection)
+    private static MongoSagaStateRepository CreateSut(
+        IMongoCollection<Entities.SagaState> collection,
+        IMongoCollection<Entities.OutboxMessage>? outbox = null)
     {
         var dbContext = Substitute.For<IDbContext>();
         dbContext.SagaStates.Returns(collection);
+        if (outbox is not null)
+            dbContext.OutboxMessages.Returns(outbox);
         return new MongoSagaStateRepository(dbContext, MongoSagaStateRepositoryOptions.Default, new JsonSerializer());
     }
 

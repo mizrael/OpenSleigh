@@ -8,33 +8,47 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class PaymentTimeoutScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
+    private const int MessagesOfAnOrderThatExpires = 2;
     private static readonly TimeSpan PaymentDueWithin = TimeSpan.FromSeconds(2);
 
-    // one host, and a few: every host relays the outbox, and the timeout is one row in it
     [Theory]
-    [MatrixData(HostsCounts = [1, 3])]
-    public async Task an_order_that_is_not_paid_in_time_expires_once(string combination, int hostsCount)
+    [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
+    public Task an_order_that_is_not_paid_in_time_expires_once(string combination, int hostsCount)
+        => LetAnOrderExpireAsync(combination, hostsCount);
+
+    // every host relays the outbox, and the timeout is one row in it: several hosts, one timeout.
+    // One host on these combinations is PaymentTimeoutAfterRestartScenario
+    [Theory]
+    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    public Task an_order_that_is_not_paid_in_time_expires_once_with_several_hosts(string combination, int hostsCount)
+        => LetAnOrderExpireAsync(combination, hostsCount);
+
+    private async Task LetAnOrderExpireAsync(string combination, int hostsCount)
     {
         var correlationId = Guid.NewGuid().ToString();
-        var journal = new OrderPaymentJournal();
+        var runs = new HandlerRuns();
+        var setup = PaymentTimeoutWorkload.HostSetup(services => services.RecordHandlerRuns(runs));
 
-        await RunScenarioAsync(combination, hostsCount, journal.CreateHostSetup(), async (run, cancellationToken) =>
+        await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
         {
-            await run.AnyHost.PublishAsync(new PlaceOrder(correlationId, PaymentDueWithin), cancellationToken);
+            await run.AnyHost.PublishNewAsync(new PlaceOrder(correlationId, PaymentDueWithin), cancellationToken);
 
-            await journal.TimedOut.Reached.WaitAsync(cancellationToken);
-            await journal.ExpiredOrderHandled.Reached.WaitAsync(cancellationToken);
+            var order = await run.WaitForReleasedSagaAsync<OrderPaymentSaga>(correlationId, MessagesOfAnOrderThatExpires, cancellationToken);
+            Assert.True(order.IsCompleted);
 
-            var order = await run.WaitForSagaAsync<OrderPaymentSaga>(correlationId, stored => stored.IsCompleted, cancellationToken);
             var state = Assert.IsType<OrderPaymentState>(order.StateData);
             Assert.True(state.Expired);
             Assert.False(state.Paid);
+
+            await run.WaitUntilAsync("the message the timeout published to be handled",
+                () => runs.RunsOf<OrderExpired>().Count >= 1, cancellationToken);
         });
 
-        Assert.Equal(1, journal.Placed.Count);
-        Assert.Equal(1, journal.TimedOut.Count);
-        Assert.Equal(1, journal.ExpiredOrderHandled.Count);
-        Assert.Equal(0, journal.Paid.Count);
-        OrderPaymentJournal.AssertTimedOutOnceWhenDue(journal, journal, PaymentDueWithin);
+        // also after the observation window: no host handled the timeout, or what it published, a second time
+        var placed = Assert.Single(runs.RunsOf<PlaceOrder>());
+        var timedOut = Assert.Single(runs.RunsOf<PaymentTimedOut>());
+        Assert.Single(runs.RunsOf<OrderExpired>());
+        Assert.Empty(runs.RunsOf<PaymentReceived>());
+        PaymentTimeoutWorkload.AssertHandledWhenDue(placed, timedOut, PaymentDueWithin);
     }
 }

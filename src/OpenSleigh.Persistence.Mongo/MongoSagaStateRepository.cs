@@ -31,6 +31,13 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     // One reference, replaced as a whole: a repository shared by several messages can lose it, never corrupt it
     private string? _sagaNotFound;
 
+    // the lock a new saga was stored with: abandoned under that lock, the saga is removed.
+    // A repository handles one message, which starts one saga at most: that one costs a field
+    private string? _creationLockId;
+
+    // only there when this repository stored another saga before the first one was released
+    private ConditionalWeakTable<ISagaInstance, string>? _otherCreationLocks;
+
     private sealed record FoundSaga(string? LockId);
 
     public MongoSagaStateRepository(
@@ -289,6 +296,39 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             // whoever handles the message looks for the saga again and finds theirs
             throw new OptimisticLockException($"saga state for correlation '{state.CorrelationId}' was created by someone else");
         }
+
+        RememberCreatedSaga(state, lockId);
+    }
+
+    // taken by whoever gets there first: a repository shared by several messages loses none of them
+    private void RememberCreatedSaga(ISagaInstance state, string lockId)
+    {
+        if (Interlocked.CompareExchange(ref _creationLockId, lockId, null) is null)
+            return;
+
+        if (_otherCreationLocks is null)
+            Interlocked.CompareExchange(ref _otherCreationLocks, new ConditionalWeakTable<ISagaInstance, string>(), null);
+
+        _otherCreationLocks!.AddOrUpdate(state, lockId);
+    }
+
+    private bool WasCreatedByLockOf(ISagaInstance state)
+        => _creationLockId == state.LockId ||
+           (_otherCreationLocks is { } others &&
+            others.TryGetValue(state, out var creationLockId) &&
+            creationLockId == state.LockId);
+
+    // the saga is released: what this repository knows about it is of no use to whoever locks it next
+    private void Forget(ISagaInstance state)
+    {
+        _foundSagas.Remove(state);
+
+        // only if it is still the lock that was just compared: someone else may have taken the field since
+        var creationLockId = _creationLockId;
+        if (creationLockId is not null && creationLockId == state.LockId)
+            Interlocked.CompareExchange(ref _creationLockId, null, creationLockId);
+
+        _otherCreationLocks?.Remove(state);
     }
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
@@ -298,44 +338,45 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
         return ReleaseAsyncCore(state, cancellationToken);
     }
 
+    /// <summary>
+    /// releases the saga. The saga itself stays as it was stored, or is removed when this lock created it.
+    /// </summary>
+    public ValueTask AbandonAsync(ISagaInstance state, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return AbandonAsyncCore(state, cancellationToken);
+    }
+
+    private async ValueTask AbandonAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // an instance that holds no lock would otherwise match a saga stored without a lock id
+        if (string.IsNullOrEmpty(state.LockId))
+            throw LockLost(state);
+
+        var heldByState = LockedBy(state);
+
+        // its first message was not handled: nobody ever saw a saga released that this lock created
+        var applied = WasCreatedByLockOf(state)
+            ? await RemoveAsync(heldByState).ConfigureAwait(false)
+            : await WriteReleaseAsync(heldByState, state, storeInstance: false).ConfigureAwait(false);
+
+        // not read to tell why: a saga that is not there is not locked by this instance either
+        if (!applied)
+            throw LockLost(state);
+
+        Forget(state);
+    }
+
     private async ValueTask ReleaseAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var filterBuilder = Builders<Entities.SagaState>.Filter;
-        var heldByState = filterBuilder.And(
-            WithInstanceId(state.InstanceId),
-            filterBuilder.Eq(e => e.LockId, state.LockId));
-
-        var processedMessages = state.ProcessedMessages
-            .Select(msg => new Entities.SagaProcessedMessage()
-            {
-                InstanceId = state.InstanceId,
-                MessageId = msg.MessageId,
-                When = msg.When,
-            })
-            .ToArray();
-
-        // the saga is unlocked by its lock time. Its lock id is replaced, not removed:
-        // whoever found the saga before this release cannot lock it as it was then
-        var release = Builders<Entities.SagaState>.Update
-            .Set(e => e.LockTime, null)
-            .Set(e => e.LockId, Guid.NewGuid().ToString())
-            .Set(e => e.IsCompleted, state.IsCompleted)
-            .Set(e => e.ProcessedMessages, processedMessages);
-
-        var stateData = ExtractStateData(state);
-        if (stateData is not null)
-            release = release.Set(e => e.StateData, stateData);
-
-        // one conditional update: the saga is only written while the lock is still the one this state holds.
-        // Not cancellable: cancelled in flight it can still be applied, and whoever called would undo
-        // what goes with a release that did happen
-        var result = await _dbContext.SagaStates.UpdateOneAsync(heldByState, release, cancellationToken: CancellationToken.None)
-                                                .ConfigureAwait(false);
-        if (WasApplied(result))
+        if (await WriteReleaseAsync(LockedBy(state), state, storeInstance: true).ConfigureAwait(false))
         {
-            _foundSagas.Remove(state);
+            Forget(state);
             return;
         }
 
@@ -346,7 +387,64 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
         if (!exists)
             throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
-        throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
+        throw LockLost(state);
+    }
+
+    private static FilterDefinition<Entities.SagaState> LockedBy(ISagaInstance state)
+    {
+        var filterBuilder = Builders<Entities.SagaState>.Filter;
+        return filterBuilder.And(
+            WithInstanceId(state.InstanceId),
+            filterBuilder.Eq(e => e.LockId, state.LockId));
+    }
+
+    private static LockException LockLost(ISagaInstance state)
+        => new($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
+
+    // one conditional write, applied only while the lock is still the one this state holds. Not cancellable:
+    // cancelled in flight it can still be applied, and whoever called would undo what goes with a release that did happen
+    private async ValueTask<bool> WriteReleaseAsync(FilterDefinition<Entities.SagaState> heldByState, ISagaInstance state, bool storeInstance)
+    {
+        // the saga is unlocked by its lock time. Its lock id is replaced, not removed:
+        // whoever found the saga before this release cannot lock it as it was then
+        var release = Builders<Entities.SagaState>.Update
+            .Set(e => e.LockTime, null)
+            .Set(e => e.LockId, Guid.NewGuid().ToString());
+
+        if (storeInstance)
+            release = StoreInstance(release, state);
+
+        var result = await _dbContext.SagaStates.UpdateOneAsync(heldByState, release, cancellationToken: CancellationToken.None)
+                                                .ConfigureAwait(false);
+        return WasApplied(result);
+    }
+
+    private async ValueTask<bool> RemoveAsync(FilterDefinition<Entities.SagaState> heldByState)
+    {
+        var result = await _dbContext.SagaStates.DeleteOneAsync(heldByState, CancellationToken.None)
+                                                .ConfigureAwait(false);
+        return !result.IsAcknowledged || result.DeletedCount > 0;
+    }
+
+    private UpdateDefinition<Entities.SagaState> StoreInstance(UpdateDefinition<Entities.SagaState> release, ISagaInstance state)
+    {
+        var processedMessages = state.ProcessedMessages
+            .Select(msg => new Entities.SagaProcessedMessage()
+            {
+                InstanceId = state.InstanceId,
+                MessageId = msg.MessageId,
+                When = msg.When,
+            })
+            .ToArray();
+
+        release = release
+            .Set(e => e.IsCompleted, state.IsCompleted)
+            .Set(e => e.ProcessedMessages, processedMessages);
+
+        var stateData = ExtractStateData(state);
+        return stateData is null
+            ? release
+            : release.Set(e => e.StateData, stateData);
     }
 
     private bool WasNotFound(ISagaInstance state)

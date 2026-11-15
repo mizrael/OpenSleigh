@@ -111,6 +111,16 @@ public abstract class ScenarioBase
     }
 
     /// <summary>
+    /// no message was given up on, and the only reason a host gave one back to its transport
+    /// is a saga that someone else held: the message was retried.
+    /// </summary>
+    protected static async Task AssertOnlyLockConflictsAsync(ScenarioRun run)
+    {
+        await AssertNoDeadLettersAsync(run);
+        Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.ToString()));
+    }
+
+    /// <summary>
     /// the only dead letters are messages that reached a host before their saga was stored, which is by design
     /// (see <see cref="ProcessingFailure.IsSagaNotFound"/>): one dead letter for each such failure,
     /// of the message types the scenario says can arrive early, and nothing else.

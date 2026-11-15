@@ -142,11 +142,11 @@ public sealed class SagaDbSchemaUpgradeTests : IDisposable
         protected override bool IsPermissionDenied(Exception exception)
             => exception is UnauthorizedAccessException;
 
-        protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        protected override void RunExclusively(DatabaseFacade database, Action action)
         {
             Waits++;
             WhileWaiting(database);
-            apply();
+            action();
         }
     }
 }

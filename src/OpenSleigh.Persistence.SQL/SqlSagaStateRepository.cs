@@ -205,6 +205,9 @@ public partial class SqlSagaStateRepository : ISagaStateRepository
 
         RememberLockedSaga(state, isNew);
 
+        if (isNew)
+            RememberCreatedSaga(state, entity.LockId!);
+
         return entity.LockId!;
     }
 

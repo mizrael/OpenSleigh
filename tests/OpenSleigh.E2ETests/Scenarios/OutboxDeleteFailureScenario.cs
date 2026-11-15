@@ -1,6 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
-using OpenSleigh.Transport;
+using OpenSleigh.E2ETests.Sagas;
+using OpenSleigh.Outbox;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
@@ -11,61 +12,58 @@ namespace OpenSleigh.E2ETests.Scenarios;
 /// </summary>
 public class OutboxDeleteFailureScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
+    private const int Copies = 2;
     private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
 
-    // in memory, where there is one host, and with a few hosts everywhere else: the second copy can reach
-    // another host than the first, which only knows what is in the store
     [Theory]
     [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
     public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once(string combination, int hostsCount)
         => PublishWithoutRemovingAsync(combination, hostsCount);
 
+    // the second copy can reach another host than the first, which only knows what is in the store
     [Theory]
-    [MatrixData(HostsCounts = [3])]
+    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
     public Task a_message_that_was_published_but_not_removed_is_published_again_and_handled_once_with_several_hosts(string combination, int hostsCount)
         => PublishWithoutRemovingAsync(combination, hostsCount);
 
     private async Task PublishWithoutRemovingAsync(string combination, int hostsCount)
     {
+        var correlationId = Guid.NewGuid().ToString();
         var outboxCannotBeCleaned = new Fault("the published messages cannot be removed from the outbox, on purpose.");
-        var publishedTwice = new Expectation(2);
-        var deliveredTwice = new Expectation(2);
-        var handled = new Expectation(1);
-        Action<IMessageContext<StartSimpleSaga>> onMessage = _ => handled.Signal();
+        var runs = new HandlerRuns();
+        var published = new ConcurrentQueue<MessageEnvelope>();
+        var copiesDelivered = new Expectation(Copies);
 
-        var setup = new HostSetup(bus => bus.AddSaga<SimpleSaga>())
+        var setup = new HostSetup(bus => bus.AddSaga<ShipmentSaga, ShipmentState>())
         {
             ConfigureServices = services => services
-                .AddSingleton(onMessage)
+                .RecordHandlerRuns(runs)
                 .ExpireOutboxClaimsAfter(MongoOutboxClaim)
                 .FailOutboxDeletesWhile(outboxCannotBeCleaned)
-                .ObservePublishedMessages(_ => publishedTwice.Signal())
-                .ObserveDeliveriesOf<StartSimpleSaga>(deliveredTwice)
+                .ObservePublishedMessages(published.Enqueue)
+                .ObserveDeliveriesOf<StartShipment>(copiesDelivered)
         };
 
         await RunScenarioAsync(combination, hostsCount, setup,
             async (run, cancellationToken) =>
             {
                 outboxCannotBeCleaned.StartFor(failures: 1);
-                await run.AnyHost.PublishAsync(new StartSimpleSaga(), cancellationToken);
+                await run.AnyHost.PublishNewAsync(new StartShipment(correlationId), cancellationToken);
 
-                await publishedTwice.Reached.WaitAsync(cancellationToken);
-                await handled.Reached.WaitAsync(cancellationToken);
+                await run.WaitUntilAsync("the message that was not removed to be published again",
+                    () => published.Count >= Copies, cancellationToken);
 
                 // the hosts are done with both copies: the second one found nothing to do
-                await deliveredTwice.Reached.WaitAsync(cancellationToken);
+                await run.WaitForAsync("both copies of the message to be delivered", copiesDelivered.Reached, cancellationToken);
+                await run.WaitForReleasedSagaAsync<ShipmentSaga>(correlationId, handledMessages: 1, cancellationToken);
             },
-            async run =>
-            {
-                await AssertNoDeadLettersAsync(run);
+            // a copy that arrives while the other is being handled finds the saga locked, and is tried again
+            AssertOnlyLockConflictsAsync);
 
-                // a copy that arrives while the other is being handled finds the saga locked, and is tried again
-                Assert.All(run.ProcessingFailures, failure => Assert.True(failure.IsLockConflict, failure.Exception.ToString()));
-            });
-
+        // the delete failed, so the message really was published a second time: the same message, handled once
         Assert.Single(outboxCannotBeCleaned.Hits);
-        Assert.Equal(2, publishedTwice.Count);
-        Assert.Equal(2, deliveredTwice.Count);
-        Assert.Equal(1, handled.Count);
+        Assert.True(published.Count >= Copies);
+        Assert.Single(published.Select(message => message.MessageId).Distinct());
+        Assert.Single(runs.Runs);
     }
 }

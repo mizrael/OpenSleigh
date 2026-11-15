@@ -1,6 +1,5 @@
-using Microsoft.Extensions.DependencyInjection;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
-using OpenSleigh.Transport;
+using OpenSleigh.E2ETests.Sagas;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
@@ -21,14 +20,14 @@ public class OutboxReadFailureScenario(ITestOutputHelper console) : ScenarioBase
     [MatrixData(HostsCounts = [1])]
     public async Task a_relay_that_cannot_read_its_outbox_keeps_trying_and_relays_what_is_in_it_afterwards(string combination, int hostsCount)
     {
+        var correlationId = Guid.NewGuid().ToString();
         var outboxCannotBeRead = new Fault("the outbox cannot be read, on purpose.");
-        var handled = new Expectation(1);
-        Action<IMessageContext<StartSimpleSaga>> onMessage = _ => handled.Signal();
+        var runs = new HandlerRuns();
 
-        var setup = new HostSetup(bus => bus.AddSaga<SimpleSaga>())
+        var setup = new HostSetup(bus => bus.AddSaga<ShipmentSaga, ShipmentState>())
         {
             ConfigureServices = services => services
-                .AddSingleton(onMessage)
+                .RecordHandlerRuns(runs)
                 .FailOutboxReadsWhile(outboxCannotBeRead)
         };
 
@@ -37,17 +36,18 @@ public class OutboxReadFailureScenario(ITestOutputHelper console) : ScenarioBase
 
         await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
         {
-            await run.AnyHost.PublishAsync(new StartSimpleSaga(), cancellationToken);
+            await run.AnyHost.PublishNewAsync(new StartShipment(correlationId), cancellationToken);
 
-            var failedPassesSoFar = outboxCannotBeRead.Hits.Count;
-            await outboxCannotBeRead.WaitForHitsAsync(failedPassesSoFar + FailedPassesToWaitFor, cancellationToken);
-            Assert.Equal(0, handled.Count);
+            var failedPasses = outboxCannotBeRead.Hits.Count + FailedPassesToWaitFor;
+            await run.WaitUntilAsync($"the relay to fail to read its outbox {FailedPassesToWaitFor} more times",
+                () => outboxCannotBeRead.Hits.Count >= failedPasses, cancellationToken);
+            Assert.Empty(runs.Runs);
 
             outboxCannotBeRead.Stop();
-            await handled.Reached.WaitAsync(cancellationToken);
+            await run.WaitForReleasedSagaAsync<ShipmentSaga>(correlationId, handledMessages: 1, cancellationToken);
         });
 
-        Assert.Equal(1, handled.Count);
+        Assert.Single(runs.Runs);
 
         var shortestPause = outboxCannotBeRead.ShortestTimeBetweenHitsOfOneSource();
         Assert.True(shortestPause >= ShortestPauseOfARelayThatBacksOff,

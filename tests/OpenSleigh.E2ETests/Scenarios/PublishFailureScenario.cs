@@ -1,6 +1,7 @@
-using Microsoft.Extensions.DependencyInjection;
+using System.Collections.Concurrent;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
-using OpenSleigh.Transport;
+using OpenSleigh.E2ETests.Sagas;
+using OpenSleigh.Outbox;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
@@ -18,51 +19,55 @@ public class PublishFailureScenario(ITestOutputHelper console) : ScenarioBase(co
 
     private static readonly TimeSpan MongoOutboxClaim = TimeSpan.FromSeconds(2);
 
-    // in memory, where there is one host, and with a few hosts everywhere else: every relay finds the broker down,
-    // and only one of them may publish the message when it is back
     [Theory]
     [MatrixData(Only = [Combinations.InMemory], HostsCounts = [1])]
-    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_delivered_once_afterwards(string combination, int hostsCount)
+    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_published_once_afterwards(string combination, int hostsCount)
         => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
 
+    // every relay finds the broker down, and only one of them may publish the message when it is back
     [Theory]
-    [MatrixData(HostsCounts = [3])]
-    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_delivered_once_afterwards_with_several_hosts(string combination, int hostsCount)
+    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    public Task a_message_that_cannot_be_published_stays_in_the_outbox_and_is_published_once_afterwards_with_several_hosts(string combination, int hostsCount)
         => PublishWhileTheBrokerIsDownAsync(combination, hostsCount);
 
     private async Task PublishWhileTheBrokerIsDownAsync(string combination, int hostsCount)
     {
+        var correlationId = Guid.NewGuid().ToString();
         var brokerIsDown = new Fault("the broker cannot be reached, on purpose.");
-        var published = new Expectation(1);
-        var handled = new Expectation(1);
-        Action<IMessageContext<StartSimpleSaga>> onMessage = _ => handled.Signal();
+        var runs = new HandlerRuns();
+        var published = new ConcurrentQueue<MessageEnvelope>();
 
-        var setup = new HostSetup(bus => bus.AddSaga<SimpleSaga>())
+        var setup = new HostSetup(bus => bus.AddSaga<ShipmentSaga, ShipmentState>())
         {
             ConfigureServices = services => services
-                .AddSingleton(onMessage)
+                .RecordHandlerRuns(runs)
                 .ExpireOutboxClaimsAfter(MongoOutboxClaim)
-                .ObservePublishedMessages(_ => published.Signal())
+                .ObservePublishedMessages(published.Enqueue)
                 .FailPublishingWhile(brokerIsDown)
         };
+
+        // one more failure than there are hosts: at least one relay has then tried twice
+        var failedAttemptsToWaitFor = Math.Max(FailedAttemptsToWaitFor, hostsCount + 1);
 
         await RunScenarioAsync(combination, hostsCount, setup, async (run, cancellationToken) =>
         {
             brokerIsDown.Start();
-            await run.AnyHost.PublishAsync(new StartSimpleSaga(), cancellationToken);
+            await run.AnyHost.PublishNewAsync(new StartShipment(correlationId), cancellationToken);
 
-            // the relay keeps trying, and the message stays where it is. One more failure than there are hosts:
-            // at least one of them has then tried twice
-            await brokerIsDown.WaitForHitsAsync(Math.Max(FailedAttemptsToWaitFor, hostsCount + 1), cancellationToken);
+            // the relays keep trying, and the message stays where it is
+            await run.WaitUntilAsync($"the relays to fail to publish {failedAttemptsToWaitFor} times",
+                () => brokerIsDown.Hits.Count >= failedAttemptsToWaitFor, cancellationToken);
             Assert.Equal(1, await run.CountOutboxMessagesAsync(cancellationToken));
-            Assert.Equal(0, handled.Count);
+            Assert.Empty(published);
+            Assert.Empty(runs.Runs);
 
             brokerIsDown.Stop();
-            await handled.Reached.WaitAsync(cancellationToken);
+            await run.WaitForReleasedSagaAsync<ShipmentSaga>(correlationId, handledMessages: 1, cancellationToken);
         });
 
-        Assert.Equal(1, handled.Count);
-        Assert.Equal(1, published.Count);
+        // also after the observation window: one relay published the message, and it was handled once
+        Assert.Single(published);
+        Assert.Single(runs.Runs);
 
         var shortestPause = brokerIsDown.ShortestTimeBetweenHitsOfOneSource();
         Assert.True(shortestPause >= ShortestPauseOfARelayThatBacksOff,

@@ -16,6 +16,14 @@ public partial class SqlSagaStateRepository
     // the saga this repository last looked for and did not find
     private string? _sagaNotFound;
 
+    // the lock a new saga was stored with: abandoned under that lock, the saga is removed.
+    // Kept apart from what is known of a stored saga, which is forgotten whenever a save fails.
+    // A repository handles one message, which starts one saga at most: that one costs a field
+    private string? _creationLockId;
+
+    // only there when this repository stored another saga before the first one was released
+    private ConditionalWeakTable<ISagaInstance, string>? _otherCreationLocks;
+
     private sealed class KnownSaga
     {
         /// <summary>the row as <see cref="FindAsync"/> read it. Null once the saga is locked, or when it was not found.</summary>
@@ -47,6 +55,31 @@ public partial class SqlSagaStateRepository
         {
             StoredMessageIds = isNew ? new HashSet<string>() : null
         });
+
+    private void RememberCreatedSaga(ISagaInstance instance, string lockId)
+    {
+        if (_creationLockId is null)
+            _creationLockId = lockId;
+        else
+            (_otherCreationLocks ??= new()).AddOrUpdate(instance, lockId);
+    }
+
+    private bool WasCreatedByLockOf(ISagaInstance state)
+        => IsCreationLockOf(state) ||
+           (_otherCreationLocks is not null &&
+            _otherCreationLocks.TryGetValue(state, out var creationLockId) &&
+            creationLockId == state.LockId);
+
+    private bool IsCreationLockOf(ISagaInstance state)
+        => _creationLockId is not null && _creationLockId == state.LockId;
+
+    private void ForgetCreatedSaga(ISagaInstance state)
+    {
+        if (IsCreationLockOf(state))
+            _creationLockId = null;
+
+        _otherCreationLocks?.Remove(state);
+    }
 
     private bool TryGetFoundRow(ISagaInstance instance, [NotNullWhen(true)] out SagaState? foundRow)
     {

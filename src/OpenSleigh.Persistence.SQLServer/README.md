@@ -24,6 +24,14 @@ services.AddOpenSleigh(cfg =>{
 
 Of course it can be used in conjunction with any other Transport library as well (eg. [InMemory](https://www.nuget.org/packages/OpenSleigh.InMemory/) or [RabbitMQ](https://www.nuget.org/packages/OpenSleigh.Transport.RabbitMQ/).
 
+## The first start
+
+The database and its tables are created when the application starts, if they are missing. Several instances can start together on a server that does not have the database yet: they wait for each other to create it (an application lock in `master`), and then to create the tables (an application lock in the database), which only the first one does. When the tables are there, a start costs the same two checks as before, and takes no lock.
+
+`UseSqlServerPersistence` configures the context this way. A context registered otherwise (`AddSagaDbSchemaInitialization`) with `UseSeeding` takes the application lock in the database on every start to seed, one instance at a time, and can wait up to 10 minutes for another instance.
+
+The lock for the creation is taken through the connection the EF Core provider creates the database with, which is not part of its public API: it was run against Microsoft.EntityFrameworkCore.SqlServer 10.0.15 with a server, and 9.0.23 up to opening the connection.
+
 ## Upgrading a database created by version 3.3.0 or earlier
 
 Delayed messages need a column on the outbox table and an index on it. A new database is created with both. A database that already exists gets them from the library when the application starts (or, without a host, the first time it uses the database):

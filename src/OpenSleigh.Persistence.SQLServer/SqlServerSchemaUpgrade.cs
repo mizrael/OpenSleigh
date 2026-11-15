@@ -1,6 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.SqlServer.Storage.Internal;
 using Microsoft.Extensions.Logging;
 using OpenSleigh.Persistence.SQL;
 using OpenSleigh.Persistence.SQL.Entities;
@@ -59,6 +60,10 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
     private readonly string _lockStatement;
     private readonly string _waitForTableLocks;
 
+    // released when asked to, or when the connection is closed for good
+    private const string ReleaseLock =
+        $"EXEC sp_releaseapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockOwner = N'Session'";
+
     public SqlServerSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)
     {
         // sp_getapplock reports a lock it did not get (timeout, cancellation, deadlock) with a negative return value,
@@ -66,9 +71,9 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
         _lockStatement =
             "DECLARE @result int; " +
             $"EXEC @result = sp_getapplock @Resource = N'{ConcurrentUpgradesLockName}', @LockMode = N'Exclusive', " +
-            $"@LockOwner = N'Transaction', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
+            $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
             "IF @result < 0 BEGIN; " +
-            "THROW 51000, N'the lock that makes schema upgrades wait for each other was not granted.', 1; " +
+            "THROW 51000, N'the lock that makes instances wait for each other to create, upgrade or seed the schema was not granted.', 1; " +
             "END";
 
         _waitForTableLocks = $"SET LOCK_TIMEOUT {(int)TableLockTimeout.TotalMilliseconds}";
@@ -80,13 +85,13 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
         => $"SELECT CASE WHEN OBJECT_ID(N'{OutboxTable}', N'U') IS NOT NULL THEN 1 ELSE 0 END AS [{ResultColumn}]";
 
     protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        => RunExclusively(database, () => RunInTransaction(database, apply));
+
+    private void RunInTransaction(DatabaseFacade database, Action apply)
     {
         using var transaction = database.BeginTransaction();
         try
         {
-            // held until the transaction ends
-            database.ExecuteSqlRaw(_lockStatement);
-
             database.ExecuteSqlRaw(_waitForTableLocks);
             apply();
 
@@ -95,6 +100,92 @@ internal sealed class SqlServerSchemaUpgrade : SagaDbSchemaUpgrade
         finally
         {
             TryStopWaitingForTableLocks(database);
+        }
+    }
+
+    // the lock belongs to the connection, not to a transaction, because the tables are created in a transaction
+    // of their own: the connection is kept for all the statements
+    protected override void RunExclusively(DatabaseFacade database, Action action)
+    {
+        database.OpenConnection();
+        try
+        {
+            database.ExecuteSqlRaw(_lockStatement);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                ReleaseLockOrConnection(database);
+            }
+        }
+        finally
+        {
+            database.CloseConnection();
+        }
+    }
+
+    // a connection goes back to its pool as it is, and is only reset when it is taken out again:
+    // one that still has the lock would keep every other instance waiting until then, so it is not kept
+    private static void ReleaseLockOrConnection(DatabaseFacade database)
+    {
+        try
+        {
+            database.ExecuteSqlRaw(ReleaseLock);
+        }
+        catch
+        {
+            ClearConnectionPool(database);
+        }
+    }
+
+    private static void ClearConnectionPool(DatabaseFacade database)
+    {
+        if (database.GetDbConnection() is SqlConnection connection)
+            SqlConnection.ClearPool(connection);
+    }
+
+    private const string CreationLockPrefix = "OpenSleigh.CreateDatabase.";
+    private const int MaxLockNameLength = 255;
+
+    // the server has a database before any other: instances that find theirs missing wait for each other there,
+    // on the connection the provider creates the database with, which signs in the way the application configured.
+    // The lock belongs to that connection, which is not pooled: closing it lets go of the lock
+    protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+    {
+        var lockName = CreationLockPrefix + new SqlConnectionStringBuilder(database.GetConnectionString()).InitialCatalog;
+
+#pragma warning disable EF1001 // the provider has no public way to its connection to the system database
+        using var master = database.GetService<ISqlServerConnection>().CreateMasterConnection();
+#pragma warning restore EF1001
+        master.ConnectionString = new SqlConnectionStringBuilder(master.ConnectionString) { Pooling = false }.ConnectionString;
+        master.Open();
+        try
+        {
+            using (var command = (SqlCommand)master.DbConnection.CreateCommand())
+            {
+                command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+                command.CommandText =
+                    "DECLARE @result int; " +
+                    "EXEC @result = sp_getapplock @Resource = @name, @LockMode = N'Exclusive', " +
+                    $"@LockOwner = N'Session', @LockTimeout = {(int)CommandTimeout.TotalMilliseconds}; " +
+                    "IF @result < 0 BEGIN; " +
+                    "THROW 51000, N'the lock that makes instances wait for each other to create the database was not granted.', 1; " +
+                    "END";
+                command.Parameters.AddWithValue("@name", lockName.Length > MaxLockNameLength ? lockName[..MaxLockNameLength] : lockName);
+                command.ExecuteNonQuery();
+            }
+
+            // the login that failed because the database was missing is remembered by the pool for a while,
+            // and answered with again without asking the server: the database another instance created would not be seen
+            ClearConnectionPool(database);
+
+            createDatabase();
+        }
+        finally
+        {
+            master.Close();
         }
     }
 

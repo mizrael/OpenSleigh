@@ -24,7 +24,7 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
         var databaseIsBack = false;
 
         var setup = CreateHostSetup(invoices,
-            configureServices: services => services.ObserveRelayPasses((host, failed) =>
+            services => services.ObserveRelayPasses((host, failed) =>
             {
                 if (failed)
                     failedPassesOfEachRelay.AddOrUpdate(host, 1, (_, passes) => passes + 1);
@@ -44,13 +44,20 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
 
                 // nothing gets in while the database is away, and the relays keep finding it gone:
                 // the outage lasts until each of them has, more than once
-                var refusedBefore = invoices.Refused;
-                while (invoices.Refused == refusedBefore || !EveryRelayHasFailed())
+                async Task PublishWhileTheDatabaseIsAwayAsync()
                 {
-                    var taken = await TryPublishAsync(run, new IssueInvoice(Guid.NewGuid().ToString()), cancellationToken);
-                    Assert.False(taken, "the database took a message while it was away.");
-                    invoices.WasRefused();
+                    var refusedBefore = invoices.Refused;
+                    while (invoices.Refused == refusedBefore || !EveryRelayHasFailed())
+                    {
+                        var taken = await TryPublishAsync(run, new IssueInvoice(Guid.NewGuid().ToString()), cancellationToken);
+                        Assert.False(taken, "the database took a message while it was away.");
+                        invoices.WasRefused();
+                    }
                 }
+
+                await run.WaitForAsync(
+                    $"a publish to be refused and the relay of each host to fail {FailedRelayPassesOfEachHostToWaitFor} times while the database is away",
+                    PublishWhileTheDatabaseIsAwayAsync(), cancellationToken, IsInfrastructureFailure);
 
                 await outage.EndAsync(cancellationToken);
                 Volatile.Write(ref databaseIsBack, true);
@@ -58,15 +65,16 @@ public class DatabaseOutageScenario(ITestOutputHelper console) : DatabaseInterru
                 await IssueInvoicesUntilTheyKeepCompletingAsync(run, invoices, cancellationToken);
 
                 // the invoices can all have been relayed by one host: the relay of every host has to be reading again
-                while (relaysThatWorkAgain.Count < hostsCount)
-                    await Task.Delay(PauseAfterARefusal, cancellationToken);
+                await run.WaitUntilAsync("the relay of every host to read its outbox again",
+                    () => relaysThatWorkAgain.Count >= hostsCount, cancellationToken, IsInfrastructureFailure);
 
                 bool EveryRelayHasFailed()
-                    => failedPassesOfEachRelay.Count == hostsCount
+                    => failedPassesOfEachRelay.Count >= hostsCount
                        && failedPassesOfEachRelay.Values.All(passes => passes >= FailedRelayPassesOfEachHostToWaitFor);
             },
-            AssertOnlyDatabaseFailuresWereDeadLetteredAsync);
+            AssertOnlyInfrastructureFailuresWereDeadLetteredAsync);
 
+        Assert.True(invoices.Refused >= 1);
         AssertEveryInvoiceIsAccountedFor(invoices);
     }
 }
