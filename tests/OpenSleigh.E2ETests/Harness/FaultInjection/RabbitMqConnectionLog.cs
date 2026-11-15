@@ -13,8 +13,7 @@ namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 /// </summary>
 /// <remarks>
 /// A host closes the connection it uses when it stops, not one it has replaced: those would stay open, and keep
-/// recovering, on a broker that every test shares. Disposing the log closes them. From then on a host that asks for
-/// a connection is given one that was never opened: a host that was stopped has no use for a real one.
+/// recovering, on a broker that every test shares. Disposing the log closes them.
 /// </remarks>
 public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDisposable
 {
@@ -25,7 +24,6 @@ public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDis
     private readonly ConcurrentQueue<IConnection> _closed = new();
     private int _opening;
     private int _isClosing;
-    private int _askedForWhileClosing;
     private int _closures;
 
     /// <summary>the name the connections of the hosts have at the broker.</summary>
@@ -39,11 +37,11 @@ public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDis
 
     internal async Task<IConnection> OpenAsync(Func<Task<IConnection>> open)
     {
+        // a host opens a connection whenever one it had is closed, also when it is the host that closed it,
+        // because it stopped (see the known defect about connections kept after a reconnect): closing the ones
+        // it left behind would make it open as many again, for ever. It is given one that was never opened
         if (Volatile.Read(ref _isClosing) != 0)
-        {
-            Interlocked.Increment(ref _askedForWhileClosing);
             return Substitute.For<IConnection>();
-        }
 
         Interlocked.Increment(ref _opening);
         try
@@ -65,7 +63,6 @@ public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDis
 
     public async ValueTask DisposeAsync()
     {
-        var leftOpenByTheHosts = Open;
         Volatile.Write(ref _isClosing, 1);
 
         // a connection that was being opened when the closing began shows up afterwards
@@ -81,11 +78,6 @@ public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDis
         var leftOpen = _closed.Count(connection => connection.IsOpen);
         if (leftOpen > 0)
             ReportCleanUpFailure($"{leftOpen} of them are still open.");
-
-        if (leftOpenByTheHosts > 0 || Volatile.Read(ref _askedForWhileClosing) > 0)
-            console.WriteLine(
-                $"RabbitMQ connections '{Name}': {_closed.Count} were opened, the hosts left {leftOpenByTheHosts} open " +
-                $"and asked for {Volatile.Read(ref _askedForWhileClosing)} more while those were closed.");
     }
 
     // what goes wrong here is written to the output, as the run does for its own clean-up:

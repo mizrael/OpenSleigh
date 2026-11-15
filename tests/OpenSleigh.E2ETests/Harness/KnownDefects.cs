@@ -29,7 +29,11 @@ public static class KnownDefects
             "a host that loses its connection to RabbitMQ ends up with one connection more every time: the connection " +
             "it had recovers by itself (automatic recovery is on) and keeps the consumers, while RabbitPersistentConnection " +
             "opens another one when it is told of the shutdown, and never closes the first. " +
-            "CircleCI job 1894: 10 runs out of 10, two hosts with 2 connections had 4 after losing them once and 6 after twice.",
+            "CircleCI job 1894: 10 runs out of 10, two hosts with 2 connections had 4 after losing them once and 6 after twice. " +
+            "It does the same when the connection is closed because the host is stopped: a stopped host opens a connection " +
+            "that nobody closes. CircleCI job 2150: one host that had lost its connection once had opened 3 by the time " +
+            "it was stopped and left 2 of them open; closing those made it ask for 2 more. " +
+            "RabbitMqConnectionLog closes what the hosts of a scenario leave behind, and gives a stopped host no real connection.",
             matrixCase => matrixCase.Scenario == nameof(RabbitMqConnectionLossScenario)
                           && matrixCase.Method == nameof(RabbitMqConnectionLossScenario.hosts_have_as_many_connections_as_before_once_they_are_connected_again)),
     ];
