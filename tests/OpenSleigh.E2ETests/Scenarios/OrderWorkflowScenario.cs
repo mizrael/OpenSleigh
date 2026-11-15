@@ -23,6 +23,12 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
     // PlaceOrder, CreditChecked and OrderShipped, besides one StockReserved per line
     private const int MessagesHandledBesidesTheLines = 3;
 
+    // CheckCredit and ReserveStock
+    private const int RequestsOfAnOrder = 2;
+
+    // at most one of them is CreditChecked
+    private const int AnswersReadTogether = 3;
+
     private const int Replicas = 3;
 
     private const string Orders = "orders";
@@ -107,15 +113,20 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
                 await publisher.PublishNewAsync(contended, cancellationToken);
                 await run.WaitForAsync("the first order to reach its saga", placing.Entered, cancellationToken);
 
-                using (workflow.Batch.Of(2))
+                // the warehouse is kept from answering until the conflict is armed. Only its answers are held
+                // then: a host of these transports handles one message at a time, and one that held the answer
+                // of the credit check could have the request to the warehouse waiting behind it, for ever
+                var reserving = runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(ReserveStock));
+                using (workflow.Batch.Of(RequestsOfAnOrder))
                 {
-                    // the warehouse is kept from answering until the conflict is armed. Only its answers are held
-                    // then: a host of these transports handles one message at a time, and one that held the answer
-                    // of the credit check could have the request to the warehouse waiting behind it, for ever
-                    var reserving = runs.HoldNext(handlerRun => handlerRun.MessageType == typeof(ReserveStock));
                     placing.Release();
                     await run.WaitForAsync("the warehouse to be asked for the stock of the first order", reserving.Entered, cancellationToken);
+                }
 
+                // an in-memory host is busy with the request that is held, and reads nothing until it is let go.
+                // Then it reads enough answers for two of them to be of the warehouse: one that came with the answer
+                // of the credit check alone could find the saga free again, and be held with nothing left to meet
+                using (workflow.Batch.Of(AnswersReadTogether))
                     await run.ForceLockConflictAsync(runs,
                         handlerRun => handlerRun.MessageType == typeof(StockReserved) && handlerRun.CorrelationId == contended.CorrelationId,
                         () =>
@@ -124,7 +135,6 @@ public class OrderWorkflowScenario(ITestOutputHelper console) : ScenarioBase(con
                             return Task.CompletedTask;
                         },
                         cancellationToken);
-                }
 
                 // nothing else was in flight: the saga that was found locked is the first order, busy with another answer
                 Assert.Contains(run.ProcessingFailures, failure => failure.IsLockConflict && AnswerTypes.Contains(failure.MessageType));
