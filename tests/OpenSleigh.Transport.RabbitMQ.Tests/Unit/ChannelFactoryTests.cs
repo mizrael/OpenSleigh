@@ -52,6 +52,27 @@ public class ChannelFactoryTests
     }
 
     [Fact]
+    public async Task GetPublishChannel_should_hand_the_messages_the_broker_returns_to_their_handler()
+    {
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
+        var connection = Substitute.For<IBusConnection>();
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(channel);
+        var returnedMessages = Substitute.For<IReturnedMessageHandler>();
+        var logger = Substitute.For<ILogger<ChannelFactory>>();
+
+        var sut = new ChannelFactory(connection, logger, returnedMessages);
+        await sut.GetPublishChannelAsync(CancellationToken.None);
+
+        var returned = new global::RabbitMQ.Client.Events.BasicReturnEventArgs(
+            312, "NO_ROUTE", "the-exchange", "bar", new BasicProperties(), ReadOnlyMemory<byte>.Empty, CancellationToken.None);
+        channel.BasicReturnAsync += Raise.Event<global::RabbitMQ.Client.Events.AsyncEventHandler<global::RabbitMQ.Client.Events.BasicReturnEventArgs>>(channel, returned);
+
+        returnedMessages.Received(1).Accept(returned);
+        Assert.Empty(logger.ReceivedCalls());
+    }
+
+    [Fact]
     public async Task GetConsumeChannel_should_create_channel()
     {
         var channel = Substitute.For<IChannel>();

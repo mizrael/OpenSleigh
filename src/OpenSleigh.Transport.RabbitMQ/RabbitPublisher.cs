@@ -3,6 +3,7 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using Polly;
 using RabbitMQ.Client;
+using System.Globalization;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -60,6 +61,10 @@ public class RabbitPublisher : IPublisher
             { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString() }
         };
 
+        // so that this host knows, when the broker returns the message again, for how long it has been coming back
+        if (envelope.FirstReturnedAt is { } firstReturnedAt)
+            properties.Headers.Add(nameof(envelope.FirstReturnedAt), firstReturnedAt.ToString("O", CultureInfo.InvariantCulture));
+
         var body = _serializer.Serialize(envelope.Message);
 
         var policy = Policy
@@ -75,7 +80,7 @@ public class RabbitPublisher : IPublisher
 
         await policy.ExecuteAsync(async () =>
         {
-            // mandatory: a message that no queue takes is sent back by the broker, and reported in the log
+            // mandatory: a message that no queue takes is sent back by the broker, and goes back to the outbox
             await channel.BasicPublishAsync(
                 exchange: queueRef.ExchangeName,
                 routingKey: queueRef.RoutingKey,
