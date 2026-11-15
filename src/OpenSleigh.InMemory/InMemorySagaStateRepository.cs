@@ -65,8 +65,7 @@ internal class InMemorySagaStateRepository : ISagaStateRepository, ISagaStateQue
             }
 
             // the saga is stored with another instance: this one was created by a message that looked for it too early
-            if (_statesByDescriptor.TryGetValue(key, out var byDesc)
-                && (byDesc.LockId is not null || !ReferenceEquals(byDesc.State, state)))
+            if (_statesByDescriptor.TryGetValue(key, out var byDesc) && !ReferenceEquals(byDesc.State, state))
                 throw new OptimisticLockException($"saga '{byDesc.State.InstanceId}' is already stored for '{state.InstanceId}'");
 
             Store(key, new Entry(state, lockId, byId.Released));

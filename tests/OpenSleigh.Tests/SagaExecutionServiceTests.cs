@@ -139,6 +139,7 @@ public class SagaExecutionServiceTests
 
         Assert.IsType<NoOpSagaInstance>(result);
         await sagaStateRepository.Received(1).ReleaseAsync(sagaInstance, CancellationToken.None);
+        Assert.Empty(sagaInstance.LockId);
         await sagaStateRepository.DidNotReceive().AbandonAsync(Arg.Any<ISagaInstance>(), Arg.Any<CancellationToken>());
     }
 

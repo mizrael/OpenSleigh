@@ -70,6 +70,18 @@ public record SagaInstance : ISagaInstance
                                            .ConfigureAwait(false);
     }
 
+    public async ValueTask ReleaseAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken)
+    {
+        var heldLockId = _lockId;
+
+        await sagaStateRepository.ReleaseAsync(this, cancellationToken)
+                                 .ConfigureAwait(false);
+
+        ClearLock(heldLockId);
+    }
+
     public void Publish(MessageEnvelope message)
     {
         ArgumentNullException.ThrowIfNull(message);

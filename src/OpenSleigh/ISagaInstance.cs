@@ -48,6 +48,13 @@ public interface ISagaInstance
         ISagaStateRepository sagaStateRepository,
         CancellationToken cancellationToken);
 
+    /// <summary>
+    /// stores the saga as it is and lets go of the lock taken with <see cref="LockAsync"/>.
+    /// </summary>
+    ValueTask ReleaseAsync(
+        ISagaStateRepository sagaStateRepository,
+        CancellationToken cancellationToken);
+
     ValueTask ProcessAsync<TM>(
         IMessageHandlerManager messageHandlerManager, 
         IMessageContext<TM> messageContext,
