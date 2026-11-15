@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 
 namespace OpenSleigh.Persistence.SQL.Tests.Unit;
@@ -44,6 +45,118 @@ public class SagaDbSchemaInitializerTests
         sut.EnsureCreated(context.Database);
 
         Assert.Equal(2, upgrade.Applied);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_create_the_tables_of_a_relational_database_one_instance_at_a_time()
+    {
+        var upgrade = new RecordingSchemaUpgrade();
+        var sut = new SagaDbSchemaInitializer(upgrade);
+        using var database = new SqliteFile();
+        using var context = database.CreateContext();
+
+        sut.EnsureCreated(context.Database);
+
+        Assert.Equal(1, upgrade.ExclusiveDatabaseCreations);
+        Assert.Equal(1, upgrade.ExclusiveCreations);
+        Assert.Equal(0, upgrade.Applied);
+        Assert.False(context.Set<Entities.SagaState>().Any());
+    }
+
+    [Fact]
+    public void EnsureCreated_should_not_upgrade_a_database_another_instance_created_while_this_one_waited_for_it()
+    {
+        using var database = new SqliteFile();
+        var upgrade = new RecordingSchemaUpgrade
+        {
+            WhileWaiting = () =>
+            {
+                using var otherInstance = database.CreateContext();
+                otherInstance.Database.EnsureCreated();
+            }
+        };
+        var sut = new SagaDbSchemaInitializer(upgrade);
+        var seeded = new List<bool>();
+        using var context = database.CreateContext(options => options.UseSeeding((_, created) => seeded.Add(created)));
+
+        sut.EnsureCreated(context.Database);
+
+        Assert.Equal(1, upgrade.ExclusiveCreations);
+        Assert.Equal(0, upgrade.Applied);
+        Assert.Equal([false], seeded);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_work_inside_a_transaction_of_whoever_asks_for_the_first_context()
+    {
+        var sut = new SagaDbSchemaInitializer(new RecordingSchemaUpgrade());
+        using var database = new SqliteFile();
+        using var context = database.CreateContext();
+
+        using (new System.Transactions.TransactionScope())
+            sut.EnsureCreated(context.Database);
+
+        Assert.False(context.Set<Entities.SagaState>().Any());
+    }
+
+    [Fact]
+    public void EnsureCreated_should_run_the_seeding_the_context_was_configured_with()
+    {
+        var seeded = new List<bool>();
+        using var database = new SqliteFile();
+        using var context = database.CreateContext(options => options.UseSeeding((_, created) => seeded.Add(created)));
+
+        new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database);
+        new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database);
+
+        Assert.Equal([true, false], seeded);
+    }
+
+    [Fact]
+    public void EnsureCreated_should_seed_in_a_transaction_once_the_tables_are_there_and_current()
+    {
+        const string seededTable = "SELECT COUNT(*) AS \"Value\" FROM sqlite_master WHERE name = 'seeded'";
+        using var database = new SqliteFile();
+        using (var existing = database.CreateContext())
+            existing.Database.EnsureCreated();
+
+        var upgrade = new RecordingSchemaUpgrade();
+        var appliedWhenSeeding = -1;
+        using var context = database.CreateContext(options => options.UseSeeding((seeding, _) =>
+        {
+            appliedWhenSeeding = upgrade.Applied;
+            seeding.Database.ExecuteSqlRaw("CREATE TABLE seeded (id INTEGER)");
+            throw new InvalidOperationException("the seeding failed");
+        }));
+
+        Assert.Throws<InvalidOperationException>(() => new SagaDbSchemaInitializer(upgrade).EnsureCreated(context.Database));
+
+        Assert.Equal(1, appliedWhenSeeding);
+        Assert.Equal(0, context.Database.SqlQueryRaw<int>(seededTable).AsEnumerable().Single());
+    }
+
+    [Fact]
+    public void EnsureCreated_should_refuse_a_context_that_can_only_be_seeded_asynchronously()
+    {
+        using var database = new SqliteFile();
+        using var context = database.CreateContext(options => options.UseAsyncSeeding((_, _, _) => Task.CompletedTask));
+
+        Assert.Throws<InvalidOperationException>(
+            () => new SagaDbSchemaInitializer(new RecordingSchemaUpgrade()).EnsureCreated(context.Database));
+    }
+
+    private sealed class SqliteFile : IDisposable
+    {
+        private readonly string _path = Path.Combine(Path.GetTempPath(), $"osl_create_{Guid.NewGuid():N}.db");
+
+        public DbContext CreateContext(Action<DbContextOptionsBuilder>? configure = null)
+        {
+            var options = new DbContextOptionsBuilder<NotInitializedSagaDbContext>().UseSqlite($"Data Source={_path};Pooling=False");
+            configure?.Invoke(options);
+            return new NotInitializedSagaDbContext(options.Options);
+        }
+
+        public void Dispose() => File.Delete(_path);
     }
 
     [Fact]
@@ -105,14 +218,29 @@ public class SagaDbSchemaInitializerTests
     private sealed class RecordingSchemaUpgrade : SagaDbSchemaUpgrade
     {
         public int Applied { get; private set; }
+        public int ExclusiveCreations { get; private set; }
+        public int ExclusiveDatabaseCreations { get; private set; }
         public int FailuresLeft { get; set; }
+
+        /// <summary>what happens between the moment this instance asks for its turn and the moment it has it.</summary>
+        public Action WhileWaiting { get; init; } = () => { };
 
         public override IReadOnlyList<SagaDbSchemaChange> Changes => [];
         protected override string TablesExistQuery => string.Empty;
         protected override bool IsPermissionDenied(Exception exception) => false;
 
-        protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
-            => apply();
+        protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+        {
+            ExclusiveDatabaseCreations++;
+            createDatabase();
+        }
+
+        protected override void RunExclusively(DatabaseFacade database, Action createTables)
+        {
+            ExclusiveCreations++;
+            WhileWaiting();
+            createTables();
+        }
 
         public override void Apply(DatabaseFacade database)
         {

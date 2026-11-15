@@ -9,7 +9,10 @@ public interface ISagaStateCommitter
 {
     /// <summary>
     /// stores the messages in the outbox of the saga instance and releases its lock.
-    /// When the lock is no longer held, nothing is stored and a <see cref="LockException"/> is thrown.
     /// </summary>
+    /// <exception cref="LockException">
+    /// nothing was stored, and the saga is not locked by the instance any more: its lock was lost, or was released
+    /// here. The instance is not abandoned afterwards.
+    /// </exception>
     ValueTask CommitAsync(ISagaInstance state, CancellationToken cancellationToken = default);
 }

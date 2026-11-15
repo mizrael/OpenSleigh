@@ -77,9 +77,12 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     protected override string TablesExistQuery
         => $"SELECT CASE WHEN to_regclass('{OutboxTable}') IS NOT NULL THEN 1 ELSE 0 END AS \"{ResultColumn}\"";
 
-    // the lock belongs to the connection, not to a transaction, because the index is built outside one:
-    // the connection is kept for all the statements
+    // the lock belongs to the connection, not to a transaction, because the index is built outside one
+    // and the tables are created in a transaction of their own: the connection is kept for all the statements
     protected override void RunExclusively(DatabaseFacade database, SagaDbSchemaChange change, Action apply)
+        => RunExclusively(database, change.RunsInTransaction ? () => RunInTransaction(database, apply) : apply);
+
+    protected override void RunExclusively(DatabaseFacade database, Action action)
     {
         database.OpenConnection();
         try
@@ -87,10 +90,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
             WaitForLock(database);
             try
             {
-                if (change.RunsInTransaction)
-                    RunInTransaction(database, apply);
-                else
-                    apply();
+                action();
             }
             finally
             {
@@ -140,6 +140,34 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
         {
             // the connection is gone, and its lock with it: the failure that broke it is the one to report
         }
+    }
+
+    private const string AdminDatabase = "postgres";
+
+    // another arbitrary number: creating a database does not wait for the upgrade of another one
+    private const string ConcurrentCreationsLockKey = "7308325172346594412";
+
+    // the server has a database before any other: instances that find theirs missing wait for each other there.
+    // The lock belongs to the connection, which is not pooled: closing it lets go of the lock
+    protected override void RunDatabaseCreationExclusively(DatabaseFacade database, Action createDatabase)
+    {
+        var connectionString = new NpgsqlConnectionStringBuilder(database.GetConnectionString())
+        {
+            Database = AdminDatabase,
+            Pooling = false,
+        };
+
+        using var admin = new NpgsqlConnection(connectionString.ConnectionString);
+        admin.Open();
+
+        using (var command = admin.CreateCommand())
+        {
+            command.CommandTimeout = (int)CommandTimeout.TotalSeconds;
+            command.CommandText = $"SELECT pg_advisory_lock({ConcurrentCreationsLockKey})";
+            command.ExecuteNonQuery();
+        }
+
+        createDatabase();
     }
 
     protected override bool IsPermissionDenied(Exception exception)

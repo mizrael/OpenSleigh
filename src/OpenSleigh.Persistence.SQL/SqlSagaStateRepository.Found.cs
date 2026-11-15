@@ -16,6 +16,9 @@ public partial class SqlSagaStateRepository
     // the saga this repository last looked for and did not find
     private string? _sagaNotFound;
 
+    // the lock this repository stored a new saga with: abandoned under that lock, the saga is removed
+    private string? _createdWithLockId;
+
     private sealed class KnownSaga
     {
         /// <summary>the row as <see cref="FindAsync"/> read it. Null once the saga is locked, or when it was not found.</summary>

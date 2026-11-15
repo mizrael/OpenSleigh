@@ -6,7 +6,9 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Transport.RabbitMQ.Tests.Fixtures;
 using OpenSleigh.Utils;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -218,6 +220,76 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Assert.Equal(1, processCount);
     }
 
+    [Fact]
+    public async Task A_host_that_publishes_a_message_it_does_not_handle_should_declare_no_queue_of_its_own()
+    {
+        var exchangeName = NewExchangeName();
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (_, worker) = CreateSUT(_ => received.TrySetResult(), out _, exchangeName, clientGroup: "workers");
+        var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false);
+
+        await worker.StartAsync();
+        await publisher.PublishAsync(CreateMessage());
+        await received.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+        await using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
+        var ofThePublisher = DefaultReferences(exchangeName, "api");
+        Assert.False(await QueueExistsAsync(connection, ofThePublisher.QueueName));
+        Assert.False(await QueueExistsAsync(connection, ofThePublisher.RetryQueueName));
+        Assert.False(await QueueExistsAsync(connection, ofThePublisher.DeadLetterQueue));
+
+        // the service that consumes the message still has all of its own
+        var ofTheWorker = DefaultReferences(exchangeName, "workers");
+        Assert.True(await QueueExistsAsync(connection, ofTheWorker.QueueName));
+        Assert.True(await QueueExistsAsync(connection, ofTheWorker.RetryQueueName));
+        Assert.True(await QueueExistsAsync(connection, ofTheWorker.DeadLetterQueue));
+    }
+
+    [Fact]
+    public async Task A_message_no_queue_takes_should_be_reported_and_dropped()
+    {
+        var exchangeName = NewExchangeName();
+        var reported = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var logger = Substitute.For<ILogger<ChannelFactory>>();
+        logger.IsEnabled(LogLevel.Warning).Returns(true);
+        logger.WhenForAnyArgs(l => l.Log<object>(default, default, default!, default, default!))
+              .Do(call =>
+              {
+                  if (call.Arg<LogLevel>() == LogLevel.Warning)
+                      reported.TrySetResult(call.Args()[2]!.ToString()!);
+              });
+        var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
+            configure: services => services.AddSingleton(logger));
+        var message = CreateMessage();
+
+        // the publish does not wait for the broker, which sends the message back afterwards
+        await publisher.PublishAsync(message);
+
+        var report = await reported.Task.WaitAsync(TimeSpan.FromSeconds(20));
+        Assert.Contains(message.MessageId, report);
+        Assert.Contains(typeof(FakeSagaStarter).FullName!, report);
+        Assert.Contains(exchangeName, report);
+
+        // the channel is still there to publish with
+        await publisher.PublishAsync(CreateMessage());
+    }
+
+    // a channel is closed by the broker when it asks for a queue that does not exist: one per question
+    private static async Task<bool> QueueExistsAsync(global::RabbitMQ.Client.IConnection connection, string queueName)
+    {
+        await using var channel = await connection.CreateChannelAsync();
+        try
+        {
+            await channel.QueueDeclarePassiveAsync(queueName);
+            return true;
+        }
+        catch (global::RabbitMQ.Client.Exceptions.OperationInterruptedException e)
+            when (e.ShutdownReason?.ReplyCode == global::RabbitMQ.Client.Constants.NotFound)
+        {
+            return false;
+        }
+    }
+
     private async Task DeclareRetryTopologyOfVersion330Async(global::RabbitMQ.Client.IChannel channel, QueueReferences references)
     {
         var configuration = _fixture.RabbitConfiguration;
@@ -255,7 +327,9 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         Action<MessageEnvelope>? onMessage,
         out IServiceProvider provider,
         string? exchangeName = null,
-        string clientGroup = "test")
+        string clientGroup = "test",
+        bool handlesTheMessage = true,
+        Action<IServiceCollection>? configure = null)
     {
         var services = new ServiceCollection();
         services.AddLogging(cfg =>
@@ -289,7 +363,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
 
         var sagaDescriptorResolver = Substitute.For<ISagaDescriptorsResolver>();
         sagaDescriptorResolver.GetRegisteredMessageTypes()
-            .Returns(new[] { typeof(FakeSagaStarter) });
+            .Returns(handlesTheMessage ? new[] { typeof(FakeSagaStarter) } : Array.Empty<Type>());
         services.AddSingleton<ISagaDescriptorsResolver>(sagaDescriptorResolver);
 
         var processor = Substitute.For<IMessageProcessor>();
@@ -301,6 +375,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
                     onMessage(message);
                 });
         services.AddSingleton(processor);
+        configure?.Invoke(services);
 
         var sp = services.BuildServiceProvider();
         provider = sp;

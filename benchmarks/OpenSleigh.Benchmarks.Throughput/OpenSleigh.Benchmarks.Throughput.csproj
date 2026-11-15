@@ -22,6 +22,7 @@
     <OpenSleighSrcRoot Condition="'$(OpenSleighSrcRoot)' == ''">$(MSBuildThisFileDirectory)..\..\src</OpenSleighSrcRoot>
     <RabbitConfigurationFile>$(OpenSleighSrcRoot)/OpenSleigh.Transport.RabbitMQ/RabbitConfiguration.cs</RabbitConfigurationFile>
     <MessageEnvelopeFile>$(OpenSleighSrcRoot)/OpenSleigh/Outbox/MessageEnvelope.cs</MessageEnvelopeFile>
+    <SagaStateRepositoryFile>$(OpenSleighSrcRoot)/OpenSleigh/ISagaStateRepository.cs</SagaStateRepositoryFile>
   </PropertyGroup>
 
   <!-- scenarios for settings that only exist on one side of a comparison are compiled in only where the setting exists -->
@@ -39,6 +40,11 @@
 
   <PropertyGroup Condition="Exists('$(OpenSleighSrcRoot)/OpenSleigh.Persistence.SQL/SagaDbContextServiceCollectionExtensions.cs')">
     <DefineConstants>$(DefineConstants);SAGA_DBCONTEXT_POOL</DefineConstants>
+  </PropertyGroup>
+
+  <!-- a saga repository can release a saga without storing it -->
+  <PropertyGroup Condition="Exists('$(SagaStateRepositoryFile)') And $([System.IO.File]::ReadAllText('$(SagaStateRepositoryFile)').Contains('AbandonAsync'))">
+    <DefineConstants>$(DefineConstants);SAGA_ABANDON</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
