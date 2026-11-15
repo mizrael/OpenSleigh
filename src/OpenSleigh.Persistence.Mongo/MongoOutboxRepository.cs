@@ -68,9 +68,16 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
             filterBuilder.Eq(e => e.MessageId, message.MessageId),
             filterBuilder.Eq(e => e.DeliverAt, AsStored(message.DeliverAt)));
 
-        await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
+        // looked up by its id, as before there was a second condition: left to choose between the index on the id
+        // and the one on the due time, the server tries both
+        await _dbContext.OutboxMessages.DeleteOneAsync(filter, DeleteByMessageId, cancellationToken)
                                        .ConfigureAwait(false);
     }
+
+    private static readonly DeleteOptions DeleteByMessageId = new()
+    {
+        Hint = new MongoDB.Bson.BsonDocument(nameof(Entities.OutboxMessage.MessageId), 1)
+    };
 
     // dates are stored to the millisecond
     private static DateTime? AsStored(DateTimeOffset? time)
