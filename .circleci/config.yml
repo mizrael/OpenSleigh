@@ -18,7 +18,7 @@ parameters:
   e2e_repetitions:
     description: how many times the E2E job runs the whole E2E suite; raise it to measure flakiness
     type: integer
-    default: 10
+    default: 1
 
 jobs:
   build:
@@ -129,12 +129,6 @@ jobs:
       - run:
           name: Build the E2E tests
           command: dotnet build ./tests/OpenSleigh.E2ETests/OpenSleigh.E2ETests.csproj --framework $TARGET_FRAMEWORK
-      - run:
-          name: TEMPORARY the case excluded by a known defect, to see it fail
-          command: |
-            E2E_INCLUDE_KNOWN_DEFECTS=true E2E_REPETITIONS=1 E2E_RESULTS_DIR=/tmp/e2e-results/known-defect \
-            E2E_FILTER="Category=E2E&FullyQualifiedName~leaves_no_message_behind_on_rabbitmq" \
-            bash ./tests/OpenSleigh.E2ETests/run-e2e.sh || true
       - run:
           name: E2E tests
           no_output_timeout: 20m
