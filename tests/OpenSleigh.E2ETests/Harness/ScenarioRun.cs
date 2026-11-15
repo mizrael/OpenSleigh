@@ -115,8 +115,7 @@ public sealed class ScenarioRun : IAsyncDisposable
 
             await Task.WhenAll(hosts.Select(host => host.StartAsync(timeout.Token)));
 
-            var runningHosts = Hosts.Where(host => host.IsRunning).Select(host => host.Services).ToArray();
-            await _transport.WaitUntilSubscribedAsync(runningHosts, timeout.Token);
+            await WaitUntilSubscribedAsync(timeout.Token);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {

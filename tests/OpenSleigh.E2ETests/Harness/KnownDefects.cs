@@ -1,3 +1,5 @@
+using OpenSleigh.E2ETests.Scenarios;
+
 namespace OpenSleigh.E2ETests.Harness;
 
 /// <summary>one cell of the matrix: a scenario method, on a combination, with a number of hosts.</summary>
@@ -28,8 +30,8 @@ public static class KnownDefects
             "it had recovers by itself (automatic recovery is on) and keeps the consumers, while RabbitPersistentConnection " +
             "opens another one when it is told of the shutdown, and never closes the first. " +
             "CircleCI job 1894: 10 runs out of 10, two hosts with 2 connections had 4 after losing them once and 6 after twice.",
-            matrixCase => matrixCase.Scenario == "RabbitMqConnectionLossScenario"
-                          && matrixCase.Method == "hosts_have_as_many_connections_as_before_once_they_are_connected_again"),
+            matrixCase => matrixCase.Scenario == nameof(RabbitMqConnectionLossScenario)
+                          && matrixCase.Method == nameof(RabbitMqConnectionLossScenario.hosts_have_as_many_connections_as_before_once_they_are_connected_again)),
     ];
 
     public static bool AreIncluded

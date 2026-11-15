@@ -67,7 +67,13 @@ public class PaymentBeforeTimeoutScenario(ITestOutputHelper console) : ScenarioB
                 // The in-memory outbox does not count a message that is not due, so its being empty would prove nothing
                 await run.WaitForAsync("the timeout of the paid order to be delivered", timeoutDelivered.Reached, cancellationToken);
 
-                var state = Assert.IsType<OrderPaymentState>(order.StateData);
+                // read again: the timeout has been and gone, and changed nothing
+                var afterTheTimeout = await run.FindSagaAsync<OrderPaymentSaga>(correlationId, cancellationToken);
+                Assert.NotNull(afterTheTimeout);
+                Assert.True(afterTheTimeout.IsCompleted);
+                Assert.Equal(MessagesOfAnOrderThatIsPaid, afterTheTimeout.ProcessedMessages.Count);
+
+                var state = Assert.IsType<OrderPaymentState>(afterTheTimeout.StateData);
                 Assert.True(state.Paid);
                 Assert.False(state.Expired);
             },

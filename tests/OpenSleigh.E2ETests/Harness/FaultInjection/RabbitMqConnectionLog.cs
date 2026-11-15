@@ -1,43 +1,135 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
+using NSubstitute;
 using RabbitMQ.Client;
+using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 
 /// <summary>
-/// every connection the hosts of a scenario opened to RabbitMQ, to tell how many of them they still have.
-/// A connection that the client library recovers by itself stays the same connection.
+/// every connection the hosts of a scenario opened to RabbitMQ, under a name no other scenario uses: to find them
+/// at the broker, to tell how many of them the hosts still have, and to close them when the scenario is over,
+/// however it ended. A connection that the client library recovers by itself stays the same connection.
 /// </summary>
-public sealed class RabbitMqConnectionLog
+/// <remarks>
+/// A host closes the connection it uses when it stops, not one it has replaced: those would stay open, and keep
+/// recovering, on a broker that every test shares. Disposing the log closes them. From then on a host that asks for
+/// a connection is given one that was never opened: a host that was stopped has no use for a real one.
+/// </remarks>
+public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDisposable
 {
+    private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(20);
+
     private readonly ConcurrentQueue<IConnection> _opened = new();
+    private readonly ConcurrentQueue<IConnection> _closed = new();
+    private int _opening;
+    private int _isClosing;
+    private int _askedForWhileClosing;
+    private int _closures;
+
+    /// <summary>the name the connections of the hosts have at the broker.</summary>
+    public string Name { get; } = $"e2e-{Guid.NewGuid():N}";
 
     /// <summary>how many of the connections the hosts asked for are open now.</summary>
     public int Open => _opened.Count(connection => connection.IsOpen);
 
-    internal void Add(IConnection connection) => _opened.Enqueue(connection);
+    /// <summary>how many times a connection of the hosts was closed, by whoever closed it.</summary>
+    public int Closures => Volatile.Read(ref _closures);
 
-    /// <summary>
-    /// closes every connection the hosts opened, once they are stopped: a host closes the connection it uses,
-    /// not one it has replaced, which would otherwise stay open until the tests end.
-    /// </summary>
-    public async Task CloseAllAsync()
+    internal async Task<IConnection> OpenAsync(Func<Task<IConnection>> open)
     {
-        foreach (var connection in _opened)
-            await connection.DisposeAsync();
+        if (Volatile.Read(ref _isClosing) != 0)
+        {
+            Interlocked.Increment(ref _askedForWhileClosing);
+            return Substitute.For<IConnection>();
+        }
+
+        Interlocked.Increment(ref _opening);
+        try
+        {
+            var connection = await open();
+            connection.ConnectionShutdownAsync += (_, _) =>
+            {
+                Interlocked.Increment(ref _closures);
+                return Task.CompletedTask;
+            };
+            _opened.Enqueue(connection);
+            return connection;
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _opening);
+        }
     }
+
+    public async ValueTask DisposeAsync()
+    {
+        var leftOpenByTheHosts = Open;
+        Volatile.Write(ref _isClosing, 1);
+
+        // a connection that was being opened when the closing began shows up afterwards
+        do
+        {
+            while (_opened.TryDequeue(out var connection))
+            {
+                await CloseAsync(connection);
+                _closed.Enqueue(connection);
+            }
+        } while (await IsOpeningAsync() || !_opened.IsEmpty);
+
+        var leftOpen = _closed.Count(connection => connection.IsOpen);
+        if (leftOpen > 0)
+            ReportCleanUpFailure($"{leftOpen} of them are still open.");
+
+        if (leftOpenByTheHosts > 0 || Volatile.Read(ref _askedForWhileClosing) > 0)
+            console.WriteLine(
+                $"RabbitMQ connections '{Name}': {_closed.Count} were opened, the hosts left {leftOpenByTheHosts} open " +
+                $"and asked for {Volatile.Read(ref _askedForWhileClosing)} more while those were closed.");
+    }
+
+    // what goes wrong here is written to the output, as the run does for its own clean-up:
+    // it never replaces what the scenario failed with
+    private async Task CloseAsync(IConnection connection)
+    {
+        try
+        {
+            await connection.DisposeAsync().AsTask().WaitAsync(CloseTimeout);
+        }
+        catch (Exception e)
+        {
+            ReportCleanUpFailure(e.ToString());
+        }
+    }
+
+    private async Task<bool> IsOpeningAsync()
+    {
+        using var timeout = new CancellationTokenSource(CloseTimeout);
+        while (Volatile.Read(ref _opening) > 0 && !timeout.IsCancellationRequested)
+            await Task.Delay(PollingInterval);
+
+        return Volatile.Read(ref _opening) > 0;
+    }
+
+    private void ReportCleanUpFailure(string problem)
+        => console.WriteLine($"{ScenarioRun.CleanUpFailed}: the RabbitMQ connections '{Name}' may have been left behind. {problem}");
 }
 
 public static class RabbitMqConnectionLogExtensions
 {
     /// <summary>
-    /// records in the log every connection a host opens to RabbitMQ.
+    /// names every connection a host opens to RabbitMQ after the log, and records it there.
     /// Call it from <see cref="HostSetup.ConfigureServices"/>, on a combination that uses RabbitMQ.
     /// </summary>
-    public static IServiceCollection LogRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log)
+    public static IServiceCollection TrackRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log)
     {
         ArgumentNullException.ThrowIfNull(log);
-        return services.Decorate<IConnectionFactory>((_, factory) => new LoggingConnectionFactory(factory, log));
+
+        return services.Decorate<IConnectionFactory>((_, factory) =>
+        {
+            factory.ClientProvidedName = log.Name;
+            return new LoggingConnectionFactory(factory, log);
+        });
     }
 
     private sealed class LoggingConnectionFactory(IConnectionFactory inner, RabbitMqConnectionLog log) : IConnectionFactory
@@ -124,28 +216,21 @@ public static class RabbitMqConnectionLogExtensions
             => inner.AuthMechanismFactory(mechanismNames);
 
         public Task<IConnection> CreateConnectionAsync(CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(cancellationToken));
+            => log.OpenAsync(() => inner.CreateConnectionAsync(cancellationToken));
 
         public Task<IConnection> CreateConnectionAsync(string clientProvidedName, CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(clientProvidedName, cancellationToken));
+            => log.OpenAsync(() => inner.CreateConnectionAsync(clientProvidedName, cancellationToken));
 
         public Task<IConnection> CreateConnectionAsync(IEnumerable<string> hostnames, CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(hostnames, cancellationToken));
+            => log.OpenAsync(() => inner.CreateConnectionAsync(hostnames, cancellationToken));
 
         public Task<IConnection> CreateConnectionAsync(IEnumerable<string> hostnames, string clientProvidedName, CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(hostnames, clientProvidedName, cancellationToken));
+            => log.OpenAsync(() => inner.CreateConnectionAsync(hostnames, clientProvidedName, cancellationToken));
 
         public Task<IConnection> CreateConnectionAsync(IEnumerable<AmqpTcpEndpoint> endpoints, CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(endpoints, cancellationToken));
+            => log.OpenAsync(() => inner.CreateConnectionAsync(endpoints, cancellationToken));
 
         public Task<IConnection> CreateConnectionAsync(IEnumerable<AmqpTcpEndpoint> endpoints, string clientProvidedName, CancellationToken cancellationToken = default)
-            => LogAsync(inner.CreateConnectionAsync(endpoints, clientProvidedName, cancellationToken));
-
-        private async Task<IConnection> LogAsync(Task<IConnection> opening)
-        {
-            var connection = await opening;
-            log.Add(connection);
-            return connection;
-        }
+            => log.OpenAsync(() => inner.CreateConnectionAsync(endpoints, clientProvidedName, cancellationToken));
     }
 }

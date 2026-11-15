@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using OpenSleigh.E2ETests.Harness.FaultInjection;
 using OpenSleigh.E2ETests.Sagas;
+using OpenSleigh.Outbox;
 using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Scenarios;
@@ -19,9 +21,13 @@ public class CommitFailureScenario(ITestOutputHelper console) : ScenarioBase(con
     public Task a_commit_that_fails_keeps_nothing_of_what_the_handler_did_and_leaves_the_saga_unlocked(string combination, int hostsCount)
         => FailACommitAsync(combination, hostsCount);
 
-    // the message that follows can reach another host, which only knows what is in the store
+    // the message that follows can reach another host, which only knows what is in the store. The commit fails before
+    // the store is asked; what releases the saga afterwards is the store, and what dead-letters the message is
+    // the transport: every store runs it, and one combination has Kafka
     [Theory]
-    [MatrixData(HostsCounts = [3], RequiresSharedInfrastructure = true)]
+    [MatrixData(
+        Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq, Combinations.PostgreSqlKafka],
+        HostsCounts = [3])]
     public Task a_commit_that_fails_keeps_nothing_of_what_the_handler_did_and_leaves_the_saga_unlocked_with_several_hosts(string combination, int hostsCount)
         => FailACommitAsync(combination, hostsCount);
 
@@ -30,11 +36,13 @@ public class CommitFailureScenario(ITestOutputHelper console) : ScenarioBase(con
         var correlationId = Guid.NewGuid().ToString();
         var commitFails = new Fault("the saga cannot be committed, on purpose.");
         var runs = new HandlerRuns();
+        var published = new ConcurrentQueue<MessageEnvelope>();
 
         var setup = new HostSetup(bus => bus.AddSaga<ShipmentSaga, ShipmentState>())
         {
             ConfigureServices = services => services
                 .RecordHandlerRuns(runs)
+                .ObservePublishedMessages(published.Enqueue)
                 .FailCommitsThatPublish<ParcelPacked>(commitFails)
         };
 
@@ -49,7 +57,7 @@ public class CommitFailureScenario(ITestOutputHelper console) : ScenarioBase(con
 
                 // the host has given the message back to its transport: it is done with it
                 await run.WaitUntilAsync("the commit to fail and its message to be given back",
-                    () => commitFails.Hits.Count >= 1 && run.ProcessingFailures.Any(IsTheFailedCommit),
+                    () => commitFails.Hits >= 1 && run.ProcessingFailures.Any(IsTheFailedCommit),
                     cancellationToken, IsTheFailedCommit);
                 Assert.Single(runs.RunsOf<PackParcel>());
 
@@ -67,22 +75,21 @@ public class CommitFailureScenario(ITestOutputHelper console) : ScenarioBase(con
                 Assert.True(packed.IsCompleted);
                 Assert.Equal(1, Assert.IsType<ShipmentState>(packed.StateData).PackingAttempts);
             },
+            // the message whose commit failed is given back once and dead-lettered once, and nothing else is:
+            // nobody found the saga locked afterwards
             async run =>
             {
-                // the message whose commit failed, and nothing else: nobody found the saga locked afterwards
                 var failure = Assert.Single(run.ProcessingFailures);
                 Assert.True(IsTheFailedCommit(failure), failure.ToString());
 
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                Assert.Equal(
-                    new Dictionary<Type, long> { [typeof(PackParcel)] = 1 },
-                    await run.ReadDeadLettersAsync(timeout.Token));
+                await AssertDeadLettersAsync(run, IsTheFailedCommit);
             });
 
         // also after the observation window: the handler ran for both requests,
         // and what it published before the commit failed never went out
         Assert.Equal(2, runs.RunsOf<PackParcel>().Select(handlerRun => handlerRun.MessageId).Distinct().Count());
         Assert.Equal(2, runs.RunsOf<PackParcel>().Count);
+        Assert.Single(published, message => message.MessageType == typeof(ParcelPacked));
         Assert.Single(runs.RunsOf<ParcelPacked>());
     }
 

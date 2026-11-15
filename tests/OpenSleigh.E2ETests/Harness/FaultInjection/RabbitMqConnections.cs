@@ -1,16 +1,15 @@
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using RabbitMQ.Client;
 
 namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 
 /// <summary>
-/// the connections the hosts of one scenario have to RabbitMQ, found by the name the scenario gave them,
-/// and closed through the management API of the broker, as a network that drops them would.
-/// The connections of the other runs, on the same broker, are left alone.
+/// the connections the hosts of one scenario have to RabbitMQ, as the broker sees them: found by the name
+/// of their <see cref="RabbitMqConnectionLog"/> and closed through the management API, as a network that drops them
+/// would. The connections of the other runs, on the same broker, are left alone.
 /// </summary>
 public sealed class RabbitMqConnections : IDisposable
 {
@@ -39,11 +38,11 @@ public sealed class RabbitMqConnections : IDisposable
             "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{userName}:{password}")));
     }
 
-    /// <param name="connectionName">the name given to the hosts with <see cref="RabbitMqConnectionExtensions.NameRabbitMqConnections"/>.</param>
-    public static RabbitMqConnections Named(string connectionName)
+    /// <param name="log">the log the hosts were given with <see cref="RabbitMqConnectionLogExtensions.TrackRabbitMqConnections"/>.</param>
+    public static RabbitMqConnections Of(RabbitMqConnectionLog log)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionName);
-        return new RabbitMqConnections(connectionName, RunContext.Create().Configuration.GetSection(SettingsSection));
+        ArgumentNullException.ThrowIfNull(log);
+        return new RabbitMqConnections(log.Name, RunContext.Create().Configuration.GetSection(SettingsSection));
     }
 
     /// <summary>the connections of the hosts that are open, as the broker names them.</summary>
@@ -77,7 +76,10 @@ public sealed class RabbitMqConnections : IDisposable
         }
     }
 
-    /// <summary>closes the connections, and returns once the broker lists none of them any more.</summary>
+    /// <summary>
+    /// asks the broker to close the connections, and returns when it has been asked: what the broker lists lags
+    /// behind, see <see cref="WaitUntilClosedAsync"/>.
+    /// </summary>
     public async Task CloseAsync(IReadOnlyCollection<string> connections, CancellationToken cancellationToken)
     {
         foreach (var connection in connections)
@@ -87,31 +89,17 @@ public sealed class RabbitMqConnections : IDisposable
 
             // a connection that went away by itself in the meantime is not there to be closed
             using var response = await _management.SendAsync(request, cancellationToken);
-            if (response.StatusCode != System.Net.HttpStatusCode.NotFound)
+            if (response.StatusCode != HttpStatusCode.NotFound)
                 response.EnsureSuccessStatusCode();
         }
+    }
 
+    /// <summary>returns once the broker lists none of the connections any more.</summary>
+    public async Task WaitUntilClosedAsync(IReadOnlyCollection<string> connections, CancellationToken cancellationToken)
+    {
         while ((await ListAsync(cancellationToken)).Intersect(connections).Any())
             await Task.Delay(PollingInterval, cancellationToken);
     }
 
     public void Dispose() => _management.Dispose();
-}
-
-public static class RabbitMqConnectionExtensions
-{
-    /// <summary>
-    /// gives the connections a host opens to RabbitMQ a name, for <see cref="RabbitMqConnections"/> to find them by.
-    /// Call it from <see cref="HostSetup.ConfigureServices"/>, on a combination that uses RabbitMQ.
-    /// </summary>
-    public static IServiceCollection NameRabbitMqConnections(this IServiceCollection services, string connectionName)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(connectionName);
-
-        return services.Decorate<IConnectionFactory>((_, factory) =>
-        {
-            factory.ClientProvidedName = connectionName;
-            return factory;
-        });
-    }
 }

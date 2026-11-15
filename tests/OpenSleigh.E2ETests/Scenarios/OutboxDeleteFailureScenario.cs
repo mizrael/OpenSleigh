@@ -64,7 +64,7 @@ public class OutboxDeleteFailureScenario(ITestOutputHelper console) : ScenarioBa
             AssertOnlyLockConflictsAsync);
 
         // the delete failed, so the message really was published a second time: the same message, handled once
-        Assert.Single(outboxCannotBeCleaned.Hits);
+        Assert.Equal(1, outboxCannotBeCleaned.Hits);
         Assert.True(published.Count >= Copies);
         Assert.Single(published.Select(message => message.MessageId).Distinct());
         Assert.Single(runs.Runs);

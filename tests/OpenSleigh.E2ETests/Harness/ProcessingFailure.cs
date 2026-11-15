@@ -8,7 +8,7 @@ namespace OpenSleigh.E2ETests.Harness;
 /// a message that a host gave back to its transport with an exception: what the transport then does with it
 /// depends on the exception. A lock conflict is retried, anything else is dead-lettered.
 /// </summary>
-public sealed record ProcessingFailure(string Service, Type MessageType, string MessageId, Exception Exception)
+public sealed record ProcessingFailure(string Service, Type MessageType, string MessageId, string CorrelationId, Exception Exception)
 {
     private const string SagaNotFoundMessagePrefix = "unable to locate state for Saga";
 
@@ -45,7 +45,8 @@ internal sealed class RecordingMessageProcessor(
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            failures.Enqueue(new ProcessingFailure(service, outboxMessage.MessageType, outboxMessage.MessageId, e));
+            failures.Enqueue(new ProcessingFailure(
+                service, outboxMessage.MessageType, outboxMessage.MessageId, outboxMessage.CorrelationId, e));
             throw;
         }
     }
