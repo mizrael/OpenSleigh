@@ -381,14 +381,14 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         saga.SetAsProcessed(firstMessage);
         await setupRepository.ReleaseAsync(saga);
 
-        var sut = CreateSut(_fixture.CreateDbContext(dbSuffix));
+        var sut = new MongoSagaStateRepository(_fixture.CreateDbContext(dbSuffix), null, new SerializerFailingOn<DummyState>());
         var secondMessage = CreateMessageContext<FakeMessage>();
         secondMessage.CorrelationId.Returns(correlationId);
         var found = await sut.FindAsync(descriptor, secondMessage, CancellationToken.None);
         Assert.NotNull(found);
         await found.LockAsync(sut, CancellationToken.None);
 
-        // the handler changed the state and completed the saga, and its commit failed
+        // the handler changed the state and completed the saga
         var changed = new SagaInstance<DummyState>(found.InstanceId, found.TriggerMessageId, found.CorrelationId, descriptor, DummyState.New(), found.ProcessedMessages);
         var lockHolder = Substitute.For<ISagaStateRepository>();
         lockHolder.LockAsync(changed, Arg.Any<CancellationToken>()).Returns(found.LockId);
@@ -396,9 +396,9 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
         changed.SetAsProcessed(secondMessage);
         changed.MarkAsCompleted();
         var published = Publish(changed);
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await sut.CommitAsync(changed, cancelled.Token));
+
+        // its commit fails on the release: by then the message it published is in the outbox
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.CommitAsync(changed));
 
         await sut.AbandonAsync(changed);
 
@@ -429,6 +429,40 @@ public class MongoSagaStateRepositoryTests : IClassFixture<DbFixture>
 
         // a message that cannot start the saga does not find it
         Assert.Null(await CreateSut(db).FindAsync(saga.Descriptor, messageContext, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_remove_a_saga_it_created_after_another_saga_went_through_the_same_repository()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var messageContext = CreateMessageContext<FakeMessage>();
+        var abandoned = CreateSagaContext(messageContext);
+        Assert.Null(await sut.FindAsync(abandoned.Descriptor, messageContext, CancellationToken.None));
+        await abandoned.LockAsync(sut, CancellationToken.None);
+
+        var otherMessageContext = CreateMessageContext<FakeMessage>();
+        var other = CreateSagaContext(otherMessageContext);
+        Assert.Null(await sut.FindAsync(other.Descriptor, otherMessageContext, CancellationToken.None));
+        await other.LockAsync(sut, CancellationToken.None);
+        await sut.ReleaseAsync(other);
+
+        await sut.AbandonAsync(abandoned);
+
+        Assert.False(await db.SagaStates.Find(e => e.InstanceId == abandoned.InstanceId).AnyAsync());
+        Assert.True(await db.SagaStates.Find(e => e.InstanceId == other.InstanceId).AnyAsync());
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_throw_a_lock_exception_when_the_saga_is_not_stored()
+    {
+        var sut = CreateSut(_fixture.CreateDbContext());
+        var saga = CreateSagaContext(CreateMessageContext<FakeMessage>());
+        var lockHolder = Substitute.For<ISagaStateRepository>();
+        lockHolder.LockAsync(saga, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid().ToString());
+        await saga.LockAsync(lockHolder, CancellationToken.None);
+
+        await Assert.ThrowsAsync<LockException>(async () => await sut.AbandonAsync(saga));
     }
 
     [Fact]
