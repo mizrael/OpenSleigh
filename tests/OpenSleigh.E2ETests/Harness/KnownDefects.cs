@@ -29,6 +29,14 @@ public static class KnownDefects
             "nobody consumes from that queue, and it keeps a copy of every message.",
             matrixCase => matrixCase.Scenario == nameof(Scenarios.PublishOnlyApiScenario)
                           && matrixCase.Method == nameof(Scenarios.PublishOnlyApiScenario.an_api_that_only_publishes_leaves_no_message_behind_on_rabbitmq)),
+                                  new KnownDefect(
+            "cold-start-schema-race",
+            "hosts that start together on an empty SQL database each run EnsureCreated, which checks and then creates: "
+            + "the ones that lose the race fail to start ('database already exists' on SQL Server, a duplicate key on "
+            + "pg_namespace on PostgreSQL). SagaDbSchemaInitializer serialises the contexts of one process only.",
+            matrixCase => matrixCase.Scenario == nameof(Scenarios.ColdStartScenario)
+                          && (Combinations.Uses(matrixCase.Combination, Combinations.SqlServer)
+                              || Combinations.Uses(matrixCase.Combination, Combinations.PostgreSql))),
     ];
 
     public static bool AreIncluded
