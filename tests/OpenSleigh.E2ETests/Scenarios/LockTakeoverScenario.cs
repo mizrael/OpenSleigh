@@ -67,7 +67,6 @@ public class LockTakeoverScenario(ITestOutputHelper console) : ScenarioBase(cons
                 Assert.True(locked.IsLocked);
                 Assert.Empty(locked.ProcessedMessages);
 
-                // the message is delivered again, by the transport this time, and finds the lock
                 await run.Hosts[^1].Services.GetRequiredService<IPublisher>().PublishAsync(start, cancellationToken);
                 await run.WaitUntilAsync("the message, delivered again, to find the saga locked",
                     () => run.CountLockConflicts() > 0, cancellationToken);

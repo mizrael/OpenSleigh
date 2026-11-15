@@ -11,9 +11,7 @@ public class PayoutState
     public int Executions { get; set; }
 }
 
-/// <summary>
-/// a payout that is executed, then confirmed by the message its execution publishes.
-/// </summary>
+/// <summary>a payout that is executed, then confirmed by the message its execution publishes.</summary>
 public class PayoutSaga(ISagaInstance<PayoutState> context) :
     Saga<PayoutState>(context),
     IStartedBy<StartPayout>,

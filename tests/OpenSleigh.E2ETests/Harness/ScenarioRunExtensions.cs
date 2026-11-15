@@ -59,9 +59,7 @@ public static class ScenarioRunExtensions
         await expected;
     }
 
-    /// <summary>
-    /// reads a saga from the store until it is stored with that many messages handled, and released.
-    /// </summary>
+    /// <summary>reads a saga from the store until it is stored with that many messages handled, and released.</summary>
     public static async Task<SagaInstanceInfo> WaitForReleasedSagaAsync<TSaga>(
         this ScenarioRun run,
         string correlationId,

@@ -60,7 +60,6 @@ public class MessageWithoutSagaScenario(ITestOutputHelper console) : ScenarioBas
                 var confirmed = await run.WaitForReleasedSagaAsync<ReservationSaga>(reservation, MessagesOfTheReservation, cancellationToken, HasNoSaga);
                 Assert.True(confirmed.IsCompleted);
 
-                // a late cancellation for the reservation that is over, and the message that started it, sent again
                 await run.AnyHost.PublishNewAsync(new CancelReservation(reservation), cancellationToken);
                 await run.AnyHost.PublishNewAsync(new ReserveSeat(reservation), cancellationToken);
 
