@@ -119,6 +119,49 @@ public class SqlSagaStateCommitTests
     }
 
     [Fact]
+    public async Task AbandonAsync_should_remove_a_saga_it_created_after_another_saga_went_through_the_same_repository()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var sut = CreateSut(dbName);
+        var abandoned = CreateSaga(CreateMessageContext());
+        await abandoned.LockAsync(sut, CancellationToken.None);
+
+        var other = CreateSaga(CreateMessageContext());
+        await other.LockAsync(sut, CancellationToken.None);
+        await sut.ReleaseAsync(other);
+
+        await sut.AbandonAsync(abandoned);
+
+        await using var db = CreateDbContext(dbName);
+        Assert.Equal(other.InstanceId, (await db.SagaStates.SingleAsync()).InstanceId);
+    }
+
+    [Fact]
+    public async Task AbandonAsync_should_fail_with_a_lock_exception_and_leave_the_saga_alone_when_the_instance_holds_no_lock()
+    {
+        var dbName = Guid.NewGuid().ToString();
+        var saga = await StoreSagaAsync(dbName, CreateMessageContext());
+
+        // what a version that released a saga by removing its lock id left behind
+        await using (var db = CreateDbContext(dbName))
+        {
+            (await db.SagaStates.SingleAsync()).LockId = null;
+            await db.SaveChangesAsync();
+        }
+
+        var neverLocked = Substitute.For<ISagaInstance>();
+        neverLocked.InstanceId.Returns(saga.InstanceId);
+        neverLocked.CorrelationId.Returns(saga.CorrelationId);
+        neverLocked.TriggerMessageId.Returns(saga.TriggerMessageId);
+        neverLocked.Descriptor.Returns(saga.Descriptor);
+        neverLocked.LockId.Returns((string?)null);
+        await Assert.ThrowsAsync<LockException>(async () => await CreateSut(dbName).AbandonAsync(neverLocked));
+
+        await using var verificationDb = CreateDbContext(dbName);
+        Assert.Null((await verificationDb.SagaStates.SingleAsync()).LockId);
+    }
+
+    [Fact]
     public async Task AbandonAsync_should_release_the_saga_as_it_was_stored()
     {
         var dbName = Guid.NewGuid().ToString();
@@ -131,13 +174,13 @@ public class SqlSagaStateCommitTests
         saga.SetAsProcessed(firstMessage);
         await setupRepository.ReleaseAsync(saga);
 
-        var sut = CreateSut(dbName);
+        var sut = CreateSut(dbName, serializer: new SerializerFailingOn<UnstorableMessage>());
         var secondMessage = CreateMessageContext(firstMessage.CorrelationId);
         var found = await sut.FindAsync(descriptor, secondMessage);
         Assert.NotNull(found);
         await found.LockAsync(sut, CancellationToken.None);
 
-        // the handler changed the state and completed the saga, and its commit failed
+        // the handler changed the state and completed the saga
         var changed = new SagaInstance<DummyState>(found.InstanceId, found.TriggerMessageId, found.CorrelationId, descriptor, DummyState.New(), found.ProcessedMessages);
         var lockHolder = Substitute.For<ISagaStateRepository>();
         lockHolder.LockAsync(changed, Arg.Any<CancellationToken>()).Returns(found.LockId);
@@ -145,9 +188,10 @@ public class SqlSagaStateCommitTests
         changed.SetAsProcessed(secondMessage);
         changed.MarkAsCompleted();
         Publish(changed);
-        using var cancelled = new CancellationTokenSource();
-        cancelled.Cancel();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await sut.CommitAsync(changed, cancelled.Token));
+        changed.Publish(MessageEnvelope.Create(new UnstorableMessage(), changed));
+
+        // its commit fails on the second message: by then the saga is changed and released, and the first message added
+        await Assert.ThrowsAsync<InvalidOperationException>(async () => await sut.CommitAsync(changed));
 
         await sut.AbandonAsync(changed);
 
@@ -448,8 +492,8 @@ public class SqlSagaStateCommitTests
         return envelope;
     }
 
-    private static SqlSagaStateRepository CreateSut(string dbName, SqlSagaStateRepositoryOptions? options = null)
-        => new(CreateDbContext(dbName), options ?? SqlSagaStateRepositoryOptions.Default, new JsonSerializer());
+    private static SqlSagaStateRepository CreateSut(string dbName, SqlSagaStateRepositoryOptions? options = null, ISerializer? serializer = null)
+        => new(CreateDbContext(dbName), options ?? SqlSagaStateRepositoryOptions.Default, serializer ?? new JsonSerializer());
 
     private static SagaDbContext CreateDbContext(string dbName)
         => new(new DbContextOptionsBuilder<SagaDbContext>().UseInMemoryDatabase(dbName).Options);

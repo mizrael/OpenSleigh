@@ -31,8 +31,12 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     // One reference, replaced as a whole: a repository shared by several messages can lose it, never corrupt it
     private string? _sagaNotFound;
 
-    // the lock this repository stored a new saga with: abandoned under that lock, the saga is removed
-    private string? _createdWithLockId;
+    // the lock a new saga was stored with: abandoned under that lock, the saga is removed.
+    // A repository handles one message, which starts one saga at most: that one costs a field
+    private string? _creationLockId;
+
+    // only there when this repository stored another saga before the first one was released
+    private ConditionalWeakTable<ISagaInstance, string>? _otherCreationLocks;
 
     private sealed record FoundSaga(string? LockId);
 
@@ -293,14 +297,45 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
             throw new OptimisticLockException($"saga state for correlation '{state.CorrelationId}' was created by someone else");
         }
 
-        _createdWithLockId = lockId;
+        RememberCreatedSaga(state, lockId);
+    }
+
+    // taken by whoever gets there first: a repository shared by several messages loses none of them
+    private void RememberCreatedSaga(ISagaInstance state, string lockId)
+    {
+        if (Interlocked.CompareExchange(ref _creationLockId, lockId, null) is null)
+            return;
+
+        if (_otherCreationLocks is null)
+            Interlocked.CompareExchange(ref _otherCreationLocks, new ConditionalWeakTable<ISagaInstance, string>(), null);
+
+        _otherCreationLocks!.AddOrUpdate(state, lockId);
+    }
+
+    private bool WasCreatedByLockOf(ISagaInstance state)
+        => _creationLockId == state.LockId ||
+           (_otherCreationLocks is { } others &&
+            others.TryGetValue(state, out var creationLockId) &&
+            creationLockId == state.LockId);
+
+    // the saga is released: what this repository knows about it is of no use to whoever locks it next
+    private void Forget(ISagaInstance state)
+    {
+        _foundSagas.Remove(state);
+
+        // only if it is still the lock that was just compared: someone else may have taken the field since
+        var creationLockId = _creationLockId;
+        if (creationLockId is not null && creationLockId == state.LockId)
+            Interlocked.CompareExchange(ref _creationLockId, null, creationLockId);
+
+        _otherCreationLocks?.Remove(state);
     }
 
     public ValueTask ReleaseAsync(ISagaInstance state, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        return ReleaseAsyncCore(state, storeInstance: true, cancellationToken);
+        return ReleaseAsyncCore(state, cancellationToken);
     }
 
     /// <summary>
@@ -310,27 +345,38 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
     {
         ArgumentNullException.ThrowIfNull(state);
 
-        return ReleaseAsyncCore(state, storeInstance: false, cancellationToken);
+        return AbandonAsyncCore(state, cancellationToken);
     }
 
-    private async ValueTask ReleaseAsyncCore(ISagaInstance state, bool storeInstance, CancellationToken cancellationToken)
+    private async ValueTask AbandonAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var filterBuilder = Builders<Entities.SagaState>.Filter;
-        var heldByState = filterBuilder.And(
-            WithInstanceId(state.InstanceId),
-            filterBuilder.Eq(e => e.LockId, state.LockId));
+        // an instance that holds no lock would otherwise match a saga stored without a lock id
+        if (string.IsNullOrEmpty(state.LockId))
+            throw LockLost(state);
+
+        var heldByState = LockedBy(state);
 
         // its first message was not handled: nobody ever saw a saga released that this lock created
-        var applied = !storeInstance && _createdWithLockId is not null && _createdWithLockId == state.LockId
+        var applied = WasCreatedByLockOf(state)
             ? await RemoveAsync(heldByState).ConfigureAwait(false)
-            : await WriteReleaseAsync(heldByState, state, storeInstance).ConfigureAwait(false);
+            : await WriteReleaseAsync(heldByState, state, storeInstance: false).ConfigureAwait(false);
 
-        if (applied)
+        // not read to tell why: a saga that is not there is not locked by this instance either
+        if (!applied)
+            throw LockLost(state);
+
+        Forget(state);
+    }
+
+    private async ValueTask ReleaseAsyncCore(ISagaInstance state, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (await WriteReleaseAsync(LockedBy(state), state, storeInstance: true).ConfigureAwait(false))
         {
-            _foundSagas.Remove(state);
-            _createdWithLockId = null;
+            Forget(state);
             return;
         }
 
@@ -341,8 +387,19 @@ public partial class MongoSagaStateRepository : ISagaStateRepository
         if (!exists)
             throw new ArgumentException($"saga state '{state.InstanceId}' not found");
 
-        throw new LockException($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
+        throw LockLost(state);
     }
+
+    private static FilterDefinition<Entities.SagaState> LockedBy(ISagaInstance state)
+    {
+        var filterBuilder = Builders<Entities.SagaState>.Filter;
+        return filterBuilder.And(
+            WithInstanceId(state.InstanceId),
+            filterBuilder.Eq(e => e.LockId, state.LockId));
+    }
+
+    private static LockException LockLost(ISagaInstance state)
+        => new($"unable to release Saga State '{state.InstanceId}' with lock id '{state.LockId}'");
 
     // one conditional write, applied only while the lock is still the one this state holds. Not cancellable:
     // cancelled in flight it can still be applied, and whoever called would undo what goes with a release that did happen

@@ -25,6 +25,8 @@ public interface ISagaStateRepository
     /// stores the saga instance (state, completed flag and processed messages) and releases it from the lock.
     /// </summary>
     /// <exception cref="LockException">the lock is no longer held by the instance: nothing was stored.</exception>
+    /// <exception cref="OptimisticLockException">a message the instance processed was stored by someone else in the meantime:
+    /// nothing was stored, and the lock is still held by the instance, which has to be abandoned.</exception>
     /// <param name="state"></param>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
