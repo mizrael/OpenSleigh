@@ -264,7 +264,7 @@ for it to have been hit (`run.WaitUntilAsync(..., () => fault.Hits >= n, ...)`) 
 | Helper | What it does | Combinations |
 |---|---|---|
 | `DatabaseOutage.Of(run, Console)` | `DropConnectionsAsync` ends the sessions of the database of the run, which stays available, and returns how many it ended: none means nothing was interrupted. `BeginAsync` and `EndAsync` take the database away and give it back: PostgreSQL refuses connections, SQL Server sets it offline | `postgresql-*`, `sqlserver-*` |
-| `RabbitMqConnectionLog` with `services.TrackRabbitMqConnections(log)`, and `RabbitMqConnections.Of(log)` | the log names the connections of the hosts, tells how many are open and closes them all when it is disposed (`await using`), however the scenario ended; `RabbitMqConnections` lists and closes them through the management API of the broker | `*-rabbitmq` |
+| `RabbitMqConnectionLog` with `services.TrackRabbitMqConnections(log)`, and `RabbitMqConnections.Of(log)` | the log names the connections of the hosts, and tells how many they asked for, how many are open and how many times one was closed; `RabbitMqConnections` lists and closes them through the management API of the broker | `*-rabbitmq` |
 
 Hosts of a service share their outbox and their queues, so work that completes does not tell that every host works.
 `HostActivity`, with `services.RecordHostActivity(activity)`, tells what each host did since `StartOver()`: whether

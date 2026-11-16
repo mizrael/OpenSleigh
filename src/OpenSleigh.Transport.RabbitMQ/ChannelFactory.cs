@@ -70,8 +70,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
             if (_publishChannel is not null && _publishChannel.IsOpen)
                 return _publishChannel;
 
-            _publishChannel?.Dispose();
-            _publishChannel = await _connection.CreateChannelAsync(cancellationToken);
+            _publishChannel = await ReplaceAsync(_publishChannel, cancellationToken);
             ListenForReturnedMessages(_publishChannel);
             return _publishChannel;
         }
@@ -92,14 +91,22 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
             if (_consumeChannel is not null && _consumeChannel.IsOpen)
                 return _consumeChannel;
 
-            _consumeChannel?.Dispose();
-            _consumeChannel = await _connection.CreateChannelAsync(cancellationToken);
+            _consumeChannel = await ReplaceAsync(_consumeChannel, cancellationToken);
             return _consumeChannel;
         }
         finally
         {
             _semaphore.Release();
         }
+    }
+
+    // the new channel first: without a connection it fails, and the closed channel is left as it is for the client
+    // to recover with the connection. Disposed, it would not be recovered
+    private async ValueTask<IChannel> ReplaceAsync(IChannel? closed, CancellationToken cancellationToken)
+    {
+        var channel = await _connection.CreateChannelAsync(cancellationToken);
+        closed?.Dispose();
+        return channel;
     }
 
     public async ValueTask DisposeAsync()

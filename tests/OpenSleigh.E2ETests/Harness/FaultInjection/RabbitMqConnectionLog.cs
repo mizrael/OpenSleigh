@@ -1,33 +1,25 @@
 using System.Collections.Concurrent;
 using Microsoft.Extensions.DependencyInjection;
-using NSubstitute;
 using RabbitMQ.Client;
-using Xunit.Abstractions;
 
 namespace OpenSleigh.E2ETests.Harness.FaultInjection;
 
 /// <summary>
 /// every connection the hosts of a scenario opened to RabbitMQ, under a name no other scenario uses: to find them
-/// at the broker, to tell how many of them the hosts still have, and to close them when the scenario is over,
-/// however it ended. A connection that the client library recovers by itself stays the same connection.
+/// at the broker, and to tell how many the hosts asked for and how many of them they still have.
+/// A connection that the client library recovers by itself stays the same connection.
+/// A host closes its connection when it stops: the log closes nothing.
 /// </summary>
-/// <remarks>
-/// A host closes the connection it uses when it stops, not one it has replaced: those would stay open, and keep
-/// recovering, on a broker that every test shares. Disposing the log closes them.
-/// </remarks>
-public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDisposable
+public sealed class RabbitMqConnectionLog
 {
-    private static readonly TimeSpan CloseTimeout = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan PollingInterval = TimeSpan.FromMilliseconds(20);
-
     private readonly ConcurrentQueue<IConnection> _opened = new();
-    private readonly ConcurrentQueue<IConnection> _closed = new();
-    private int _opening;
-    private int _isClosing;
     private int _closures;
 
     /// <summary>the name the connections of the hosts have at the broker.</summary>
     public string Name { get; } = $"e2e-{Guid.NewGuid():N}";
+
+    /// <summary>how many connections the hosts asked for, open or not.</summary>
+    public int Opened => _opened.Count;
 
     /// <summary>how many of the connections the hosts asked for are open now.</summary>
     public int Open => _opened.Count(connection => connection.IsOpen);
@@ -37,74 +29,15 @@ public sealed class RabbitMqConnectionLog(ITestOutputHelper console) : IAsyncDis
 
     internal async Task<IConnection> OpenAsync(Func<Task<IConnection>> open)
     {
-        // a host opens a connection whenever one it had is closed, also when it is the host that closed it,
-        // because it stopped (see the known defect about connections kept after a reconnect): closing the ones
-        // it left behind would make it open as many again, for ever. It is given one that was never opened
-        if (Volatile.Read(ref _isClosing) != 0)
-            return Substitute.For<IConnection>();
-
-        Interlocked.Increment(ref _opening);
-        try
+        var connection = await open();
+        connection.ConnectionShutdownAsync += (_, _) =>
         {
-            var connection = await open();
-            connection.ConnectionShutdownAsync += (_, _) =>
-            {
-                Interlocked.Increment(ref _closures);
-                return Task.CompletedTask;
-            };
-            _opened.Enqueue(connection);
-            return connection;
-        }
-        finally
-        {
-            Interlocked.Decrement(ref _opening);
-        }
+            Interlocked.Increment(ref _closures);
+            return Task.CompletedTask;
+        };
+        _opened.Enqueue(connection);
+        return connection;
     }
-
-    public async ValueTask DisposeAsync()
-    {
-        Volatile.Write(ref _isClosing, 1);
-
-        // a connection that was being opened when the closing began shows up afterwards
-        do
-        {
-            while (_opened.TryDequeue(out var connection))
-            {
-                await CloseAsync(connection);
-                _closed.Enqueue(connection);
-            }
-        } while (await IsOpeningAsync() || !_opened.IsEmpty);
-
-        var leftOpen = _closed.Count(connection => connection.IsOpen);
-        if (leftOpen > 0)
-            ReportCleanUpFailure($"{leftOpen} of them are still open.");
-    }
-
-    // what goes wrong here is written to the output, as the run does for its own clean-up:
-    // it never replaces what the scenario failed with
-    private async Task CloseAsync(IConnection connection)
-    {
-        try
-        {
-            await connection.DisposeAsync().AsTask().WaitAsync(CloseTimeout);
-        }
-        catch (Exception e)
-        {
-            ReportCleanUpFailure(e.ToString());
-        }
-    }
-
-    private async Task<bool> IsOpeningAsync()
-    {
-        using var timeout = new CancellationTokenSource(CloseTimeout);
-        while (Volatile.Read(ref _opening) > 0 && !timeout.IsCancellationRequested)
-            await Task.Delay(PollingInterval);
-
-        return Volatile.Read(ref _opening) > 0;
-    }
-
-    private void ReportCleanUpFailure(string problem)
-        => console.WriteLine($"{ScenarioRun.CleanUpFailed}: the RabbitMQ connections '{Name}' may have been left behind. {problem}");
 }
 
 public static class RabbitMqConnectionLogExtensions
@@ -113,13 +46,20 @@ public static class RabbitMqConnectionLogExtensions
     /// names every connection a host opens to RabbitMQ after the log, and records it there.
     /// Call it from <see cref="HostSetup.ConfigureServices"/>, on a combination that uses RabbitMQ.
     /// </summary>
-    public static IServiceCollection TrackRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log)
+    /// <param name="recoverAfter">
+    /// how long the client waits before it recovers a connection that was lost, instead of the retry delay of the run:
+    /// long enough for a scenario to see what the hosts do in the meantime.
+    /// </param>
+    public static IServiceCollection TrackRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log, TimeSpan? recoverAfter = null)
     {
         ArgumentNullException.ThrowIfNull(log);
 
         return services.Decorate<IConnectionFactory>((_, factory) =>
         {
             factory.ClientProvidedName = log.Name;
+            if (recoverAfter is { } interval)
+                ((ConnectionFactory)factory).NetworkRecoveryInterval = interval;
+
             return new LoggingConnectionFactory(factory, log);
         });
     }

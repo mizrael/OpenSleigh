@@ -40,6 +40,7 @@ public class ReturnedMessageHandlerTests
     public ReturnedMessageHandlerTests()
     {
         _deadLetterChannel.IsOpen.Returns(true);
+        _connection.IsConnected.Returns(true);
         _connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_deadLetterChannel);
 
         // every message the outbox is asked to store, whatever it answers
@@ -62,13 +63,14 @@ public class ReturnedMessageHandlerTests
         }
     }
 
-    private string[] Errors
+    private string[] Errors => Logged(LogLevel.Error);
+
+    private string[] Warnings => Logged(LogLevel.Warning);
+
+    private string[] Logged(LogLevel level)
     {
-        get
-        {
-            lock (_log)
-                return _log.Where(entry => entry.Level == LogLevel.Error).Select(entry => entry.Text).ToArray();
-        }
+        lock (_log)
+            return _log.Where(entry => entry.Level == level).Select(entry => entry.Text).ToArray();
     }
 
     [Fact]
@@ -170,16 +172,50 @@ public class ReturnedMessageHandlerTests
         Assert.Contains("was given to", Assert.Single(Errors));
     }
 
-    [Theory]
-    [InlineData(false, 2)]
-    [InlineData(true, 4)]
-    public async Task Messages_that_cannot_be_given_to_their_dead_letter_exchange_should_be_dropped_and_reported_and_never_put_back(
-        bool connected, int expectedChannels)
+    [Fact]
+    public async Task Messages_whose_period_is_over_should_wait_for_the_connection_and_not_be_dropped_or_put_back()
     {
-        // without a connection the second message is not tried: it would wait as long as the first to find the broker away
-        _connection.IsConnected.Returns(connected);
-        _connection.CreateChannelAsync(Arg.Any<CancellationToken>())
-                   .Returns(_ => connected ? Task.FromResult(FailingChannel()) : Task.FromException<IChannel>(new InvalidOperationException("it failed")));
+        var connected = false;
+        _connection.IsConnected.Returns(_ => Volatile.Read(ref connected));
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        sut.Accept(Returned("message-2", firstReturnedAt: Now - Period));
+        await WaitUntilAsync(() => Warnings.Any(text => text.Contains("They wait for it")));
+        Assert.Empty(Errors);
+
+        Volatile.Write(ref connected, true);
+        await WaitUntilAsync(() => Errors.Length == 2);
+        await sut.StoppedAsync(CancellationToken.None);
+
+        await AssertDeadLetteredAsync(_deadLetterChannel, "message-1");
+        await AssertDeadLetteredAsync(_deadLetterChannel, "message-2");
+        Assert.Empty(_putBack);
+        Assert.All(Errors, error => Assert.Contains("was given to", error));
+    }
+
+    [Fact]
+    public async Task Messages_that_wait_for_the_connection_should_be_reported_as_lost_when_the_application_stops()
+    {
+        _clock.TimersFire = false;
+        _connection.IsConnected.Returns(false);
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        sut.Accept(Returned("message-2", firstReturnedAt: Now - Period));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        Assert.Equal(2, Errors.Length);
+        Assert.All(new[] { "message-1", "message-2" }, messageId => Assert.Contains(Errors, text => text.Contains(messageId) && text.Contains("is lost")));
+        Assert.Empty(_putBack);
+    }
+
+    [Fact]
+    public async Task Messages_that_cannot_be_given_to_their_dead_letter_exchange_should_be_dropped_and_reported_and_never_put_back()
+    {
+        const int expectedChannels = 4;
+        _connection.IsConnected.Returns(true);
+        _connection.CreateChannelAsync(Arg.Any<CancellationToken>()).Returns(_ => Task.FromResult(FailingChannel()));
         var sut = CreateSut(Period);
         var release = HoldTheOutbox();
 

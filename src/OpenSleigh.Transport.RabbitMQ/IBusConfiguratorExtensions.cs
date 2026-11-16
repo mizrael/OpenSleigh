@@ -43,6 +43,8 @@ public static class IBusConfiguratorExtensions
                 Password = config.Password,
                 Port = AmqpTcpEndpoint.UseDefaultPort,
                 NetworkRecoveryInterval = config.RetryDelay,
+
+                // the only thing that reconnects: RabbitPersistentConnection keeps the connection it is given here
                 AutomaticRecoveryEnabled = true,
                 ConsumerDispatchConcurrency = config.ConsumerDispatchConcurrency,
             };
