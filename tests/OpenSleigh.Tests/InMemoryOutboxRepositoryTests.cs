@@ -52,9 +52,10 @@ public class InMemoryOutboxRepositoryTests
     [Fact]
     public async Task A_message_put_back_should_survive_the_delete_of_the_relay_that_published_it_and_be_read_again_when_due()
     {
+        // created before it comes back
+        var published = CreateEnvelope(deliverAt: null);
         var clock = new SettableClock();
         var sut = new InMemoryOutboxRepository(clock);
-        var published = CreateEnvelope(deliverAt: null);
         await sut.AppendAsync(new[] { published });
         var returned = published.Returned(clock.UtcNow, clock.UtcNow + ShortDelay);
 
@@ -87,8 +88,10 @@ public class InMemoryOutboxRepositoryTests
         await sut.AppendAsync(new[] { appended });
         var published = delayed ? appended : Assert.Single(await sut.ReadPendingAsync());
 
-        // a retry delay of zero: the message is due again at once, when the relay has not deleted it yet
+        // a retry delay of zero: the message is due again at once, when the relay has not deleted it yet.
+        // It is read once more, so that it is among the pending messages, where the relay looks first
         await sut.PutBackAsync([published.Returned(clock.UtcNow, published.DeliverAt ?? clock.UtcNow)]);
+        Assert.Single(await sut.ReadPendingAsync());
         await sut.DeleteAsync(published);
 
         Assert.Equal(published.MessageId, Assert.Single(await sut.ReadPendingAsync()).MessageId);

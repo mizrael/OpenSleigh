@@ -130,7 +130,7 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
 
     public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(messages);
+        IOutboxReturnRepository.ThrowIfNotReturned(messages);
 
         lock (_gate)
         {
@@ -138,8 +138,8 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
             {
                 // the time of first return that is kept is the earliest, whoever stores it
                 var stored = _delayedMessages.GetValueOrDefault(message.MessageId) ?? _messages.GetValueOrDefault(message.MessageId);
-                var putBack = stored?.FirstReturnedAt is { } storedFirstReturn && message.DeliverAt is { } dueTime
-                    ? message.Returned(storedFirstReturn, dueTime)
+                var putBack = stored?.FirstReturnedAt < message.FirstReturnedAt
+                    ? message.Returned(stored.FirstReturnedAt.Value, message.DeliverAt!.Value)
                     : message;
 
                 _messages.TryRemove(message.MessageId, out _);

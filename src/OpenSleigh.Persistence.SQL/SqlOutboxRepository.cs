@@ -15,7 +15,7 @@ public record SqlOutboxRepositoryOptions(TimeSpan LockMaxDuration, int MaxMessag
 public delegate bool DuplicateKeyDetector(Exception exception);
 
 
-public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepository, IOutboxReturnRepository
+public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepository
 {
     protected readonly SqlOutboxRepositoryOptions _options;
     protected readonly ISerializer _serializer;
@@ -89,44 +89,54 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         }
     }
 
-    /// <summary>
-    /// stores the messages again with one command. The relay that published a message holds its row until its pass ends,
-    /// and deletes it then: the command waits for that row, so that what is stored here is never what the relay removes.
-    /// </summary>
-    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
-    {
-        ArgumentNullException.ThrowIfNull(messages);
-        if (messages.Count == 0)
-            return ValueTask.CompletedTask;
+    // what a returned message is stored with, in the order of the parameters of the command that stores it
+    private static readonly (string Name, Func<Entities.OutboxMessage, object> Value)[] ReturnedMessageColumns =
+    [
+        (nameof(Entities.OutboxMessage.MessageId), row => row.MessageId),
+        (nameof(Entities.OutboxMessage.CorrelationId), row => row.CorrelationId),
+        (nameof(Entities.OutboxMessage.Body), row => row.Body),
+        (nameof(Entities.OutboxMessage.MessageType), row => row.MessageType),
+        (nameof(Entities.OutboxMessage.CreatedAt), row => row.CreatedAt),
+        (nameof(Entities.OutboxMessage.SenderId), row => row.SenderId),
+        (nameof(Entities.OutboxMessage.DeliverAt), row => row.DeliverAt!.Value),
+        (nameof(Entities.OutboxMessage.FirstReturnedAt), row => row.FirstReturnedAt!.Value),
+    ];
 
-        return PutBackAsyncCore(messages, cancellationToken);
-    }
+    /// <summary>the columns a returned message is stored with, not quoted, in the order of <see cref="ReturnedMessageParameters"/>.</summary>
+    protected static IEnumerable<string> ReturnedMessageColumnNames => ReturnedMessageColumns.Select(column => column.Name);
 
-    /// <summary>how many parameters <see cref="BuildPutBackCommand"/> has for each message.</summary>
-    protected const int PutBackParametersPerMessage = 8;
+    /// <summary>the placeholders of the values of message <paramref name="index"/>, from 0, one for each column.</summary>
+    protected static IEnumerable<string> ReturnedMessageParameters(int index)
+        => Enumerable.Range(index * ReturnedMessageColumns.Length, ReturnedMessageColumns.Length).Select(parameter => $"{{{parameter}}}");
+
+    /// <summary>the placeholder of the value of a column of message <paramref name="index"/>, from 0.</summary>
+    protected static string ReturnedMessageParameter(int index, string columnName)
+        => $"{{{index * ReturnedMessageColumns.Length + Array.FindIndex(ReturnedMessageColumns, column => column.Name == columnName)}}}";
 
     // a command has a limited number of parameters on some databases
     private const int MaxMessagesPerPutBackCommand = 200;
 
     /// <summary>
-    /// the command that stores <paramref name="messagesCount"/> returned messages again, each of them atomically:
-    /// a row that exists gets the new due time, and the earlier of its time of first return and the new one;
-    /// a row that does not is inserted. It must wait for a row a relay holds, find rows by key, and not fail
-    /// when another host stores the same message at the same time.
+    /// what a provider implements <see cref="IOutboxReturnRepository.PutBackAsync"/> with: stores the messages again
+    /// with one command, as few round trips as a relay pass. A provider that does not implement the interface
+    /// does not take returned messages back, which only a transport that returns messages asks for.
     /// </summary>
-    /// <remarks>
-    /// Message n, from 0, has the parameters {n * 8} to {n * 8 + 7}: message id, correlation id, body, message type,
-    /// creation time, sender id, due time, time of first return. The messages come ordered by id, each id once.
-    /// </remarks>
-    protected abstract string BuildPutBackCommand(int messagesCount);
-
-    private async ValueTask PutBackAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
+    /// <param name="buildCommand">
+    /// builds the command for that many messages, each of them stored atomically: a row that exists gets the new due time,
+    /// and the earlier of its time of first return and the new one; a row that does not is inserted. The command waits
+    /// for a row a relay holds, finds rows by key, holds no lock on a row longer than it takes to store it, and does not
+    /// fail when another host stores the same message at the same time. The messages come ordered by id.
+    /// </param>
+    protected async ValueTask StoreReturnedAsync(
+        IReadOnlyCollection<MessageEnvelope> messages, Func<int, string> buildCommand, CancellationToken cancellationToken)
     {
-        // each message once, as it first came back, and always in the same order: two hosts that put the same
-        // messages back wait for each other instead of each holding what the other needs
+        IOutboxReturnRepository.ThrowIfNotReturned(messages);
+        if (messages.Count == 0)
+            return;
+
+        // always in the same order: two hosts that put the same messages back wait for each other
+        // instead of each holding what the other needs
         var rows = messages
-            .GroupBy(message => message.MessageId)
-            .Select(sameMessage => sameMessage.MinBy(message => message.FirstReturnedAt)!)
             .OrderBy(message => message.MessageId, StringComparer.Ordinal)
             .Select(message => Entities.OutboxMessage.Map(message, _serializer))
             .ToArray();
@@ -136,32 +146,18 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         try
         {
             foreach (var chunk in rows.Chunk(MaxMessagesPerPutBackCommand))
+            {
+                var parameters = chunk.SelectMany(row => ReturnedMessageColumns.Select(column => column.Value(row)));
+
                 await DbContext.Database
-                    .ExecuteSqlRawAsync(BuildPutBackCommand(chunk.Length), PutBackParameters(chunk), cancellationToken)
+                    .ExecuteSqlRawAsync(buildCommand(chunk.Length), parameters, cancellationToken)
                     .ConfigureAwait(false);
+            }
         }
         finally
         {
             _appendSemaphore.Release();
         }
-    }
-
-    private static IEnumerable<object> PutBackParameters(IReadOnlyCollection<Entities.OutboxMessage> rows)
-    {
-        var parameters = new List<object>(rows.Count * PutBackParametersPerMessage);
-        foreach (var row in rows)
-        {
-            parameters.Add(row.MessageId);
-            parameters.Add(row.CorrelationId);
-            parameters.Add(row.Body);
-            parameters.Add(row.MessageType);
-            parameters.Add(row.CreatedAt);
-            parameters.Add(row.SenderId);
-            parameters.Add(row.DeliverAt!.Value);
-            parameters.Add(row.FirstReturnedAt!.Value);
-        }
-
-        return parameters;
     }
 
     // appended messages are never read back through this context. Left tracked, they would pile up

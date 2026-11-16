@@ -66,39 +66,44 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
     {
         var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
         var filter = filterBuilder.And(
-            filterBuilder.Eq(e => e.MessageId, message.MessageId),
-            filterBuilder.Eq(e => e.LockId, _claimId));
+            filterBuilder.Eq(MessageIdField, message.MessageId),
+            filterBuilder.Eq(LockIdField, _claimId));
 
         await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
                                        .ConfigureAwait(false);
     }
 
-    // the claim of the last read of this repository, which the relay creates for one pass
+    // built once: this delete runs for every message that is published
+    private static readonly ExpressionFieldDefinition<Entities.OutboxMessage, string> MessageIdField = new(e => e.MessageId);
+    private static readonly ExpressionFieldDefinition<Entities.OutboxMessage, string?> LockIdField = new(e => e.LockId);
+
+    // the claim of the last read of this repository. The relay creates a repository for each pass and reads once:
+    // a repository that is read again before it has deleted what it read first leaves those messages
+    // to be published again when their claim expires
     private string? _claimId;
 
     private const int MaxPutBackAttempts = 3;
 
     /// <summary>
     /// stores each message again with its new due time, in place when the relay has not deleted it yet,
-    /// and lets go of the claim of the relay that published it.
+    /// and lets go of the claim it finds on it, which is the one of the relay that published it.
     /// </summary>
-    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    /// <remarks>
+    /// Unless that claim expired while its relay was still publishing, and another relay claimed the message
+    /// and published it as well: its claim is the one that is removed, its delete then removes nothing,
+    /// and the message is published once more than the two relays already did.
+    /// </remarks>
+    public async ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(messages);
+        IOutboxReturnRepository.ThrowIfNotReturned(messages);
         if (messages.Count == 0)
-            return ValueTask.CompletedTask;
+            return;
 
-        return PutBackAsyncCore(messages, cancellationToken);
-    }
-
-    private async ValueTask PutBackAsyncCore(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken)
-    {
         var update = Builders<Entities.OutboxMessage>.Update;
 
-        // each message once. The time of first return that is kept is the earliest, whoever stores it
+        // the time of first return that is kept is the earliest, whoever stores it
         var writes = messages
-            .GroupBy(message => message.MessageId)
-            .Select(sameMessage => Entities.OutboxMessage.Create(sameMessage.MinBy(message => message.FirstReturnedAt)!, _serializer))
+            .Select(message => Entities.OutboxMessage.Create(message, _serializer))
             .Select(entity => new UpdateOneModel<Entities.OutboxMessage>(
                 Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, entity.MessageId),
                 update.Set(e => e.DeliverAt, entity.DeliverAt)

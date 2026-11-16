@@ -12,14 +12,17 @@ public class SagaExecutionService : ISagaExecutionService
     private readonly IOutboxRepository _outboxRepository;
     private readonly IOutboxSignal? _outboxSignal;
     private readonly ILogger<SagaExecutionService> _logger;
+    private readonly Utils.ITypeResolver? _typeResolver;
 
     public SagaExecutionService(
         ISagaInstanceFactory sagaExecCtxFactory,
         ISagaStateRepository sagaStateRepository,
         IOutboxRepository outboxRepository,
         IOutboxSignal? outboxSignal = null,
-        ILogger<SagaExecutionService>? logger = null)
+        ILogger<SagaExecutionService>? logger = null,
+        Utils.ITypeResolver? typeResolver = null)
     {
+        _typeResolver = typeResolver;
         _sagaExecCtxFactory = sagaExecCtxFactory ?? throw new ArgumentNullException(nameof(sagaExecCtxFactory));
         _sagaStateRepository = sagaStateRepository ?? throw new ArgumentNullException(nameof(sagaStateRepository));
         _outboxRepository = outboxRepository ?? throw new ArgumentNullException(nameof(outboxRepository));
@@ -123,6 +126,12 @@ public class SagaExecutionService : ISagaExecutionService
         ArgumentNullException.ThrowIfNull(context);
 
         var hasNewMessages = context.Outbox.Count > 0;
+
+        // as the message bus does: whoever reads the outbox, or gets a message back from the transport,
+        // finds the type of a message by its name
+        if (hasNewMessages && _typeResolver is not null)
+            foreach (var message in context.Outbox)
+                _typeResolver.Register(message.MessageType);
 
         // looked up now: the outbox is empty once the messages are stored
         DateTimeOffset? earliestDueTime = hasNewMessages && _outboxSignal is not null ? EarliestDueTime(context.Outbox) : null;

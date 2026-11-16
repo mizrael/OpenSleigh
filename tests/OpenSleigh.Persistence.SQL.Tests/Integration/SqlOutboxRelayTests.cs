@@ -265,9 +265,7 @@ public abstract class SqlOutboxRelayTests
                 .OrderBy(_ => Random.Shared.Next())
                 .ToArray();
 
-            await using var scope = provider.CreateAsyncScope();
-            var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-            await ((IOutboxReturnRepository)repository).PutBackAsync(returned);
+            await PutBackAsync(provider, returned);
         })));
 
         await using var reader = provider.CreateAsyncScope();
@@ -276,11 +274,51 @@ public abstract class SqlOutboxRelayTests
         Assert.All(stored, row => Assert.Equal(earliest.ToUnixTimeMilliseconds(), row.FirstReturnedAt!.Value.ToUnixTimeMilliseconds()));
     }
 
-    private static async Task PutBackAsync(IServiceProvider provider, MessageEnvelope returned)
+    [Fact]
+    public async Task Messages_put_back_should_not_wait_for_a_relay_that_holds_other_messages_nor_keep_appends_waiting()
+    {
+        const int hosts = 4;
+        const int rounds = 5;
+        const int messagesPerRound = 20;
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 2 * BatchSize);
+        var systemInfo = provider.GetRequiredService<ISystemInfo>();
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        await using var relay = provider.CreateAsyncScope();
+        await using var transaction = await StartTransactionAsync(relay);
+        Assert.Equal(BatchSize, (await ReadPendingIdsAsync(relay)).Count);
+
+        // messages that are no longer in the outbox, next to the ones the relay holds, put back while others are appended
+        var work = Enumerable.Range(0, hosts).SelectMany(_ => new[]
+        {
+            Task.Run(async () =>
+            {
+                for (var round = 0; round < rounds; round++)
+                    await PutBackAsync(provider, Enumerable.Range(0, messagesPerRound)
+                        .Select(_ => MessageEnvelope.Create(new FakeMessage(), systemInfo).Returned(returnedAt, returnedAt + NotDueDelay))
+                        .ToArray());
+            }),
+            Task.Run(async () =>
+            {
+                for (var round = 0; round < rounds; round++)
+                    await AppendMessagesAsync(provider, messagesPerRound, NotDueDelay);
+            }),
+        });
+        await Task.WhenAll(work).WaitAsync(TimeSpan.FromSeconds(30));
+
+        await transaction.CommitAsync();
+
+        await using var reader = provider.CreateAsyncScope();
+        Assert.Equal(
+            2 * BatchSize + 2 * hosts * rounds * messagesPerRound,
+            await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.CountAsync());
+    }
+
+    private static async Task PutBackAsync(IServiceProvider provider, params MessageEnvelope[] returned)
     {
         await using var scope = provider.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IOutboxRepository>();
-        await Assert.IsAssignableFrom<IOutboxReturnRepository>(repository).PutBackAsync([returned]);
+        await scope.ServiceProvider.GetRequiredService<IOutboxReturnRepository>().PutBackAsync(returned);
     }
 
     private sealed class RecordingPublisher : IPublisher

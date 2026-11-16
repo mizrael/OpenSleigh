@@ -223,6 +223,26 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task CommitAsync_should_make_the_types_of_the_messages_it_stores_known_to_whoever_reads_them_by_name()
+    {
+        var typeResolver = new OpenSleigh.Utils.TypeResolver();
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            Guid.NewGuid().ToString(),
+            SagaDescriptor.Create<FakeSaga>());
+        sagaInstance.Publish(MessageEnvelope.Create(new FakeSagaStarter(), sagaInstance));
+        var sut = new SagaExecutionService(
+            Substitute.For<ISagaInstanceFactory>(), Substitute.For<ISagaStateRepository>(), Substitute.For<IOutboxRepository>(),
+            typeResolver: typeResolver);
+        Assert.Null(typeResolver.Resolve(typeof(FakeSagaStarter).FullName!, throwOnError: false));
+
+        await sut.CommitAsync(sagaInstance, CancellationToken.None);
+
+        Assert.Equal(typeof(FakeSagaStarter), typeResolver.Resolve(typeof(FakeSagaStarter).FullName!, throwOnError: false));
+    }
+
+    [Fact]
     public async Task CommitAsync_should_store_messages_and_release_through_a_repository_that_does_both_together()
     {
         var sagaStateRepository = Substitute.For<ISagaStateRepository, ISagaStateCommitter>();

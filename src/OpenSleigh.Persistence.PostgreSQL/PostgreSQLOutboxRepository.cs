@@ -6,7 +6,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
 
-internal class PostgreSQLOutboxRepository : SqlOutboxRepository
+internal class PostgreSQLOutboxRepository : SqlOutboxRepository, IOutboxReturnRepository
 {
     private const string Table = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
     private const string DeliverAt = $"\"{nameof(OutboxMessage.DeliverAt)}\"";
@@ -35,25 +35,19 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
 
     protected override string ReadPendingQuery => ReadQuery;
 
-    private static readonly string PutBackColumns = string.Join(", ", new[]
-    {
-        nameof(OutboxMessage.MessageId), nameof(OutboxMessage.CorrelationId), nameof(OutboxMessage.Body), nameof(OutboxMessage.MessageType),
-        nameof(OutboxMessage.CreatedAt), nameof(OutboxMessage.SenderId), nameof(OutboxMessage.DeliverAt), nameof(OutboxMessage.FirstReturnedAt),
-    }.Select(column => $"\"{column}\""));
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+        => StoreReturnedAsync(messages, BuildPutBackCommand, cancellationToken);
 
     private const string FirstReturnedAt = $"\"{nameof(OutboxMessage.FirstReturnedAt)}\"";
 
     // one statement: a row that conflicts is waited for when a relay holds it, and inserted after all when the relay
-    // deleted it. LEAST leaves out a time of first return that is null
-    protected override string BuildPutBackCommand(int messagesCount)
+    // deleted it
+    private static string BuildPutBackCommand(int messagesCount)
     {
-        var rows = Enumerable.Range(0, messagesCount).Select(row =>
-        {
-            var first = row * PutBackParametersPerMessage;
-            return "(" + string.Join(", ", Enumerable.Range(first, PutBackParametersPerMessage).Select(parameter => $"{{{parameter}}}")) + ")";
-        });
+        var columns = string.Join(", ", ReturnedMessageColumnNames.Select(column => $"\"{column}\""));
+        var rows = Enumerable.Range(0, messagesCount).Select(index => $"({string.Join(", ", ReturnedMessageParameters(index))})");
 
-        return $"INSERT INTO {Table} AS stored ({PutBackColumns}) VALUES {string.Join(", ", rows)} " +
+        return $"INSERT INTO {Table} AS stored ({columns}) VALUES {string.Join(", ", rows)} " +
                $"ON CONFLICT (\"{nameof(OutboxMessage.MessageId)}\") DO UPDATE SET " +
                $"{DeliverAt} = EXCLUDED.{DeliverAt}, {FirstReturnedAt} = LEAST(stored.{FirstReturnedAt}, EXCLUDED.{FirstReturnedAt})";
     }

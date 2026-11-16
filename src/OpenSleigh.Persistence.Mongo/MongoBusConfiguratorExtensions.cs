@@ -30,6 +30,7 @@ public static class MongoBusConfiguratorExtensions
             .AddSingleton<IDbContext, DbContext>()
             .AddTransient<ISagaStateRepository, MongoSagaStateRepository>()
             .AddTransient<IOutboxRepository, MongoOutboxRepository>()
+            .AddTransient<IOutboxReturnRepository, MongoOutboxRepository>()
             .AddTransient<ISagaStateQuery, MongoSagaStateQuery>();
 
         // the relay asks for a transaction around each pass. On MongoDB there is none to give: a relay claims

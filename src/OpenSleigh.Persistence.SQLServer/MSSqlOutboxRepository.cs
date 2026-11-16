@@ -6,7 +6,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Persistence.SQLServer;
 
-internal class MSSqlOutboxRepository : SqlOutboxRepository
+internal class MSSqlOutboxRepository : SqlOutboxRepository, IOutboxReturnRepository
 {
     private const string Table = $"[{Constants.DbSchema}].[{OutboxMessage.TableName}]";
     private const string MessageId = $"[{nameof(OutboxMessage.MessageId)}]";
@@ -46,41 +46,38 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository
 
     protected override string ReadPendingQuery => ReadQuery;
 
+    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+        => StoreReturnedAsync(messages, BuildPutBackCommand, cancellationToken);
+
     private const string FirstReturnedAt = $"[{nameof(OutboxMessage.FirstReturnedAt)}]";
+    private const string DuplicateKeyErrors = "2601, 2627";
 
-    private static readonly string PutBackColumns = string.Join(", ", new[]
+    // for each message, all sent together and each statement committed on its own: the row is looked up by key,
+    // waited for when a relay holds it, and inserted when it is not there. No lock is kept from one statement
+    // to the next, and none on a row that is not there: when another host inserts the message in between,
+    // the insert is refused and the row is updated after all
+    private static string BuildPutBackCommand(int messagesCount)
     {
-        nameof(OutboxMessage.MessageId), nameof(OutboxMessage.CorrelationId), nameof(OutboxMessage.Body), nameof(OutboxMessage.MessageType),
-        nameof(OutboxMessage.CreatedAt), nameof(OutboxMessage.SenderId), nameof(OutboxMessage.DeliverAt), nameof(OutboxMessage.FirstReturnedAt),
-    }.Select(column => $"[{column}]"));
+        var columns = string.Join(", ", ReturnedMessageColumnNames.Select(column => $"[{column}]"));
+        var command = new System.Text.StringBuilder();
 
-    private const int MessageIdParameter = 0;
-    private const int DeliverAtParameter = 6;
-    private const int FirstReturnedAtParameter = 7;
-
-    // a pair of statements for each message, all sent together in one transaction: the row is looked up by key,
-    // waited for when a relay holds it, and inserted when it is not there. The lock on the key, or on where it would be,
-    // is kept until the end: nobody else stores the same message in between
-    protected override string BuildPutBackCommand(int messagesCount)
-    {
-        var command = new System.Text.StringBuilder("SET XACT_ABORT ON; BEGIN TRANSACTION; ");
-
-        for (var row = 0; row < messagesCount; row++)
+        for (var index = 0; index < messagesCount; index++)
         {
-            var first = row * PutBackParametersPerMessage;
-            var messageId = $"{{{first + MessageIdParameter}}}";
-            var deliverAt = $"{{{first + DeliverAtParameter}}}";
-            var firstReturnedAt = $"{{{first + FirstReturnedAtParameter}}}";
-            var values = string.Join(", ", Enumerable.Range(first, PutBackParametersPerMessage).Select(parameter => $"{{{parameter}}}"));
+            var firstReturnedAt = ReturnedMessageParameter(index, nameof(OutboxMessage.FirstReturnedAt));
+            var update =
+                $"UPDATE {Table} SET {DeliverAt} = {ReturnedMessageParameter(index, nameof(OutboxMessage.DeliverAt))}, " +
+                $"{FirstReturnedAt} = CASE WHEN {FirstReturnedAt} < {firstReturnedAt} THEN {FirstReturnedAt} ELSE {firstReturnedAt} END " +
+                $"WHERE {MessageId} = {ReturnedMessageParameter(index, nameof(OutboxMessage.MessageId))}; ";
 
             command
-                .Append($"UPDATE {Table} WITH (UPDLOCK, HOLDLOCK) SET {DeliverAt} = {deliverAt}, ")
-                .Append($"{FirstReturnedAt} = CASE WHEN {FirstReturnedAt} < {firstReturnedAt} THEN {FirstReturnedAt} ELSE {firstReturnedAt} END ")
-                .Append($"WHERE {MessageId} = {messageId}; ")
-                .Append($"IF @@ROWCOUNT = 0 INSERT INTO {Table} ({PutBackColumns}) VALUES ({values}); ");
+                .Append(update)
+                .Append("IF @@ROWCOUNT = 0 BEGIN ")
+                .Append($"BEGIN TRY INSERT INTO {Table} ({columns}) VALUES ({string.Join(", ", ReturnedMessageParameters(index))}); END TRY ")
+                .Append($"BEGIN CATCH IF ERROR_NUMBER() NOT IN ({DuplicateKeyErrors}) BEGIN; THROW; END; {update}END CATCH ")
+                .Append("END; ");
         }
 
-        return command.Append("COMMIT TRANSACTION; SET XACT_ABORT OFF;").ToString();
+        return command.ToString();
     }
 
     // SQL Server is not given one statement listing the keys: depending on the version it reads the list as JSON,

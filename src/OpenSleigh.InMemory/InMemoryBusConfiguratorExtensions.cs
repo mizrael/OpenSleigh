@@ -22,7 +22,9 @@ public static class InMemoryBusConfiguratorExtensions
             .AddSingleton<InMemorySagaStateRepository>()
             .AddSingleton<ISagaStateRepository>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
             .AddSingleton<ISagaStateQuery>(sp => sp.GetRequiredService<InMemorySagaStateRepository>())
-            .AddSingleton<IOutboxRepository, InMemoryOutboxRepository>();
+            .AddSingleton<InMemoryOutboxRepository>()
+            .AddSingleton<IOutboxRepository>(sp => sp.GetRequiredService<InMemoryOutboxRepository>())
+            .AddSingleton<IOutboxReturnRepository>(sp => sp.GetRequiredService<InMemoryOutboxRepository>());
 
         // the outbox relay needs one, whatever the transport is
         busConfigurator.Services.TryAddSingleton<ITransactionManager, NoOpTransactionManager>();
