@@ -272,22 +272,50 @@ public class OutboxProcessorTests
     }
 
     [Fact]
-    public async Task RelayPendingMessagesAsync_should_log_an_error_when_the_read_fails_while_stopping()
+    public async Task RelayPendingMessagesAsync_should_log_a_warning_and_no_error_when_the_read_fails_while_stopping()
     {
         var outboxRepo = Substitute.For<IOutboxRepository>();
         var logger = Substitute.For<ILogger<OutboxProcessor>>();
         var txManager = Substitute.For<ITransactionManager>();
         txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
 
+        // SQL Server can report a query interrupted by a stop as a failed batch
         using var stopping = new CancellationTokenSource();
         outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
             .Returns<IEnumerable<MessageEnvelope>>(_ =>
             {
                 stopping.Cancel();
-                throw new InvalidOperationException("db error");
+                throw new InvalidOperationException("the batch is aborted");
             });
 
         var sut = new OutboxProcessor(outboxRepo, Substitute.For<IPublisher>(), logger, txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(stopping.Token);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 0, Failed: 1), result);
+        Assert.Equal(LogLevel.Warning, LoggedLevels(logger).Max());
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_log_an_error_when_what_it_published_cannot_be_deleted_while_stopping()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var logger = Substitute.For<ILogger<OutboxProcessor>>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        using var stopping = new CancellationTokenSource();
+        var published = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { published });
+        publisher.When(p => p.PublishAsync(published, Arg.Any<CancellationToken>()))
+            .Do(_ => stopping.Cancel());
+        ((IOutboxBatchRepository)outboxRepo)
+            .DeleteAsync(Arg.Any<IReadOnlyCollection<MessageEnvelope>>(), Arg.Any<CancellationToken>())
+            .Returns(x => throw new InvalidOperationException("delete failed"));
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, logger, txManager);
 
         await sut.RelayPendingMessagesAsync(stopping.Token);
 

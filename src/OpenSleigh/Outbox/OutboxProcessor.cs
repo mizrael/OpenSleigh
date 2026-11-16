@@ -32,6 +32,7 @@ public class OutboxProcessor : IOutboxProcessor
 
         var relayed = 0;
         var failed = 0;
+        var canBeInterrupted = true;
 
         await using var transaction = await _transactionManager.StartTransactionAsync(cancellationToken);
 
@@ -90,12 +91,10 @@ public class OutboxProcessor : IOutboxProcessor
                         message.MessageId,
                         e.Message);
                 }
-                catch (Exception e) when (IsStop(e, cancellationToken))
+                catch (Exception e) when (cancellationToken.IsCancellationRequested)
                 {
                     failed++;
-                    _logger.LogInformation(
-                        "the relay of outbox message {MessageId} was interrupted by a stop: it is left in the outbox.",
-                        message.MessageId);
+                    LogInterruptedByStop(e);
                     break;
                 }
                 catch (Exception e)
@@ -106,6 +105,7 @@ public class OutboxProcessor : IOutboxProcessor
             }
 
             // not cancellable, like the commit: these messages are published, and leaving them in the outbox sends them twice
+            canBeInterrupted = false;
             if (batchRepository is not null && published.Count > 0)
                 await batchRepository.DeleteAsync(published, CancellationToken.None)
                                      .ConfigureAwait(false);
@@ -114,8 +114,8 @@ public class OutboxProcessor : IOutboxProcessor
         }
         catch (Exception ex)
         {
-            if (IsStop(ex, cancellationToken))
-                _logger.LogInformation("The relay of the outbox messages was interrupted by a stop: what was not removed stays in the outbox.");
+            if (canBeInterrupted && cancellationToken.IsCancellationRequested)
+                LogInterruptedByStop(ex);
             else
                 _logger.LogError(ex, "Error processing outbox messages: {Error}", ex.Message);
 
@@ -128,8 +128,17 @@ public class OutboxProcessor : IOutboxProcessor
         return new OutboxRelayResult(relayed, failed);
     }
 
-    // only a cancellation asked for by the caller, the host that stops, is not a failure:
-    // any other one, a timeout reported as a cancellation for instance, is
-    private static bool IsStop(Exception exception, CancellationToken cancellationToken)
-        => exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
+    // called only once the caller, the host that stops, has cancelled the pass. A driver does not always report
+    // what it was interrupted in as a cancellation: SQL Server can report a failed batch instead. That cannot be told
+    // from a failure that happened while stopping, so it is not an error, and it keeps its details
+    private void LogInterruptedByStop(Exception exception)
+    {
+        if (exception is OperationCanceledException)
+            _logger.LogInformation("The relay of the outbox messages was interrupted by a stop: what was not removed stays in the outbox.");
+        else
+            _logger.LogWarning(
+                exception,
+                "The relay of the outbox messages failed while it was being stopped, what was not removed stays in the outbox: {Error}",
+                exception.Message);
+    }
 }
