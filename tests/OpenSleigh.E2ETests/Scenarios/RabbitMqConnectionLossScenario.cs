@@ -25,21 +25,35 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         Assert.All(outcome.Runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
     }
 
-    // twice: a host that ends up with one connection more every time is not seen by losing them once
+    // twice: a host that ends up with one connection more every time is not seen by losing them once.
+    // And stopped: a host that opens a connection when its own is closed leaves it behind
     [Theory]
     [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [2])]
     public async Task hosts_have_as_many_connections_as_before_once_they_are_connected_again(string combination, int hostsCount)
     {
         var outcome = await CloseTheConnectionsOfHostsThatAreIdleAsync(combination, hostsCount, times: 2);
 
+        Console.WriteLine(
+            $"connections of {hostsCount} hosts: {outcome.OpenConnectionsBefore} open before, " +
+            $"{string.Join(" then ", outcome.OpenConnectionsAfterEachTime)} open after each loss, " +
+            $"{outcome.OpenConnectionsAfterStop} open once stopped, {outcome.OpenedConnections} opened in all.");
+
         Assert.All(outcome.OpenConnectionsAfterEachTime, open => Assert.Equal(outcome.OpenConnectionsBefore, open));
+        Assert.Equal(outcome.OpenConnectionsBefore, outcome.OpenedConnections);
+        Assert.Equal(0, outcome.OpenConnectionsAfterStop);
     }
 
-    private sealed record Outcome(HandlerRuns Runs, int Invoices, int OpenConnectionsBefore, IReadOnlyList<int> OpenConnectionsAfterEachTime);
+    private sealed record Outcome(
+        HandlerRuns Runs,
+        int Invoices,
+        int OpenConnectionsBefore,
+        IReadOnlyList<int> OpenConnectionsAfterEachTime,
+        int OpenConnectionsAfterStop,
+        int OpenedConnections);
 
     private async Task<Outcome> CloseTheConnectionsOfHostsThatAreIdleAsync(string combination, int hostsCount, int times)
     {
-        await using var connectionLog = new RabbitMqConnectionLog(Console);
+        var connectionLog = new RabbitMqConnectionLog();
         var runs = new HandlerRuns();
         var activity = new HostActivity();
 
@@ -108,6 +122,7 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
             // a message that is delivered again while its first delivery is still being handled finds the saga locked
             AssertOnlyLockConflictsAsync);
 
-        return new Outcome(runs, invoices, openBefore, openAfterEachTime);
+        // the hosts are stopped by now
+        return new Outcome(runs, invoices, openBefore, openAfterEachTime, connectionLog.Open, connectionLog.Opened);
     }
 }

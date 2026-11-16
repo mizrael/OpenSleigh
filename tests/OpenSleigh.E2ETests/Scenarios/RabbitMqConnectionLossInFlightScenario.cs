@@ -19,7 +19,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
     [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1])]
     public async Task a_message_that_was_being_handled_when_the_connection_was_closed_is_delivered_again_and_handled_once(string combination, int hostsCount)
     {
-        await using var connectionLog = new RabbitMqConnectionLog(Console);
+        var connectionLog = new RabbitMqConnectionLog();
         var correlationId = Guid.NewGuid().ToString();
         var runs = new HandlerRuns();
 

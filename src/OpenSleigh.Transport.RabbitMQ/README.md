@@ -71,6 +71,13 @@ With the default naming, the retry queue of those versions (`<queue>.retry`) sen
 
 When the routing key of a message type is the name of its queue (a custom naming policy), the retry queue already returned its messages to that queue only, and it is kept as it is.
 
+### When the connection to the broker is lost
+
+- A host has one connection to the broker, opened when it first publishes or consumes and closed when it stops.
+- A connection that is lost is recovered by the RabbitMQ client, together with its channels and its consumers: the first attempt is made after `RetryDelay`, 30 seconds by default, and it is repeated at that interval until the broker is back. The host never opens a second connection in its place, and opens none once it is stopped.
+- Until the connection is recovered the host consumes nothing, and publishes nothing: every attempt fails with an Error in the log, the messages stay in the outbox, and they are published once the connection is back. A Warning in the log tells when the connection is lost.
+- A connection the client does not recover, such as one the broker closes because access was refused, is not replaced either: the host has to be restarted.
+
 ### What a host declares on the broker
 
 - A host declares the queue of its service, with its retry and dead letter queues, for every message type its sagas handle: when it starts consuming, and when it publishes one of them.
