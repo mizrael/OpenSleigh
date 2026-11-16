@@ -115,8 +115,7 @@ public sealed class ScenarioRun : IAsyncDisposable
 
             await Task.WhenAll(hosts.Select(host => host.StartAsync(timeout.Token)));
 
-            var runningHosts = Hosts.Where(host => host.IsRunning).Select(host => host.Services).ToArray();
-            await _transport.WaitUntilSubscribedAsync(runningHosts, timeout.Token);
+            await WaitUntilSubscribedAsync(timeout.Token);
         }
         catch (OperationCanceledException) when (timeout.IsCancellationRequested)
         {
@@ -131,6 +130,14 @@ public sealed class ScenarioRun : IAsyncDisposable
     /// </summary>
     public async Task<ScenarioHost> StartHostAsync(HostSetup setup)
         => (await StartHostsAsync(1, setup))[0];
+
+    /// <summary>
+    /// returns once every running host receives its share of the messages again: for a scenario that took
+    /// their subscriptions away, such as one that closes their connections.
+    /// </summary>
+    public Task WaitUntilSubscribedAsync(CancellationToken cancellationToken)
+        => _transport.WaitUntilSubscribedAsync(
+            Hosts.Where(host => host.IsRunning).Select(host => host.Services).ToArray(), cancellationToken);
 
     /// <summary>
     /// reads a saga from the store, over and over, until it is stored the way the scenario expects.

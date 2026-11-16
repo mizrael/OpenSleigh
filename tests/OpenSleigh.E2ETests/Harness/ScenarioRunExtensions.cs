@@ -59,6 +59,49 @@ public static class ScenarioRunExtensions
         await expected;
     }
 
+    /// <summary>
+    /// the same, for something the scenario does until it is done, such as polling: it is stopped when the wait
+    /// ends, however it ends, so that nothing goes on behind a scenario that gave up.
+    /// </summary>
+    public static async Task<TResult> WaitForAsync<TResult>(
+        this ScenarioRun run,
+        string what,
+        Func<CancellationToken, Task<TResult>> expected,
+        CancellationToken cancellationToken,
+        Func<ProcessingFailure, bool>? isExpectedFailure = null)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+
+        using var working = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var work = expected(working.Token);
+
+        try
+        {
+            await run.WaitForAsync(what, work, cancellationToken, isExpectedFailure);
+            return await work;
+        }
+        finally
+        {
+            await working.CancelAsync();
+        }
+    }
+
+    public static Task WaitForAsync(
+        this ScenarioRun run,
+        string what,
+        Func<CancellationToken, Task> expected,
+        CancellationToken cancellationToken,
+        Func<ProcessingFailure, bool>? isExpectedFailure = null)
+    {
+        ArgumentNullException.ThrowIfNull(expected);
+
+        return run.WaitForAsync(what, async token =>
+        {
+            await expected(token);
+            return true;
+        }, cancellationToken, isExpectedFailure);
+    }
+
     /// <summary>reads a saga from the store until it is stored with that many messages handled, and released.</summary>
     public static async Task<SagaInstanceInfo> WaitForReleasedSagaAsync<TSaga>(
         this ScenarioRun run,

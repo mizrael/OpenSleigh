@@ -125,16 +125,26 @@ public abstract class ScenarioBase
     /// (see <see cref="ProcessingFailure.IsSagaNotFound"/>): one dead letter for each such failure,
     /// of the message types the scenario says can arrive early, and nothing else.
     /// </summary>
-    protected static async Task AssertOnlySagaNotFoundDeadLettersAsync(ScenarioRun run, params Type[] canArriveEarly)
+    protected static Task AssertOnlySagaNotFoundDeadLettersAsync(ScenarioRun run, params Type[] canArriveEarly)
+        => AssertDeadLettersAsync(run, failure => failure.IsSagaNotFound && canArriveEarly.Contains(failure.MessageType));
+
+    /// <summary>
+    /// every message a host gave back to its transport, for another reason than a saga someone else held, failed
+    /// the way the scenario expects, and each of them is in the dead letters, once: nothing else is,
+    /// and nothing was dropped on the way.
+    /// </summary>
+    protected static async Task AssertDeadLettersAsync(ScenarioRun run, Func<ProcessingFailure, bool> isExpected)
     {
-        var notFound = run.ProcessingFailures.Where(failure => failure.IsSagaNotFound).ToArray();
-        Assert.All(notFound, failure => Assert.Contains(failure.MessageType, canArriveEarly));
+        ArgumentNullException.ThrowIfNull(isExpected);
+
+        var failures = run.ProcessingFailures.Where(failure => !failure.IsLockConflict).ToArray();
+        Assert.All(failures, failure => Assert.True(isExpected(failure), failure.ToString()));
 
         if (!run.SupportsDeadLetters)
             return;
 
-        var expected = notFound.GroupBy(failure => failure.MessageType)
-            .ToDictionary(failures => failures.Key, failures => failures.LongCount());
+        var expected = failures.GroupBy(failure => failure.MessageType)
+            .ToDictionary(group => group.Key, group => group.LongCount());
 
         using var timeout = new CancellationTokenSource(ChecksTimeout);
         var deadLetters = await run.ReadDeadLettersAsync(timeout.Token);

@@ -147,7 +147,7 @@ A host must still be running when the scenario returns: the checks read the stor
 | outbox | `run.CountOutboxMessagesAsync` |
 | dead letters | `run.ReadDeadLettersAsync` (count per message type), on every combination |
 | why a message was retried or dead-lettered | `run.ProcessingFailures`: every exception a host gave back to its transport, with `IsSagaNotFound`, `IsLockConflict` and `IsHandlerFailure` |
-| dead letters that are expected | pass `assertDeadLetters` to `RunScenarioAsync`, for example `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)` |
+| dead letters that are expected | pass `assertDeadLetters` to `RunScenarioAsync`, for example `run => AssertOnlySagaNotFoundDeadLettersAsync(run, types...)`, or `run => AssertDeadLettersAsync(run, isExpected)` for another kind of failure: one dead letter for each failure, and nothing else |
 | hosts that start on a database nobody prepared | `prepareStore: false` on `RunScenarioAsync`: the first hosts create the database themselves, together |
 | which handler ran, how many times and for which saga instance | `HandlerRuns` with `services.RecordHandlerRuns(runs)`: the sagas know nothing of it. `RunsByMessage()` tells a message handled once from one handled twice |
 | messages that must not run a handler | `services.ObserveDeliveriesOf<TMessage>(expectation)`: wait until the hosts are done with them, then assert that nothing ran |
@@ -235,3 +235,53 @@ runs the handler again. The first owner can no longer commit: its commit is refu
   would take its messages with it. The transport deletes them at the end of the run.
 - Every run has its own database, queues, topics and client group, so tests can run at the same time.
   Scenario classes run in parallel (`xunit.runner.json`); the cases of one class run one after the other.
+
+## Timeouts and infrastructure failures
+
+**Timeouts.** A saga publishes its own timeout with `Publish(message, delay)` and handles it like any other message.
+A scenario asserts that the timeout is never handled before the delay, and that it is not handled more than half a
+minute late, from the `HandlerRuns` of the handler that published the timeout and of the one that handled it.
+What a timeout races with is not left to the clock: `FailPublishingOf<TMessage>(fault)` keeps it in the outbox until
+the scenario is ready for it. A timeout that must *not* be handled, because its saga
+completed, reaches no handler: `services.ObserveDeliveriesOf<TMessage>(expectation)` tells when a host is done with it.
+The in-memory outbox count leaves out a message that is not due, so "the outbox is empty" proves nothing there.
+
+**Failures injected in a host**: in memory with its one host, elsewhere with three, where whatever follows the
+failure can reach a host that only knows what is in the store. They are injected before the store or the transport
+is asked, so they run on every store with RabbitMQ and on one combination with Kafka. A `Fault` is turned on and off
+by the scenario, which waits
+for it to have been hit (`run.WaitUntilAsync(..., () => fault.Hits >= n, ...)`) rather than for a time:
+
+| In `ConfigureServices` | While the fault is on |
+|---|---|
+| `FailPublishingWhile(fault)`, `FailPublishingOf<TMessage>(fault)` | the relay cannot publish, anything or messages of one type |
+| `FailOutboxReadsWhile(fault)`, `FailOutboxDeletesWhile(fault)` | the relay cannot read its outbox, or remove what it published |
+| `FailCommitsThatPublish<TMessage>(fault)` | a saga that published a `TMessage` cannot be committed |
+| `ExpireOutboxClaimsAfter(duration)` | not a fault: on MongoDB a message the relay could not publish or remove is read again only when its claim expires, a minute by default |
+
+**Connections taken away for real**, with what the services offer and for one run only:
+
+| Helper | What it does | Combinations |
+|---|---|---|
+| `DatabaseOutage.Of(run, Console)` | `DropConnectionsAsync` ends the sessions of the database of the run, which stays available, and returns how many it ended: none means nothing was interrupted. `BeginAsync` and `EndAsync` take the database away and give it back: PostgreSQL refuses connections, SQL Server sets it offline | `postgresql-*`, `sqlserver-*` |
+| `RabbitMqConnectionLog` with `services.TrackRabbitMqConnections(log)`, and `RabbitMqConnections.Of(log)` | the log names the connections of the hosts, tells how many are open and closes them all when it is disposed (`await using`), however the scenario ended; `RabbitMqConnections` lists and closes them through the management API of the broker | `*-rabbitmq` |
+
+Hosts of a service share their outbox and their queues, so work that completes does not tell that every host works.
+`HostActivity`, with `services.RecordHostActivity(activity)`, tells what each host did since `StartOver()`: whether
+its relay published, whether it had a pass that failed nothing, whether the host processed a delivery; and how long
+a relay waited after a pass that failed. A scenario about recovery asks it of every host.
+
+What these scenarios assert, because it is how the library behaves today:
+
+- a message that fails for another reason than a lock is dead-lettered at once, also when the reason is the database:
+  an interruption can cost messages. The scenarios require every message to be accounted for (completed, or in the
+  dead letters with the failure a host reported), and the hosts to work again without a restart;
+- a scenario cannot know which pooled connection a host will use next, so it does not expect a given message to
+  succeed after an interruption: it issues work one item at a time, through each host in turn, until several in a row
+  complete and every host has done its part (`DatabaseInterruptionScenarioBase`);
+- a saga that could not be released, because the database was away, stays locked until `LockMaxDuration`;
+- the RabbitMQ transport publishes without waiting for the broker to confirm: a message published on a connection
+  that the broker is closing can be lost, and so can one that goes to the retry queue at that moment. The scenarios
+  publish once the hosts are connected again, and do not test that window.
+
+Kafka has no such switch: its interruptions need a proxy between the hosts and the broker, which the suite does not have.

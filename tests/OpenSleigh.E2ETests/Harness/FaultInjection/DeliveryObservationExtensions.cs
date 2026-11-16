@@ -18,6 +18,24 @@ public static class DeliveryObservationExtensions
         return services.Decorate<IMessageProcessor>((_, inner) => new ObservingMessageProcessor(inner, typeof(TMessage), processed));
     }
 
+    /// <summary>
+    /// tells a scenario about every message the relay of a host published.
+    /// </summary>
+    public static IServiceCollection ObservePublishedMessages(this IServiceCollection services, Action<MessageEnvelope> onPublished)
+    {
+        ArgumentNullException.ThrowIfNull(onPublished);
+        return services.Decorate<IPublisher>((_, inner) => new ObservingPublisher(inner, onPublished));
+    }
+
+    private sealed class ObservingPublisher(IPublisher inner, Action<MessageEnvelope> onPublished) : IPublisher
+    {
+        public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
+        {
+            await inner.PublishAsync(envelope, cancellationToken);
+            onPublished(envelope);
+        }
+    }
+
     private sealed class ObservingMessageProcessor(IMessageProcessor inner, Type messageType, Expectation processed) : IMessageProcessor
     {
         public async ValueTask ProcessAsync(MessageEnvelope outboxMessage, CancellationToken cancellationToken = default)
