@@ -15,7 +15,7 @@ public static class DecorationExtensions
     private static readonly IReadOnlyDictionary<Type, Type[]> OptionalInterfaces = new Dictionary<Type, Type[]>
     {
         [typeof(ISagaStateRepository)] = [typeof(ISagaStateCommitter)],
-        [typeof(IOutboxRepository)] = [typeof(IOutboxBatchRepository), typeof(IOutboxReturnRepository)],
+        [typeof(IOutboxRepository)] = [typeof(IOutboxBatchRepository)],
     };
 
     /// <summary>

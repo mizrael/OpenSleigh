@@ -138,8 +138,9 @@ public class ReturnedMessageScenario(ITestOutputHelper console) : ScenarioBase(c
     {
         public async ValueTask PublishAsync(MessageEnvelope envelope, CancellationToken cancellationToken = default)
         {
-            await inner.PublishAsync(envelope, cancellationToken);
+            // before: a dead letter is in its queue when its publish is counted
             publishes.Add();
+            await inner.PublishAsync(envelope, cancellationToken);
         }
     }
 

@@ -38,11 +38,6 @@
     <DefineConstants>$(DefineConstants);OUTBOX_BATCH_DELETE</DefineConstants>
   </PropertyGroup>
 
-  <!-- an outbox can take back the messages a transport returned -->
-  <PropertyGroup Condition="Exists('$(OpenSleighSrcRoot)/OpenSleigh/Outbox/IOutboxReturnRepository.cs')">
-    <DefineConstants>$(DefineConstants);OUTBOX_PUT_BACK</DefineConstants>
-  </PropertyGroup>
-
   <PropertyGroup Condition="Exists('$(OpenSleighSrcRoot)/OpenSleigh.Persistence.SQL/SagaDbContextServiceCollectionExtensions.cs')">
     <DefineConstants>$(DefineConstants);SAGA_DBCONTEXT_POOL</DefineConstants>
   </PropertyGroup>
