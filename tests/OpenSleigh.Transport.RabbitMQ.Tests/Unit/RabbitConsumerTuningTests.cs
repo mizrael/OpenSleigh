@@ -39,6 +39,19 @@ public class RabbitConsumerTuningTests
     }
 
     [Fact]
+    public async Task UseRabbitMQTransport_should_give_the_publish_channel_the_handler_of_returned_messages_the_host_stops()
+    {
+        await using var provider = new ServiceCollection()
+            .AddLogging()
+            .AddOpenSleigh(configurator => configurator.UseRabbitMQTransport(CreateConfiguration()))
+            .BuildServiceProvider();
+
+        var handler = provider.GetRequiredService<IReturnedMessageHandler>();
+
+        Assert.Same(handler, Assert.Single(provider.GetServices<Microsoft.Extensions.Hosting.IHostedService>(), service => service is IReturnedMessageHandler));
+    }
+
+    [Fact]
     public async Task StartAsync_should_not_set_a_prefetch_limit_by_default()
     {
         var channel = Substitute.For<IChannel>();

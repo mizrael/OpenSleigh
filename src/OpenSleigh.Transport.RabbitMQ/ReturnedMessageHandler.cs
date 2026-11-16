@@ -4,7 +4,6 @@ using Microsoft.Extensions.Logging;
 using OpenSleigh.Outbox;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
 using System.Threading.Channels;
 
 namespace OpenSleigh.Transport.RabbitMQ;
@@ -12,8 +11,8 @@ namespace OpenSleigh.Transport.RabbitMQ;
 /// <summary>
 /// puts the messages the broker returned back in the outbox, to be published again after
 /// <see cref="RabbitConfiguration.RetryDelay"/>. A message that still comes back when
-/// <see cref="RabbitConfiguration.ReturnedMessageRetryPeriod"/> is over is published to its dead letter exchange,
-/// and dropped when no queue takes it there either.
+/// <see cref="RabbitConfiguration.ReturnedMessageRetryPeriod"/> is over is published to its dead letter exchange instead,
+/// and dropped when that fails or when no queue takes it there: it never goes back to the outbox.
 /// </summary>
 /// <remarks>
 /// When a message first came back is stored with it in the outbox and published with it: nothing is remembered here.
@@ -23,18 +22,19 @@ namespace OpenSleigh.Transport.RabbitMQ;
 internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedLifecycleService, IAsyncDisposable
 {
     private const int MaxWaitingMessages = 10_000;
+    private const long MaxWaitingBytes = 128 * 1024 * 1024;
     private const int MaxMessagesPerBatch = 100;
-    private const int MaxOutboxAttempts = 5;
-    private const int MaxDeadLetterAttempts = 2;
     private const string Stopped = "the application stopped before it was stored";
 
     /// <summary>a returned message is not published again sooner than this, whatever the retry delay.</summary>
     internal static readonly TimeSpan MinRepublishDelay = TimeSpan.FromSeconds(1);
 
+    private static readonly TimeSpan MaxOutboxRetryDelay = TimeSpan.FromSeconds(30);
+
     private sealed record ReturnedMessage(BasicProperties Properties, byte[] Body, string Exchange, string ReplyText, DateTimeOffset ReturnedAt);
 
-    /// <param name="Envelope">the message as it goes back to the outbox.</param>
-    private sealed record PutBack(ReturnedMessage Returned, MessageEnvelope Envelope);
+    /// <param name="Envelope">the message, with the time it first came back.</param>
+    private sealed record ParsedMessage(ReturnedMessage Returned, MessageEnvelope Envelope);
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IRabbitMessageParser _messageParser;
@@ -47,6 +47,9 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
 
     private readonly Channel<ReturnedMessage> _waiting = Channel.CreateBounded<ReturnedMessage>(
         new BoundedChannelOptions(MaxWaitingMessages) { SingleReader = true });
+
+    // the bodies of the messages that are waiting and of the batch that is being handled
+    private long _waitingBytes;
 
     // cancelled when whoever stops this no longer waits for the messages that are left
     private readonly CancellationTokenSource _givingUp = new();
@@ -83,7 +86,7 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
         ArgumentNullException.ThrowIfNull(returned);
 
         // looked at before the message is copied: a flood that cannot be taken must not cost a copy of every body
-        if (_closed || _waiting.Reader.Count >= MaxWaitingMessages)
+        if (_closed || _waiting.Reader.Count >= MaxWaitingMessages || Interlocked.Read(ref _waitingBytes) >= MaxWaitingBytes)
         {
             LogRefused(returned);
             return;
@@ -97,8 +100,12 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
             returned.ReplyText,
             _timeProvider.GetUtcNow());
 
-        if (!_waiting.Writer.TryWrite(message))
-            LogRefused(returned);
+        Interlocked.Add(ref _waitingBytes, message.Body.Length);
+        if (_waiting.Writer.TryWrite(message))
+            return;
+
+        Interlocked.Add(ref _waitingBytes, -message.Body.Length);
+        LogRefused(returned);
     }
 
     private async Task HandleWaitingMessagesAsync()
@@ -121,45 +128,45 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
                 foreach (var message in batch)
                     LogLost(message, ex.Message, ex);
             }
+            finally
+            {
+                Interlocked.Add(ref _waitingBytes, -batch.Sum(message => (long)message.Body.Length));
+            }
         }
     }
 
     private async Task HandleAsync(IReadOnlyCollection<ReturnedMessage> batch, CancellationToken cancellationToken)
     {
-        var toPutBack = new List<PutBack>(batch.Count);
-        var expired = new List<PutBack>();
-
-        foreach (var returned in OncePerMessage(batch))
+        if (cancellationToken.IsCancellationRequested)
         {
-            // a time of first return that is later than the return itself is not believed: the period starts now
-            var envelope = returned.Envelope.Returned(returned.Returned.ReturnedAt, returned.Returned.ReturnedAt + _republishDelay);
-            var comingBackFor = returned.Returned.ReturnedAt - envelope.FirstReturnedAt!.Value;
-
-            // a difference of two times, never a time plus the period: any period can be configured
-            (comingBackFor < _configuration.ReturnedMessageRetryPeriod ? toPutBack : expired).Add(returned with { Envelope = envelope });
+            foreach (var message in batch)
+                LogLost(message, Stopped);
+            return;
         }
 
-        // first: the broker can keep the dead letters waiting for a long time
-        await PutBackAsync(toPutBack, cancellationToken).ConfigureAwait(false);
+        var messages = OncePerMessage(batch);
 
-        var notDeadLettered = new List<PutBack>();
-        foreach (var message in expired)
-            if (!await TryDeadLetterAsync(message, cancellationToken).ConfigureAwait(false))
-                notDeadLettered.Add(message);
+        // a difference of two times, never a time plus the period: any period can be configured
+        var withinPeriod = messages.ToLookup(message
+            => message.Returned.ReturnedAt - message.Envelope.FirstReturnedAt!.Value < _configuration.ReturnedMessageRetryPeriod);
 
-        // they come back once more, and are given to the dead letter exchange again
-        await PutBackAsync(notDeadLettered, cancellationToken).ConfigureAwait(false);
+        // first: the broker can keep the dead letters waiting
+        await PutBackAsync(withinPeriod[true].ToArray(), cancellationToken).ConfigureAwait(false);
+        await DeadLetterAsync(withinPeriod[false].ToArray(), cancellationToken).ConfigureAwait(false);
     }
 
-    // a message that several relays published comes back several times: it is handled once, as it first came back
-    private IEnumerable<PutBack> OncePerMessage(IEnumerable<ReturnedMessage> batch)
+    // a message that several relays published comes back several times: it is handled once, with the earliest time
+    // it first came back and as it came back last. Each of its times of first return is checked against its own
+    // return before they are compared: one that cannot be believed is not the earliest
+    private IReadOnlyCollection<ParsedMessage> OncePerMessage(IEnumerable<ReturnedMessage> batch)
     {
-        var parsed = new List<PutBack>();
+        var parsed = new List<ParsedMessage>();
         foreach (var message in batch)
         {
             try
             {
-                parsed.Add(new PutBack(message, _messageParser.Parse(message.Properties, message.Body)));
+                var envelope = _messageParser.Parse(message.Properties, message.Body);
+                parsed.Add(new ParsedMessage(message, envelope.Returned(message.ReturnedAt, message.ReturnedAt)));
             }
             catch (Exception ex)
             {
@@ -169,15 +176,21 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
 
         return parsed
             .GroupBy(message => message.Envelope.MessageId)
-            .Select(sameMessage => sameMessage.MinBy(message => message.Envelope.FirstReturnedAt ?? message.Returned.ReturnedAt)!);
+            .Select(sameMessage =>
+            {
+                var last = sameMessage.MaxBy(message => message.Returned.ReturnedAt)!;
+                var firstReturnedAt = sameMessage.Min(message => message.Envelope.FirstReturnedAt!.Value);
+                return last with { Envelope = last.Envelope.Returned(firstReturnedAt, last.Returned.ReturnedAt) };
+            })
+            .ToArray();
     }
 
-    private async Task PutBackAsync(IReadOnlyCollection<PutBack> messages, CancellationToken cancellationToken)
+    // until it is stored, or until the host stops waiting: what cannot be stored now is not lost for it.
+    // The messages that come back meanwhile wait, up to what can wait
+    private async Task PutBackAsync(IReadOnlyCollection<ParsedMessage> messages, CancellationToken cancellationToken)
     {
         if (messages.Count == 0)
             return;
-
-        var envelopes = messages.Select(message => message.Envelope).ToArray();
 
         try
         {
@@ -188,18 +201,25 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
                 try
                 {
                     using var scope = _scopeFactory.CreateScope();
-                    if (scope.ServiceProvider.GetRequiredService<IOutboxRepository>() is not IOutboxReturnRepository outbox)
+                    var outbox = scope.ServiceProvider.GetService<IOutboxReturnRepository>();
+                    if (outbox is null)
                     {
-                        LogLost(messages, $"the outbox does not implement {nameof(IOutboxReturnRepository)}");
+                        LogLost(messages, $"the outbox cannot take messages back: no {nameof(IOutboxReturnRepository)} is registered");
                         return;
                     }
+
+                    // from now, not from the first attempt
+                    var deliverAt = _timeProvider.GetUtcNow() + _republishDelay;
+                    var envelopes = messages
+                        .Select(message => message.Envelope.Returned(message.Envelope.FirstReturnedAt!.Value, deliverAt))
+                        .ToArray();
 
                     await outbox.PutBackAsync(envelopes, cancellationToken).ConfigureAwait(false);
                     break;
                 }
-                catch (Exception ex) when (attempt < MaxOutboxAttempts && !cancellationToken.IsCancellationRequested)
+                catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
                 {
-                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt - 1));
+                    var delay = TimeSpan.FromSeconds(Math.Min(Math.Pow(2, attempt - 1), MaxOutboxRetryDelay.TotalSeconds));
                     _logger.LogWarning(
                         ex,
                         "{Count} messages returned by the broker could not be put back in the outbox, trying again in {Delay}: {Error}",
@@ -209,87 +229,95 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
                 }
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
             LogLost(messages, Stopped);
-            return;
-        }
-        catch (Exception ex)
-        {
-            LogLost(messages, $"it could not be put back in the outbox. {ex.Message}", ex);
             return;
         }
 
         foreach (var message in messages)
             _logger.LogWarning(
                 "message '{MessageId}' of type '{MessageType}' was returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}': " +
-                "no queue took it. It is back in the outbox, and is published again at {DeliverAt}.",
+                "no queue took it. It is back in the outbox, and is published again in {RetryDelay}.",
                 message.Envelope.MessageId, message.Envelope.MessageType.FullName, message.Returned.Exchange, message.Returned.ReplyText,
-                message.Envelope.DeliverAt);
+                _republishDelay);
+    }
+
+    private async Task DeadLetterAsync(IReadOnlyList<ParsedMessage> expired, CancellationToken cancellationToken)
+    {
+        for (var index = 0; index < expired.Count; index++)
+        {
+            try
+            {
+                await DeadLetterAsync(expired[index], cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                // the others are not tried: each of them would wait as long as this one to find the broker away
+                var reason = cancellationToken.IsCancellationRequested
+                    ? Stopped
+                    : $"its retry period is over, and it could not be given to its dead letter exchange. {ex.Message}";
+
+                LogLost(expired.Skip(index), reason, ex);
+                return;
+            }
+        }
     }
 
     // the exchange is declared, so that publishing to it cannot close the channel, and no queue is:
     // the dead letter queues belong to the services that consume the message
-    private async Task<bool> TryDeadLetterAsync(PutBack message, CancellationToken cancellationToken)
+    private async Task DeadLetterAsync(ParsedMessage message, CancellationToken cancellationToken)
     {
         var references = _queueReferenceFactory.Create(message.Envelope);
 
-        for (var attempt = 1; !cancellationToken.IsCancellationRequested; attempt++)
+        try
         {
-            try
-            {
-                var channel = await GetDeadLetterChannelAsync(cancellationToken).ConfigureAwait(false);
-                await channel.EnsureDeadLetterExchangeAsync(references, _configuration, cancellationToken).ConfigureAwait(false);
-
-                await channel.BasicPublishAsync(
-                    exchange: references.DeadLetterExchangeName,
-                    routingKey: references.DeadLetterQueue,
-                    mandatory: true,
-                    basicProperties: message.Returned.Properties,
-                    body: message.Returned.Body,
-                    cancellationToken: cancellationToken).ConfigureAwait(false);
-
-                _logger.LogError(
-                    "message '{MessageId}' of type '{MessageType}' is still returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}' " +
-                    "after {RetryPeriod}: no service that consumes it has declared its queue. It is not published again: it was given to " +
-                    "the dead letter exchange '{DeadLetterExchangeName}'.",
-                    message.Envelope.MessageId, message.Envelope.MessageType.FullName, message.Returned.Exchange, message.Returned.ReplyText,
-                    _configuration.ReturnedMessageRetryPeriod, references.DeadLetterExchangeName);
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                // a channel that failed is not used again
-                DropDeadLetterChannel();
-
-                if (attempt < MaxDeadLetterAttempts && !cancellationToken.IsCancellationRequested)
-                    continue;
-
-                _logger.LogWarning(
-                    ex,
-                    "message '{MessageId}' of type '{MessageType}' could not be given to the dead letter exchange '{DeadLetterExchangeName}': {Error}",
-                    message.Envelope.MessageId, message.Envelope.MessageType.FullName, references.DeadLetterExchangeName, ex.Message);
-
-                return false;
-            }
+            await PublishAsync(message.Returned, references, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // once more, on a new channel: the one that failed may be closed
+            await PublishAsync(message.Returned, references, cancellationToken).ConfigureAwait(false);
         }
 
-        return false;
+        _logger.LogError(
+            "message '{MessageId}' of type '{MessageType}' is still returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}' " +
+            "after {RetryPeriod}: no service that consumes it has declared its queue. It is not published again: it was given to " +
+            "the dead letter exchange '{DeadLetterExchangeName}'.",
+            message.Envelope.MessageId, message.Envelope.MessageType.FullName, message.Returned.Exchange, message.Returned.ReplyText,
+            _configuration.ReturnedMessageRetryPeriod, references.DeadLetterExchangeName);
     }
 
-    private async ValueTask<IChannel> GetDeadLetterChannelAsync(CancellationToken cancellationToken)
+    private async Task PublishAsync(ReturnedMessage message, QueueReferences references, CancellationToken cancellationToken)
     {
-        if (_deadLetterChannel is { IsOpen: true } open)
-            return open;
+        try
+        {
+            if (_deadLetterChannel is not { IsOpen: true })
+            {
+                DropDeadLetterChannel();
+                _deadLetterChannel = await _connection.CreateChannelAsync(cancellationToken).ConfigureAwait(false);
+                _deadLetterChannel.BasicReturnAsync += OnDeadLetterReturnedAsync;
+            }
 
-        DropDeadLetterChannel();
+            await _deadLetterChannel.EnsureDeadLetterExchangeAsync(references, _configuration, cancellationToken).ConfigureAwait(false);
 
-        var channel = await _connection.CreateChannelAsync(cancellationToken).ConfigureAwait(false);
-        channel.BasicReturnAsync += OnDeadLetterReturnedAsync;
-        return _deadLetterChannel = channel;
+            await _deadLetterChannel.BasicPublishAsync(
+                exchange: references.DeadLetterExchangeName,
+                routingKey: references.DeadLetterQueue,
+                mandatory: true,
+                basicProperties: message.Properties,
+                body: message.Body,
+                cancellationToken: cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // a channel that failed is not used again
+            DropDeadLetterChannel();
+            throw;
+        }
     }
 
+    // disposing a channel closes it
     private void DropDeadLetterChannel()
     {
         var channel = _deadLetterChannel;
@@ -317,19 +345,15 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
     }
 
     private static string? MessageTypeOf(IReadOnlyBasicProperties properties)
-        => properties.Headers is { } headers && headers.TryGetValue(nameof(MessageEnvelope.MessageType), out var value)
-            ? value switch
-            {
-                byte[] bytes => Encoding.UTF8.GetString(bytes),
-                _ => value?.ToString(),
-            }
-            : null;
+        => properties.TryGetHeaderValue(nameof(MessageEnvelope.MessageType), out var messageType) ? messageType : null;
 
     private void LogRefused(BasicReturnEventArgs returned)
         => _logger.LogError(
             "message '{MessageId}' of type '{MessageType}', returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}', is lost: {Reason}",
             returned.BasicProperties.MessageId, MessageTypeOf(returned.BasicProperties), returned.Exchange, returned.ReplyText,
-            _closed ? "the application has stopped" : $"{MaxWaitingMessages} returned messages are already waiting to be stored");
+            _closed
+                ? "the application has stopped"
+                : $"too many returned messages are already waiting to be stored (at most {MaxWaitingMessages} messages and {MaxWaitingBytes} bytes)");
 
     private void LogLost(ReturnedMessage message, string reason, Exception? exception = null)
         => _logger.LogError(
@@ -337,7 +361,7 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
             "message '{MessageId}' of type '{MessageType}', returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}', is lost: {Reason}",
             message.Properties.MessageId, MessageTypeOf(message.Properties), message.Exchange, message.ReplyText, reason);
 
-    private void LogLost(IEnumerable<PutBack> messages, string reason, Exception? exception = null)
+    private void LogLost(IEnumerable<ParsedMessage> messages, string reason, Exception? exception = null)
     {
         foreach (var message in messages)
             LogLost(message.Returned, reason, exception);
@@ -390,10 +414,7 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
         // the worker is done with the channel before it is closed
         await _worker.ConfigureAwait(false);
 
-        if (_deadLetterChannel is { IsOpen: true } channel)
-            await channel.CloseAsync().ConfigureAwait(false);
         DropDeadLetterChannel();
-
         _givingUp.Dispose();
     }
 }

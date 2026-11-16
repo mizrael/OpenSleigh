@@ -4,7 +4,6 @@ using OpenSleigh.Utils;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Globalization;
-using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -62,10 +61,8 @@ internal sealed class RabbitMessageParser : IRabbitMessageParser
     // only a message that came back before has it. One that cannot be read is as good as none:
     // the message is not refused for it, and its period starts again if it comes back
     private static DateTimeOffset? FirstReturnedAt(IReadOnlyBasicProperties properties)
-        => properties.Headers is { } headers
-           && headers.TryGetValue(nameof(MessageEnvelope.FirstReturnedAt), out var value)
-           && value is byte[] bytes
-           && DateTimeOffset.TryParse(Encoding.UTF8.GetString(bytes), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstReturnedAt)
+        => properties.TryGetHeaderValue(nameof(MessageEnvelope.FirstReturnedAt), out var text)
+           && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var firstReturnedAt)
             ? firstReturnedAt
             : null;
 }

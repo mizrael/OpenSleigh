@@ -3,7 +3,6 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Utils;
 using Polly;
 using RabbitMQ.Client;
-using System.Globalization;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -15,13 +14,9 @@ public class RabbitPublisher : IPublisher
     private readonly IChannelFactory _channelFactory;
     private readonly ISerializer _serializer;
     private readonly HashSet<Type> _consumedMessageTypes;
-    private readonly ITypeResolver _typeResolver;
 
     /// <param name="sagaDescriptorsResolver">tells which message types the sagas of this host handle.</param>
     /// <param name="systemInfo">tells whether this host only publishes.</param>
-    /// <param name="typeResolver">
-    /// is told the types this host publishes and does not consume: a message the broker returns is read back by its type.
-    /// </param>
     public RabbitPublisher(
         IQueueReferenceFactory queueReferenceFactory,
         RabbitConfiguration rabbitConfig,
@@ -29,10 +24,8 @@ public class RabbitPublisher : IPublisher
         ILogger<RabbitPublisher> logger,
         ISerializer serializer,
         ISagaDescriptorsResolver sagaDescriptorsResolver,
-        ISystemInfo systemInfo,
-        ITypeResolver typeResolver)
+        ISystemInfo systemInfo)
     {
-        _typeResolver = typeResolver ?? throw new ArgumentNullException(nameof(typeResolver));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _queueReferenceFactory = queueReferenceFactory ?? throw new ArgumentNullException(nameof(queueReferenceFactory));
         _rabbitConfig = rabbitConfig ?? throw new ArgumentNullException(nameof(rabbitConfig));
@@ -69,7 +62,7 @@ public class RabbitPublisher : IPublisher
 
         // so that this host knows, when the broker returns the message again, for how long it has been coming back
         if (envelope.FirstReturnedAt is { } firstReturnedAt)
-            properties.Headers.Add(nameof(envelope.FirstReturnedAt), firstReturnedAt.ToString("O", CultureInfo.InvariantCulture));
+            properties.Headers.Add(nameof(envelope.FirstReturnedAt), firstReturnedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
 
         var body = _serializer.Serialize(envelope.Message);
 
@@ -101,23 +94,9 @@ public class RabbitPublisher : IPublisher
     }
 
     // the queue of a message this host consumes is declared here as well: the relay can publish before the subscriber
-    // has declared it, and the message would be lost. Any other queue would keep a copy of every message, for nobody.
-    // The types this host consumes are known to the type resolver already: the others are made known here,
-    // whatever store the message comes from
+    // has declared it, and the message would be lost. Any other queue would keep a copy of every message, for nobody
     private ValueTask EnsureCanPublishAsync(IChannel channel, Type messageType, QueueReferences queueRef, CancellationToken cancellationToken)
-    {
-        if (_consumedMessageTypes.Contains(messageType))
-            return channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken);
-
-        // once per type: this runs for every message, and the resolver looks a type up by its names
-        if (!_publishedMessageTypes.ContainsKey(messageType))
-        {
-            _typeResolver.Register(messageType);
-            _publishedMessageTypes.TryAdd(messageType, 0);
-        }
-
-        return channel.EnsureExchangeAsync(queueRef, _rabbitConfig, cancellationToken);
-    }
-
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, byte> _publishedMessageTypes = new();
+        => _consumedMessageTypes.Contains(messageType)
+            ? channel.EnsureTopologyAsync(queueRef, _rabbitConfig, cancellationToken)
+            : channel.EnsureExchangeAsync(queueRef, _rabbitConfig, cancellationToken);
 }

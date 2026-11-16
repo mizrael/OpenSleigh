@@ -148,28 +148,7 @@ public class RabbitPublisherTests
             Substitute.For<ILogger<RabbitPublisher>>(),
             new JsonSerializer(),
             sagaDescriptorsResolver,
-            systemInfo,
-            TypeResolver);
-    }
-
-    private static readonly TypeResolver TypeResolver = new();
-
-    [Fact]
-    public async Task PublishAsync_should_make_the_type_of_a_message_the_host_does_not_handle_known_so_that_it_can_be_read_when_it_comes_back()
-    {
-        var typeResolver = new TypeResolver();
-        var channelFactory = Substitute.For<IChannelFactory>();
-        channelFactory.GetPublishChannelAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<IChannel>());
-        var queueReferenceFactory = Substitute.For<IQueueReferenceFactory>();
-        queueReferenceFactory.Create(Arg.Any<MessageEnvelope>()).Returns(NewReferences());
-        var sut = new RabbitPublisher(
-            queueReferenceFactory, Configuration, channelFactory, Substitute.For<ILogger<RabbitPublisher>>(), new JsonSerializer(),
-            Substitute.For<ISagaDescriptorsResolver>(), Substitute.For<ISystemInfo>(), typeResolver);
-        Assert.Null(typeResolver.Resolve(typeof(FakeSagaStarter).FullName!, throwOnError: false));
-
-        await sut.PublishAsync(CreateEnvelope());
-
-        Assert.Equal(typeof(FakeSagaStarter), typeResolver.Resolve(typeof(FakeSagaStarter).FullName!, throwOnError: false));
+            systemInfo);
     }
 
     // every test has names of its own: a failure shows which one declared what

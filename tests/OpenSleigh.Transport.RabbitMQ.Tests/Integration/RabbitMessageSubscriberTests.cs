@@ -250,8 +250,8 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     {
         var exchangeName = NewExchangeName();
         var putBack = new TaskCompletionSource<MessageEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var outbox = Substitute.For<IOutboxRepository, IOutboxReturnRepository>();
-        ((IOutboxReturnRepository)outbox)
+        var outbox = Substitute.For<IOutboxReturnRepository>();
+        outbox
             .PutBackAsync(Arg.Do<IReadOnlyCollection<MessageEnvelope>>(messages => putBack.TrySetResult(messages.Single())), Arg.Any<CancellationToken>())
             .Returns(ValueTask.CompletedTask);
         var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
@@ -287,7 +287,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
                   if (call.Arg<LogLevel>() == LogLevel.Error && text.Contains("was dropped"))
                       dropped.TrySetResult(text);
               });
-        var outbox = Substitute.For<IOutboxRepository, IOutboxReturnRepository>();
+        var outbox = Substitute.For<IOutboxReturnRepository>();
         var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
             configure: services => services.AddSingleton(outbox).AddSingleton(logger),
             configuration: _fixture.RabbitConfiguration with { ReturnedMessageRetryPeriod = TimeSpan.Zero });
@@ -298,7 +298,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         var report = await dropped.Task.WaitAsync(TimeSpan.FromSeconds(20));
         Assert.Contains(message.MessageId, report);
         Assert.Contains(typeof(FakeSagaStarter).FullName!, report);
-        await ((IOutboxReturnRepository)outbox).DidNotReceiveWithAnyArgs().PutBackAsync(default!, default);
+        await outbox.DidNotReceiveWithAnyArgs().PutBackAsync(default!, default);
 
         // the publisher declared no queue, for dead letters or anything else, and its channel is still there
         await using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
