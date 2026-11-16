@@ -193,6 +193,60 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     }
 
     [Fact]
+    public async Task StartAsync_should_leave_a_locked_message_with_the_broker_when_it_cannot_be_published_to_the_retry_exchange()
+    {
+        var exchangeName = NewExchangeName();
+        var references = DefaultReferences(exchangeName, "test");
+        // queues that stay when their consumer goes: the broker closes the channel of a publish it cannot route to an exchange
+        var configuration = new RabbitConfiguration(
+            _fixture.RabbitConfiguration.HostName,
+            _fixture.RabbitConfiguration.UserName,
+            _fixture.RabbitConfiguration.Password,
+            _fixture.RabbitConfiguration.VirtualHost,
+            _fixture.RabbitConfiguration.RetryDelay,
+            durable: false,
+            autoDelete: false);
+        var processCount = 0;
+        var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var locked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var (publisher, sut) = CreateSUT(_ =>
+        {
+            if (Interlocked.Increment(ref processCount) == 1)
+            {
+                processed.TrySetResult();
+                return;
+            }
+
+            locked.TrySetResult();
+            throw new LockException("whoops");
+        }, out _, exchangeName, configuration: configuration);
+
+        await using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        try
+        {
+            await sut.StartAsync();
+            // the publisher declares what it publishes to once: after this it does not bring the retry exchange back
+            await publisher.PublishAsync(CreateMessage());
+            await processed.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            await channel.ExchangeDeleteAsync(references.RetryExchangeName);
+            var message = CreateMessage();
+            await publisher.PublishAsync(message);
+            await locked.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            // acknowledged before its retry was published, it would be in no queue at all
+            var left = await GetAsync(channel, references.QueueName);
+            Assert.NotNull(left);
+            Assert.Equal(message.MessageId, left.BasicProperties.MessageId);
+        }
+        finally
+        {
+            await channel.DeleteAsync(references);
+        }
+    }
+
+    [Fact]
     public async Task StartAsync_should_not_dead_letter_a_message_whose_processing_was_interrupted_by_a_stop()
     {
         using var stopping = new CancellationTokenSource();

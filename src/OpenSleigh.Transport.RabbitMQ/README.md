@@ -57,6 +57,7 @@ var rabbitCfg = new RabbitConfiguration(hostName, userName, password)
 ### When a message cannot be processed
 
 - When the saga instance a message is for is being processed by another worker (a lock conflict), the message goes through the retry queue of the service and is processed again after `RetryDelay`, 30 seconds by default. This repeats for as long as the conflict lasts. Only the service that could not process the message gets it again, not the other services that handle the same message type.
+- The message is published to the retry queue first and acknowledged afterwards, on the same channel, so a connection lost in between cannot leave it in neither queue. It can leave it in both: the message is then delivered twice, and a saga ignores a message it has processed already. The publish is not confirmed by the broker, so a broker that fails after it took the message and before it stored it can still lose it, and so can a retry queue that was deleted or unbound while the service runs.
 - On any other failure, a saga handler that throws included, the message is rejected and ends up in the dead letter queue. It is not processed again.
 - A message whose processing is interrupted because the application is stopping is neither acknowledged nor rejected: the broker delivers it again once the connection is closed.
 

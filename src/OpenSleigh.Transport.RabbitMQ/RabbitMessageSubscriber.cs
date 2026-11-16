@@ -145,19 +145,33 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         }
 
         var props = new BasicProperties(deliveryProps.BasicProperties);
-        await WithChannelAsync(async () =>
+        try
         {
-            // we acknowledge the message so it's removed from the original queue
-            await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
+            await WithChannelAsync(async () =>
+            {
+                // the message goes to the retry exchange, for the retry queue of this service only, before it is
+                // acknowledged, and on the same channel: the broker handles what a channel sends in order, so it
+                // cannot acknowledge the message without having been given its copy first. Acknowledged first,
+                // a connection lost before the copy got through would leave the message in no queue at all
+                await channel.BasicPublishAsync(
+                    exchange: queueReference.RetryExchangeName,
+                    routingKey: queueReference.RetryQueueName,
+                    mandatory: true,
+                    basicProperties: props,
+                    body: deliveryProps.Body);
 
-            // we publish the message to the retry exchange, for the retry queue of this service only
-            await channel.BasicPublishAsync(
-                exchange: queueReference.RetryExchangeName,
-                routingKey: queueReference.RetryQueueName,
-                mandatory: true,
-                basicProperties: props,
-                body: deliveryProps.Body);
-        });
+                await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
+            });
+        }
+        catch (Exception retryException)
+        {
+            // not acknowledged: the broker gives it back to its queue when the channel closes. If its copy did reach
+            // the retry queue the message is delivered twice, and the saga ignores the one it has processed already
+            _logger.LogWarning(
+                retryException,
+                "Message '{MessageId}' could not be sent to the retry Exchange '{ExchangeName}' and acknowledged: it is left to be delivered again. {ExceptionMessage}",
+                message.MessageId, queueReference.RetryExchangeName, retryException.Message);
+        }
     }
 
     // with ConsumerDispatchConcurrency above 1 several deliveries are handled at the same time, all on this
