@@ -15,11 +15,13 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
 {
     private readonly ILogger<RabbitPersistentConnection> _logger;
     private readonly IConnectionFactory _connectionFactory;
-    private readonly CancellationTokenSource _disposing = new();
-    private volatile IConnection? _connection;
-    private volatile bool _disposed;
-
     private readonly SemaphoreSlim _semaphore = new(1, 1);
+    private IConnection? _connection;
+    private int _disposed;
+
+    // from the loss of the connection until the client has recovered it with its channels and consumers. The client
+    // reports the connection open before that, and a channel created in between is recovered a second time
+    private volatile bool _lost;
 
     public RabbitPersistentConnection(IConnectionFactory connectionFactory, ILogger<RabbitPersistentConnection> logger)
     {
@@ -27,53 +29,86 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    public bool IsConnected => !_disposed && _connection is { IsOpen: true };
+    private bool IsDisposed => Volatile.Read(ref _disposed) != 0;
+
+    public bool IsConnected => !IsDisposed && !_lost && Volatile.Read(ref _connection) is { IsOpen: true };
 
     public void Dispose()
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-
-        // not disposed: a connection may be being opened with its token, and it holds nothing to release
-        _disposing.Cancel();
-        Close(_connection);
+        if (Interlocked.Exchange(ref _disposed, 1) == 0)
+            Close(Interlocked.Exchange(ref _connection, null));
     }
 
+    // called with what was taken out of the field: once for a connection, whoever closes it
     private void Close(IConnection? connection)
     {
         if (connection is null)
             return;
 
         connection.ConnectionShutdownAsync -= OnConnectionShutdownAsync;
+        connection.ConnectionRecoveryErrorAsync -= OnRecoveryErrorAsync;
+        connection.RecoverySucceededAsync -= OnRecoverySucceededAsync;
         connection.Dispose();
     }
 
     private Task OnConnectionShutdownAsync(object sender, ShutdownEventArgs shutdown)
     {
-        if (!_disposed && shutdown.Initiator != ShutdownInitiator.Application)
+        if (IsDisposed)
+            return Task.CompletedTask;
+
+        _lost = true;
+
+        if (IsRecoveredByTheClient(shutdown))
             _logger.LogWarning(
-                "the RabbitMQ connection was closed: {Reason}. The client library recovers it, with its channels and consumers; " +
-                "no channel can be created until then.",
+                "the RabbitMQ connection was closed: {Reason}. Nothing is published or consumed until the RabbitMQ client " +
+                "has recovered it, which it does when its automatic recovery is enabled.",
                 shutdown.ReplyText);
+        else
+            _logger.LogError(
+                "the RabbitMQ connection was closed, and the RabbitMQ client does not recover it: {Reason}. " +
+                "Nothing is published or consumed until the application is restarted.",
+                shutdown.ReplyText);
+
+        return Task.CompletedTask;
+    }
+
+    // as the client decides it, in its AutorecoveringConnection
+    private static bool IsRecoveredByTheClient(ShutdownEventArgs shutdown)
+        => shutdown.Initiator == ShutdownInitiator.Library
+           || (shutdown.Initiator == ShutdownInitiator.Peer && shutdown.ReplyCode != Constants.AccessRefused);
+
+    private Task OnRecoveryErrorAsync(object sender, ConnectionRecoveryErrorEventArgs error)
+    {
+        if (!IsDisposed)
+            _logger.LogError(error.Exception,
+                "the RabbitMQ connection could not be recovered: {Error}. The RabbitMQ client tries again.",
+                error.Exception.Message);
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnRecoverySucceededAsync(object sender, AsyncEventArgs recovered)
+    {
+        _lost = false;
+        _logger.LogInformation("the RabbitMQ connection was recovered, with its channels and consumers.");
 
         return Task.CompletedTask;
     }
 
     private async ValueTask<IConnection> GetConnectionAsync(CancellationToken cancellationToken)
     {
-        ObjectDisposedException.ThrowIf(_disposed, this);
+        ObjectDisposedException.ThrowIf(IsDisposed, this);
 
-        if (_connection is { } connection)
+        if (Volatile.Read(ref _connection) is { } connection)
             return connection;
 
-        using var connecting = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _disposing.Token);
-        await _semaphore.WaitAsync(connecting.Token);
+        await _semaphore.WaitAsync(cancellationToken);
 
         try
         {
-            return _connection ?? await ConnectAsync(connecting.Token);
+            ObjectDisposedException.ThrowIf(IsDisposed, this);
+
+            return Volatile.Read(ref _connection) ?? await ConnectAsync(cancellationToken);
         }
         finally
         {
@@ -83,8 +118,9 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
 
     private async ValueTask<IConnection> ConnectAsync(CancellationToken cancellationToken)
     {
+        // neither a caller that gave up nor an owner that was disposed is a failure to try again
         var policy = Policy
-                    .Handle<Exception>()
+                    .Handle<Exception>(_ => !cancellationToken.IsCancellationRequested && !IsDisposed)
                     .WaitAndRetryAsync(5,
                         retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)),
                         (ex, timeSpan, context) =>
@@ -92,15 +128,25 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
                             _logger.LogError(ex, $"an exception has occurred while opening RabbitMQ connection: {ex.Message}");
                         });
 
-        var connection = await policy.ExecuteAsync(_connectionFactory.CreateConnectionAsync, cancellationToken);
-        connection.ConnectionShutdownAsync += OnConnectionShutdownAsync;
-        _connection = connection;
-
-        // Dispose reads the connection after it sets the flag, and this reads the flag after it sets the connection:
-        // one of the two closes a connection that was being opened while the owner was disposed
-        if (_disposed)
+        IConnection connection;
+        try
         {
-            Close(connection);
+            connection = await policy.ExecuteAsync(_connectionFactory.CreateConnectionAsync, cancellationToken);
+        }
+        catch (Exception) when (IsDisposed && !cancellationToken.IsCancellationRequested)
+        {
+            throw new ObjectDisposedException(nameof(RabbitPersistentConnection));
+        }
+
+        connection.ConnectionShutdownAsync += OnConnectionShutdownAsync;
+        connection.ConnectionRecoveryErrorAsync += OnRecoveryErrorAsync;
+        connection.RecoverySucceededAsync += OnRecoverySucceededAsync;
+        Volatile.Write(ref _connection, connection);
+
+        // the owner was disposed while the connection was being opened: whichever of the two takes it out closes it
+        if (IsDisposed)
+        {
+            Close(Interlocked.Exchange(ref _connection, null));
             throw new ObjectDisposedException(nameof(RabbitPersistentConnection));
         }
 
@@ -108,14 +154,14 @@ public sealed class RabbitPersistentConnection : IDisposable, IBusConnection
     }
 
     /// <exception cref="InvalidOperationException">
-    /// the connection is lost and has not been recovered yet, or this was disposed (<see cref="ObjectDisposedException"/>).
+    /// the connection is closed and has not been recovered, or this was disposed (<see cref="ObjectDisposedException"/>).
     /// </exception>
     public async Task<IChannel> CreateChannelAsync(CancellationToken cancellationToken = default)
     {
         var connection = await GetConnectionAsync(cancellationToken);
 
-        if (!connection.IsOpen)
-            throw new InvalidOperationException("No RabbitMQ connections are available to perform this action: the connection is closed, and is being recovered");
+        if (_lost || !connection.IsOpen)
+            throw new InvalidOperationException("No RabbitMQ connections are available to perform this action: the connection is closed");
 
         return await connection.CreateChannelAsync(cancellationToken: cancellationToken);
     }

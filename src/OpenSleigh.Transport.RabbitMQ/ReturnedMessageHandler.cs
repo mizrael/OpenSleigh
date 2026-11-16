@@ -12,7 +12,8 @@ namespace OpenSleigh.Transport.RabbitMQ;
 /// puts the messages the broker returned back in the outbox, one by one, to be published again after
 /// <see cref="RabbitConfiguration.RetryDelay"/>. A message that still comes back when
 /// <see cref="RabbitConfiguration.ReturnedMessageRetryPeriod"/> is over is published to its dead letter exchange instead,
-/// and dropped when that fails or when no queue takes it there: it never goes back to the outbox.
+/// and dropped when that fails or when no queue takes it there: it never goes back to the outbox. While the connection
+/// to the broker is lost it waits here for it instead.
 /// </summary>
 /// <remarks>
 /// When a message first came back is stored with it in the outbox and published with it: nothing is remembered here.
@@ -181,7 +182,7 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
             }
             finally
             {
-                // they are gone, one way or the other
+                // they are gone, one way or the other: the ones that wait again were taken out
                 foreach (var message in expired)
                     Release(message.Returned.Body.Length);
                 expired.Clear();
@@ -290,7 +291,10 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
         }
     }
 
-    private async Task DeadLetterAsync(IReadOnlyList<ParsedMessage> expired, CancellationToken cancellationToken)
+    // a message whose period is over while the connection to the broker is lost is not lost with it: it waits again,
+    // here and not in the outbox, with the ones behind it, and is given to its dead letter exchange once the
+    // connection is back. Until every hosted service has stopped: from then on nothing waits
+    private async Task DeadLetterAsync(List<ParsedMessage> expired, CancellationToken cancellationToken)
     {
         for (var index = 0; index < expired.Count; index++)
         {
@@ -300,25 +304,53 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
                 return;
             }
 
+            // asked before and after: a connection that came back in between says nothing of the attempt
+            var connected = _connection.IsConnected;
             try
             {
+                if (!connected)
+                    throw new InvalidOperationException("the connection to the broker is lost");
+
                 await DeadLetterAsync(expired[index], cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
+                if (!cancellationToken.IsCancellationRequested && !(connected && _connection.IsConnected))
+                {
+                    var waiting = await WaitAgainAsync(expired, index).ConfigureAwait(false);
+                    if (waiting > 0)
+                    {
+                        LogLost(expired.Skip(index + waiting), Stopped, ex);
+                        expired.RemoveRange(index, waiting);
+                        return;
+                    }
+                }
+
                 var reason = cancellationToken.IsCancellationRequested
                     ? Stopped
                     : $"its retry period is over, and it could not be given to its dead letter exchange. {ex.Message}";
                 LogLost(expired[index].Returned, reason, ex);
-
-                // without a connection the others are not tried: each of them would wait as long to find the broker away
-                if (!cancellationToken.IsCancellationRequested && !_connection.IsConnected)
-                {
-                    LogLost(expired.Skip(index + 1), reason, ex);
-                    return;
-                }
             }
         }
+    }
+
+    /// <returns>how many of the messages, from that one on, wait again: none once no more messages are taken.</returns>
+    private async Task<int> WaitAgainAsync(IReadOnlyList<ParsedMessage> expired, int from)
+    {
+        if (!await PauseAsync().ConfigureAwait(false))
+            return 0;
+
+        var waiting = 0;
+        while (from + waiting < expired.Count && _waiting.Writer.TryWrite(expired[from + waiting].Returned))
+            waiting++;
+
+        if (waiting > 0)
+            _logger.LogWarning(
+                "{Count} message(s) returned by the broker, whose retry period is over, cannot be given to their dead letter exchange: " +
+                "the connection to the broker is lost. They wait for it.",
+                waiting);
+
+        return waiting;
     }
 
     // the exchange is declared, so that publishing to it cannot close the channel, and no queue is:

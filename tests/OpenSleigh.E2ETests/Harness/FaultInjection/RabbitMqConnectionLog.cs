@@ -46,13 +46,20 @@ public static class RabbitMqConnectionLogExtensions
     /// names every connection a host opens to RabbitMQ after the log, and records it there.
     /// Call it from <see cref="HostSetup.ConfigureServices"/>, on a combination that uses RabbitMQ.
     /// </summary>
-    public static IServiceCollection TrackRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log)
+    /// <param name="recoverAfter">
+    /// how long the client waits before it recovers a connection that was lost, instead of the retry delay of the run:
+    /// long enough for a scenario to see what the hosts do in the meantime.
+    /// </param>
+    public static IServiceCollection TrackRabbitMqConnections(this IServiceCollection services, RabbitMqConnectionLog log, TimeSpan? recoverAfter = null)
     {
         ArgumentNullException.ThrowIfNull(log);
 
         return services.Decorate<IConnectionFactory>((_, factory) =>
         {
             factory.ClientProvidedName = log.Name;
+            if (recoverAfter is { } interval)
+                ((ConnectionFactory)factory).NetworkRecoveryInterval = interval;
+
             return new LoggingConnectionFactory(factory, log);
         });
     }

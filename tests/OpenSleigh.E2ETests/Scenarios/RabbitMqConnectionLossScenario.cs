@@ -25,6 +25,67 @@ public class RabbitMqConnectionLossScenario(ITestOutputHelper console) : Scenari
         Assert.All(outcome.Runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
     }
 
+    // the client recovers the connection after this long: time for the relay, which reads its outbox every 250 ms,
+    // to find it closed more than once
+    private static readonly TimeSpan RecoveryDelay = TimeSpan.FromSeconds(3);
+    private const int FailedRelayPassesToWaitFor = 2;
+
+    // one host: its relay is the only one that can publish the message, and its connection the only one there is
+    [Theory]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1])]
+    public async Task a_message_published_while_the_connection_is_lost_stays_in_the_outbox_and_is_handled_once_when_it_is_back(string combination, int hostsCount)
+    {
+        var connectionLog = new RabbitMqConnectionLog();
+        var runs = new HandlerRuns();
+        var activity = new HostActivity();
+
+        var setup = new HostSetup(bus => bus.AddSaga<InvoiceSaga>())
+        {
+            ConfigureServices = services => services
+                .RecordHandlerRuns(runs)
+                .RecordHostActivity(activity)
+                .TrackRabbitMqConnections(connectionLog, recoverAfter: RecoveryDelay)
+        };
+
+        await RunScenarioAsync(combination, hostsCount, setup,
+            async (run, cancellationToken) =>
+            {
+                using var connections = RabbitMqConnections.Of(connectionLog);
+                var host = run.AnyHost;
+
+                // the host has published and consumed: its channels and its consumers are there to be recovered
+                var before = Guid.NewGuid().ToString();
+                await host.PublishNewAsync(new IssueInvoice(before), cancellationToken);
+                await run.WaitForReleasedSagaAsync<InvoiceSaga>(before, MessagesOfAnInvoice, cancellationToken);
+
+                var open = await run.WaitForAsync("the broker to list the connection of the host",
+                    listing => connections.WaitForAsync(hostsCount, listing), cancellationToken);
+                var closuresBefore = connectionLog.Closures;
+                await connections.CloseAsync(open, cancellationToken);
+                await run.WaitUntilAsync("the host to see its connection closed",
+                    () => connectionLog.Closures >= closuresBefore + open.Count, cancellationToken);
+
+                activity.StartOver();
+                var meanwhile = Guid.NewGuid().ToString();
+                await host.PublishNewAsync(new IssueInvoice(meanwhile), cancellationToken);
+
+                await run.WaitUntilAsync($"the relay to find the connection closed {FailedRelayPassesToWaitFor} times",
+                    () => activity.FailedRelayPasses(host) >= FailedRelayPassesToWaitFor, cancellationToken);
+                Assert.False(activity.HasPublished(host));
+                Assert.Equal(1, await run.CountOutboxMessagesAsync(cancellationToken));
+
+                // on the connection it had, and on no other: the consumers are the ones the client recovered
+                await run.WaitForReleasedSagaAsync<InvoiceSaga>(meanwhile, MessagesOfAnInvoice, cancellationToken);
+                Assert.Equal(hostsCount, connectionLog.Opened);
+                Assert.Equal(hostsCount, connectionLog.Open);
+            },
+            // a message that is delivered again while its first delivery is still being handled finds the saga locked
+            AssertOnlyLockConflictsAsync);
+
+        Assert.Equal(2 * MessagesOfAnInvoice, runs.HandledMessages);
+        Assert.All(runs.RunsByMessage(), runsOfMessage => Assert.Equal(1, runsOfMessage.Value));
+    }
+
     // twice: a host that ends up with one connection more every time is not seen by losing them once.
     // And stopped: a host that opens a connection when its own is closed leaves it behind
     [Theory]

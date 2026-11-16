@@ -158,6 +158,26 @@ public class ChannelFactoryTests
     }
 
     [Fact]
+    public async Task A_closed_channel_should_be_left_for_the_client_to_recover_while_there_is_no_connection()
+    {
+        var channel = Substitute.For<IChannel>();
+        channel.IsOpen.Returns(true);
+        var connection = Substitute.For<IBusConnection>();
+        connection.CreateChannelAsync(Arg.Any<CancellationToken>())
+                  .Returns(Task.FromResult(channel), Task.FromException<IChannel>(new InvalidOperationException("the connection is closed")));
+        var sut = new ChannelFactory(connection);
+        await sut.GetPublishChannelAsync();
+
+        channel.IsOpen.Returns(false);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.GetPublishChannelAsync().AsTask());
+        channel.DidNotReceive().Dispose();
+
+        channel.IsOpen.Returns(true);
+        Assert.Same(channel, await sut.GetPublishChannelAsync());
+        await connection.Received(2).CreateChannelAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task Dispose_should_dispose_cached_channels()
     {
         var channel = Substitute.For<IChannel>();
