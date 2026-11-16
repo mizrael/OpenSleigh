@@ -285,9 +285,9 @@ What these scenarios assert, because it is how the library behaves today:
   that window;
 - a message whose saga is locked is published to the retry queue before it is acknowledged, on the same channel: a
   connection that goes away in between leaves the message with the broker, at worst twice, and a saga ignores the
-  copy it has handled. `RabbitMqConnectionLossInFlightScenario` runs it with three hosts: the message that could not
-  be acknowledged is delivered to a host that is still connected, which sends it to the retry queue while its own
-  connection is being closed. Which host loses its connection first is up to the broker, so a run does not always
-  go through it.
+  copy it has handled. `RabbitMqConnectionLossDuringRetryScenario` closes the connections of the hosts when one of
+  them is about to publish to its retry exchange, with a channel that wraps the one the subscriber consumes on: the
+  scenario fails every time when the message is acknowledged first. `RabbitMqConnectionLossInFlightScenario` with
+  three hosts goes near that moment only when the broker happens to close the connections in the right order.
 
 Kafka has no such switch: its interruptions need a proxy between the hosts and the broker, which the suite does not have.

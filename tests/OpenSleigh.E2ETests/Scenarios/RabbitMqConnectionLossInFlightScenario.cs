@@ -12,13 +12,13 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
 {
     private const int MessagesOfAnInvoice = 2;
 
-    // the store takes no part in this, but every one of them runs it: what the scenario needs from the store is that
-    // the saga stays locked while its handler waits. With one host the message comes back to the host that was
-    // handling it, once it is connected again. With three it is delivered at once to a host that is still connected,
-    // which finds the saga locked and sends the message to the retry queue on a connection that is about to be
-    // closed as well: the message must not be lost between its queue and the retry queue
+    // one store: it is the broker that goes away here, and the store takes no part in it. With one host the message
+    // comes back to the host that was handling it, once it is connected again. With three it is delivered at once to
+    // a host that is still connected, which finds the saga locked and sends the message to the retry queue, on a
+    // connection that is about to be closed as well. Which connection the broker closes first is not the scenario's
+    // to say: RabbitMqConnectionLossDuringRetryScenario closes them at that very moment
     [Theory]
-    [MatrixData(Only = [Combinations.SqlServerRabbitMq, Combinations.PostgreSqlRabbitMq, Combinations.MongoDbRabbitMq], HostsCounts = [1, 3])]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1, 3])]
     public async Task a_message_that_was_being_handled_when_the_connection_was_closed_is_delivered_again_and_handled_once(string combination, int hostsCount)
     {
         await using var connectionLog = new RabbitMqConnectionLog(Console);
