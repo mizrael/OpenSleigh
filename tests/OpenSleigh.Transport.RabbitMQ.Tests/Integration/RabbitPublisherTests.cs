@@ -53,7 +53,9 @@ public class RabbitPublisherTests : IClassFixture<RabbitFixture>
             Assert.Equal(envelope.CorrelationId, evt.BasicProperties.CorrelationId);
             Assert.Equal(envelope.MessageId, evt.BasicProperties.MessageId);
             Assert.Equal(Encoding.UTF8.GetBytes(typeof(FakeSagaStarter).FullName), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.MessageType)]);
-            Assert.Equal(Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString()), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)]);
+            Assert.Equal(
+                Encoding.UTF8.GetBytes(envelope.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture)),
+                (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.CreatedAt)]);
             Assert.Equal(Encoding.UTF8.GetBytes(envelope.SenderId), (byte[])evt.BasicProperties.Headers[nameof(MessageEnvelope.SenderId)]);
 
             Assert.False(evt.Body.IsEmpty);
