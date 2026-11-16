@@ -259,7 +259,8 @@ public abstract class SqlOutboxRelayTests
         var now = DateTimeOffset.UtcNow;
         var earliest = now;
 
-        // none of the messages is in the outbox any more, each host got them back at another time and in another order
+        // none of the messages is in the outbox any more, each host got them back at another time and in another order.
+        // Two hosts that insert one at the same time: one of them may be refused, and tries again as the transport does
         await Task.WhenAll(Enumerable.Range(0, hosts).Select(host => Task.Run(async () =>
         {
             var returned = messages
@@ -267,7 +268,17 @@ public abstract class SqlOutboxRelayTests
                 .OrderBy(_ => Random.Shared.Next())
                 .ToArray();
 
-            await PutBackAsync(provider, returned);
+            foreach (var message in returned)
+            {
+                try
+                {
+                    await PutBackAsync(provider, message);
+                }
+                catch (System.Data.Common.DbException)
+                {
+                    await PutBackAsync(provider, message);
+                }
+            }
         })));
 
         await using var reader = provider.CreateAsyncScope();
@@ -289,7 +300,20 @@ public abstract class SqlOutboxRelayTests
 
         await using var relay = provider.CreateAsyncScope();
         await using var transaction = await StartTransactionAsync(relay);
-        Assert.Equal(BatchSize, (await ReadPendingIdsAsync(relay)).Count);
+        var held = await ReadPendingIdsAsync(relay);
+        Assert.Equal(BatchSize, held.Count);
+
+        // messages that are no longer in the outbox, whose place is right before and right after each row the relay holds
+        var serializer = provider.GetRequiredService<ISerializer>();
+        var neighbours = held.Select(id => id + "-next").Append("00000000-before-every-row")
+            .Select(id =>
+            {
+                Assert.True(MessageEnvelope.TryCreate(
+                    serializer.Serialize(new FakeMessage()), id, Guid.NewGuid().ToString(), returnedAt, typeof(FakeMessage), "sender", serializer, out var envelope));
+                return envelope!.Returned(returnedAt, returnedAt + NotDueDelay);
+            })
+            .ToArray();
+        await PutBackAsync(provider, neighbours).WaitAsync(TimeSpan.FromSeconds(30));
 
         // messages that are no longer in the outbox, next to the ones the relay holds, put back while others are appended
         var work = Enumerable.Range(0, hosts).SelectMany(_ => new[]
@@ -313,7 +337,7 @@ public abstract class SqlOutboxRelayTests
 
         await using var reader = provider.CreateAsyncScope();
         Assert.Equal(
-            2 * BatchSize + 2 * hosts * rounds * messagesPerRound,
+            2 * BatchSize + neighbours.Length + 2 * hosts * rounds * messagesPerRound,
             await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.CountAsync());
     }
 

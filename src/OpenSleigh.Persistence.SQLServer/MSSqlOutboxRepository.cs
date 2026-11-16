@@ -52,12 +52,13 @@ internal class MSSqlOutboxRepository : SqlOutboxRepository, IOutboxReturnReposit
     private const string CreatedAt = $"[{nameof(OutboxMessage.CreatedAt)}]";
     private const string FirstReturnedAt = $"[{nameof(OutboxMessage.FirstReturnedAt)}]";
 
-    // one short transaction: the row is looked up by key and waited for when a relay holds it. The lock on the key,
-    // or on where it would be, is kept until the row is updated or inserted, so that nobody stores the same message
-    // in between. A failure ends the transaction
+    // one short transaction: the row is looked up by key and waited for when a relay holds it. When it is not there
+    // nothing is locked, a relay may hold the rows next to where it would be, and the row is inserted. Two hosts
+    // that insert the same message at the same time: one of them fails with a duplicate key, which ends
+    // the transaction, and whoever asked tries again
     private const string PutBackCommand =
         "SET XACT_ABORT ON; BEGIN TRANSACTION; " +
-        $"UPDATE {Table} WITH (UPDLOCK, HOLDLOCK) SET {DeliverAt} = {{6}}, " +
+        $"UPDATE {Table} WITH (UPDLOCK) SET {DeliverAt} = {{6}}, " +
         $"{FirstReturnedAt} = CASE WHEN {FirstReturnedAt} >= {CreatedAt} AND {FirstReturnedAt} < {{7}} THEN {FirstReturnedAt} ELSE {{7}} END " +
         $"WHERE {MessageId} = {{0}}; " +
         $"IF @@ROWCOUNT = 0 INSERT INTO {Table} ({MessageId}, [{nameof(OutboxMessage.CorrelationId)}], [{nameof(OutboxMessage.Body)}], " +

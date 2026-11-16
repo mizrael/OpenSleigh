@@ -369,16 +369,23 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         Assert.Equal(0, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
     }
 
-    [Fact]
-    public async Task PutBackAsync_should_not_keep_a_stored_time_of_first_return_that_is_earlier_than_the_creation_of_the_message()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PutBackAsync_should_not_keep_a_stored_time_of_first_return_that_is_earlier_than_the_creation_of_the_message(bool inTheSameMillisecond)
     {
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
         var message = CreateMessage();
+        while (message.CreatedAt.Ticks % TimeSpan.TicksPerMillisecond == 0)
+            message = CreateMessage();
         var cameBack = message.CreatedAt.AddSeconds(10);
 
-        // stored by a host whose clock was behind
-        await sut.PutBackAsync(message.Returned(message.CreatedAt.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(-1)));
+        // stored by a host whose clock was behind: by a minute, or by less than the millisecond dates are stored to
+        var beforeCreation = inTheSameMillisecond
+            ? message.CreatedAt.AddTicks(-(message.CreatedAt.Ticks % TimeSpan.TicksPerMillisecond))
+            : message.CreatedAt.AddMinutes(-1);
+        await sut.PutBackAsync(message.Returned(beforeCreation, DateTimeOffset.UtcNow.AddMinutes(-1)));
         await sut.PutBackAsync(message.Returned(cameBack, DateTimeOffset.UtcNow.AddMinutes(-1)));
 
         var stored = Assert.Single(await sut.ReadPendingAsync());
@@ -394,22 +401,12 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var earliest = now.AddMilliseconds(1);
 
         // each host got the messages back at another time, and none of them is in the outbox any more.
-        // Two hosts that insert a message at the same time: one of them is refused, and tries again
+        // Two hosts that insert a message at the same time: the server runs the update of the second one again
         await Task.WhenAll(System.Linq.Enumerable.Range(0, 8).Select(host => Task.Run(async () =>
         {
             var sut = CreateSut(db);
             foreach (var message in messages)
-            {
-                var returned = message.Returned(earliest.AddSeconds(host), now.AddHours(1));
-                try
-                {
-                    await sut.PutBackAsync(returned);
-                }
-                catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
-                {
-                    await sut.PutBackAsync(returned);
-                }
-            }
+                await sut.PutBackAsync(message.Returned(earliest.AddSeconds(host), now.AddHours(1)));
         })));
 
         var ids = messages.Select(message => message.MessageId).ToArray();

@@ -73,9 +73,20 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
                                        .ConfigureAwait(false);
     }
 
-    // built once: this delete runs for every message that is published
-    private static readonly ExpressionFieldDefinition<Entities.OutboxMessage, string> MessageIdField = new(e => e.MessageId);
-    private static readonly ExpressionFieldDefinition<Entities.OutboxMessage, string?> LockIdField = new(e => e.LockId);
+    // rendered once, with the names and the serializers of the class map: this delete runs for every message
+    // that is published, and an expression would be translated each time
+    private static readonly FieldDefinition<Entities.OutboxMessage, string> MessageIdField = Rendered(e => e.MessageId);
+    private static readonly FieldDefinition<Entities.OutboxMessage, string?> LockIdField = Rendered(e => e.LockId);
+
+    private static FieldDefinition<Entities.OutboxMessage, TField> Rendered<TField>(
+        System.Linq.Expressions.Expression<Func<Entities.OutboxMessage, TField>> field)
+    {
+        var rendered = new ExpressionFieldDefinition<Entities.OutboxMessage, TField>(field).Render(
+            new RenderArgs<Entities.OutboxMessage>(
+                MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer<Entities.OutboxMessage>(),
+                MongoDB.Bson.Serialization.BsonSerializer.SerializerRegistry));
+        return new StringFieldDefinition<Entities.OutboxMessage, TField>(rendered.FieldName, rendered.FieldSerializer);
+    }
 
     // the claim of the last read of this repository that claimed anything. The relay creates a repository for each pass
     // and reads once: a repository that is read again before it has deleted what it read first leaves those messages
@@ -90,8 +101,8 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
     /// <para>Unless that claim expired while its relay was still publishing, and another relay claimed the message
     /// and published it as well: its claim is the one that is removed, its delete then removes nothing,
     /// and the message is published once more than the two relays already did.</para>
-    /// <para>When two hosts store a message that is not there at the same time, one of them fails with a duplicate key,
-    /// and succeeds when it tries again.</para>
+    /// <para>When two hosts store a message that is not there at the same time, the insert of one of them finds
+    /// the document of the other: the server (4.2 and later) then runs its update again, on that document.</para>
     /// </remarks>
     public async ValueTask PutBackAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
@@ -103,9 +114,10 @@ public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
         var sameMessage = filter.Eq(e => e.MessageId, entity.MessageId);
 
         // a time of first return that is earlier than the creation of the message is not one to keep.
-        // On its own: an update cannot compare two fields of the document it changes
+        // On its own: an update cannot compare two fields of the document it changes. Dates are stored
+        // to the millisecond, and one in the millisecond the message was created in was rounded up past it
         await _dbContext.OutboxMessages.UpdateOneAsync(
-            filter.And(sameMessage, filter.Lt(e => e.FirstReturnedAt, entity.CreatedAt.UtcDateTime)),
+            filter.And(sameMessage, filter.Lt(e => e.FirstReturnedAt, Entities.OutboxMessage.NextWholeMillisecond(entity.CreatedAt.UtcDateTime))),
             update.Unset(e => e.FirstReturnedAt),
             cancellationToken: cancellationToken).ConfigureAwait(false);
 

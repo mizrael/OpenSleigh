@@ -398,29 +398,147 @@ public class ReturnedMessageHandlerTests
         const int capacity = 10_000;
         const int tooMany = 50;
         var sut = CreateSut(Period);
-        var release = HoldTheOutbox();
+        var firstAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        _outbox.PutBackAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Interlocked.Increment(ref attempts) == 1 ? new ValueTask(firstAttempt.Task) : ValueTask.CompletedTask);
 
-        // the worker is busy with the first one: the others wait
+        // the worker is busy with the first one, which has its place among the ones that wait
         sut.Accept(Returned("message-first"));
-        await OutboxIsAskedAsync();
-        for (var index = 0; index < capacity + tooMany; index++)
+        await WaitUntilAsync(() => PutBackCount == 1);
+        for (var index = 0; index < capacity - 1 + tooMany; index++)
             sut.Accept(Returned($"message-{index}"));
 
         Assert.Equal(tooMany, Errors.Count(text => text.Contains("too many")));
 
-        release.SetResult();
+        // the first one cannot be stored: its place is still there when it waits again
+        firstAttempt.SetException(new InvalidOperationException("the outbox is away"));
+        await WaitUntilAsync(() => PutBackCount == capacity + 1);
         await sut.StoppedAsync(CancellationToken.None);
 
-        Assert.Equal(capacity + 1, _putBack.Count);
+        Assert.Equal(tooMany, Errors.Length);
+        Assert.Equal("message-first", _putBack[^1].MessageId);
+    }
+
+    [Fact]
+    public async Task A_message_should_keep_its_room_until_it_is_given_to_its_dead_letter_exchange()
+    {
+        var large = LargeBody();
+        var deadLettering = new SemaphoreSlim(0);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _deadLetterChannel
+            .BasicPublishAsync(string.Empty, string.Empty, default, default(BasicProperties)!, default, default)
+            .ReturnsForAnyArgs(_ =>
+            {
+                deadLettering.Release();
+                return new ValueTask(release.Task);
+            });
+        var sut = CreateSut(TimeSpan.Zero);
+
+        // the broker keeps the first one waiting: it is still here
+        sut.Accept(Returned("message-0", body: large));
+        Assert.True(await deadLettering.WaitAsync(TimeSpan.FromSeconds(20)));
+        sut.Accept(Returned("message-1", body: large));
+        sut.Accept(Returned("message-2", body: large));
+
+        Assert.Contains("message-2", Assert.Single(Errors, text => text.Contains("too many")));
+
+        release.SetResult();
+        await sut.StoppedAsync(CancellationToken.None);
+    }
+
+    [Fact]
+    public async Task A_pass_should_end_with_a_message_that_cannot_be_stored_and_not_keep_the_dead_letters_waiting()
+    {
+        var firstAttempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var attempts = 0;
+        _outbox.PutBackAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
+               .Returns(_ => Interlocked.Increment(ref attempts) == 1
+                   ? new ValueTask(firstAttempt.Task)
+                   : ValueTask.FromException(new InvalidOperationException("the outbox is away")));
+        var putBackWhenDeadLettering = -1;
+        _deadLetterChannel
+            .WhenForAnyArgs(channel => channel.BasicPublishAsync(string.Empty, string.Empty, default, default(BasicProperties)!, default, default))
+            .Do(_ => Interlocked.CompareExchange(ref putBackWhenDeadLettering, PutBackCount, -1));
+        var sut = CreateSut(Period);
+
+        // the worker is busy with the first one: the next two are handled in the same pass
+        sut.Accept(Returned("message-0"));
+        await WaitUntilAsync(() => PutBackCount == 1);
+        sut.Accept(Returned("message-1", firstReturnedAt: Now - Period));
+        sut.Accept(Returned("message-2"));
+        firstAttempt.SetResult();
+        await WaitUntilAsync(() => Volatile.Read(ref putBackWhenDeadLettering) >= 0);
+        await sut.StoppedAsync(CancellationToken.None);
+
+        // the one that failed was not read again, and again, before the dead letter went out
+        Assert.Equal(2, putBackWhenDeadLettering);
+    }
+
+    [Fact]
+    public async Task A_message_that_cannot_be_stored_once_the_application_is_stopping_should_be_reported_as_lost_without_waiting()
+    {
+        var attempt = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _outbox.PutBackAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>()).Returns(_ => new ValueTask(attempt.Task));
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1"));
+        await WaitUntilAsync(() => PutBackCount == 1);
+        var stopped = sut.StoppedAsync(CancellationToken.None);
+        attempt.SetException(new InvalidOperationException("the outbox is away"));
+        await stopped;
+
+        Assert.Contains("message-1", Assert.Single(Errors));
+        Assert.False(IsLogged("could not be put back"));
+    }
+
+    [Fact]
+    public async Task A_message_that_waits_to_be_tried_again_should_be_reported_as_lost_at_once_when_the_application_stops()
+    {
+        _clock.TimersFire = false;
+        _outbox.PutBackAsync(Arg.Any<MessageEnvelope>(), Arg.Any<CancellationToken>())
+               .Returns(_ => ValueTask.FromException(new InvalidOperationException("the outbox is away")));
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1"));
+        await WaitUntilAsync(() => IsLogged("could not be put back"));
+        await sut.StoppedAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(20));
+
+        Assert.Contains("message-1", Assert.Single(Errors));
+        Assert.Equal(1, PutBackCount);
+    }
+
+    [Fact]
+    public async Task A_message_should_not_be_stored_as_returned_before_it_was_created_when_the_clock_of_the_host_is_behind()
+    {
+        _clock.Now = CreatedAt.AddMinutes(-1);
+        var sut = CreateSut(Period);
+
+        sut.Accept(Returned("message-1"));
+        await sut.StoppedAsync(CancellationToken.None);
+
+        Assert.Equal(CreatedAt, Assert.Single(_putBack).FirstReturnedAt);
+    }
+
+    private bool IsLogged(string text)
+    {
+        lock (_log)
+            return _log.Any(entry => entry.Text.Contains(text));
+    }
+
+    // a message that can be read, followed by blanks: two of them fit in what can wait, three do not
+    private static byte[] LargeBody()
+    {
+        var large = new byte[48 * 1024 * 1024];
+        Array.Fill(large, (byte)' ');
+        SerializedMessage.CopyTo(large, 0);
+        return large;
     }
 
     [Fact]
     public async Task Messages_should_be_refused_and_reported_when_the_ones_that_are_waiting_are_too_large()
     {
-        // a message that can be read, followed by blanks: two of them fit in what can wait, three do not
-        var large = new byte[48 * 1024 * 1024];
-        Array.Fill(large, (byte)' ');
-        SerializedMessage.CopyTo(large, 0);
+        var large = LargeBody();
         var sut = CreateSut(Period);
         var release = HoldTheOutbox();
 
@@ -556,7 +674,10 @@ public class ReturnedMessageHandlerTests
 
         public override DateTimeOffset GetUtcNow() => Now;
 
+        /// <summary>when false, what waits for a delay waits until it is told to stop waiting.</summary>
+        public bool TimersFire { get; set; } = true;
+
         public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
-            => base.CreateTimer(callback, state, TimeSpan.Zero, period);
+            => base.CreateTimer(callback, state, TimersFire ? TimeSpan.Zero : Timeout.InfiniteTimeSpan, period);
     }
 }

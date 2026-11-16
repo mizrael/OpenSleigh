@@ -46,14 +46,21 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
     private readonly TimeProvider _timeProvider;
     private readonly TimeSpan _republishDelay;
 
-    private readonly Channel<ReturnedMessage> _waiting = Channel.CreateBounded<ReturnedMessage>(
-        new BoundedChannelOptions(MaxWaitingMessages) { SingleReader = true });
+    // not bounded by itself: a message that is tried again goes back in, and its place must still be there
+    private readonly Channel<ReturnedMessage> _waiting = Channel.CreateUnbounded<ReturnedMessage>(
+        new UnboundedChannelOptions { SingleReader = true });
 
-    // the bodies of the messages that are waiting and of the ones that are being handled
+    // the messages that are waiting and the ones that are being handled, and their bodies:
+    // a message keeps its place and its room until it is stored, dead-lettered or reported lost
+    private int _waitingMessages;
     private long _waitingBytes;
 
     // cancelled when whoever stops this no longer waits for the messages that are left
     private readonly CancellationTokenSource _givingUp = new();
+
+    // cancelled when no more messages are taken: nothing waits to be tried again from then on.
+    // Not disposed: it holds nothing, and the host may still close this once it is disposed
+    private readonly CancellationTokenSource _closing = new();
     private readonly Task _worker;
     private volatile bool _closed;
 
@@ -86,35 +93,61 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
     {
         ArgumentNullException.ThrowIfNull(returned);
 
-        if (_closed || _waiting.Reader.Count >= MaxWaitingMessages)
-        {
-            LogRefused(returned);
-            return;
-        }
-
         // the room for the body is taken before the body is copied: a flood that cannot be taken must not cost
         // a copy of every body, and callers that come together cannot take more room than there is
         var size = returned.Body.Length;
-        if (Interlocked.Add(ref _waitingBytes, size) > MaxWaitingBytes)
+        if (_closed || !TryReserve(size))
         {
-            Interlocked.Add(ref _waitingBytes, -size);
             LogRefused(returned);
             return;
         }
 
-        // the body is only there for the length of this call
-        var message = new ReturnedMessage(
-            new BasicProperties(returned.BasicProperties),
-            returned.Body.ToArray(),
-            returned.Exchange,
-            returned.ReplyText,
-            _timeProvider.GetUtcNow());
+        var waits = false;
+        try
+        {
+            // the body is only there for the length of this call
+            var message = new ReturnedMessage(
+                new BasicProperties(returned.BasicProperties),
+                returned.Body.ToArray(),
+                returned.Exchange,
+                returned.ReplyText,
+                _timeProvider.GetUtcNow());
 
-        if (_waiting.Writer.TryWrite(message))
-            return;
+            waits = _waiting.Writer.TryWrite(message);
+        }
+        finally
+        {
+            if (!waits)
+                Release(size);
+        }
 
+        if (!waits)
+            LogRefused(returned);
+    }
+
+    // the room is only taken when it is there: a body that does not fit takes none from the ones that do
+    private bool TryReserve(int size)
+    {
+        long waitingBytes;
+        do
+        {
+            waitingBytes = Interlocked.Read(ref _waitingBytes);
+            if (waitingBytes + size > MaxWaitingBytes)
+                return false;
+        }
+        while (Interlocked.CompareExchange(ref _waitingBytes, waitingBytes + size, waitingBytes) != waitingBytes);
+
+        if (Interlocked.Increment(ref _waitingMessages) <= MaxWaitingMessages)
+            return true;
+
+        Release(size);
+        return false;
+    }
+
+    private void Release(int size)
+    {
+        Interlocked.Decrement(ref _waitingMessages);
         Interlocked.Add(ref _waitingBytes, -size);
-        LogRefused(returned);
     }
 
     private async Task HandleWaitingMessagesAsync()
@@ -123,11 +156,12 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
 
         while (await _waiting.Reader.WaitToReadAsync().ConfigureAwait(false))
         {
-            // the ones whose period is over are kept for the end of the pass: the broker can keep them waiting
-            expired.Clear();
-            for (var handled = 0; handled < MaxMessagesPerPass && _waiting.Reader.TryRead(out var message); handled++)
+            // the ones whose period is over are kept for the end of the pass: the broker can keep them waiting.
+            // The pass ends with a message that waits again: it is not read twice in a pass
+            var waitsAgain = false;
+            for (var handled = 0; !waitsAgain && handled < MaxMessagesPerPass && _waiting.Reader.TryRead(out var message); handled++)
             {
-                var waitsAgain = false;
+                var expiredBefore = expired.Count;
                 try
                 {
                     waitsAgain = await HandleAsync(message, expired, _givingUp.Token).ConfigureAwait(false);
@@ -137,11 +171,21 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
                     LogLost(message, ex.Message, ex);
                 }
 
-                if (!waitsAgain)
-                    Interlocked.Add(ref _waitingBytes, -message.Body.Length);
+                if (!waitsAgain && expired.Count == expiredBefore)
+                    Release(message.Body.Length);
             }
 
-            await DeadLetterAsync(expired, _givingUp.Token).ConfigureAwait(false);
+            try
+            {
+                await DeadLetterAsync(expired, _givingUp.Token).ConfigureAwait(false);
+            }
+            finally
+            {
+                // they are gone, one way or the other
+                foreach (var message in expired)
+                    Release(message.Returned.Body.Length);
+                expired.Clear();
+            }
         }
     }
 
@@ -163,6 +207,11 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
             var firstReturnedAt = envelope.FirstReturnedAt is { } first && first >= envelope.CreatedAt && first <= returned.ReturnedAt
                 ? first
                 : returned.ReturnedAt;
+
+            // the clock of this host is behind the one that created the message: the outbox keeps the earliest time
+            // it is given, and is not given one earlier than the creation of the message
+            if (firstReturnedAt < envelope.CreatedAt)
+                firstReturnedAt = envelope.CreatedAt;
             message = new ParsedMessage(returned, envelope, firstReturnedAt);
         }
         catch (Exception ex)
@@ -202,20 +251,20 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
         }
         catch (Exception ex)
         {
-            if (!cancellationToken.IsCancellationRequested)
+            // once no more messages are taken nothing can wait again: the message is lost now, not after a pause
+            if (!_closed)
+            {
                 _logger.LogWarning(
                     ex,
                     "message '{MessageId}' of type '{MessageType}', returned by the broker, could not be put back in the outbox: {Error}. " +
                     "It is tried again later, until its retry period is over.",
                     message.Envelope.MessageId, message.Envelope.MessageType.FullName, ex.Message);
 
-            if (await PauseAsync(cancellationToken).ConfigureAwait(false) && _waiting.Writer.TryWrite(message.Returned))
-                return true;
+                if (await PauseAsync().ConfigureAwait(false) && _waiting.Writer.TryWrite(message.Returned))
+                    return true;
+            }
 
-            LogLost(
-                message.Returned,
-                cancellationToken.IsCancellationRequested ? Stopped : $"it could not be put back in the outbox, and it cannot wait to be tried again. {ex.Message}",
-                ex);
+            LogLost(message.Returned, $"{Stopped}. {ex.Message}", ex);
             return false;
         }
 
@@ -227,11 +276,12 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
         return false;
     }
 
-    private async Task<bool> PauseAsync(CancellationToken cancellationToken)
+    // ends early, with false, when no more messages are taken
+    private async Task<bool> PauseAsync()
     {
         try
         {
-            await Task.Delay(PauseAfterFailedPutBack, _timeProvider, cancellationToken).ConfigureAwait(false);
+            await Task.Delay(PauseAfterFailedPutBack, _timeProvider, _closing.Token).ConfigureAwait(false);
             return true;
         }
         catch (OperationCanceledException)
@@ -405,6 +455,7 @@ internal sealed class ReturnedMessageHandler : IReturnedMessageHandler, IHostedL
     {
         _closed = true;
         _waiting.Writer.TryComplete();
+        _closing.Cancel();
     }
 
     private int _disposed;
