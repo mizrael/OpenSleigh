@@ -87,7 +87,14 @@ public record OutboxMessage
             MessageType = message.MessageType.FullName!,
             SenderId = message.SenderId,
             DeliverAt = message.DeliverAt?.UtcDateTime,
-            FirstReturnedAt = message.FirstReturnedAt?.UtcDateTime,
+            FirstReturnedAt = NextWholeMillisecond(message.FirstReturnedAt?.UtcDateTime),
         };
     }
+
+    // dates are stored to the millisecond and the creation time is not: rounded down, a message that came back
+    // in the millisecond it was created in would have come back before it existed
+    private static DateTime? NextWholeMillisecond(DateTime? time)
+        => time is { } value && value.Ticks % TimeSpan.TicksPerMillisecond is var rest and > 0
+            ? value.AddTicks(TimeSpan.TicksPerMillisecond - rest)
+            : time;
 }

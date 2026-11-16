@@ -409,25 +409,33 @@ public class MessageEnvelopeTests
     }
 
     [Fact]
-    public void Returned_ShouldKeepTheTimeTheMessageFirstCameBack_AndSetTheNewDueTime()
+    public void Returned_ShouldSetTheTimeTheMessageFirstCameBack_AndTheNewDueTime_InUtc()
     {
         var envelope = DummyMessage.CreateEnvelope();
-        var firstReturn = DateTimeOffset.UtcNow;
+        var firstReturn = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(2));
 
-        var returnedOnce = envelope.Returned(firstReturn, firstReturn.AddSeconds(30));
-        var returnedTwice = returnedOnce.Returned(firstReturn.AddMinutes(1), firstReturn.AddMinutes(2));
+        var returned = envelope.Returned(firstReturn, firstReturn.AddSeconds(30));
 
         Assert.Null(envelope.FirstReturnedAt);
-        Assert.Equal(firstReturn, returnedOnce.FirstReturnedAt);
-        Assert.Equal(firstReturn.AddSeconds(30), returnedOnce.DeliverAt);
-        Assert.Equal(firstReturn, returnedTwice.FirstReturnedAt);
-        Assert.Equal(firstReturn.AddMinutes(2), returnedTwice.DeliverAt);
-        Assert.Equal(envelope.MessageId, returnedTwice.MessageId);
-        Assert.Same(envelope.Message, returnedTwice.Message);
+        Assert.Equal(firstReturn, returned.FirstReturnedAt);
+        Assert.Equal(firstReturn.AddSeconds(30), returned.DeliverAt);
+        Assert.Equal(TimeSpan.Zero, returned.FirstReturnedAt!.Value.Offset);
+        Assert.Equal(TimeSpan.Zero, returned.DeliverAt!.Value.Offset);
+        Assert.Equal(envelope.MessageId, returned.MessageId);
+        Assert.Same(envelope.Message, returned.Message);
+    }
 
-        // a message cannot have come back for the first time after it came back
-        var earlier = firstReturn.AddMinutes(-1);
-        Assert.Equal(earlier, returnedOnce.Returned(earlier, firstReturn).FirstReturnedAt);
+    [Fact]
+    public void TryCreate_ShouldKeepTheCreationTime_InUtc()
+    {
+        var createdAt = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(2));
+
+        Assert.True(MessageEnvelope.TryCreate(
+            [1, 2, 3], "messageId", "correlationId", createdAt, typeof(DummyMessage), "senderId",
+            new MockSerializer(new DummyMessage()), out var envelope));
+
+        Assert.Equal(createdAt, envelope.CreatedAt);
+        Assert.Equal(TimeSpan.Zero, envelope.CreatedAt.Offset);
     }
 
     #region Helper Classes

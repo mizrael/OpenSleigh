@@ -63,16 +63,17 @@ public class ReturnedMessageScenario(ITestOutputHelper console) : ScenarioBase(c
             {
                 var api = await run.StartHostAsync(ApiSetup(publishes, clock));
 
+                // someone who wants to keep what the API gives up on: the API declares no queue, this one included
+                await DeclareDeadLetterQueueAsync(api, cancellationToken);
+
                 await api.PublishAsync(message, cancellationToken);
                 await run.WaitUntilAsync("the message to come back and be published again",
                     () => publishes.Count >= PublishesOfAMessageThatCameBack, cancellationToken);
 
-                // someone who wants to keep what the API gives up on: the API declares no queue, this one included
-                await DeclareDeadLetterQueueAsync(api, cancellationToken);
-
-                // from here on the message is past its period whenever it comes back: it was put back at least once,
-                // so it carries the time it first came back, which is before the clock moved. Nothing is put back
-                // with a due time on the moved clock, which the relay, on the system clock, would wait minutes for
+                // from here on the message is past its period whenever it is handled: it was put back at least once,
+                // so it carries the time it first came back, which is before the clock moved. The period is looked at
+                // on the same reading of the clock as the due time, so nothing is put back with a due time on the moved
+                // clock, which the relay, on the system clock, would wait minutes for
                 clock.Advance(api.Services.GetRequiredService<RabbitConfiguration>().ReturnedMessageRetryPeriod + ClockMargin);
 
                 while (!(await run.ReadDeadLettersAsync(cancellationToken)).ContainsKey(typeof(StartSimpleSaga)))

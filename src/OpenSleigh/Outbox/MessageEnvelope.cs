@@ -44,13 +44,9 @@ public class MessageEnvelope
     /// <summary>
     /// the same message, to be put back in the outbox after the transport gave it back.
     /// </summary>
-    /// <param name="returnedAt">
-    /// when it was given back. <see cref="FirstReturnedAt"/> is kept when it is between the creation of the message
-    /// and this time, and replaced by this time otherwise: a message cannot have come back before it existed,
-    /// or for the first time after it came back.
-    /// </param>
+    /// <param name="firstReturnedAt">when it was first given back, which is not earlier than its creation.</param>
     /// <param name="deliverAt">the earliest time at which the relay publishes it again.</param>
-    public MessageEnvelope Returned(DateTimeOffset returnedAt, DateTimeOffset deliverAt)
+    public MessageEnvelope Returned(DateTimeOffset firstReturnedAt, DateTimeOffset deliverAt)
         => new()
         {
             Message = Message,
@@ -59,7 +55,7 @@ public class MessageEnvelope
             CreatedAt = CreatedAt,
             SenderId = SenderId,
             DeliverAt = deliverAt.ToUniversalTime(),
-            FirstReturnedAt = FirstReturnedAt is { } first && first >= CreatedAt && first <= returnedAt ? first : returnedAt.ToUniversalTime(),
+            FirstReturnedAt = firstReturnedAt.ToUniversalTime(),
         };
 
     #region Factory
@@ -134,7 +130,7 @@ public class MessageEnvelope
             Message = message,
             MessageId = messageId,
             CorrelationId = correlationId,
-            CreatedAt = createdAt,
+            CreatedAt = createdAt.ToUniversalTime(),
             SenderId = senderId,
             DeliverAt = deliverAt?.ToUniversalTime(),
             FirstReturnedAt = firstReturnedAt?.ToUniversalTime()

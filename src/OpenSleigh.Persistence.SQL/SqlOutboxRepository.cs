@@ -89,70 +89,31 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         }
     }
 
-    // what a returned message is stored with, in the order of the parameters of the command that stores it
-    private static readonly (string Name, Func<Entities.OutboxMessage, object> Value)[] ReturnedMessageColumns =
-    [
-        (nameof(Entities.OutboxMessage.MessageId), row => row.MessageId),
-        (nameof(Entities.OutboxMessage.CorrelationId), row => row.CorrelationId),
-        (nameof(Entities.OutboxMessage.Body), row => row.Body),
-        (nameof(Entities.OutboxMessage.MessageType), row => row.MessageType),
-        (nameof(Entities.OutboxMessage.CreatedAt), row => row.CreatedAt),
-        (nameof(Entities.OutboxMessage.SenderId), row => row.SenderId),
-        (nameof(Entities.OutboxMessage.DeliverAt), row => row.DeliverAt!.Value),
-        (nameof(Entities.OutboxMessage.FirstReturnedAt), row => row.FirstReturnedAt!.Value),
-    ];
-
-    /// <summary>the columns a returned message is stored with, not quoted, in the order of <see cref="ReturnedMessageParameters"/>.</summary>
-    protected static IEnumerable<string> ReturnedMessageColumnNames => ReturnedMessageColumns.Select(column => column.Name);
-
-    /// <summary>the placeholders of the values of message <paramref name="index"/>, from 0, one for each column.</summary>
-    protected static IEnumerable<string> ReturnedMessageParameters(int index)
-        => Enumerable.Range(index * ReturnedMessageColumns.Length, ReturnedMessageColumns.Length).Select(parameter => $"{{{parameter}}}");
-
-    /// <summary>the placeholder of the value of a column of message <paramref name="index"/>, from 0.</summary>
-    protected static string ReturnedMessageParameter(int index, string columnName)
-        => $"{{{index * ReturnedMessageColumns.Length + Array.FindIndex(ReturnedMessageColumns, column => column.Name == columnName)}}}";
-
-    // a command has a limited number of parameters on some databases
-    private const int MaxMessagesPerPutBackCommand = 200;
-
     /// <summary>
-    /// what a provider implements <see cref="IOutboxReturnRepository.PutBackAsync"/> with: stores the messages again
-    /// with one command, as few round trips as a relay pass. A provider that does not implement the interface
-    /// does not take returned messages back, which only a transport that returns messages asks for.
+    /// what a provider implements <see cref="IOutboxReturnRepository.PutBackAsync"/> with: runs the command
+    /// that stores a returned message again. A provider that does not implement the interface does not take
+    /// returned messages back, which only a transport that returns messages asks for.
     /// </summary>
-    /// <param name="buildCommand">
-    /// builds the command for that many messages, each of them stored atomically: a row that exists gets the new due time,
-    /// and the earlier of its time of first return and the new one; a row that does not is inserted. The command waits
-    /// for a row a relay holds, finds rows by key, holds no lock on a row longer than it takes to store it, and does not
-    /// fail when another host stores the same message at the same time. The messages come ordered by id.
+    /// <param name="command">
+    /// its parameters: {0} message id, {1} correlation id, {2} body, {3} message type, {4} creation time, {5} sender id,
+    /// {6} due time, {7} time of first return. Atomically, a row that exists gets the due time, and keeps its time
+    /// of first return when that is earlier than {7} and not earlier than its creation time; a row that does not exist
+    /// is inserted. The command finds the row by key and waits for a relay that holds it.
     /// </param>
-    protected async ValueTask StoreReturnedAsync(
-        IReadOnlyCollection<MessageEnvelope> messages, Func<int, string> buildCommand, CancellationToken cancellationToken)
+    protected async ValueTask PutBackAsync(string command, MessageEnvelope message, CancellationToken cancellationToken)
     {
-        IOutboxReturnRepository.ThrowIfNotReturned(messages);
-        if (messages.Count == 0)
-            return;
-
-        // always in the same order: two hosts that put the same messages back wait for each other
-        // instead of each holding what the other needs
-        var rows = messages
-            .OrderBy(message => message.MessageId, StringComparer.Ordinal)
-            .Select(message => Entities.OutboxMessage.Map(message, _serializer))
-            .ToArray();
+        var row = Entities.OutboxMessage.Map(message, _serializer);
+        object[] parameters =
+        [
+            row.MessageId, row.CorrelationId, row.Body, row.MessageType, row.CreatedAt, row.SenderId,
+            row.DeliverAt!.Value, row.FirstReturnedAt!.Value,
+        ];
 
         await _appendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
         try
         {
-            foreach (var chunk in rows.Chunk(MaxMessagesPerPutBackCommand))
-            {
-                var parameters = chunk.SelectMany(row => ReturnedMessageColumns.Select(column => column.Value(row)));
-
-                await DbContext.Database
-                    .ExecuteSqlRawAsync(buildCommand(chunk.Length), parameters, cancellationToken)
-                    .ConfigureAwait(false);
-            }
+            await DbContext.Database.ExecuteSqlRawAsync(command, parameters, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

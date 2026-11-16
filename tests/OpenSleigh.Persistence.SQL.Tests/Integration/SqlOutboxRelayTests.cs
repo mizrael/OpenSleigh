@@ -219,7 +219,7 @@ public abstract class SqlOutboxRelayTests
     {
         await using var provider = BuildProvider();
         await AppendMessagesAsync(provider, 1);
-        var firstReturnedAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        var firstReturnedAt = DateTimeOffset.UtcNow;
 
         MessageEnvelope published;
         await using (var relay = provider.CreateAsyncScope())
@@ -231,8 +231,10 @@ public abstract class SqlOutboxRelayTests
             await transaction.CommitAsync();
         }
 
-        // twice, as when two relays published it and each got it back: the later one stores it first
+        // by a host whose clock was behind, before the message existed: that time is not kept. Then twice,
+        // as when two relays published it and each got it back: the later one stores it first
         var later = firstReturnedAt.AddMinutes(1);
+        await PutBackAsync(provider, published.Returned(published.CreatedAt.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(-1)));
         await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddMinutes(-1)));
         await PutBackAsync(provider, published.Returned(firstReturnedAt, DateTimeOffset.UtcNow.AddSeconds(-1)));
         await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddSeconds(-1)));
@@ -255,7 +257,7 @@ public abstract class SqlOutboxRelayTests
         var systemInfo = provider.GetRequiredService<ISystemInfo>();
         var messages = Enumerable.Range(0, messagesCount).Select(_ => MessageEnvelope.Create(new FakeMessage(), systemInfo)).ToArray();
         var now = DateTimeOffset.UtcNow;
-        var earliest = now.AddMinutes(-3);
+        var earliest = now;
 
         // none of the messages is in the outbox any more, each host got them back at another time and in another order
         await Task.WhenAll(Enumerable.Range(0, hosts).Select(host => Task.Run(async () =>
@@ -318,7 +320,8 @@ public abstract class SqlOutboxRelayTests
     private static async Task PutBackAsync(IServiceProvider provider, params MessageEnvelope[] returned)
     {
         await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<IOutboxReturnRepository>().PutBackAsync(returned);
+        foreach (var message in returned)
+            await scope.ServiceProvider.GetRequiredService<IOutboxReturnRepository>().PutBackAsync(message);
     }
 
     private sealed class RecordingPublisher : IPublisher

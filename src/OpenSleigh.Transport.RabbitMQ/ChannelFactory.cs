@@ -2,7 +2,6 @@
 using OpenSleigh.Outbox;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -52,11 +51,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
         if (!logger.IsEnabled(LogLevel.Warning))
             return;
 
-        var messageType = returned.BasicProperties.Headers is { } headers
-            && headers.TryGetValue(nameof(MessageEnvelope.MessageType), out var value)
-            && value is byte[] bytes
-                ? Encoding.UTF8.GetString(bytes)
-                : null;
+        returned.BasicProperties.TryGetHeaderValue(nameof(MessageEnvelope.MessageType), out var messageType);
 
         logger.LogWarning(
             "message '{MessageId}' of type '{MessageType}' was returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}': " +

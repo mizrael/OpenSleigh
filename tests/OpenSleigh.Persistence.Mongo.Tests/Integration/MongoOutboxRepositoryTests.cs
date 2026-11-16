@@ -356,37 +356,66 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var returnedAt = DateTimeOffset.UtcNow;
 
         // the broker returns the message before the relay deletes it, and nothing delays its next publish
-        await sut.PutBackAsync([published.Returned(returnedAt, published.DeliverAt!.Value)]);
+        await sut.PutBackAsync(published.Returned(returnedAt, published.DeliverAt!.Value));
         await sut.DeleteAsync(published);
 
+        // the time it came back is stored to the millisecond, and never earlier than it was
         var readAgain = Assert.Single(await sut.ReadPendingAsync());
         Assert.Equal(published.MessageId, readAgain.MessageId);
         Assert.NotNull(readAgain.FirstReturnedAt);
-        Assert.Equal(returnedAt.ToUnixTimeMilliseconds(), readAgain.FirstReturnedAt.Value.ToUnixTimeMilliseconds());
+        Assert.InRange(readAgain.FirstReturnedAt.Value, returnedAt, returnedAt.AddMilliseconds(1));
 
         await sut.DeleteAsync(readAgain);
         Assert.Equal(0, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
     }
 
     [Fact]
-    public async Task PutBackAsync_should_keep_the_earliest_time_a_message_first_came_back_and_not_fail_when_several_hosts_store_it_together()
+    public async Task PutBackAsync_should_not_keep_a_stored_time_of_first_return_that_is_earlier_than_the_creation_of_the_message()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var message = CreateMessage();
+        var cameBack = message.CreatedAt.AddSeconds(10);
+
+        // stored by a host whose clock was behind
+        await sut.PutBackAsync(message.Returned(message.CreatedAt.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await sut.PutBackAsync(message.Returned(cameBack, DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var stored = Assert.Single(await sut.ReadPendingAsync());
+        Assert.InRange(stored.FirstReturnedAt!.Value, cameBack, cameBack.AddMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task PutBackAsync_should_keep_the_earliest_time_a_message_first_came_back_when_several_hosts_store_it_together()
     {
         var db = _fixture.CreateDbContext();
         var messages = System.Linq.Enumerable.Range(0, 20).Select(_ => CreateMessage()).ToArray();
         var now = DateTimeOffset.UtcNow;
-        var earliest = now.AddMinutes(-3);
+        var earliest = now.AddMilliseconds(1);
 
-        // each host got the messages back at another time, and none of them is in the outbox any more
+        // each host got the messages back at another time, and none of them is in the outbox any more.
+        // Two hosts that insert a message at the same time: one of them is refused, and tries again
         await Task.WhenAll(System.Linq.Enumerable.Range(0, 8).Select(host => Task.Run(async () =>
         {
-            var returned = messages.Select(message => message.Returned(earliest.AddSeconds(host), now.AddHours(1))).ToArray();
-            await CreateSut(db).PutBackAsync(returned);
+            var sut = CreateSut(db);
+            foreach (var message in messages)
+            {
+                var returned = message.Returned(earliest.AddSeconds(host), now.AddHours(1));
+                try
+                {
+                    await sut.PutBackAsync(returned);
+                }
+                catch (MongoWriteException e) when (e.WriteError.Category == ServerErrorCategory.DuplicateKey)
+                {
+                    await sut.PutBackAsync(returned);
+                }
+            }
         })));
 
         var ids = messages.Select(message => message.MessageId).ToArray();
         var stored = await (await db.OutboxMessages.FindAsync(Builders<Entities.OutboxMessage>.Filter.In(e => e.MessageId, ids))).ToListAsync();
         Assert.Equal(messages.Length, stored.Count);
-        Assert.All(stored, message => Assert.Equal(earliest.ToUnixTimeMilliseconds(), new DateTimeOffset(message.FirstReturnedAt!.Value, TimeSpan.Zero).ToUnixTimeMilliseconds()));
+        Assert.All(stored, message => Assert.InRange(new DateTimeOffset(message.FirstReturnedAt!.Value, TimeSpan.Zero), earliest, earliest.AddMilliseconds(1)));
     }
 
     [Fact]
@@ -398,7 +427,7 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
         var published = Assert.Single(await sut.ReadPendingAsync());
         await sut.DeleteAsync(published);
 
-        await sut.PutBackAsync([published.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1))]);
+        await sut.PutBackAsync(published.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
 
         Assert.Empty(await sut.ReadPendingAsync());
         var stored = await db.OutboxMessages.FindOneAsync(Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, published.MessageId));

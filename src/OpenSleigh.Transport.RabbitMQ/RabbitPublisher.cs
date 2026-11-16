@@ -57,7 +57,7 @@ public class RabbitPublisher : IPublisher
         {
             { nameof(envelope.MessageType), envelope.MessageType.FullName },
             { nameof(envelope.SenderId), envelope.SenderId },
-            { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString() }
+            { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture) }
         };
 
         // so that this host knows, when the broker returns the message again, for how long it has been coming back

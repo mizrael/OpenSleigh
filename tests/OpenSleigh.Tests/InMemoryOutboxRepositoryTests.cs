@@ -60,7 +60,7 @@ public class InMemoryOutboxRepositoryTests
         var returned = published.Returned(clock.UtcNow, clock.UtcNow + ShortDelay);
 
         // the transport returns the message before the relay deletes it
-        await sut.PutBackAsync([returned]);
+        await sut.PutBackAsync(returned);
         await sut.DeleteAsync(published);
         Assert.Empty(await sut.ReadPendingAsync());
 
@@ -71,43 +71,49 @@ public class InMemoryOutboxRepositoryTests
 
         // and after it did
         await sut.DeleteAsync(readAgain);
-        await sut.PutBackAsync([readAgain.Returned(clock.UtcNow, clock.UtcNow + ShortDelay)]);
+        await sut.PutBackAsync(readAgain.Returned(clock.UtcNow, clock.UtcNow + ShortDelay));
         clock.UtcNow += ShortDelay;
-        Assert.Equal(returned.FirstReturnedAt, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
+        Assert.Equal(clock.UtcNow - ShortDelay, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task A_message_put_back_with_the_due_time_it_had_should_survive_the_delete_of_the_relay_that_published_it(bool delayed)
+    public async Task A_message_put_back_should_survive_the_delete_of_the_relay_that_published_it_wherever_it_is(bool waitsToBeDue)
     {
         var clock = new SettableClock();
         var sut = new InMemoryOutboxRepository(clock);
-        var dueTime = clock.UtcNow - ShortDelay;
-        var appended = CreateEnvelope(deliverAt: delayed ? dueTime : null);
-        await sut.AppendAsync(new[] { appended });
-        var published = delayed ? appended : Assert.Single(await sut.ReadPendingAsync());
+        await sut.AppendAsync(new[] { CreateEnvelope(deliverAt: null) });
+        var published = Assert.Single(await sut.ReadPendingAsync());
 
-        // a retry delay of zero: the message is due again at once, when the relay has not deleted it yet.
-        // It is read once more, so that it is among the pending messages, where the relay looks first
-        await sut.PutBackAsync([published.Returned(clock.UtcNow, published.DeliverAt ?? clock.UtcNow)]);
-        Assert.Single(await sut.ReadPendingAsync());
+        // put back among the messages that wait to be due, or, once it is read again, among the pending ones:
+        // the relay that published it looks in both for the message it read
+        var delay = waitsToBeDue ? ShortDelay : TimeSpan.Zero;
+        await sut.PutBackAsync(published.Returned(clock.UtcNow, clock.UtcNow + delay));
+        if (!waitsToBeDue)
+            Assert.Single(await sut.ReadPendingAsync());
         await sut.DeleteAsync(published);
 
+        clock.UtcNow += delay;
         Assert.Equal(published.MessageId, Assert.Single(await sut.ReadPendingAsync()).MessageId);
     }
 
     [Fact]
-    public async Task A_message_put_back_by_two_hosts_should_keep_the_earliest_time_it_first_came_back()
+    public async Task A_message_put_back_by_two_hosts_should_keep_the_earliest_time_it_can_have_come_back_first()
     {
+        var published = CreateEnvelope(deliverAt: null);
         var clock = new SettableClock();
         var sut = new InMemoryOutboxRepository(clock);
-        var published = CreateEnvelope(deliverAt: null);
-        var earlier = clock.UtcNow - LongDelay;
+        var earlier = clock.UtcNow;
+        var later = earlier + LongDelay;
 
-        await sut.PutBackAsync([published.Returned(earlier, clock.UtcNow)]);
-        await sut.PutBackAsync([published.Returned(clock.UtcNow, clock.UtcNow)]);
+        // the first one was stored by a host whose clock was behind: the message did not exist yet
+        await sut.PutBackAsync(published.Returned(published.CreatedAt - LongDelay, clock.UtcNow));
+        await sut.PutBackAsync(published.Returned(later, clock.UtcNow));
+        Assert.Equal(later, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
 
+        await sut.PutBackAsync(published.Returned(earlier, clock.UtcNow));
+        await sut.PutBackAsync(published.Returned(later, clock.UtcNow));
         Assert.Equal(earlier, Assert.Single(await sut.ReadPendingAsync()).FirstReturnedAt);
     }
 

@@ -128,24 +128,22 @@ internal class InMemoryOutboxRepository : IOutboxRepository, IOutboxReturnReposi
         }
     }
 
-    public ValueTask PutBackAsync(IReadOnlyCollection<MessageEnvelope> messages, CancellationToken cancellationToken = default)
+    public ValueTask PutBackAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
     {
-        IOutboxReturnRepository.ThrowIfNotReturned(messages);
+        ArgumentNullException.ThrowIfNull(message);
 
         lock (_gate)
         {
-            foreach (var message in messages)
-            {
-                // the time of first return that is kept is the earliest, whoever stores it
-                var stored = _delayedMessages.GetValueOrDefault(message.MessageId) ?? _messages.GetValueOrDefault(message.MessageId);
-                var putBack = stored?.FirstReturnedAt < message.FirstReturnedAt
-                    ? message.Returned(stored.FirstReturnedAt.Value, message.DeliverAt!.Value)
-                    : message;
+            // the time of first return that is kept is the earliest, whoever stores it, unless it is one
+            // the message cannot have: earlier than its creation
+            var stored = _delayedMessages.GetValueOrDefault(message.MessageId) ?? _messages.GetValueOrDefault(message.MessageId);
+            var putBack = stored?.FirstReturnedAt is { } first && first >= stored.CreatedAt && first < message.FirstReturnedAt
+                ? message.Returned(first, message.DeliverAt!.Value)
+                : message;
 
-                _messages.TryRemove(message.MessageId, out _);
-                _delayedMessages.Remove(message.MessageId);
-                TryAppend(putBack);
-            }
+            _messages.TryRemove(message.MessageId, out _);
+            _delayedMessages.Remove(message.MessageId);
+            TryAppend(putBack);
 
             _delayedMessagesCount = _delayedMessages.Count;
         }

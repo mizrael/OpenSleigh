@@ -38,7 +38,12 @@ internal sealed class RabbitMessageParser : IRabbitMessageParser
         var senderId = properties.GetHeaderValue(nameof(MessageEnvelope.SenderId));
         ArgumentException.ThrowIfNullOrWhiteSpace(senderId, nameof(senderId));
 
-        var createdAt = DateTimeOffset.Parse(properties.GetHeaderValue(nameof(MessageEnvelope.CreatedAt)));
+        // written this way by this version, whatever the culture of the host. An earlier version wrote it
+        // as its own culture does, to the second, and reads this one as well
+        var createdAtText = properties.GetHeaderValue(nameof(MessageEnvelope.CreatedAt));
+        var createdAt = DateTimeOffset.TryParseExact(createdAtText, "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var exact)
+            ? exact
+            : DateTimeOffset.Parse(createdAtText);
 
         if (!MessageEnvelope.TryCreate(
                 body,

@@ -92,6 +92,9 @@ public class RabbitPublisherTests
 
         Assert.False(published[0].Headers!.ContainsKey(nameof(MessageEnvelope.FirstReturnedAt)));
         Assert.Equal(
+            returned.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            published[1].Headers![nameof(MessageEnvelope.CreatedAt)]);
+        Assert.Equal(
             firstReturnedAt,
             DateTimeOffset.Parse((string)published[1].Headers![nameof(MessageEnvelope.FirstReturnedAt)]!, System.Globalization.CultureInfo.InvariantCulture));
     }

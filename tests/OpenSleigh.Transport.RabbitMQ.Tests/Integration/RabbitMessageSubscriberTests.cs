@@ -252,7 +252,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
         var putBack = new TaskCompletionSource<MessageEnvelope>(TaskCreationOptions.RunContinuationsAsynchronously);
         var outbox = Substitute.For<IOutboxReturnRepository>();
         outbox
-            .PutBackAsync(Arg.Do<IReadOnlyCollection<MessageEnvelope>>(messages => putBack.TrySetResult(messages.Single())), Arg.Any<CancellationToken>())
+            .PutBackAsync(Arg.Do<MessageEnvelope>(message => putBack.TrySetResult(message)), Arg.Any<CancellationToken>())
             .Returns(ValueTask.CompletedTask);
         var (publisher, _) = CreateSUT(null, out _, exchangeName, clientGroup: "api", handlesTheMessage: false,
             configure: services => services.AddSingleton(outbox));
