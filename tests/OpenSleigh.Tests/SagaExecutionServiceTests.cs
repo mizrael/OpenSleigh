@@ -60,6 +60,41 @@ public class SagaExecutionServiceTests
     }
 
     [Fact]
+    public async Task BeginProcessingAsync_should_report_a_cancellation_when_the_retry_is_interrupted_by_a_stop()
+    {
+        var sagaStateRepository = Substitute.For<ISagaStateRepository>();
+        var sagaInstanceFactory = Substitute.For<ISagaInstanceFactory>();
+
+        var descriptor = SagaDescriptor.Create<FakeSaga>();
+        var messageContext = FakeMessageContext<FakeSagaStarter>.Create(new FakeSagaStarter());
+        var sagaInstance = new SagaInstance(
+            Guid.NewGuid().ToString(),
+            messageContext.MessageId,
+            messageContext.CorrelationId,
+            descriptor);
+
+        sagaStateRepository.FindAsync(descriptor, messageContext, Arg.Any<CancellationToken>())
+            .Returns(sagaInstance);
+
+        using var stopping = new CancellationTokenSource();
+        var attempts = 0;
+        sagaStateRepository.When(x => x.LockAsync(sagaInstance, Arg.Any<CancellationToken>()))
+            .Do(_ =>
+            {
+                if (++attempts == 1)
+                    throw new OptimisticLockException();
+
+                stopping.Cancel();
+                throw new OperationCanceledException(stopping.Token);
+            });
+
+        var sut = new SagaExecutionService(sagaInstanceFactory, sagaStateRepository, Substitute.For<IOutboxRepository>());
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            async () => await sut.BeginProcessingAsync(messageContext, descriptor, stopping.Token));
+    }
+
+    [Fact]
     public async Task BeginProcessingAsync_should_succeed_on_retry_when_lock_acquired()
     {
         // Arrange
