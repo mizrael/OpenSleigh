@@ -48,7 +48,8 @@ public class SagaExecutionService : ISagaExecutionService
             {
                 sagaInstance = await BeginProcessingCore(messageContext, descriptor, cancellationToken).ConfigureAwait(false);
             }
-            catch (Exception retryException)
+            // a retry interrupted by a stop has not failed: reported as a cancellation, the message is left to be delivered again
+            catch (Exception retryException) when (retryException is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
             {
                 // Preserve both the original OptimisticLockException and the retry failure exception
                 // This ensures debugging information is not lost in production

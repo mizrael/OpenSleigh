@@ -226,6 +226,114 @@ public class OutboxProcessorTests
     }
 
     [Fact]
+    public async Task RelayPendingMessagesAsync_should_not_log_an_error_when_the_read_is_cancelled_by_a_stop()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository>();
+        var logger = Substitute.For<ILogger<OutboxProcessor>>();
+        var txManager = Substitute.For<ITransactionManager>();
+        var tx = Substitute.For<ITransaction>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(tx);
+
+        using var stopping = new CancellationTokenSource();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns<IEnumerable<MessageEnvelope>>(_ =>
+            {
+                stopping.Cancel();
+                throw new TaskCanceledException();
+            });
+
+        var sut = new OutboxProcessor(outboxRepo, Substitute.For<IPublisher>(), logger, txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(stopping.Token);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 0, Failed: 1), result);
+        await tx.Received(1).RollbackAsync();
+        Assert.DoesNotContain(LoggedLevels(logger), level => level >= LogLevel.Warning);
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_log_an_error_when_the_read_is_cancelled_and_nobody_asked_to_stop()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository>();
+        var logger = Substitute.For<ILogger<OutboxProcessor>>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        using var notStopping = new CancellationTokenSource();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns<IEnumerable<MessageEnvelope>>(_ => throw new TaskCanceledException("the query timed out"));
+
+        var sut = new OutboxProcessor(outboxRepo, Substitute.For<IPublisher>(), logger, txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(notStopping.Token);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 0, Failed: 1), result);
+        Assert.Contains(LogLevel.Error, LoggedLevels(logger));
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_log_an_error_when_the_read_fails_while_stopping()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository>();
+        var logger = Substitute.For<ILogger<OutboxProcessor>>();
+        var txManager = Substitute.For<ITransactionManager>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(Substitute.For<ITransaction>());
+
+        using var stopping = new CancellationTokenSource();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns<IEnumerable<MessageEnvelope>>(_ =>
+            {
+                stopping.Cancel();
+                throw new InvalidOperationException("db error");
+            });
+
+        var sut = new OutboxProcessor(outboxRepo, Substitute.For<IPublisher>(), logger, txManager);
+
+        await sut.RelayPendingMessagesAsync(stopping.Token);
+
+        Assert.Contains(LogLevel.Error, LoggedLevels(logger));
+    }
+
+    [Fact]
+    public async Task RelayPendingMessagesAsync_should_not_log_an_error_when_a_publish_is_cancelled_by_a_stop()
+    {
+        var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();
+        var publisher = Substitute.For<IPublisher>();
+        var logger = Substitute.For<ILogger<OutboxProcessor>>();
+        var txManager = Substitute.For<ITransactionManager>();
+        var tx = Substitute.For<ITransaction>();
+        txManager.StartTransactionAsync(Arg.Any<CancellationToken>()).Returns(tx);
+
+        using var stopping = new CancellationTokenSource();
+        var published = DummyMessage.CreateEnvelope();
+        var interrupted = DummyMessage.CreateEnvelope();
+        var notReached = DummyMessage.CreateEnvelope();
+        outboxRepo.ReadPendingAsync(Arg.Any<CancellationToken>())
+            .Returns(new[] { published, interrupted, notReached });
+        publisher.PublishAsync(interrupted, Arg.Any<CancellationToken>())
+            .Returns(_ =>
+            {
+                stopping.Cancel();
+                throw new OperationCanceledException(stopping.Token);
+            });
+
+        var sut = new OutboxProcessor(outboxRepo, publisher, logger, txManager);
+
+        var result = await sut.RelayPendingMessagesAsync(stopping.Token);
+
+        Assert.Equal(new OutboxRelayResult(Relayed: 1, Failed: 1), result);
+        await publisher.DidNotReceive().PublishAsync(notReached, Arg.Any<CancellationToken>());
+        await ((IOutboxBatchRepository)outboxRepo).Received(1).DeleteAsync(
+            Arg.Is<IReadOnlyCollection<MessageEnvelope>>(deleted => deleted.SequenceEqual(new[] { published })),
+            CancellationToken.None);
+        await tx.Received(1).CommitAsync();
+        Assert.DoesNotContain(LoggedLevels(logger), level => level >= LogLevel.Warning);
+    }
+
+    private static IEnumerable<LogLevel> LoggedLevels(ILogger<OutboxProcessor> logger)
+        => logger.ReceivedCalls().SelectMany(call => call.GetArguments().OfType<LogLevel>());
+
+    [Fact]
     public async Task RelayPendingMessagesAsync_should_report_nothing_relayed_when_the_batch_cannot_be_deleted()
     {
         var outboxRepo = Substitute.For<IOutboxRepository, IOutboxBatchRepository>();

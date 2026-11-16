@@ -90,6 +90,14 @@ public class OutboxProcessor : IOutboxProcessor
                         message.MessageId,
                         e.Message);
                 }
+                catch (Exception e) when (IsStop(e, cancellationToken))
+                {
+                    failed++;
+                    _logger.LogInformation(
+                        "the relay of outbox message {MessageId} was interrupted by a stop: it is left in the outbox.",
+                        message.MessageId);
+                    break;
+                }
                 catch (Exception e)
                 {
                     failed++;
@@ -106,7 +114,11 @@ public class OutboxProcessor : IOutboxProcessor
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error processing outbox messages: {Error}", ex.Message);
+            if (IsStop(ex, cancellationToken))
+                _logger.LogInformation("The relay of the outbox messages was interrupted by a stop: what was not removed stays in the outbox.");
+            else
+                _logger.LogError(ex, "Error processing outbox messages: {Error}", ex.Message);
+
             await transaction.RollbackAsync();
 
             // nothing was removed from the outbox: reporting progress would make the relay retry without pause
@@ -115,4 +127,9 @@ public class OutboxProcessor : IOutboxProcessor
 
         return new OutboxRelayResult(relayed, failed);
     }
+
+    // only a cancellation asked for by the caller, the host that stops, is not a failure:
+    // any other one, a timeout reported as a cancellation for instance, is
+    private static bool IsStop(Exception exception, CancellationToken cancellationToken)
+        => exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
 }
