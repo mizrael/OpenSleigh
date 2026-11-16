@@ -149,10 +149,9 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         {
             await WithChannelAsync(async () =>
             {
-                // the message goes to the retry exchange, for the retry queue of this service only, before it is
-                // acknowledged, and on the same channel: the broker handles what a channel sends in order, so it
-                // cannot acknowledge the message without having been given its copy first. Acknowledged first,
-                // a connection lost before the copy got through would leave the message in no queue at all
+                // published, to the retry queue of this service only, before it is acknowledged and on the same
+                // channel: the broker handles a channel's frames in order, so it cannot acknowledge the message
+                // without having its copy. Acknowledged first, a connection lost in between leaves it in no queue
                 await channel.BasicPublishAsync(
                     exchange: queueReference.RetryExchangeName,
                     routingKey: queueReference.RetryQueueName,
@@ -165,8 +164,8 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         }
         catch (Exception retryException)
         {
-            // not acknowledged: the broker gives it back to its queue when the channel closes. If its copy did reach
-            // the retry queue the message is delivered twice, and the saga ignores the one it has processed already
+            // not acknowledged: the broker requeues it when the channel closes. If its copy reached the retry queue
+            // it is delivered twice, and the saga ignores the duplicate
             _logger.LogWarning(
                 retryException,
                 "Message '{MessageId}' could not be sent to the retry Exchange '{ExchangeName}' and acknowledged: it is left to be delivered again. {ExceptionMessage}",

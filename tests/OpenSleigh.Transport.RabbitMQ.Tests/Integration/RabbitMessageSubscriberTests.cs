@@ -197,7 +197,7 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
     {
         var exchangeName = NewExchangeName();
         var references = DefaultReferences(exchangeName, "test");
-        // queues that stay when their consumer goes: the broker closes the channel of a publish it cannot route to an exchange
+        // queues that outlive their consumer: the broker closes the channel of a publish to a missing exchange
         var configuration = new RabbitConfiguration(
             _fixture.RabbitConfiguration.HostName,
             _fixture.RabbitConfiguration.UserName,

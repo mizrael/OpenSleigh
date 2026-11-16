@@ -12,9 +12,8 @@ using Xunit.Abstractions;
 namespace OpenSleigh.E2ETests.Scenarios;
 
 /// <summary>
-/// the connections of the hosts to RabbitMQ are closed at the moment a host sends a message, whose saga is locked,
-/// to the retry queue: the message is neither in its queue nor in the retry queue if the host has let go of it
-/// before the retry queue has it. It has to be handled all the same, once.
+/// the connections of the hosts to RabbitMQ are closed as a host sends a message whose saga is locked to the retry
+/// queue: acknowledged before the retry queue has it, the message is in no queue. It has to be handled, once.
 /// </summary>
 public class RabbitMqConnectionLossDuringRetryScenario(ITestOutputHelper console) : ScenarioBase(console)
 {
@@ -51,9 +50,8 @@ public class RabbitMqConnectionLossDuringRetryScenario(ITestOutputHelper console
                 var open = await run.WaitForAsync("the broker to list the connections of the hosts",
                     listing => connections.WaitForAsync(hostsCount, listing), cancellationToken);
 
-                // the first host to send a movement to the retry queue loses its connection before the broker is
-                // given it. The relays have published every movement by then: a publish that meets a connection
-                // being closed is another matter, and can be lost
+                // the first host to send a movement to the retry queue loses its connection before the broker gets it.
+                // The relays have published every movement by then: a publish on a closing connection can be lost
                 retries.BeforeTheNext(async channel =>
                 {
                     while (await run.CountOutboxMessagesAsync(cancellationToken) > 0)
@@ -110,7 +108,7 @@ public class RabbitMqConnectionLossDuringRetryScenario(ITestOutputHelper console
         private readonly TaskCompletionSource _intercepted = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private Func<IChannel, Task>? _beforeTheNext;
 
-        /// <summary>completes when a publish to a retry exchange was held back, and what the scenario does before it is done.</summary>
+        /// <summary>completes once the held-back publish and what the scenario does before it are done.</summary>
         public Task Intercepted => _intercepted.Task;
 
         /// <param name="act">is given the channel the host is about to publish on.</param>
