@@ -5,6 +5,7 @@ using OpenSleigh.Outbox;
 using OpenSleigh.Persistence.Mongo.Tests.Fixtures;
 using OpenSleigh.Transport;
 using System.ComponentModel;
+using System.Linq;
 
 namespace OpenSleigh.Persistence.Mongo.Tests.Integration;
 
@@ -337,15 +338,100 @@ public class MongoOutboxRepositoryTests : IClassFixture<DbFixture>
     }
 
     [Fact]
-    public async Task DeleteAsync_should_throw_if_message_not_found()
+    public async Task DeleteAsync_should_not_mind_a_message_that_is_gone()
     {
-        var message = CreateMessage();
-
         var db = _fixture.CreateDbContext();
         var sut = CreateSut(db);
 
-        var ex = await Assert.ThrowsAsync<ArgumentException>(async () => await sut.DeleteAsync(message));
-        Assert.Contains($"message '{message.MessageId}' not found", ex.Message);
+        await sut.DeleteAsync(CreateMessage());
+    }
+
+    [Fact]
+    public async Task DeleteAsync_should_leave_a_message_that_was_put_back_since_the_relay_read_it_even_with_the_due_time_it_had()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync([CreateMessageDueSince(TimeSpan.FromMinutes(1))]);
+        var published = Assert.Single(await sut.ReadPendingAsync());
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        // the broker returns the message before the relay deletes it, and nothing delays its next publish
+        await sut.PutBackAsync(published.Returned(returnedAt, published.DeliverAt!.Value));
+        await sut.DeleteAsync(published);
+
+        // the time it came back is stored to the millisecond, and never earlier than it was
+        var readAgain = Assert.Single(await sut.ReadPendingAsync());
+        Assert.Equal(published.MessageId, readAgain.MessageId);
+        Assert.NotNull(readAgain.FirstReturnedAt);
+        Assert.InRange(readAgain.FirstReturnedAt.Value, returnedAt, returnedAt.AddMilliseconds(1));
+
+        await sut.DeleteAsync(readAgain);
+        Assert.Equal(0, await db.OutboxMessages.CountDocumentsAsync(FilterDefinition<Entities.OutboxMessage>.Empty));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task PutBackAsync_should_not_keep_a_stored_time_of_first_return_that_is_earlier_than_the_creation_of_the_message(bool inTheSameMillisecond)
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        var message = CreateMessage();
+        while (message.CreatedAt.Ticks % TimeSpan.TicksPerMillisecond == 0)
+            message = CreateMessage();
+        var cameBack = message.CreatedAt.AddSeconds(10);
+
+        // stored by a host whose clock was behind: by a minute, or by less than the millisecond dates are stored to
+        var beforeCreation = inTheSameMillisecond
+            ? message.CreatedAt.AddTicks(-(message.CreatedAt.Ticks % TimeSpan.TicksPerMillisecond))
+            : message.CreatedAt.AddMinutes(-1);
+        await sut.PutBackAsync(message.Returned(beforeCreation, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await sut.PutBackAsync(message.Returned(cameBack, DateTimeOffset.UtcNow.AddMinutes(-1)));
+
+        var stored = Assert.Single(await sut.ReadPendingAsync());
+        Assert.InRange(stored.FirstReturnedAt!.Value, cameBack, cameBack.AddMilliseconds(1));
+    }
+
+    [Fact]
+    public async Task PutBackAsync_should_keep_the_earliest_time_a_message_first_came_back_when_several_hosts_store_it_together()
+    {
+        var db = _fixture.CreateDbContext();
+        var messages = System.Linq.Enumerable.Range(0, 20).Select(_ => CreateMessage()).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var earliest = now.AddMilliseconds(1);
+
+        // each host got the messages back at another time, and none of them is in the outbox any more.
+        // Two hosts that insert a message at the same time: the server runs the update of the second one again
+        await Task.WhenAll(System.Linq.Enumerable.Range(0, 8).Select(host => Task.Run(async () =>
+        {
+            var sut = CreateSut(db);
+            foreach (var message in messages)
+                await sut.PutBackAsync(message.Returned(earliest.AddSeconds(host), now.AddHours(1)));
+        })));
+
+        var ids = messages.Select(message => message.MessageId).ToArray();
+        var stored = await (await db.OutboxMessages.FindAsync(Builders<Entities.OutboxMessage>.Filter.In(e => e.MessageId, ids))).ToListAsync();
+        Assert.Equal(messages.Length, stored.Count);
+        Assert.All(stored, message => Assert.InRange(new DateTimeOffset(message.FirstReturnedAt!.Value, TimeSpan.Zero), earliest, earliest.AddMilliseconds(1)));
+    }
+
+    [Fact]
+    public async Task PutBackAsync_should_store_again_a_message_the_relay_has_deleted()
+    {
+        var db = _fixture.CreateDbContext();
+        var sut = CreateSut(db);
+        await sut.AppendAsync([CreateMessage()]);
+        var published = Assert.Single(await sut.ReadPendingAsync());
+        await sut.DeleteAsync(published);
+
+        await sut.PutBackAsync(published.Returned(DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1)));
+
+        Assert.Empty(await sut.ReadPendingAsync());
+        var stored = await db.OutboxMessages.FindOneAsync(Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, published.MessageId));
+        Assert.NotNull(stored);
+        Assert.Null(stored.LockId);
+        Assert.Equal(published.CorrelationId, stored.CorrelationId);
+        Assert.NotNull(stored.Body);
     }
 
     [Fact]

@@ -202,6 +202,50 @@ public class RabbitMessageParserTests
         await Assert.ThrowsAsync<ArgumentException>(() => sut.ParseMessageAsync(eventArgs));
     }
 
+    [Theory]
+    [InlineData("not a date")]
+    [InlineData(null)]
+    [InlineData(42)]
+    public async Task ParseMessageAsync_should_take_a_time_of_first_return_it_cannot_read_for_none(object? firstReturnedAt)
+    {
+        var typeResolver = Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(Arg.Any<string>(), throwOnError: true).Returns(typeof(FakeSagaStarter));
+        var sut = new RabbitMessageParser(typeResolver, new FakeSerializer { DeserializeResult = new FakeSagaStarter() });
+        var eventArgs = CreateBasicDeliverEventArgs(
+            Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), DateTimeOffset.UtcNow, typeof(FakeSagaStarter).FullName!);
+        var headers = (Dictionary<string, object?>)eventArgs.BasicProperties.Headers!;
+        headers[nameof(MessageEnvelope.FirstReturnedAt)] = firstReturnedAt is string text ? Encoding.UTF8.GetBytes(text) : firstReturnedAt;
+
+        var result = await sut.ParseMessageAsync(eventArgs);
+
+        Assert.Null(result.FirstReturnedAt);
+    }
+
+    [Fact]
+    public async Task ParseMessageAsync_should_read_the_creation_time_as_this_version_and_as_an_earlier_one_wrote_it_and_keep_it_in_utc()
+    {
+        var typeResolver = Substitute.For<ITypeResolver>();
+        typeResolver.Resolve(Arg.Any<string>(), throwOnError: true).Returns(typeof(FakeSagaStarter));
+        var sut = new RabbitMessageParser(typeResolver, new FakeSerializer { DeserializeResult = new FakeSagaStarter() });
+        var createdAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, 678, TimeSpan.FromHours(2));
+
+        foreach (var (written, expected) in new[]
+                 {
+                     (createdAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture), createdAt),
+                     (createdAt.ToString(), createdAt.AddMilliseconds(-678)),
+                 })
+        {
+            var eventArgs = CreateBasicDeliverEventArgs(
+                Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), Guid.NewGuid().ToString(), createdAt, typeof(FakeSagaStarter).FullName!);
+            ((Dictionary<string, object?>)eventArgs.BasicProperties.Headers!)[nameof(MessageEnvelope.CreatedAt)] = Encoding.UTF8.GetBytes(written);
+
+            var result = await sut.ParseMessageAsync(eventArgs);
+
+            Assert.Equal(expected, result.CreatedAt);
+            Assert.Equal(TimeSpan.Zero, result.CreatedAt.Offset);
+        }
+    }
+
     private static BasicDeliverEventArgs CreateBasicDeliverEventArgs(
         string? messageId,
         string? correlationId,

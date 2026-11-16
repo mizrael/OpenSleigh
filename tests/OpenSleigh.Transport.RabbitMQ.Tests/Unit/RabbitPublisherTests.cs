@@ -77,6 +77,29 @@ public class RabbitPublisherTests
     }
 
     [Fact]
+    public async Task PublishAsync_should_send_the_time_a_message_first_came_back_with_it()
+    {
+        var channel = Substitute.For<IChannel>();
+        var sut = CreateSut(channel, NewReferences(), handledTypes: []);
+        var firstReturnedAt = new DateTimeOffset(2026, 1, 2, 3, 4, 5, 678, TimeSpan.Zero);
+        var returned = CreateEnvelope().Returned(firstReturnedAt, firstReturnedAt.AddSeconds(30));
+        var published = new List<BasicProperties>();
+        channel.WhenForAnyArgs(c => c.BasicPublishAsync(string.Empty, string.Empty, default, default(BasicProperties)!, default, default))
+               .Do(call => published.Add(call.Arg<BasicProperties>()));
+
+        await sut.PublishAsync(CreateEnvelope());
+        await sut.PublishAsync(returned);
+
+        Assert.False(published[0].Headers!.ContainsKey(nameof(MessageEnvelope.FirstReturnedAt)));
+        Assert.Equal(
+            returned.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+            published[1].Headers![nameof(MessageEnvelope.CreatedAt)]);
+        Assert.Equal(
+            firstReturnedAt,
+            DateTimeOffset.Parse((string)published[1].Headers![nameof(MessageEnvelope.FirstReturnedAt)]!, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public async Task What_was_declared_on_a_channel_should_be_declared_again_on_another_one()
     {
         var references = NewReferences();

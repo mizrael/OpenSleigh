@@ -89,6 +89,38 @@ public abstract class SqlOutboxRepository : IOutboxRepository, IOutboxBatchRepos
         }
     }
 
+    /// <summary>
+    /// what a provider implements <see cref="IOutboxReturnRepository.PutBackAsync"/> with: runs the command
+    /// that stores a returned message again. A provider that does not implement the interface does not take
+    /// returned messages back, which only a transport that returns messages asks for.
+    /// </summary>
+    /// <param name="command">
+    /// its parameters: {0} message id, {1} correlation id, {2} body, {3} message type, {4} creation time, {5} sender id,
+    /// {6} due time, {7} time of first return. Atomically, a row that exists gets the due time, and keeps its time
+    /// of first return when that is earlier than {7} and not earlier than its creation time; a row that does not exist
+    /// is inserted. The command finds the row by key and waits for a relay that holds it.
+    /// </param>
+    protected async ValueTask PutBackAsync(string command, MessageEnvelope message, CancellationToken cancellationToken)
+    {
+        var row = Entities.OutboxMessage.Map(message, _serializer);
+        object[] parameters =
+        [
+            row.MessageId, row.CorrelationId, row.Body, row.MessageType, row.CreatedAt, row.SenderId,
+            row.DeliverAt!.Value, row.FirstReturnedAt!.Value,
+        ];
+
+        await _appendSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        try
+        {
+            await DbContext.Database.ExecuteSqlRawAsync(command, parameters, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _appendSemaphore.Release();
+        }
+    }
+
     // appended messages are never read back through this context. Left tracked, they would pile up
     // for as long as the repository lives, and a rejected duplicate would be re-sent with every later append
     private void StopTracking(IEnumerable<Entities.OutboxMessage> entities)

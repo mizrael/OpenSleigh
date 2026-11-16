@@ -32,6 +32,12 @@ public record OutboxMessage
     [BsonIgnoreIfNull]
     public DateTime? DeliverAt { get; set; }
 
+    /// <summary>
+    /// when the transport first gave the message back because nothing could take it. Not written when it never did.
+    /// </summary>
+    [BsonIgnoreIfNull]
+    public DateTime? FirstReturnedAt { get; set; }
+
     public bool TryMap(
         ITypeResolver typeResolver,
         ISerializer serializer,
@@ -53,15 +59,16 @@ public record OutboxMessage
             CreatedAt,
             type,
             senderId: SenderId,
-            deliverAt: DueTime(),
+            deliverAt: Utc(DeliverAt),
+            firstReturnedAt: Utc(FirstReturnedAt),
             serializer,
             out envelope);
     }
 
-    private DateTimeOffset? DueTime()
-        => DeliverAt is null
+    private static DateTimeOffset? Utc(DateTime? time)
+        => time is null
             ? null
-            : new DateTimeOffset(DateTime.SpecifyKind(DeliverAt.Value, DateTimeKind.Utc));
+            : new DateTimeOffset(DateTime.SpecifyKind(time.Value, DateTimeKind.Utc));
 
     public static OutboxMessage Create(
         Outbox.MessageEnvelope message,
@@ -80,6 +87,14 @@ public record OutboxMessage
             MessageType = message.MessageType.FullName!,
             SenderId = message.SenderId,
             DeliverAt = message.DeliverAt?.UtcDateTime,
+            FirstReturnedAt = NextWholeMillisecond(message.FirstReturnedAt?.UtcDateTime),
         };
     }
+
+    // dates are stored to the millisecond and the creation time is not: rounded down, a message that came back
+    // in the millisecond it was created in would have come back before it existed
+    internal static DateTime? NextWholeMillisecond(DateTime? time)
+        => time is { } value && value.Ticks % TimeSpan.TicksPerMillisecond is var rest and > 0
+            ? value.AddTicks(TimeSpan.TicksPerMillisecond - rest)
+            : time;
 }

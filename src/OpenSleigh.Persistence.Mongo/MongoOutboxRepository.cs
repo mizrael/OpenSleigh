@@ -10,7 +10,7 @@ public record MongoOutboxRepositoryOptions(TimeSpan LockMaxDuration)
     public static readonly MongoOutboxRepositoryOptions Default = new(TimeSpan.FromMinutes(1));
 }
 
-public class MongoOutboxRepository : IOutboxRepository
+public class MongoOutboxRepository : IOutboxRepository, IOutboxReturnRepository
 {
     private readonly IDbContext _dbContext;
     private readonly MongoOutboxRepositoryOptions _options;
@@ -59,14 +59,82 @@ public class MongoOutboxRepository : IOutboxRepository
         return DeleteAsyncCore(message, cancellationToken);
     }
 
+    // only the message as this repository last read it is deleted: one the transport returned is put back without
+    // its claim, possibly before the relay that published it deletes it, and one that is gone is not an error.
+    // A repository that never read deletes a message nobody has claimed
     private async ValueTask DeleteAsyncCore(MessageEnvelope message, CancellationToken cancellationToken)
     {
-        var filter = Builders<Entities.OutboxMessage>.Filter.Eq(e => e.MessageId, message.MessageId);
+        var filterBuilder = Builders<Entities.OutboxMessage>.Filter;
+        var filter = filterBuilder.And(
+            filterBuilder.Eq(MessageIdField, message.MessageId),
+            filterBuilder.Eq(LockIdField, _claimId));
 
-        var result = await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
-                                                    .ConfigureAwait(false);
-        if (result.IsAcknowledged && result.DeletedCount == 0)
-            throw new ArgumentException($"message '{message.MessageId}' not found");
+        await _dbContext.OutboxMessages.DeleteOneAsync(filter, cancellationToken)
+                                       .ConfigureAwait(false);
+    }
+
+    // rendered once, with the names and the serializers of the class map: this delete runs for every message
+    // that is published, and an expression would be translated each time
+    private static readonly FieldDefinition<Entities.OutboxMessage, string> MessageIdField = Rendered(e => e.MessageId);
+    private static readonly FieldDefinition<Entities.OutboxMessage, string?> LockIdField = Rendered(e => e.LockId);
+
+    private static FieldDefinition<Entities.OutboxMessage, TField> Rendered<TField>(
+        System.Linq.Expressions.Expression<Func<Entities.OutboxMessage, TField>> field)
+    {
+        var rendered = new ExpressionFieldDefinition<Entities.OutboxMessage, TField>(field).Render(
+            new RenderArgs<Entities.OutboxMessage>(
+                MongoDB.Bson.Serialization.BsonSerializer.LookupSerializer<Entities.OutboxMessage>(),
+                MongoDB.Bson.Serialization.BsonSerializer.SerializerRegistry));
+        return new StringFieldDefinition<Entities.OutboxMessage, TField>(rendered.FieldName, rendered.FieldSerializer);
+    }
+
+    // the claim of the last read of this repository that claimed anything. The relay creates a repository for each pass
+    // and reads once: a repository that is read again before it has deleted what it read first leaves those messages
+    // to be published again when their claim expires
+    private string? _claimId;
+
+    /// <summary>
+    /// stores the message again with its new due time, in place when the relay has not deleted it yet,
+    /// and lets go of the claim it finds on it, which is the one of the relay that published it.
+    /// </summary>
+    /// <remarks>
+    /// <para>Unless that claim expired while its relay was still publishing, and another relay claimed the message
+    /// and published it as well: its claim is the one that is removed, its delete then removes nothing,
+    /// and the message is published once more than the two relays already did.</para>
+    /// <para>When two hosts store a message that is not there at the same time, the insert of one of them finds
+    /// the document of the other: the server (4.2 and later) then runs its update again, on that document.</para>
+    /// </remarks>
+    public async ValueTask PutBackAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+
+        var entity = Entities.OutboxMessage.Create(message, _serializer);
+        var filter = Builders<Entities.OutboxMessage>.Filter;
+        var update = Builders<Entities.OutboxMessage>.Update;
+        var sameMessage = filter.Eq(e => e.MessageId, entity.MessageId);
+
+        // a time of first return that is earlier than the creation of the message is not one to keep.
+        // On its own: an update cannot compare two fields of the document it changes. Dates are stored
+        // to the millisecond, and one in the millisecond the message was created in was rounded up past it
+        await _dbContext.OutboxMessages.UpdateOneAsync(
+            filter.And(sameMessage, filter.Lt(e => e.FirstReturnedAt, Entities.OutboxMessage.NextWholeMillisecond(entity.CreatedAt.UtcDateTime))),
+            update.Unset(e => e.FirstReturnedAt),
+            cancellationToken: cancellationToken).ConfigureAwait(false);
+
+        // the time of first return that is kept is the earliest, whoever stores it
+        await _dbContext.OutboxMessages.UpdateOneAsync(
+            sameMessage,
+            update.Set(e => e.DeliverAt, entity.DeliverAt)
+                  .Min(e => e.FirstReturnedAt, entity.FirstReturnedAt)
+                  .Unset(e => e.LockId)
+                  .Unset(e => e.LockTime)
+                  .SetOnInsert(e => e.Body, entity.Body)
+                  .SetOnInsert(e => e.CorrelationId, entity.CorrelationId)
+                  .SetOnInsert(e => e.MessageType, entity.MessageType)
+                  .SetOnInsert(e => e.CreatedAt, entity.CreatedAt)
+                  .SetOnInsert(e => e.SenderId, entity.SenderId),
+            new UpdateOptions { IsUpsert = true },
+            cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<IEnumerable<MessageEnvelope>> ReadPendingAsync(CancellationToken cancellationToken = default)
@@ -84,6 +152,8 @@ public class MongoOutboxRepository : IOutboxRepository
                                                      .ConfigureAwait(false);
         if (claimed.IsAcknowledged && claimed.ModifiedCount == 0)
             return Enumerable.Empty<MessageEnvelope>();
+
+        _claimId = claimId;
 
         var filter = ClaimedBy(claimId, now);
         var cursor = await _dbContext.OutboxMessages.FindAsync(filter, cancellationToken: cancellationToken)

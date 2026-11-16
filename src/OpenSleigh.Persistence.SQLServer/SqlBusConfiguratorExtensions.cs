@@ -25,13 +25,15 @@ public static class SqlBusConfiguratorExtensions
             .AddScoped<SqlTransactionManager>()
             .AddScoped<ITransactionManager>(ctx => ctx.GetRequiredService<SqlTransactionManager>())
             .AddSingleton<DuplicateKeyDetector>(IsDuplicateKeyException)
-            .AddTransient<IOutboxRepository>(ctx => new MSSqlOutboxRepository(
+            .AddTransient(ctx => new MSSqlOutboxRepository(
                 ctx.GetRequiredService<SagaDbContext>(),
                 ctx.GetRequiredService<OpenSleigh.Utils.ITypeResolver>(),
                 ctx.GetRequiredService<SqlOutboxRepositoryOptions>(),
                 ctx.GetRequiredService<OpenSleigh.Utils.ISerializer>(),
                 ctx.GetRequiredService<DuplicateKeyDetector>(),
                 () => ctx.GetRequiredService<SqlTransactionManager>().DbContext))
+            .AddTransient<IOutboxRepository>(ctx => ctx.GetRequiredService<MSSqlOutboxRepository>())
+            .AddTransient<IOutboxReturnRepository>(ctx => ctx.GetRequiredService<MSSqlOutboxRepository>())
             .AddTransient<ISagaStateRepository, SqlSagaStateRepository>()
             .AddTransient<ISagaStateQuery, SqlSagaStateQuery>();
         

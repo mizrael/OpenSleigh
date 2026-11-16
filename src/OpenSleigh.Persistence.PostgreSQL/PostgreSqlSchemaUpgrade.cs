@@ -21,6 +21,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
 {
     private const string OutboxTable = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
     private const string DeliverAtColumn = nameof(OutboxMessage.DeliverAt);
+    private const string FirstReturnedAtColumn = nameof(OutboxMessage.FirstReturnedAt);
     private const string DeliverAtIndex = $"{Constants.DbSchema}.\"{OutboxMessage.DeliverAtIndexName}\"";
     private const string PermissionDeniedSqlState = "42501";
 
@@ -44,12 +45,7 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
     [
         new SagaDbSchemaChange(
             "the due time of outbox messages",
-            $"""
-             SELECT CASE WHEN EXISTS (
-                 SELECT 1 FROM information_schema.columns
-                 WHERE table_schema = '{Constants.DbSchema}' AND table_name = '{OutboxMessage.TableName}' AND column_name = '{DeliverAtColumn}')
-             THEN 1 ELSE 0 END AS "{ResultColumn}"
-             """,
+            OutboxHasColumn(DeliverAtColumn),
             [$"ALTER TABLE {OutboxTable} ADD COLUMN IF NOT EXISTS \"{DeliverAtColumn}\" timestamp with time zone"]),
 
         // a concurrent build that failed leaves an index behind that is not valid, and is never used: it is built again
@@ -68,7 +64,20 @@ internal sealed class PostgreSqlSchemaUpgrade : SagaDbSchemaUpgrade
                 $"CREATE INDEX CONCURRENTLY IF NOT EXISTS \"{OutboxMessage.DeliverAtIndexName}\" ON {OutboxTable} (\"{DeliverAtColumn}\")",
             ],
             RunsInTransaction: false),
+
+        new SagaDbSchemaChange(
+            "the time outbox messages were first returned by the transport",
+            OutboxHasColumn(FirstReturnedAtColumn),
+            [$"ALTER TABLE {OutboxTable} ADD COLUMN IF NOT EXISTS \"{FirstReturnedAtColumn}\" timestamp with time zone"]),
     ];
+
+    private static string OutboxHasColumn(string column)
+        => $"""
+            SELECT CASE WHEN EXISTS (
+                SELECT 1 FROM information_schema.columns
+                WHERE table_schema = '{Constants.DbSchema}' AND table_name = '{OutboxMessage.TableName}' AND column_name = '{column}')
+            THEN 1 ELSE 0 END AS "{ResultColumn}"
+            """;
 
     public PostgreSqlSchemaUpgrade(ILogger<SagaDbSchemaUpgrade>? logger = null) : base(logger)
     {

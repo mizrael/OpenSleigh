@@ -57,8 +57,12 @@ public class RabbitPublisher : IPublisher
         {
             { nameof(envelope.MessageType), envelope.MessageType.FullName },
             { nameof(envelope.SenderId), envelope.SenderId },
-            { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString() }
+            { nameof(envelope.CreatedAt), envelope.CreatedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture) }
         };
+
+        // so that this host knows, when the broker returns the message again, for how long it has been coming back
+        if (envelope.FirstReturnedAt is { } firstReturnedAt)
+            properties.Headers.Add(nameof(envelope.FirstReturnedAt), firstReturnedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
 
         var body = _serializer.Serialize(envelope.Message);
 
@@ -75,7 +79,7 @@ public class RabbitPublisher : IPublisher
 
         await policy.ExecuteAsync(async () =>
         {
-            // mandatory: a message that no queue takes is sent back by the broker, and reported in the log
+            // mandatory: a message that no queue takes is sent back by the broker, and goes back to the outbox
             await channel.BasicPublishAsync(
                 exchange: queueRef.ExchangeName,
                 routingKey: queueRef.RoutingKey,

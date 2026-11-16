@@ -183,6 +183,171 @@ public abstract class SqlOutboxRelayTests
 
     private static readonly TimeSpan NotDueDelay = TimeSpan.FromHours(1);
 
+    [Fact]
+    public async Task A_message_put_back_while_the_relay_that_published_it_still_holds_it_should_wait_for_the_relay_and_stay()
+    {
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 1);
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        Task putBack;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            var repository = relay.ServiceProvider.GetRequiredService<IOutboxRepository>();
+            var published = Assert.Single(await repository.ReadPendingAsync());
+
+            // the broker returns the message before the pass ends
+            putBack = PutBackAsync(provider, published.Returned(returnedAt, returnedAt + NotDueDelay));
+            await Task.Delay(TimeSpan.FromSeconds(1));
+            Assert.False(putBack.IsCompleted);
+
+            await ((IOutboxBatchRepository)repository).DeleteAsync([published]);
+            await transaction.CommitAsync();
+        }
+
+        await putBack.WaitAsync(TimeSpan.FromSeconds(20));
+
+        await using var reader = provider.CreateAsyncScope();
+        var stored = await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.AsNoTracking().SingleAsync();
+        Assert.NotNull(stored.DeliverAt);
+        Assert.NotNull(stored.FirstReturnedAt);
+    }
+
+    [Fact]
+    public async Task A_message_put_back_should_be_published_again_when_it_is_due_with_the_time_it_first_came_back()
+    {
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 1);
+        var firstReturnedAt = DateTimeOffset.UtcNow;
+
+        MessageEnvelope published;
+        await using (var relay = provider.CreateAsyncScope())
+        {
+            await using var transaction = await StartTransactionAsync(relay);
+            var repository = relay.ServiceProvider.GetRequiredService<IOutboxRepository>();
+            published = Assert.Single(await repository.ReadPendingAsync());
+            await ((IOutboxBatchRepository)repository).DeleteAsync([published]);
+            await transaction.CommitAsync();
+        }
+
+        // by a host whose clock was behind, before the message existed: that time is not kept. Then twice,
+        // as when two relays published it and each got it back: the later one stores it first
+        var later = firstReturnedAt.AddMinutes(1);
+        await PutBackAsync(provider, published.Returned(published.CreatedAt.AddMinutes(-1), DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddMinutes(-1)));
+        await PutBackAsync(provider, published.Returned(firstReturnedAt, DateTimeOffset.UtcNow.AddSeconds(-1)));
+        await PutBackAsync(provider, published.Returned(later, DateTimeOffset.UtcNow.AddSeconds(-1)));
+
+        await using var nextRelay = provider.CreateAsyncScope();
+        await using var nextTransaction = await StartTransactionAsync(nextRelay);
+        var readAgain = Assert.Single(await nextRelay.ServiceProvider.GetRequiredService<IOutboxRepository>().ReadPendingAsync());
+
+        Assert.Equal(published.MessageId, readAgain.MessageId);
+        Assert.NotNull(readAgain.FirstReturnedAt);
+        Assert.Equal(firstReturnedAt.ToUnixTimeMilliseconds(), readAgain.FirstReturnedAt.Value.ToUnixTimeMilliseconds());
+    }
+
+    [Fact]
+    public async Task Messages_put_back_by_several_hosts_together_should_all_be_stored_once_with_the_earliest_time_they_first_came_back()
+    {
+        const int hosts = 8;
+        const int messagesCount = 2 * BatchSize * 25;
+        await using var provider = BuildProvider();
+        var systemInfo = provider.GetRequiredService<ISystemInfo>();
+        var messages = Enumerable.Range(0, messagesCount).Select(_ => MessageEnvelope.Create(new FakeMessage(), systemInfo)).ToArray();
+        var now = DateTimeOffset.UtcNow;
+        var earliest = now;
+
+        // none of the messages is in the outbox any more, each host got them back at another time and in another order.
+        // Two hosts that insert one at the same time: one of them may be refused, and tries again as the transport does
+        await Task.WhenAll(Enumerable.Range(0, hosts).Select(host => Task.Run(async () =>
+        {
+            var returned = messages
+                .Select(message => message.Returned(earliest.AddSeconds(host), now + NotDueDelay))
+                .OrderBy(_ => Random.Shared.Next())
+                .ToArray();
+
+            foreach (var message in returned)
+            {
+                try
+                {
+                    await PutBackAsync(provider, message);
+                }
+                catch (System.Data.Common.DbException)
+                {
+                    await PutBackAsync(provider, message);
+                }
+            }
+        })));
+
+        await using var reader = provider.CreateAsyncScope();
+        var stored = await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.AsNoTracking().ToListAsync();
+        Assert.Equal(messages.Select(message => message.MessageId).Order(), stored.Select(row => row.MessageId).Order());
+        Assert.All(stored, row => Assert.Equal(earliest.ToUnixTimeMilliseconds(), row.FirstReturnedAt!.Value.ToUnixTimeMilliseconds()));
+    }
+
+    [Fact]
+    public async Task Messages_put_back_should_not_wait_for_a_relay_that_holds_other_messages_nor_keep_appends_waiting()
+    {
+        const int hosts = 4;
+        const int rounds = 5;
+        const int messagesPerRound = 20;
+        await using var provider = BuildProvider();
+        await AppendMessagesAsync(provider, 2 * BatchSize);
+        var systemInfo = provider.GetRequiredService<ISystemInfo>();
+        var returnedAt = DateTimeOffset.UtcNow;
+
+        await using var relay = provider.CreateAsyncScope();
+        await using var transaction = await StartTransactionAsync(relay);
+        var held = await ReadPendingIdsAsync(relay);
+        Assert.Equal(BatchSize, held.Count);
+
+        // messages that are no longer in the outbox, whose place is right before and right after each row the relay holds
+        var serializer = provider.GetRequiredService<ISerializer>();
+        var neighbours = held.Select(id => id + "-next").Append("00000000-before-every-row")
+            .Select(id =>
+            {
+                Assert.True(MessageEnvelope.TryCreate(
+                    serializer.Serialize(new FakeMessage()), id, Guid.NewGuid().ToString(), returnedAt, typeof(FakeMessage), "sender", serializer, out var envelope));
+                return envelope!.Returned(returnedAt, returnedAt + NotDueDelay);
+            })
+            .ToArray();
+        await PutBackAsync(provider, neighbours).WaitAsync(TimeSpan.FromSeconds(30));
+
+        // messages that are no longer in the outbox, next to the ones the relay holds, put back while others are appended
+        var work = Enumerable.Range(0, hosts).SelectMany(_ => new[]
+        {
+            Task.Run(async () =>
+            {
+                for (var round = 0; round < rounds; round++)
+                    await PutBackAsync(provider, Enumerable.Range(0, messagesPerRound)
+                        .Select(_ => MessageEnvelope.Create(new FakeMessage(), systemInfo).Returned(returnedAt, returnedAt + NotDueDelay))
+                        .ToArray());
+            }),
+            Task.Run(async () =>
+            {
+                for (var round = 0; round < rounds; round++)
+                    await AppendMessagesAsync(provider, messagesPerRound, NotDueDelay);
+            }),
+        });
+        await Task.WhenAll(work).WaitAsync(TimeSpan.FromSeconds(30));
+
+        await transaction.CommitAsync();
+
+        await using var reader = provider.CreateAsyncScope();
+        Assert.Equal(
+            2 * BatchSize + neighbours.Length + 2 * hosts * rounds * messagesPerRound,
+            await reader.ServiceProvider.GetRequiredService<SagaDbContext>().OutboxMessages.CountAsync());
+    }
+
+    private static async Task PutBackAsync(IServiceProvider provider, params MessageEnvelope[] returned)
+    {
+        await using var scope = provider.CreateAsyncScope();
+        foreach (var message in returned)
+            await scope.ServiceProvider.GetRequiredService<IOutboxReturnRepository>().PutBackAsync(message);
+    }
+
     private sealed class RecordingPublisher : IPublisher
     {
         private readonly System.Collections.Concurrent.ConcurrentQueue<string> _publishedIds = new();

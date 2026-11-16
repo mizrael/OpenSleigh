@@ -42,6 +42,8 @@ Delayed messages need a column on the outbox table and an index on it. A new dat
 ```sql
 ALTER TABLE opensleigh."OutboxMessages" ADD COLUMN IF NOT EXISTS "DeliverAt" timestamp with time zone;
 CREATE INDEX CONCURRENTLY IF NOT EXISTS "IX_OutboxMessages_DeliverAt" ON opensleigh."OutboxMessages" ("DeliverAt");
+-- when a transport first returned a message that nothing could take (RabbitMQ)
+ALTER TABLE opensleigh."OutboxMessages" ADD COLUMN IF NOT EXISTS "FirstReturnedAt" timestamp with time zone;
 ```
 
 - It first checks, with one query each, whether the column and the index are there. When they are, nothing else runs: this is all that happens at every later start.
@@ -49,10 +51,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "IX_OutboxMessages_DeliverAt" ON opensle
 - The column has no default, so adding it does not rewrite the table, whatever its size. It needs the table for a moment only, and gives up after 5 seconds if it cannot have it: a long transaction on the outbox table makes the upgrade fail instead of making everything else wait behind it.
 - The index is built with `CONCURRENTLY`, in a second step: the outbox is read and written as usual while it is built. PostgreSQL waits for the transactions that were running to end before it finishes, and the statement has 10 minutes. A build that fails leaves an index that is not valid: the library drops it and builds it again at the next start.
 - **If it fails**, the application does not start: the error says why, and lists the statements. Nothing is half done: either step can be applied again. The cause is logged, as are the start and the end of each step.
-- **Permissions:** both statements require the database user to own the outbox table, which is the case when the application created the database. Otherwise, run the statements above with a user that does, before or after deploying the new version: once they are applied, the application needs no such permission.
+- **Permissions:** both statements require the database user to own the outbox table, which is the case when the application created the database. Otherwise, run the statements above with a user that does, before or after deploying the new version: once they are applied, the application needs no such permission. Putting a message a RabbitMQ broker returned back in the outbox needs the `UPDATE` privilege on the outbox table, besides the ones to insert, read and delete.
 - **A large outbox** (millions of rows): apply the statements by hand before deploying, at a time of your choosing. The earlier version works on the upgraded table.
-- **Rolling upgrade:** instances of the earlier version keep working on the upgraded table, and the messages they store are published as before. They do not know about delays, though: **an instance of the earlier version publishes a delayed message as soon as it reads it.** Do not publish messages with a delay until every instance runs the new version.
-- **Going back** to the earlier version: for the same reason, every delayed message still in the outbox is published at once by the earlier version. Before going back, wait until none is left, or remove them (they are lost):
+- **Rolling upgrade:** instances of the earlier version keep working on the upgraded table, and the messages they store are published as before. They do not know about delays, though: **an instance of the earlier version publishes a delayed message as soon as it reads it.** Do not publish messages with a delay until every instance runs the new version. The same goes for the messages a RabbitMQ broker returns, which the new version puts back in the outbox with a due time and the time they first came back: an instance of the earlier version publishes such a message at once, and without that time, so its retry period starts again. Set `ReturnedMessageRetryPeriod` to zero on the new instances until every instance runs the new version, so that returned messages are not put back.
+- **Going back** to the earlier version: for the same reason, every delayed message still in the outbox is published at once by the earlier version. Before going back, wait until none is left, or remove them (they are lost; the returned messages that are waiting to be published again are among them):
 
   ```sql
   SELECT COUNT(*) FROM opensleigh."OutboxMessages" WHERE "DeliverAt" > now();

@@ -2,7 +2,6 @@
 using OpenSleigh.Outbox;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
-using System.Text;
 
 namespace OpenSleigh.Transport.RabbitMQ;
 
@@ -10,31 +9,40 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 {
     private readonly IBusConnection _connection;
     private readonly ILogger<ChannelFactory>? _logger;
+    private readonly IReturnedMessageHandler? _returnedMessages;
     private readonly SemaphoreSlim _semaphore;
 
     private IChannel? _publishChannel;
     private IChannel? _consumeChannel;
 
     /// <param name="logger">
-    /// where the messages the broker sends back, because no queue took them, are reported. Without it they are dropped unnoticed.
+    /// where the messages the broker sends back, because no queue took them, are reported when nothing handles them.
     /// </param>
-    public ChannelFactory(IBusConnection connection, ILogger<ChannelFactory>? logger = null)
+    /// <param name="returnedMessages">
+    /// what is given the messages the broker sends back. Without it they are dropped, and only reported.
+    /// </param>
+    public ChannelFactory(IBusConnection connection, ILogger<ChannelFactory>? logger = null, IReturnedMessageHandler? returnedMessages = null)
     {
         _semaphore = new SemaphoreSlim(1);
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
         _logger = logger;
+        _returnedMessages = returnedMessages;
     }
 
-    private void ReportReturnedMessages(IChannel channel)
+    private void ListenForReturnedMessages(IChannel channel)
     {
-        if (_logger is null)
-            return;
-
-        channel.BasicReturnAsync += (_, returned) =>
-        {
-            LogReturned(_logger, returned);
-            return Task.CompletedTask;
-        };
+        if (_returnedMessages is { } returnedMessages)
+            channel.BasicReturnAsync += (_, returned) =>
+            {
+                returnedMessages.Accept(returned);
+                return Task.CompletedTask;
+            };
+        else if (_logger is not null)
+            channel.BasicReturnAsync += (_, returned) =>
+            {
+                LogReturned(_logger, returned);
+                return Task.CompletedTask;
+            };
     }
 
     // the channel waits for this to return: it reads four values and writes one log entry, nothing else
@@ -43,11 +51,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
         if (!logger.IsEnabled(LogLevel.Warning))
             return;
 
-        var messageType = returned.BasicProperties.Headers is { } headers
-            && headers.TryGetValue(nameof(MessageEnvelope.MessageType), out var value)
-            && value is byte[] bytes
-                ? Encoding.UTF8.GetString(bytes)
-                : null;
+        returned.BasicProperties.TryGetHeaderValue(nameof(MessageEnvelope.MessageType), out var messageType);
 
         logger.LogWarning(
             "message '{MessageId}' of type '{MessageType}' was returned by the broker from Exchange '{ExchangeName}' with '{ReplyText}': " +
@@ -68,7 +72,7 @@ public sealed class ChannelFactory : IChannelFactory, IAsyncDisposable
 
             _publishChannel?.Dispose();
             _publishChannel = await _connection.CreateChannelAsync(cancellationToken);
-            ReportReturnedMessages(_publishChannel);
+            ListenForReturnedMessages(_publishChannel);
             return _publishChannel;
         }
         finally

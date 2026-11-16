@@ -408,6 +408,36 @@ public class MessageEnvelopeTests
         Assert.Equal(TimeSpan.Zero, envelope.DeliverAt!.Value.Offset);
     }
 
+    [Fact]
+    public void Returned_ShouldSetTheTimeTheMessageFirstCameBack_AndTheNewDueTime_InUtc()
+    {
+        var envelope = DummyMessage.CreateEnvelope();
+        var firstReturn = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(2));
+
+        var returned = envelope.Returned(firstReturn, firstReturn.AddSeconds(30));
+
+        Assert.Null(envelope.FirstReturnedAt);
+        Assert.Equal(firstReturn, returned.FirstReturnedAt);
+        Assert.Equal(firstReturn.AddSeconds(30), returned.DeliverAt);
+        Assert.Equal(TimeSpan.Zero, returned.FirstReturnedAt!.Value.Offset);
+        Assert.Equal(TimeSpan.Zero, returned.DeliverAt!.Value.Offset);
+        Assert.Equal(envelope.MessageId, returned.MessageId);
+        Assert.Same(envelope.Message, returned.Message);
+    }
+
+    [Fact]
+    public void TryCreate_ShouldKeepTheCreationTime_InUtc()
+    {
+        var createdAt = DateTimeOffset.Now.ToOffset(TimeSpan.FromHours(2));
+
+        Assert.True(MessageEnvelope.TryCreate(
+            [1, 2, 3], "messageId", "correlationId", createdAt, typeof(DummyMessage), "senderId",
+            new MockSerializer(new DummyMessage()), out var envelope));
+
+        Assert.Equal(createdAt, envelope.CreatedAt);
+        Assert.Equal(TimeSpan.Zero, envelope.CreatedAt.Offset);
+    }
+
     #region Helper Classes
 
     private class MessageWithCorrelationId : IMessage, IHasCorrelationId

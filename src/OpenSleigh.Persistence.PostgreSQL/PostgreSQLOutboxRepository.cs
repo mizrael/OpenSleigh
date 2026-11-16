@@ -6,7 +6,7 @@ using OpenSleigh.Utils;
 
 namespace OpenSleigh.Persistence.PostgreSQL;
 
-internal class PostgreSQLOutboxRepository : SqlOutboxRepository
+internal class PostgreSQLOutboxRepository : SqlOutboxRepository, IOutboxReturnRepository
 {
     private const string Table = $"{Constants.DbSchema}.\"{OutboxMessage.TableName}\"";
     private const string DeliverAt = $"\"{nameof(OutboxMessage.DeliverAt)}\"";
@@ -34,4 +34,19 @@ internal class PostgreSQLOutboxRepository : SqlOutboxRepository
     }
 
     protected override string ReadPendingQuery => ReadQuery;
+
+    public ValueTask PutBackAsync(MessageEnvelope message, CancellationToken cancellationToken = default)
+        => PutBackAsync(PutBackCommand, message, cancellationToken);
+
+    private const string CreatedAt = $"\"{nameof(OutboxMessage.CreatedAt)}\"";
+    private const string FirstReturnedAt = $"\"{nameof(OutboxMessage.FirstReturnedAt)}\"";
+
+    // one statement: a row that conflicts is waited for when a relay holds it, and inserted after all when the relay
+    // deleted it. LEAST leaves out the stored time when it is not one to keep
+    private const string PutBackCommand =
+        $"INSERT INTO {Table} AS stored (\"{nameof(OutboxMessage.MessageId)}\", \"{nameof(OutboxMessage.CorrelationId)}\", " +
+        $"\"{nameof(OutboxMessage.Body)}\", \"{nameof(OutboxMessage.MessageType)}\", {CreatedAt}, \"{nameof(OutboxMessage.SenderId)}\", " +
+        $"{DeliverAt}, {FirstReturnedAt}) VALUES ({{0}}, {{1}}, {{2}}, {{3}}, {{4}}, {{5}}, {{6}}, {{7}}) " +
+        $"ON CONFLICT (\"{nameof(OutboxMessage.MessageId)}\") DO UPDATE SET {DeliverAt} = EXCLUDED.{DeliverAt}, " +
+        $"{FirstReturnedAt} = LEAST(CASE WHEN stored.{FirstReturnedAt} >= stored.{CreatedAt} THEN stored.{FirstReturnedAt} END, EXCLUDED.{FirstReturnedAt})";
 }

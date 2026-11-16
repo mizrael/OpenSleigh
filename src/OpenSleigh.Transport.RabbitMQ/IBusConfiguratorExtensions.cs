@@ -28,6 +28,11 @@ public static class IBusConfiguratorExtensions
         busConfigurator.Services.AddSingleton<IChannelFactory, ChannelFactory>();
         busConfigurator.Services.AddSingleton<IRabbitMessageParser, RabbitMessageParser>();
 
+        // one instance: the publish channel hands it the messages the broker returns, and the host stops it
+        busConfigurator.Services.AddSingleton<ReturnedMessageHandler>();
+        busConfigurator.Services.AddSingleton<IReturnedMessageHandler>(ctx => ctx.GetRequiredService<ReturnedMessageHandler>());
+        busConfigurator.Services.AddHostedService(ctx => ctx.GetRequiredService<ReturnedMessageHandler>());
+
         busConfigurator.Services.AddSingleton<IConnectionFactory>(ctx =>
         {
             var connectionFactory = new ConnectionFactory()
