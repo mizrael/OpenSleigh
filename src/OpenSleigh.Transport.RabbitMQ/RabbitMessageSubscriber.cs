@@ -44,6 +44,7 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
 
         _channel = await _channelFactory.GetConsumeChannelAsync(cancellationToken);
         _channel.CallbackExceptionAsync += OnChannelException;
+        _channel.ChannelShutdownAsync += OnChannelShutdown;
 
         if (_rabbitConfiguration.PrefetchCount > 0)
             await _channel.BasicQosAsync(
@@ -56,6 +57,18 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     private Task OnChannelException(object _, CallbackExceptionEventArgs ea)
     {
         _logger.LogError(ea.Exception, "the RabbitMQ Channel has encountered an error: {ExceptionMessage}", ea.Exception.Message);
+        return Task.CompletedTask;
+    }
+
+    // the broker closes a channel for what it was asked and cannot do, such as a publish to an exchange
+    // that is not there, and tells nobody else
+    private Task OnChannelShutdown(object _, ShutdownEventArgs ea)
+    {
+        if (ea.Initiator == ShutdownInitiator.Peer)
+            _logger.LogError(
+                "the RabbitMQ Channel this service consumes on was closed by the broker with {ReplyCode} '{ReplyText}'",
+                ea.ReplyCode, ea.ReplyText);
+
         return Task.CompletedTask;
     }
 
@@ -73,7 +86,11 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
     private ValueTask StopChannelAsync(CancellationToken cancellationToken)
     {
         if (_channel is not null)
+        {
             _channel.CallbackExceptionAsync -= OnChannelException;
+            _channel.ChannelShutdownAsync -= OnChannelShutdown;
+        }
+
         return ValueTask.CompletedTask;
     }
 
@@ -147,16 +164,33 @@ internal sealed class RabbitMessageSubscriber : IAsyncDisposable, IMessageSubscr
         var props = new BasicProperties(deliveryProps.BasicProperties);
         await WithChannelAsync(async () =>
         {
-            // we acknowledge the message so it's removed from the original queue
-            await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
+            // published, to the retry queue of this service only, before it is acknowledged and on the same
+            // channel: the broker handles a channel's frames in order, so it cannot acknowledge the message
+            // without having its copy. Acknowledged first, a connection lost in between leaves it in no queue.
+            // On a channel that closed neither goes through, and the broker requeues the message
+            try
+            {
+                await channel.BasicPublishAsync(
+                    exchange: queueReference.RetryExchangeName,
+                    routingKey: queueReference.RetryQueueName,
+                    mandatory: true,
+                    basicProperties: props,
+                    body: deliveryProps.Body);
+            }
+            catch (Exception retryException) when (channel.IsOpen)
+            {
+                // the channel is still open, so the broker does not take the message back: left alone it would
+                // hold its place in the prefetch for good. Requeued it would come straight back and fail again
+                _logger.LogError(
+                    retryException,
+                    "Message '{MessageId}' could not be published to the retry Exchange '{ExchangeName}': it is dead-lettered. {ExceptionMessage}",
+                    message.MessageId, queueReference.RetryExchangeName, retryException.Message);
 
-            // we publish the message to the retry exchange, for the retry queue of this service only
-            await channel.BasicPublishAsync(
-                exchange: queueReference.RetryExchangeName,
-                routingKey: queueReference.RetryQueueName,
-                mandatory: true,
-                basicProperties: props,
-                body: deliveryProps.Body);
+                await channel.BasicRejectAsync(deliveryProps.DeliveryTag, requeue: false);
+                return;
+            }
+
+            await channel.BasicAckAsync(deliveryProps.DeliveryTag, multiple: false);
         });
     }
 

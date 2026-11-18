@@ -281,7 +281,14 @@ What these scenarios assert, because it is how the library behaves today:
   complete and every host has done its part (`DatabaseInterruptionScenarioBase`);
 - a saga that could not be released, because the database was away, stays locked until `LockMaxDuration`;
 - the RabbitMQ transport publishes without waiting for the broker to confirm: a message published on a connection
-  that the broker is closing can be lost, and so can one that goes to the retry queue at that moment. The scenarios
-  publish once the hosts are connected again, and do not test that window.
+  that the broker is closing can be lost. The scenarios publish once the hosts are connected again, and do not test
+  that window;
+- a message whose saga is locked is published to the retry queue before it is acknowledged, on the same channel: a
+  connection that goes away in between leaves the message with the broker, at worst twice, and a saga ignores the
+  copy it has handled. `RabbitMqConnectionLossDuringRetryScenario` closes the connections of the hosts on either
+  side of that publish, with a channel that wraps the one the subscriber consumes on. Before the publish, the
+  message is in no queue when it is acknowledged first: that case fails every time without the publish coming first.
+  Between the publish and the acknowledgement, once the broker has taken the publish, the message is in both queues:
+  that case requires it to be delivered twice and handled once.
 
 Kafka has no such switch: its interruptions need a proxy between the hosts and the broker, which the suite does not have.
