@@ -12,12 +12,11 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
 {
     private const int MessagesOfAnInvoice = 2;
 
-    // one store: only the broker goes away here. With one host the message comes back to it once it reconnects.
-    // With three it goes at once to a connected host, which finds the saga locked and sends it to the retry queue
-    // on a connection about to close too. The broker picks which closes first:
-    // RabbitMqConnectionLossDuringRetryScenario closes them at that very moment
+    // one store: it is the broker that goes away here, and the store takes no part in it. One host: the message comes
+    // back to the host that was handling it, once it is connected again. With a second host it would be delivered
+    // there at once, find its saga locked and go to the retry queue, on a connection that is about to be closed too
     [Theory]
-    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1, 3])]
+    [MatrixData(Only = [Combinations.PostgreSqlRabbitMq], HostsCounts = [1])]
     public async Task a_message_that_was_being_handled_when_the_connection_was_closed_is_delivered_again_and_handled_once(string combination, int hostsCount)
     {
         await using var connectionLog = new RabbitMqConnectionLog(Console);
@@ -60,7 +59,7 @@ public class RabbitMqConnectionLossInFlightScenario(ITestOutputHelper console) :
                 Assert.True(invoice.IsCompleted);
                 await run.WaitForAsync("the message that could not be acknowledged to be delivered again", deliveredAgain.Reached, cancellationToken);
             },
-            // the delivery that comes back finds the saga locked for as long as the first one is being handled and stored
+            // the second delivery can arrive while the first is still being stored, and find the saga locked
             AssertOnlyLockConflictsAsync);
 
         // the handler ran once, however many times the message was delivered afterwards

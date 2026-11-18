@@ -208,7 +208,6 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             autoDelete: false);
         var processCount = 0;
         var processed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var locked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var (publisher, sut) = CreateSUT(_ =>
         {
             if (Interlocked.Increment(ref processCount) == 1)
@@ -217,9 +216,9 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
                 return;
             }
 
-            locked.TrySetResult();
             throw new LockException("whoops");
-        }, out _, exchangeName, configuration: configuration);
+        }, out var services, exchangeName, configuration: configuration);
+        await using var disposingServices = (ServiceProvider)services;
 
         await using var connection = await _fixture.ConnectionFactory.CreateConnectionAsync();
         await using var channel = await connection.CreateChannelAsync();
@@ -230,10 +229,20 @@ public class RabbitMessageSubscriberTests : IClassFixture<RabbitFixture>
             await publisher.PublishAsync(CreateMessage());
             await processed.Task.WaitAsync(TimeSpan.FromSeconds(20));
 
+            // the broker answers the retry by closing the channel the service consumes on, some time after the handler
+            var closedByTheBroker = new TaskCompletionSource<global::RabbitMQ.Client.Events.ShutdownEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var consuming = await services.GetRequiredService<IChannelFactory>().GetConsumeChannelAsync();
+            consuming.ChannelShutdownAsync += (_, shutdown) =>
+            {
+                closedByTheBroker.TrySetResult(shutdown);
+                return Task.CompletedTask;
+            };
+
             await channel.ExchangeDeleteAsync(references.RetryExchangeName);
             var message = CreateMessage();
             await publisher.PublishAsync(message);
-            await locked.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            var shutdown = await closedByTheBroker.Task.WaitAsync(TimeSpan.FromSeconds(20));
+            Assert.Equal(global::RabbitMQ.Client.Constants.NotFound, shutdown.ReplyCode);
 
             // acknowledged before its retry was published, it would be in no queue at all
             var left = await GetAsync(channel, references.QueueName);
